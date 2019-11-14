@@ -14,7 +14,7 @@
 #include <gismo.h>
 #include <gismo_dev.h>
 
-#include <gsThinShell2/gsShellAssembler.h>
+#include <gsThinShell2/gsThinShellAssembler.h>
 
 #include <gsThinShell/gsNewtonIterator.h>
 
