@@ -16,7 +16,7 @@
 
 #include <gsThinShell2/gsThinShellAssembler.h>
 
-#include <gsThinShell/gsNewtonIterator.h>
+//#include <gsThinShell/gsNewtonIterator.h>
 
 using namespace gismo;
 
@@ -182,7 +182,7 @@ int main(int argc, char *argv[])
     gsFunctionExpr<> E(std::to_string(E_modulus),3);
     gsFunctionExpr<> nu(std::to_string(PoissonRatio),3);
 
-    gsShellAssembler assembler(mp,dbasis,bc,force,t,E,nu);
+    gsThinShellAssembler assembler(mp,dbasis,bc,force,t,E,nu);
 
 
     gsSparseSolver<>::CGDiagonal solver;
