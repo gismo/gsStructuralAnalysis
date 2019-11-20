@@ -61,7 +61,7 @@ int main(int argc, char *argv[])
         thickness = 0.5;
 
     }
-    else if (testCase == 2)
+    else if (testCase == 2 || testCase == 3)
     {
         thickness = 0.125;
         E_modulus = 4.32E8;
@@ -99,6 +99,11 @@ int main(int argc, char *argv[])
     gsBoundaryConditions<> bc;
     gsVector<> tmp(3);
     tmp << 0, 0, 0;
+
+    gsVector<> neu(3);
+    neu << 0, 0, 0;
+
+    gsConstantFunction<> neuData(neu,3);
     if (testCase == 1)
     {
         for (index_t i=0; i!=3; ++i)
@@ -128,6 +133,30 @@ int main(int argc, char *argv[])
 
         // Surface forces
         tmp << 0, 0, -90;
+    }
+    else if (testCase == 3)
+    {
+        neu << 0, 0, -90;
+        neuData.setValue(neu,3);
+        // Diaphragm conditions
+        bc.addCondition(boundary::west, condition_type::dirichlet, 0, 1 ); // unknown 1 - y
+        // bc.addCondition(boundary::west, condition_type::dirichlet, 0, 2 ); // unknown 2 - z
+        bc.addCondition(boundary::west, condition_type::neumann, &neuData );
+
+        // ORIGINAL
+        // bc.addCornerValue(boundary::southwest, 0.0, 0, 0); // (corner,value, patch, unknown)
+
+        bc.addCondition(boundary::east, condition_type::dirichlet, 0, 1 ); // unknown 1 - y
+        bc.addCondition(boundary::east, condition_type::dirichlet, 0, 2 ); // unknown 2 - z
+
+        // NOT ORIGINAL
+        bc.addCondition(boundary::west, condition_type::dirichlet, 0, 0 ); // unknown 1 - y
+        bc.addCondition(boundary::east, condition_type::dirichlet, 0, 0 ); // unknown 1 - y
+
+        // Surface forces
+        tmp << 0, 0, -90;
+
+
     }
     else if (testCase == 9)
     {
