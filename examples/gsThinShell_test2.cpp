@@ -58,7 +58,7 @@ int main(int argc, char *argv[])
         mp.addAutoBoundaries();
         mp.embed(3);
         E_modulus = 1.0;
-        thickness = 0.5;
+        thickness = 1.0;
 
     }
     else if (testCase == 2 || testCase == 3)
@@ -76,7 +76,7 @@ int main(int argc, char *argv[])
         fd.getId(0, mp); // id=0: Multipatch domain
         mp.embed(3);
         E_modulus = 1.0;
-        thickness = 0.5;
+        thickness = 1.0;
     }
     //! [Read input file]
 
@@ -202,14 +202,26 @@ int main(int argc, char *argv[])
     solver.compute( assembler.matrix() );
     gsVector<> solVector = solver.solve(assembler.rhs());
 
-    // update deformed patch
-    // gsMatrix<> cc;
-    // for ( size_t k =0; k!=mp_def.nPatches(); ++k) // Deform the geometry
-    // {
-    //     // extract deformed geometry
-    //     u_sol.extract(cc, k);
-    //     mp_def.patch(k).coefs() += cc;  // defG points to mp_def, therefore updated
-    // }
+    // gsInfo<<assembler.matrix().toDense()<<"\n";
+    // gsInfo<<assembler.rhs()<<"\n";
+    // gsInfo<<solVector<<"\n";
+    mp_def = assembler.constructSolution(solVector);
+    if ((plot) && (!nonlinear))
+    {
+
+        gsMultiPatch<> deformation = mp_def;
+        for (size_t k = 0; k != mp_def.nPatches(); ++k)
+            deformation.patch(0).coefs() -= mp.patch(0).coefs();
+
+        gsField<> solField(mp, deformation);
+        gsInfo<<"Plotting in Paraview...\n";
+        gsWriteParaview<>( solField, "solution", 1000, true);
+
+        // ev.options().setSwitch("plot.elements", true);
+        // ev.writeParaview( u_sol   , G, "solution");
+
+        // gsFileManager::open("solution.pvd");
+    }
 
     /*Something with Dirichlet homogenization*/
 
@@ -217,99 +229,68 @@ int main(int argc, char *argv[])
 
     // ! [Solve nonlinear problem]
 
-    // real_t residual = A.rhs().norm();
-    // if (nonlinear)
-    // {
-    //     index_t itMax = 10;
-    //     real_t tol = 1e-8;
-    //     for (index_t it = 0; it != itMax; ++it)
-    //     {
-    //         A.initSystem();
-    //         // assemble system
-    //         A.assemble(
-    //             (
-    //             (tt.val()) * (E_m_der * reshape(mm,3,3) * E_m_der.tr() + E_m_der2)
-    //             +
-    //             (tt.val() * tt.val() * tt.val())/3.0 * (E_f_der * reshape(mm,3,3) * E_f_der.tr() -  E_f_der2)
-    //             ) * meas(G)
-    //             , u * ff * meas(G)
-    //             -
-    //             (
-    //              (
-    //                 (tt.val()) *(E_m * reshape(mm,3,3) * E_m_der.tr()) -
-    //                 (tt.val() * tt.val() * tt.val())/3.0 * (E_f * reshape(mm,3,3) * E_f_der.tr())
-    //              ) * meas(G)
-    //             ).tr()
-    //             );
+    real_t residual = assembler.rhs().norm();
+    if (nonlinear)
+    {
+        index_t itMax = 10;
+        real_t tol = 1e-8;
+        for (index_t it = 0; it != itMax; ++it)
+        {
+            assembler.assemble(mp_def);
+            // solve system
+            solver.compute( assembler.matrix() );
+            solVector = solver.solve(assembler.rhs()); // this is the UPDATE
+            residual = assembler.rhs().norm();
 
-    //         // A.assemble(tt.val() * tt.val() * tt.val() / 3.0 * E_f_der2);
-    //         // solve system
-    //         solver.compute( A.matrix() );
-    //         solVector = solver.solve(A.rhs()); // this is the UPDATE
-    //         residual = A.rhs().norm();
+            gsInfo<<"Iteration: "<< it
+                   <<", residue: "<< residual
+                   <<", update norm: "<<solVector.norm()
+                   <<"\n";
 
-    //         gsInfo<<"Iteration: "<< it
-    //                <<", residue: "<< residual
-    //                <<", update norm: "<<solVector.norm()
-    //                <<"\n";
-
-    //         // update deformed patch
-    //         gsMatrix<> cc;
-    //         for ( size_t k =0; k!=mp_def.nPatches(); ++k) // Deform the geometry
-    //         {
-    //             // extract deformed geometry
-    //             u_sol.extract(cc, k);
-    //             mp_def.patch(k).coefs() += cc;  // defG points to mp_def, therefore updated
-
-
-    //             // gsInfo<<"coefficients = "<<cc<<"\n";
-    //             // gsInfo<<"solVector = "<<solVector.transpose()<<"\n";
-    //         }
-
-
-    //         if (residual < tol)
-    //             break;
-    //     }
-    // }
+            if (residual < tol)
+                break;
+        }
+    }
 
 
     // ! [Solve nonlinear problem]
 
-    // For Neumann (same for Dirichlet/Nitche) conditions
-    // variable g_N = A.getBdrFunction();
-    // A.assembleRhsBc(u * g_N.val() * nv(G).norm(), bc.neumannSides() );
+    // // For Neumann (same for Dirichlet/Nitche) conditions
+    // variable g_N = assembler.getBdrFunction();
+    // assembler.assembleRhsBc(u * g_N.val() * nv(G).norm(), bc.neumannSides() );
 
-    // Penalize the matrix? (we need values for the DoFs to be enforced..
-    // function/call:  penalize_matrix(DoF_indices, DoF_values)
-    // otherwise: should we tag the DoFs inside "u" ?
+    // // Penalize the matrix? (we need values for the DoFs to be enforced..
+    // // function/call:  penalize_matrix(DoF_indices, DoF_values)
+    // // otherwise: should we tag the DoFs inside "u" ?
 
-    // gsInfo<<"RHS rows = "<<A.rhs().rows()<<"\n";
-    // gsInfo<<"RHS cols = "<<A.rhs().cols()<<"\n";
-    // gsInfo<<"MAT rows = "<<A.matrix().rows()<<"\n";
-    // gsInfo<<"MAT cols = "<<A.matrix().cols()<<"\n";
+    // gsInfo<<"RHS rows = "<<assembler.rhs().rows()<<"\n";
+    // gsInfo<<"RHS cols = "<<assembler.rhs().cols()<<"\n";
+    // gsInfo<<"MAT rows = "<<assembler.matrix().rows()<<"\n";
+    // gsInfo<<"MAT cols = "<<assembler.matrix().cols()<<"\n";
 
-    // gsInfo<< A.rhs().transpose() <<"\n";
-    // gsInfo<< A.matrix().toDense()<<"\n";
+    // gsInfo<< assembler.rhs().transpose() <<"\n";
+    // gsInfo<< assembler.matrix().toDense()<<"\n";
 
-    // ADD BOUNDARY CONDITIONS! (clamped will be tricky..............)
+    // // ADD BOUNDARY CONDITIONS! (clamped will be tricky..............)
 
 
-    //! [Export visualization in ParaView]
-    // if (plot)
-    // {
-    //     gsMultiPatch<> deformation = mp_def;
-    //     for (index_t k = 0; k != mp_def.nPatches(); ++k)
-    //         deformation.patch(0).coefs() -= mp.patch(0).coefs();
+    // ! [Export visualization in ParaView]
+    if ( (plot) && (nonlinear) )
+    {
+        mp_def = assembler.constructSolution(solVector);
+        gsMultiPatch<> deformation = mp_def;
+        for (size_t k = 0; k != mp_def.nPatches(); ++k)
+            deformation.patch(0).coefs() -= mp.patch(0).coefs();
 
-    //     gsField<> solField(mp, deformation);
-    //     gsInfo<<"Plotting in Paraview...\n";
-    //     gsWriteParaview<>( solField, "solution", 1000, true);
+        gsField<> solField(mp, deformation);
+        gsInfo<<"Plotting in Paraview...\n";
+        gsWriteParaview<>( solField, "solution", 1000, true);
 
-    //     // ev.options().setSwitch("plot.elements", true);
-    //     // ev.writeParaview( u_sol   , G, "solution");
+        // ev.options().setSwitch("plot.elements", true);
+        // ev.writeParaview( u_sol   , G, "solution");
 
-    //     // gsFileManager::open("solution.pvd");
-    // }
+        // gsFileManager::open("solution.pvd");
+    }
 
     return EXIT_SUCCESS;
 
