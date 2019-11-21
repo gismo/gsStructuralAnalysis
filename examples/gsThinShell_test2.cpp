@@ -199,13 +199,14 @@ int main(int argc, char *argv[])
     // assemble system
     assembler.assemble();
     // solve system
+    gsDebugVar(assembler.matrix());
     solver.compute( assembler.matrix() );
     gsVector<> solVector = solver.solve(assembler.rhs());
 
     // gsInfo<<assembler.matrix().toDense()<<"\n";
     // gsInfo<<assembler.rhs()<<"\n";
     // gsInfo<<solVector<<"\n";
-    mp_def = assembler.constructSolution(solVector);
+    assembler.constructSolution(solVector,mp_def);
     if ((plot) && (!nonlinear))
     {
 
@@ -229,7 +230,9 @@ int main(int argc, char *argv[])
 
     // ! [Solve nonlinear problem]
 
+    assembler.assemble();
     real_t residual = assembler.rhs().norm();
+    assembler.assemble(mp_def);
     if (nonlinear)
     {
         index_t itMax = 10;
