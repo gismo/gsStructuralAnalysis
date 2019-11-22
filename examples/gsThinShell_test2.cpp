@@ -15,6 +15,7 @@
 #include <gismo_dev.h>
 
 #include <gsThinShell2/gsThinShellAssembler.h>
+#include <gsThinShell2/gsMaterialMatrix.h>
 
 //#include <gsThinShell/gsNewtonIterator.h>
 
@@ -181,6 +182,8 @@ int main(int argc, char *argv[])
     gsFunctionExpr<> t(std::to_string(thickness), 3);
     gsFunctionExpr<> E(std::to_string(E_modulus),3);
     gsFunctionExpr<> nu(std::to_string(PoissonRatio),3);
+
+    // gsMaterialMatrix<> materialMatrix(mp,t,E,nu);
 
     gsThinShellAssembler assembler(mp,dbasis,bc,force,t,E,nu);
 
