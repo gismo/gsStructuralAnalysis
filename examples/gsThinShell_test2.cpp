@@ -178,14 +178,35 @@ int main(int argc, char *argv[])
     }
     //! [Refinement]
 
+    // Linear isotropic material model
     gsConstantFunction<> force(tmp,3);
     gsFunctionExpr<> t(std::to_string(thickness), 3);
     gsFunctionExpr<> E(std::to_string(E_modulus),3);
     gsFunctionExpr<> nu(std::to_string(PoissonRatio),3);
+    gsMaterialMatrix materialMatrixLinear(mp,t,E,nu);
 
-    // gsMaterialMatrix<> materialMatrix(mp,t,E,nu);
+    // Linear anisotropic material model
+    real_t pi = math::atan(1)*4;
+    std::vector<std::pair<real_t,real_t>> Evec;
+    std::vector<std::pair<real_t,real_t>> nuvec;
+    std::vector<real_t> Gvec;
+    std::vector<real_t> tvec;
+    std::vector<real_t> phivec;
 
-    gsThinShellAssembler assembler(mp,dbasis,bc,force,t,E,nu);
+    index_t kmax = 2;
+    for (index_t k=0; k != kmax; ++k)
+    {
+        Evec.push_back( std::make_pair(E_modulus,E_modulus) );
+        nuvec.push_back( std::make_pair(PoissonRatio,PoissonRatio) );
+        Gvec.push_back( 0.5 * E_modulus / (1+PoissonRatio) );
+        tvec.push_back( thickness/kmax );
+        phivec.push_back( k / kmax * pi/2.0);
+    }
+    gsMaterialMatrix materialMatrixComposite(mp,tvec,Evec,Gvec,nuvec,phivec);
+
+
+
+    gsThinShellAssembler assembler(mp,dbasis,bc,force,materialMatrixLinear);
 
 
     gsSparseSolver<>::CGDiagonal solver;
@@ -202,7 +223,7 @@ int main(int argc, char *argv[])
     // assemble system
     assembler.assemble();
     // solve system
-    gsDebugVar(assembler.matrix());
+    gsDebugVar(assembler.matrix().toDense());
     solver.compute( assembler.matrix() );
     gsVector<> solVector = solver.solve(assembler.rhs());
 
@@ -233,9 +254,10 @@ int main(int argc, char *argv[])
 
     // ! [Solve nonlinear problem]
 
-    assembler.assemble();
+    // assembler.assemble();
+    // assembler.assemble(mp_def);
+
     real_t residual = assembler.rhs().norm();
-    assembler.assemble(mp_def);
     if (nonlinear)
     {
         index_t itMax = 10;
