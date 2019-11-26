@@ -242,10 +242,12 @@ int main(int argc, char *argv[])
         gsInfo<<"Plotting in Paraview...\n";
         gsWriteParaview<>( solField, "solution", 1000, true);
 
-        // ev.options().setSwitch("plot.elements", true);
-        // ev.writeParaview( u_sol   , G, "solution");
+        // GIVES SEGFAULT
+        // gsPiecewiseFunction<> stresses;
+        // assembler.constructStress(mp_def,stresses,stress_type::flexural);
+        // gsField<> stressField(mp,stresses, true);
 
-        // gsFileManager::open("solution.pvd");
+        // gsWriteParaview( stressField, "stress", 5000);
     }
 
     /*Something with Dirichlet homogenization*/
