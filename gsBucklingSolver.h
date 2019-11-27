@@ -43,32 +43,35 @@ public:
     m_nonlinearFun(nonlinear),
     m_scaling(scaling)
   {
+    m_verbose = false;
     this->initializeMatrix();
   }
 
   /// Constructor giving access to the gsShellAssembler object to create a linear system per iteration
   gsBucklingSolver(     gsSparseMatrix<T> &linear,
                         gsSparseMatrix<T> &nonlinear ) :
-    m_linear(Jacobian),
-    m_nonlinear(Residual)
+    m_linear(linear),
+    m_nonlinear(nonlinear)
   {
-
+    m_verbose = false;
   }
 public:
+
+    void verbose();
 
     void compute();
 
     gsMatrix<T> values() const { return m_values; };
     T value(int k) const { return m_values.at(k); };
 
-    gsMatrix<T> vector() const { return m_vectors; };
+    gsMatrix<T> vectors() const { return m_vectors; };
     gsMatrix<T> vector(int k) const { return m_vectors.col(k); };
 
     modes_t mode(int k) const {makeMode(k); return m_mode; }
 
 protected:
 
-    const gsSparseMatrix<T> m_linear
+    const gsSparseMatrix<T> m_linear;
     gsSparseMatrix<T> m_nonlinear;
     const gsVector<T> m_rhs;
     const std::function < gsSparseMatrix<T> ( gsVector<T> const & ) > m_nonlinearFun;
@@ -83,6 +86,8 @@ protected:
     gsMatrix<T> m_values,m_vectors;
 
     modes_t m_mode;
+
+    bool m_verbose;
 
 protected:
 
@@ -103,22 +108,31 @@ namespace gismo
 template <class T>
 void gsBucklingSolver<T>::initializeMatrix()
 {
-    solver.compute(m_linear);
-    m_solVec = solver.solve(scaling*m_rhs);
-    m_nonlinear = m_nonlinearFun(m_solVec);
+  if (m_verbose) { gsInfo<<"Computing matrices" ; }
+  m_solver.compute(m_linear);
+  if (m_verbose) { gsInfo<<"." ; }
+  m_solVec = m_solver.solve(m_scaling*m_rhs);
+  if (m_verbose) { gsInfo<<"." ; }
+  m_nonlinear = m_nonlinearFun(m_solVec);
+  if (m_verbose) { gsInfo<<"." ; }
+  if (m_verbose) { gsInfo<<"Finished\n" ; }
 };
 
 template <class T>
 void gsBucklingSolver<T>::compute()
 {
+    if (m_verbose) { gsInfo<<"Solving eigenvalue problem" ; }
     m_eigSolver.compute(m_linear,m_nonlinear - m_linear);
-
+    if (m_verbose) { gsInfo<<"." ; }
     m_values  = m_eigSolver.eigenvalues();
+    if (m_verbose) { gsInfo<<"." ; }
     m_vectors = m_eigSolver.eigenvectors();
+    if (m_verbose) { gsInfo<<"." ; }
+    if (m_verbose) { gsInfo<<"Finished\n" ; }
 };
 
 template <class T>
-void gsModalSolver<T>::makeMode(int k)
+void gsBucklingSolver<T>::makeMode(int k)
 {
     m_mode.push_back( std::make_pair( m_values.at(k), m_vectors.col(k) ) );
 };
