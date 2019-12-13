@@ -243,11 +243,11 @@ int main(int argc, char *argv[])
         gsWriteParaview<>( solField, "solution", 1000, true);
 
         // GIVES SEGFAULT
-        // gsPiecewiseFunction<> stresses;
-        // assembler.constructStress(mp_def,stresses,stress_type::flexural);
-        // gsField<> stressField(mp,stresses, true);
+        gsPiecewiseFunction<> stresses;
+        assembler.constructStress(mp_def,stresses,stress_type::flexural);
+        gsField<> stressField(mp,stresses, true);
 
-        // gsWriteParaview( stressField, "stress", 5000);
+        gsWriteParaview( stressField, "stress", 5000);
     }
 
     /*Something with Dirichlet homogenization*/
