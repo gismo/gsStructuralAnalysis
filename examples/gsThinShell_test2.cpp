@@ -223,7 +223,6 @@ int main(int argc, char *argv[])
     // assemble system
     assembler.assemble();
     // solve system
-    gsDebugVar(assembler.matrix().toDense());
     solver.compute( assembler.matrix() );
     gsVector<> solVector = solver.solve(assembler.rhs());
 
@@ -260,6 +259,7 @@ int main(int argc, char *argv[])
     // assembler.assemble(mp_def);
 
     real_t residual = assembler.rhs().norm();
+    gsVector<> updateVector = solVector;
     if (nonlinear)
     {
         index_t itMax = 10;
@@ -269,16 +269,21 @@ int main(int argc, char *argv[])
             assembler.assemble(mp_def);
             // solve system
             solver.compute( assembler.matrix() );
-            solVector = solver.solve(assembler.rhs()); // this is the UPDATE
+            updateVector = solver.solve(assembler.rhs()); // this is the UPDATE
             residual = assembler.rhs().norm();
+
+            solVector += updateVector;
+            mp_def = assembler.constructSolution(solVector);
 
             gsInfo<<"Iteration: "<< it
                    <<", residue: "<< residual
-                   <<", update norm: "<<solVector.norm()
+                   <<", update norm: "<<updateVector.norm()
                    <<"\n";
 
             if (residual < tol)
                 break;
+
+            // ADD DIRICHLET HOMOGENIZE
         }
     }
 
