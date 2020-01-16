@@ -104,6 +104,9 @@ int main(int argc, char *argv[])
     gsVector<> neu(3);
     neu << 0, 0, 0;
 
+    gsPointLoads<real_t> pLoads = gsPointLoads<real_t>();
+
+
     gsConstantFunction<> neuData(neu,3);
     if (testCase == 1)
     {
@@ -114,7 +117,14 @@ int main(int argc, char *argv[])
             bc.addCondition(boundary::south, condition_type::dirichlet, 0, i ); // unknown 2 - z
             bc.addCondition(boundary::west, condition_type::dirichlet, 0, i ); // unknown 2 - z
         }
+        // tmp << 0,0,0;
         tmp << 0,0,-1;
+
+        // Point loads
+        gsVector<> point(2);
+        gsVector<> load (3);
+        // point<< 0.5, 0.5 ; load << 0.0, 1.0, 0.0 ;
+        // pLoads.addLoad(point, load, 0 );
     }
     else if (testCase == 2)
     {
@@ -183,7 +193,7 @@ int main(int argc, char *argv[])
     gsFunctionExpr<> t(std::to_string(thickness), 3);
     gsFunctionExpr<> E(std::to_string(E_modulus),3);
     gsFunctionExpr<> nu(std::to_string(PoissonRatio),3);
-    gsMaterialMatrix materialMatrixLinear(mp,t,E,nu);
+    gsMaterialMatrix materialMatrixLinear(mp,mp_def,t,E,nu);
 
     // Linear anisotropic material model
     real_t pi = math::atan(1)*4;
@@ -207,6 +217,7 @@ int main(int argc, char *argv[])
 
 
     gsThinShellAssembler assembler(mp,dbasis,bc,force,materialMatrixLinear);
+    assembler.setPointLoads(pLoads);
 
 
     gsSparseSolver<>::CGDiagonal solver;
@@ -239,14 +250,14 @@ int main(int argc, char *argv[])
 
         gsField<> solField(mp, deformation);
         gsInfo<<"Plotting in Paraview...\n";
-        gsWriteParaview<>( solField, "solution", 1000, true);
+        gsWriteParaview<>( solField, "ThinShell_solution", 1000, true);
 
-        // GIVES SEGFAULT
-        gsPiecewiseFunction<> stresses;
-        assembler.constructStress(mp_def,stresses,stress_type::flexural);
-        gsField<> stressField(mp,stresses, true);
+        // // GIVES SEGFAULT
+        // gsPiecewiseFunction<> stresses;
+        // assembler.constructStress(mp_def,stresses,stress_type::flexural);
+        // gsField<> stressField(mp,stresses, true);
 
-        gsWriteParaview( stressField, "stress", 5000);
+        // gsWriteParaview( stressField, "stress", 5000);
     }
 
     /*Something with Dirichlet homogenization*/
