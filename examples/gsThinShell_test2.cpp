@@ -235,6 +235,10 @@ int main(int argc, char *argv[])
     assembler.assemble();
     // solve system
     solver.compute( assembler.matrix() );
+
+    gsDebugVar(assembler.matrix().toDense());
+    gsDebugVar(assembler.rhs().transpose());
+
     gsVector<> solVector = solver.solve(assembler.rhs());
 
     // gsInfo<<assembler.matrix().toDense()<<"\n";
@@ -280,6 +284,10 @@ int main(int argc, char *argv[])
             assembler.assemble(mp_def);
             // solve system
             solver.compute( assembler.matrix() );
+
+            gsDebugVar(assembler.matrix().toDense());
+            gsDebugVar(assembler.rhs().transpose());
+
             updateVector = solver.solve(assembler.rhs()); // this is the UPDATE
             residual = assembler.rhs().norm();
 
