@@ -198,7 +198,7 @@ int main(int argc, char *argv[])
     gsMaterialMatrix materialMatrixNonlinear(mp,mp_def,t,E,nu);
     // materialMatrixNonlinear.options().setInt("MaterialLaw",material_law::NHK);
     materialMatrixNonlinear.options().setInt("MaterialLaw",2);
-    materialMatrixNonlinear.options().setInt("Compressibility",1);
+    materialMatrixNonlinear.options().setInt("Compressibility",0);
     // materialMatrixNonlinear.options().setInt("Compressible",compressibility::incompressible);
 
 
