@@ -195,6 +195,13 @@ int main(int argc, char *argv[])
     gsFunctionExpr<> nu(std::to_string(PoissonRatio),3);
     gsMaterialMatrix materialMatrixLinear(mp,mp_def,t,E,nu);
 
+    gsMaterialMatrix materialMatrixNonlinear(mp,mp_def,t,E,nu);
+    // materialMatrixNonlinear.options().setInt("MaterialLaw",material_law::NHK);
+    materialMatrixNonlinear.options().setInt("MaterialLaw",2);
+    materialMatrixNonlinear.options().setInt("Compressibility",1);
+    // materialMatrixNonlinear.options().setInt("Compressible",compressibility::incompressible);
+
+
     // Linear anisotropic material model
     real_t pi = math::atan(1)*4;
     std::vector<std::pair<real_t,real_t>> Evec;
@@ -212,11 +219,11 @@ int main(int argc, char *argv[])
         tvec.push_back( thickness/kmax );
         phivec.push_back( k / kmax * pi/2.0);
     }
-    gsMaterialMatrix materialMatrixComposite(mp,tvec,Evec,Gvec,nuvec,phivec);
+    gsMaterialMatrix materialMatrixComposite(mp,mp_def,tvec,Evec,Gvec,nuvec,phivec);
 
 
 
-    gsThinShellAssembler assembler(mp,dbasis,bc,force,materialMatrixLinear);
+    gsThinShellAssembler assembler(mp,dbasis,bc,force,materialMatrixNonlinear);
     assembler.setPointLoads(pLoads);
 
 
