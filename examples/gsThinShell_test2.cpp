@@ -35,6 +35,7 @@ int main(int argc, char *argv[])
 
     real_t E_modulus = 1.0;
     real_t PoissonRatio = 0.0;
+    real_t Density = 1.0;
     real_t thickness = 1.0;
 
     gsCmdLine cmd("Tutorial on solving a Poisson problem.");
@@ -193,9 +194,10 @@ int main(int argc, char *argv[])
     gsFunctionExpr<> t(std::to_string(thickness), 3);
     gsFunctionExpr<> E(std::to_string(E_modulus),3);
     gsFunctionExpr<> nu(std::to_string(PoissonRatio),3);
-    gsMaterialMatrix materialMatrixLinear(mp,mp_def,t,E,nu);
+    gsFunctionExpr<> rho(std::to_string(Density),3);
+    gsMaterialMatrix materialMatrixLinear(mp,mp_def,t,E,nu,rho);
 
-    gsMaterialMatrix materialMatrixNonlinear(mp,mp_def,t,E,nu);
+    gsMaterialMatrix materialMatrixNonlinear(mp,mp_def,t,E,nu,rho);
     // materialMatrixNonlinear.options().setInt("MaterialLaw",material_law::NHK);
     materialMatrixNonlinear.options().setInt("MaterialLaw",2);
     materialMatrixNonlinear.options().setInt("Compressibility",0);
@@ -223,7 +225,7 @@ int main(int argc, char *argv[])
 
 
 
-    gsThinShellAssembler assembler(mp,dbasis,bc,force,materialMatrixNonlinear);
+    gsThinShellAssembler assembler(mp,dbasis,bc,force,materialMatrixLinear);
     assembler.setPointLoads(pLoads);
 
 
@@ -231,7 +233,8 @@ int main(int argc, char *argv[])
 
     // gsInfo<< A.numDofs() <<"\n"<<std::flush;
 
-
+    // assembler.assembleMass();
+    // gsDebugVar(assembler.matrix());
 
     gsVector<> pt(2); pt.setConstant(0.25);
     // evaluateFunction(ev, u * ff * meas(G), pt); // evaluates an expression on a point
@@ -263,12 +266,11 @@ int main(int argc, char *argv[])
         gsInfo<<"Plotting in Paraview...\n";
         gsWriteParaview<>( solField, "ThinShell_solution", 1000, true);
 
-        // // GIVES SEGFAULT
-        // gsPiecewiseFunction<> stresses;
-        // assembler.constructStress(mp_def,stresses,stress_type::flexural);
-        // gsField<> stressField(mp,stresses, true);
+        gsPiecewiseFunction<> stresses;
+        assembler.constructStress(mp_def,stresses,stress_type::membrane);
+        gsField<> stressField(mp,stresses, true);
 
-        // gsWriteParaview( stressField, "stress", 5000);
+        gsWriteParaview( stressField, "stress", 5000);
     }
 
     /*Something with Dirichlet homogenization*/
@@ -346,6 +348,12 @@ int main(int argc, char *argv[])
         gsField<> solField(mp, deformation);
         gsInfo<<"Plotting in Paraview...\n";
         gsWriteParaview<>( solField, "solution", 1000, true);
+
+        gsPiecewiseFunction<> stresses;
+        assembler.constructStress(mp_def,stresses,stress_type::membrane);
+        gsField<> stressField(mp,stresses, true);
+
+        gsWriteParaview( stressField, "stress", 5000);
 
         // ev.options().setSwitch("plot.elements", true);
         // ev.writeParaview( u_sol   , G, "solution");
