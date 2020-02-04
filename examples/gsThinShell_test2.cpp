@@ -30,6 +30,7 @@ int main(int argc, char *argv[])
     index_t numRefine  = 1;
     index_t numElevate = 1;
     index_t testCase = 1;
+    index_t Compressibility = 0;
     bool nonlinear = false;
     std::string fn("pde/poisson2d_bvp.xml");
 
@@ -43,6 +44,7 @@ int main(int argc, char *argv[])
                 "Number of degree elevation steps to perform before solving (0: equalize degree in all directions)", numElevate );
     cmd.addInt( "r", "uniformRefine", "Number of Uniform h-refinement steps to perform before solving",  numRefine );
     cmd.addInt( "t", "testCase", "Test case to run: 1 = unit square; 2 = Scordelis Lo Roof",  testCase );
+    cmd.addInt( "c", "Compressibility", "1: compressible, 0: incompressible",  Compressibility );
     cmd.addString( "f", "file", "Input XML file", fn );
     cmd.addSwitch("nl", "Solve nonlinear problem", nonlinear);
     cmd.addSwitch("plot", "Create a ParaView visualization file with the solution", plot);
@@ -61,11 +63,11 @@ int main(int argc, char *argv[])
         mp.embed(3);
         E_modulus = 1.0;
         thickness = 1.0;
-
+        PoissonRatio = 0.0;
     }
     else if (testCase == 2 || testCase == 3)
     {
-        thickness = 0.125;
+        thickness = 0.25;
         E_modulus = 4.32E8;
         fn = "../extensions/unsupported/filedata/scordelis_lo_roof.xml";
         gsReadFile<>(fn, mp);
@@ -140,8 +142,9 @@ int main(int argc, char *argv[])
         bc.addCondition(boundary::east, condition_type::dirichlet, 0, 2 ); // unknown 2 - z
 
         // NOT ORIGINAL
-        bc.addCondition(boundary::west, condition_type::dirichlet, 0, 0 ); // unknown 1 - y
-        bc.addCondition(boundary::east, condition_type::dirichlet, 0, 0 ); // unknown 1 - y
+        // bc.addCondition(boundary::west, condition_type::dirichlet, &displ, 0 ); // unknown 1 - x
+        bc.addCondition(boundary::west, condition_type::dirichlet, 0, 0 ); // unknown 1 - x
+        bc.addCondition(boundary::east, condition_type::dirichlet, 0, 0 ); // unknown 1 - x
 
         // Surface forces
         tmp << 0, 0, -90;
@@ -151,7 +154,7 @@ int main(int argc, char *argv[])
         neu << 0, 0, -90;
         neuData.setValue(neu,3);
         // Diaphragm conditions
-        bc.addCondition(boundary::west, condition_type::dirichlet, 0, 1 ); // unknown 1 - y
+        // bc.addCondition(boundary::west, condition_type::dirichlet, 0, 1 ); // unknown 1 - y
         // bc.addCondition(boundary::west, condition_type::dirichlet, 0, 2 ); // unknown 2 - z
         bc.addCondition(boundary::west, condition_type::neumann, &neuData );
 
@@ -162,13 +165,11 @@ int main(int argc, char *argv[])
         bc.addCondition(boundary::east, condition_type::dirichlet, 0, 2 ); // unknown 2 - z
 
         // NOT ORIGINAL
-        bc.addCondition(boundary::west, condition_type::dirichlet, 0, 0 ); // unknown 1 - y
-        bc.addCondition(boundary::east, condition_type::dirichlet, 0, 0 ); // unknown 1 - y
+        // bc.addCondition(boundary::west, condition_type::dirichlet, 0, 0 ); // unknown 1 - x
+        bc.addCondition(boundary::east, condition_type::dirichlet, 0, 0 ); // unknown 1 - x
 
         // Surface forces
-        tmp << 0, 0, -90;
-
-
+        tmp << 0, 0, 0;
     }
     else if (testCase == 9)
     {
@@ -200,7 +201,7 @@ int main(int argc, char *argv[])
     gsMaterialMatrix materialMatrixNonlinear(mp,mp_def,t,E,nu,rho);
     // materialMatrixNonlinear.options().setInt("MaterialLaw",material_law::NHK);
     materialMatrixNonlinear.options().setInt("MaterialLaw",2);
-    materialMatrixNonlinear.options().setInt("Compressibility",0);
+    materialMatrixNonlinear.options().setInt("Compressibility",Compressibility);
     // materialMatrixNonlinear.options().setInt("Compressible",compressibility::incompressible);
 
 
@@ -225,7 +226,8 @@ int main(int argc, char *argv[])
 
 
 
-    gsThinShellAssembler assembler(mp,dbasis,bc,force,materialMatrixLinear);
+    gsThinShellAssembler assembler(mp,dbasis,bc,force,materialMatrixNonlinear);
+    // gsThinShellAssembler assembler(mp,dbasis,bc,force,materialMatrixLinear);
     assembler.setPointLoads(pLoads);
 
 
@@ -234,7 +236,6 @@ int main(int argc, char *argv[])
     // gsInfo<< A.numDofs() <<"\n"<<std::flush;
 
     // assembler.assembleMass();
-    // gsDebugVar(assembler.matrix());
 
     gsVector<> pt(2); pt.setConstant(0.25);
     // evaluateFunction(ev, u * ff * meas(G), pt); // evaluates an expression on a point
@@ -264,13 +265,13 @@ int main(int argc, char *argv[])
 
         gsField<> solField(mp, deformation);
         gsInfo<<"Plotting in Paraview...\n";
-        gsWriteParaview<>( solField, "ThinShell_solution", 1000, true);
+        gsWriteParaview<>( solField, "solution", 1000, true);
 
-        gsPiecewiseFunction<> stresses;
-        assembler.constructStress(mp_def,stresses,stress_type::membrane);
-        gsField<> stressField(mp,stresses, true);
+        // gsPiecewiseFunction<> stresses;
+        // assembler.constructStress(mp_def,stresses,stress_type::membrane);
+        // gsField<> stressField(mp,stresses, true);
 
-        gsWriteParaview( stressField, "stress", 5000);
+        // gsWriteParaview( stressField, "stress", 5000);
     }
 
     /*Something with Dirichlet homogenization*/
@@ -286,7 +287,7 @@ int main(int argc, char *argv[])
     gsVector<> updateVector = solVector;
     if (nonlinear)
     {
-        index_t itMax = 10;
+        index_t itMax = 100;
         real_t tol = 1e-8;
         for (index_t it = 0; it != itMax; ++it)
         {
@@ -314,6 +315,10 @@ int main(int argc, char *argv[])
             // ADD DIRICHLET HOMOGENIZE
         }
     }
+
+    gsMatrix<> pts(2,1);
+    pts.col(0).setConstant(0.5);
+    gsDebugVar(assembler.computePrincipalStretches(pts,mp_def));
 
 
     // ! [Solve nonlinear problem]
