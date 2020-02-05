@@ -267,11 +267,11 @@ int main(int argc, char *argv[])
         gsInfo<<"Plotting in Paraview...\n";
         gsWriteParaview<>( solField, "solution", 1000, true);
 
-        // gsPiecewiseFunction<> stresses;
-        // assembler.constructStress(mp_def,stresses,stress_type::membrane);
-        // gsField<> stressField(mp,stresses, true);
+        gsPiecewiseFunction<> stresses;
+        assembler.constructStress(mp_def,stresses,stress_type::principal_stretch);
+        gsField<> stressField(mp,stresses, true);
 
-        // gsWriteParaview( stressField, "stress", 5000);
+        gsWriteParaview( stressField, "stress", 5000);
     }
 
     /*Something with Dirichlet homogenization*/
