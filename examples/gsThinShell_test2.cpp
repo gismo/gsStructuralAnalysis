@@ -63,8 +63,8 @@ int main(int argc, char *argv[])
         mp.addPatch( gsNurbsCreator<>::BSplineSquare(1) ); // degree
         mp.addAutoBoundaries();
         mp.embed(3);
-        E_modulus = 1e0;
-        thickness = 1e0;
+        E_modulus = 1e9;
+        thickness = 1e-3;
         PoissonRatio = 0.499;
     }
     else if (testCase == 2 || testCase == 3)
