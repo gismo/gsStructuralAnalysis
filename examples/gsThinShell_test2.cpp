@@ -31,6 +31,7 @@ int main(int argc, char *argv[])
     index_t numElevate = 1;
     index_t testCase = 1;
     index_t Compressibility = 0;
+    index_t material = 0;
     bool nonlinear = false;
     std::string fn("pde/poisson2d_bvp.xml");
 
@@ -44,6 +45,7 @@ int main(int argc, char *argv[])
                 "Number of degree elevation steps to perform before solving (0: equalize degree in all directions)", numElevate );
     cmd.addInt( "r", "uniformRefine", "Number of Uniform h-refinement steps to perform before solving",  numRefine );
     cmd.addInt( "t", "testCase", "Test case to run: 1 = unit square; 2 = Scordelis Lo Roof",  testCase );
+    cmd.addInt( "m", "Material", "Material law",  material );
     cmd.addInt( "c", "Compressibility", "1: compressible, 0: incompressible",  Compressibility );
     cmd.addString( "f", "file", "Input XML file", fn );
     cmd.addSwitch("nl", "Solve nonlinear problem", nonlinear);
@@ -61,9 +63,9 @@ int main(int argc, char *argv[])
         mp.addPatch( gsNurbsCreator<>::BSplineSquare(1) ); // degree
         mp.addAutoBoundaries();
         mp.embed(3);
-        E_modulus = 1.0;
-        thickness = 1.0;
-        PoissonRatio = 0.0;
+        E_modulus = 1e0;
+        thickness = 1e0;
+        PoissonRatio = 0.499;
     }
     else if (testCase == 2 || testCase == 3)
     {
@@ -71,6 +73,7 @@ int main(int argc, char *argv[])
         E_modulus = 4.32E8;
         fn = "../extensions/unsupported/filedata/scordelis_lo_roof.xml";
         gsReadFile<>(fn, mp);
+        PoissonRatio = 0.0;
     }
     else if (testCase==9)
     {
@@ -131,23 +134,33 @@ int main(int argc, char *argv[])
     }
     else if (testCase == 2)
     {
-        // Diaphragm conditions
-        bc.addCondition(boundary::west, condition_type::dirichlet, 0, 1 ); // unknown 1 - y
-        bc.addCondition(boundary::west, condition_type::dirichlet, 0, 2 ); // unknown 2 - z
+        // // Diaphragm conditions
+        // bc.addCondition(boundary::west, condition_type::dirichlet, 0, 1 ); // unknown 1 - y
+        // bc.addCondition(boundary::west, condition_type::dirichlet, 0, 2 ); // unknown 2 - z
 
-        // ORIGINAL
-        // bc.addCornerValue(boundary::southwest, 0.0, 0, 0); // (corner,value, patch, unknown)
+        // // ORIGINAL
+        // // bc.addCornerValue(boundary::southwest, 0.0, 0, 0); // (corner,value, patch, unknown)
 
-        bc.addCondition(boundary::east, condition_type::dirichlet, 0, 1 ); // unknown 1 - y
-        bc.addCondition(boundary::east, condition_type::dirichlet, 0, 2 ); // unknown 2 - z
+        // bc.addCondition(boundary::east, condition_type::dirichlet, 0, 1 ); // unknown 1 - y
+        // bc.addCondition(boundary::east, condition_type::dirichlet, 0, 2 ); // unknown 2 - z
 
-        // NOT ORIGINAL
-        // bc.addCondition(boundary::west, condition_type::dirichlet, &displ, 0 ); // unknown 1 - x
-        bc.addCondition(boundary::west, condition_type::dirichlet, 0, 0 ); // unknown 1 - x
-        bc.addCondition(boundary::east, condition_type::dirichlet, 0, 0 ); // unknown 1 - x
+        // // NOT ORIGINAL
+        // // bc.addCondition(boundary::west, condition_type::dirichlet, &displ, 0 ); // unknown 1 - x
+        // bc.addCondition(boundary::west, condition_type::dirichlet, 0, 0 ); // unknown 1 - x
+        // bc.addCondition(boundary::east, condition_type::dirichlet, 0, 0 ); // unknown 1 - x
 
-        // Surface forces
-        tmp << 0, 0, -90;
+        // // Surface forces
+        // tmp << 0, 0, -90;
+
+        for (index_t i=0; i!=3; ++i)
+        {
+            bc.addCondition(boundary::north, condition_type::dirichlet, 0, i ); // unknown 0 - x
+            bc.addCondition(boundary::east, condition_type::dirichlet, 0, i ); // unknown 1 - y
+            bc.addCondition(boundary::south, condition_type::dirichlet, 0, i ); // unknown 2 - z
+            bc.addCondition(boundary::west, condition_type::dirichlet, 0, i ); // unknown 2 - z
+        }
+        tmp << 0,0,-90;
+
     }
     else if (testCase == 3)
     {
@@ -224,10 +237,18 @@ int main(int argc, char *argv[])
     }
     gsMaterialMatrix materialMatrixComposite(mp,mp_def,tvec,Evec,Gvec,nuvec,phivec);
 
+    // TEST MATRIX INTEGRATION
+    gsMaterialMatrix materialMatrixTest(mp,mp_def,t,E,nu,rho);
+    materialMatrixTest.options().setInt("MaterialLaw",-1);
+    gsVector<> testPt(2);
+    testPt.setConstant(0.5);
+    gsMatrix<> testResult;
+    materialMatrixTest.eval_into(testPt,testResult);
+    gsDebugVar(testResult);
+    // ! TEST MATRIX INTEGRATION
 
-
-    gsThinShellAssembler assembler(mp,dbasis,bc,force,materialMatrixNonlinear);
-    // gsThinShellAssembler assembler(mp,dbasis,bc,force,materialMatrixLinear);
+    // gsThinShellAssembler assembler(mp,dbasis,bc,force,materialMatrixNonlinear);
+    gsThinShellAssembler assembler(mp,dbasis,bc,force,materialMatrixLinear);
     assembler.setPointLoads(pLoads);
 
 
@@ -247,8 +268,8 @@ int main(int argc, char *argv[])
     // solve system
     solver.compute( assembler.matrix() );
 
-    gsDebugVar(assembler.matrix().toDense());
-    gsDebugVar(assembler.rhs().transpose());
+    // gsDebugVar(assembler.matrix().toDense());
+    // gsDebugVar(assembler.rhs().transpose());
 
     gsVector<> solVector = solver.solve(assembler.rhs());
 
@@ -267,11 +288,11 @@ int main(int argc, char *argv[])
         gsInfo<<"Plotting in Paraview...\n";
         gsWriteParaview<>( solField, "solution", 1000, true);
 
-        gsPiecewiseFunction<> stresses;
-        assembler.constructStress(mp_def,stresses,stress_type::principal_stretch);
-        gsField<> stressField(mp,stresses, true);
+        // gsPiecewiseFunction<> stresses;
+        // assembler.constructStress(mp_def,stresses,stress_type::principal_stretch);
+        // gsField<> stressField(mp,stresses, true);
 
-        gsWriteParaview( stressField, "stress", 5000);
+        // gsWriteParaview( stressField, "stress", 5000);
     }
 
     /*Something with Dirichlet homogenization*/
@@ -284,6 +305,8 @@ int main(int argc, char *argv[])
     // assembler.assemble(mp_def);
 
     real_t residual = assembler.rhs().norm();
+    real_t residual0 = residual;
+    real_t residualOld = residual;
     gsVector<> updateVector = solVector;
     if (nonlinear)
     {
@@ -295,8 +318,8 @@ int main(int argc, char *argv[])
             // solve system
             solver.compute( assembler.matrix() );
 
-            gsDebugVar(assembler.matrix().toDense());
-            gsDebugVar(assembler.rhs().transpose());
+            // gsDebugVar(assembler.matrix().toDense());
+            // gsDebugVar(assembler.rhs().transpose());
 
             updateVector = solver.solve(assembler.rhs()); // this is the UPDATE
             residual = assembler.rhs().norm();
@@ -304,12 +327,17 @@ int main(int argc, char *argv[])
             solVector += updateVector;
             mp_def = assembler.constructSolution(solVector);
 
+
             gsInfo<<"Iteration: "<< it
                    <<", residue: "<< residual
                    <<", update norm: "<<updateVector.norm()
+                   <<", log(Ri/R0): "<< math::log10(residualOld/residual0)
+                   <<", log(Ri+1/R0): "<< math::log10(residual/residual0)
                    <<"\n";
 
-            if (residual < tol)
+            residualOld = residual;
+
+            if (updateVector.norm() < tol)
                 break;
 
             // ADD DIRICHLET HOMOGENIZE
@@ -318,7 +346,7 @@ int main(int argc, char *argv[])
 
     gsMatrix<> pts(2,1);
     pts.col(0).setConstant(0.5);
-    gsDebugVar(assembler.computePrincipalStretches(pts,mp_def));
+    // gsDebugVar(assembler.computePrincipalStretches(pts,mp_def));
 
 
     // ! [Solve nonlinear problem]
@@ -354,11 +382,11 @@ int main(int argc, char *argv[])
         gsInfo<<"Plotting in Paraview...\n";
         gsWriteParaview<>( solField, "solution", 1000, true);
 
-        gsPiecewiseFunction<> stresses;
-        assembler.constructStress(mp_def,stresses,stress_type::membrane);
-        gsField<> stressField(mp,stresses, true);
+        // gsPiecewiseFunction<> stresses;
+        // assembler.constructStress(mp_def,stresses,stress_type::membrane);
+        // gsField<> stressField(mp,stresses, true);
 
-        gsWriteParaview( stressField, "stress", 5000);
+        // gsWriteParaview( stressField, "stress", 5000);
 
         // ev.options().setSwitch("plot.elements", true);
         // ev.writeParaview( u_sol   , G, "solution");
