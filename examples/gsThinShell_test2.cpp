@@ -63,8 +63,8 @@ int main(int argc, char *argv[])
         mp.addPatch( gsNurbsCreator<>::BSplineSquare(1) ); // degree
         mp.addAutoBoundaries();
         mp.embed(3);
-        E_modulus = 1e9;
-        thickness = 1e-3;
+        E_modulus = 1e0;
+        thickness = 1e0;
         PoissonRatio = 0.499;
     }
     else if (testCase == 2 || testCase == 3)
@@ -247,8 +247,8 @@ int main(int argc, char *argv[])
     gsDebugVar(testResult);
     // ! TEST MATRIX INTEGRATION
 
-    // gsThinShellAssembler assembler(mp,dbasis,bc,force,materialMatrixNonlinear);
-    gsThinShellAssembler assembler(mp,dbasis,bc,force,materialMatrixLinear);
+    gsThinShellAssembler assembler(mp,dbasis,bc,force,materialMatrixNonlinear);
+    // gsThinShellAssembler assembler(mp,dbasis,bc,force,materialMatrixLinear);
     assembler.setPointLoads(pLoads);
 
 
