@@ -118,17 +118,23 @@ int main(int argc, char *argv[])
     {
         for (index_t i=0; i!=3; ++i)
         {
-            bc.addCondition(boundary::north, condition_type::dirichlet, 0, i ); // unknown 0 - x
-            bc.addCondition(boundary::east, condition_type::dirichlet, 0, i ); // unknown 1 - y
-            bc.addCondition(boundary::south, condition_type::dirichlet, 0, i ); // unknown 2 - z
-            bc.addCondition(boundary::west, condition_type::dirichlet, 0, i ); // unknown 2 - z
+            bc.addCondition(boundary::north, condition_type::dirichlet, 0, 0 ,false,i);
+            bc.addCondition(boundary::east, condition_type::dirichlet, 0, 0 ,false,i);
+            bc.addCondition(boundary::south, condition_type::dirichlet, 0, 0 ,false,i);
+            bc.addCondition(boundary::west, condition_type::dirichlet, 0, 0 ,false,i);
         }
+
+        // bc.addCondition(boundary::north, condition_type::clamped, 0, 0 ,false,2);
+        // bc.addCondition(boundary::east, condition_type::clamped, 0, 0 ,false,2);
+        // bc.addCondition(boundary::south, condition_type::clamped, 0, 0 ,false,2);
+        // bc.addCondition(boundary::west, condition_type::clamped, 0, 0 ,false,2);
+
         // tmp << 0,0,0;
         tmp << 0,0,-1;
 
         // Point loads
-        gsVector<> point(2);
-        gsVector<> load (3);
+        // gsVector<> point(2);
+        // gsVector<> load (3);
         // point<< 0.5, 0.5 ; load << 0.0, 1.0, 0.0 ;
         // pLoads.addLoad(point, load, 0 );
     }
@@ -268,8 +274,8 @@ int main(int argc, char *argv[])
     // solve system
     solver.compute( assembler.matrix() );
 
-    // gsDebugVar(assembler.matrix().toDense());
-    // gsDebugVar(assembler.rhs().transpose());
+    gsDebugVar(assembler.matrix().toDense());
+    gsDebugVar(assembler.rhs().transpose());
 
     gsVector<> solVector = solver.solve(assembler.rhs());
 
@@ -318,8 +324,8 @@ int main(int argc, char *argv[])
             // solve system
             solver.compute( assembler.matrix() );
 
-            // gsDebugVar(assembler.matrix().toDense());
-            // gsDebugVar(assembler.rhs().transpose());
+            gsDebugVar(assembler.matrix().toDense());
+            gsDebugVar(assembler.rhs().transpose());
 
             updateVector = solver.solve(assembler.rhs()); // this is the UPDATE
             residual = assembler.rhs().norm();
