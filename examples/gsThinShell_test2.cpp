@@ -57,17 +57,7 @@ int main(int argc, char *argv[])
     //! [Read input file]
     gsMultiPatch<> mp;
     gsMultiPatch<> mp_def;
-    if (testCase==1)
-    {
-        // Unit square
-        mp.addPatch( gsNurbsCreator<>::BSplineSquare(1) ); // degree
-        mp.addAutoBoundaries();
-        mp.embed(3);
-        E_modulus = 1e0;
-        thickness = 1e0;
-        PoissonRatio = 0.499;
-    }
-    else if (testCase == 2 || testCase == 3)
+    if (testCase == 2  || testCase == 3)
     {
         thickness = 0.25;
         E_modulus = 4.32E8;
@@ -75,15 +65,16 @@ int main(int argc, char *argv[])
         gsReadFile<>(fn, mp);
         PoissonRatio = 0.0;
     }
-    else if (testCase==9)
+    else
     {
-        gsFileData<> fd(fn);
-        gsInfo << "Loaded file "<< fd.lastPath() <<"\n";
-        // Annulus
-        fd.getId(0, mp); // id=0: Multipatch domain
+        // Unit square
+        mp.addPatch( gsNurbsCreator<>::BSplineSquare(1) ); // degree
+        mp.addAutoBoundaries();
         mp.embed(3);
-        E_modulus = 1.0;
-        thickness = 1.0;
+        E_modulus = 1e0;
+        thickness = 1e0;
+        PoissonRatio = 0.0;
+        // PoissonRatio = 0.499;
     }
     //! [Read input file]
 
@@ -140,33 +131,17 @@ int main(int argc, char *argv[])
     }
     else if (testCase == 2)
     {
-        // // Diaphragm conditions
-        // bc.addCondition(boundary::west, condition_type::dirichlet, 0, 1 ); // unknown 1 - y
-        // bc.addCondition(boundary::west, condition_type::dirichlet, 0, 2 ); // unknown 2 - z
+        // Diaphragm conditions
+        bc.addCondition(boundary::west, condition_type::dirichlet, 0, 1 ); // unknown 1 - y
+        bc.addCondition(boundary::west, condition_type::dirichlet, 0, 2 ); // unknown 2 - z
 
-        // // ORIGINAL
-        // // bc.addCornerValue(boundary::southwest, 0.0, 0, 0); // (corner,value, patch, unknown)
+        bc.addCornerValue(boundary::southwest, 0.0, 0, 0); // (corner,value, patch, unknown)
 
-        // bc.addCondition(boundary::east, condition_type::dirichlet, 0, 1 ); // unknown 1 - y
-        // bc.addCondition(boundary::east, condition_type::dirichlet, 0, 2 ); // unknown 2 - z
+        bc.addCondition(boundary::east, condition_type::dirichlet, 0, 1 ); // unknown 1 - y
+        bc.addCondition(boundary::east, condition_type::dirichlet, 0, 2 ); // unknown 2 - z
 
-        // // NOT ORIGINAL
-        // // bc.addCondition(boundary::west, condition_type::dirichlet, &displ, 0 ); // unknown 1 - x
-        // bc.addCondition(boundary::west, condition_type::dirichlet, 0, 0 ); // unknown 1 - x
-        // bc.addCondition(boundary::east, condition_type::dirichlet, 0, 0 ); // unknown 1 - x
-
-        // // Surface forces
-        // tmp << 0, 0, -90;
-
-        for (index_t i=0; i!=3; ++i)
-        {
-            bc.addCondition(boundary::north, condition_type::dirichlet, 0, i ); // unknown 0 - x
-            bc.addCondition(boundary::east, condition_type::dirichlet, 0, i ); // unknown 1 - y
-            bc.addCondition(boundary::south, condition_type::dirichlet, 0, i ); // unknown 2 - z
-            bc.addCondition(boundary::west, condition_type::dirichlet, 0, i ); // unknown 2 - z
-        }
-        tmp << 0,0,-90;
-
+        // Surface forces
+        tmp << 0, 0, -90;
     }
     else if (testCase == 3)
     {
@@ -190,22 +165,75 @@ int main(int argc, char *argv[])
         // Surface forces
         tmp << 0, 0, 0;
     }
-    else if (testCase == 9)
+    // else if (testCase == 10)
+    // {
+    //     for (index_t i=0; i!=3; ++i)
+    //     {
+    //         bc.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, i ); // unknown 0 - x
+    //         bc.addCondition(boundary::east, condition_type::dirichlet, 0, 0, false, i ); // unknown 1 - y
+    //         bc.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, i ); // unknown 2 - z
+    //         bc.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, i ); // unknown 2 - z
+    //     }
+
+
+    // }
+    else if (testCase == 11)
     {
         for (index_t i=0; i!=3; ++i)
         {
-            // patch 0
-            bc.addCondition(0,boundary::north, condition_type::dirichlet, 0, i ); // unknown 0 - x
-            // bc.addCondition(0,boundary::east, condition_type::dirichlet, 0, i ); // unknown 1 - y
-            bc.addCondition(0,boundary::south, condition_type::dirichlet, 0, i ); // unknown 2 - z
-            bc.addCondition(0,boundary::west, condition_type::dirichlet, 0, i ); // unknown 2 - z
-            // patch 1
-            bc.addCondition(1,boundary::north, condition_type::dirichlet, 0, i ); // unknown 0 - x
-            bc.addCondition(1,boundary::east, condition_type::dirichlet, 0, i ); // unknown 1 - y
-            bc.addCondition(1,boundary::south, condition_type::dirichlet, 0, i ); // unknown 2 - z
-            // bc.addCondition(1,boundary::west, condition_type::dirichlet, 0, i ); // unknown 2 - z
+            bc.addCondition(boundary::east, condition_type::dirichlet, 0, 0, false, i ); // unknown 1 - y
+            bc.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, i ); // unknown 2 - z
         }
+
+        bc.addCondition(boundary::east, condition_type::clamped, 0, 0 ,false,2);
+        bc.addCondition(boundary::west, condition_type::clamped, 0, 0 ,false,2);
+
+        tmp<<0,0,-1;
+    }
+    else if (testCase == 12)
+    {
+        for (index_t i=0; i!=3; ++i)
+        {
+            bc.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, i ); // unknown 2 - z
+        }
+
+        bc.addCondition(boundary::west, condition_type::clamped, 0, 0 ,false,2);
+
+        neu << 0, 0, -0.1;
+        neuData.setValue(neu,3);
+
+        bc.addCondition(boundary::east, condition_type::neumann, &neuData );
+    }
+    else if (testCase == 13)
+    {
+        for (index_t i=0; i!=3; ++i)
+        {
+            bc.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, i ); // unknown 0 - x
+            bc.addCondition(boundary::east, condition_type::dirichlet, 0, 0, false, i ); // unknown 1 - y
+            bc.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, i ); // unknown 2 - z
+            bc.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, i ); // unknown 2 - z
+        }
+
+        bc.addCondition(boundary::north, condition_type::clamped, 0, 0 ,false,2);
+        bc.addCondition(boundary::east, condition_type::clamped, 0, 0 ,false,2);
+        bc.addCondition(boundary::south, condition_type::clamped, 0, 0 ,false,2);
+        bc.addCondition(boundary::west, condition_type::clamped, 0, 0 ,false,2);
+
         tmp << 0,0,-1;
+    }
+    else if (testCase == 14)
+    {
+        for (index_t i=0; i!=3; ++i)
+        {
+            bc.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, i ); // unknown 2 - z
+        }
+        bc.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z
+        bc.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z
+
+        tmp << 0,0,-1;
+
+        bc.addCondition(boundary::east, condition_type::collapsed, 0, 0 ,false,0);
+        bc.addCondition(boundary::east, condition_type::collapsed, 0, 0, false, 2 );
     }
     //! [Refinement]
 
