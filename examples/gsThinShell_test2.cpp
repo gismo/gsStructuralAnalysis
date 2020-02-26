@@ -33,7 +33,8 @@ int main(int argc, char *argv[])
     index_t Compressibility = 0;
     index_t material = 0;
     bool nonlinear = false;
-    std::string fn("pde/poisson2d_bvp.xml");
+    bool verbose = false;
+    std::string fn;
 
     real_t E_modulus = 1.0;
     real_t PoissonRatio = 0.0;
@@ -49,6 +50,7 @@ int main(int argc, char *argv[])
     cmd.addInt( "c", "Compressibility", "1: compressible, 0: incompressible",  Compressibility );
     cmd.addString( "f", "file", "Input XML file", fn );
     cmd.addSwitch("nl", "Solve nonlinear problem", nonlinear);
+    cmd.addSwitch("verbose", "Full matrix and vector output", verbose);
     cmd.addSwitch("plot", "Create a ParaView visualization file with the solution", plot);
 
     try { cmd.getValues(argc,argv); } catch (int rv) { return rv; }
@@ -57,13 +59,27 @@ int main(int argc, char *argv[])
     //! [Read input file]
     gsMultiPatch<> mp;
     gsMultiPatch<> mp_def;
-    if (testCase == 2  || testCase == 3)
+    if (testCase == 2 )
     {
         thickness = 0.25;
         E_modulus = 4.32E8;
         fn = "../extensions/unsupported/filedata/scordelis_lo_roof.xml";
         gsReadFile<>(fn, mp);
         PoissonRatio = 0.0;
+    }
+    else if (testCase == 3)
+    {
+        thickness = 0.04;
+        E_modulus = 6.825E7;
+        PoissonRatio = 0.3;
+        gsReadFile<>("quarter_hemisphere.xml", mp);
+    }
+    else if (testCase == 4)
+    {
+        thickness = 3;
+        E_modulus = 3E6;
+        PoissonRatio = 0.3;
+        gsReadFile<>("pinched_cylinder.xml", mp);
     }
     else
     {
@@ -132,38 +148,72 @@ int main(int argc, char *argv[])
     else if (testCase == 2)
     {
         // Diaphragm conditions
-        bc.addCondition(boundary::west, condition_type::dirichlet, 0, 1 ); // unknown 1 - y
-        bc.addCondition(boundary::west, condition_type::dirichlet, 0, 2 ); // unknown 2 - z
+        bc.addCondition(boundary::west, condition_type::dirichlet, 0, 0 ,false, 1 ); // unknown 1 - y
+        bc.addCondition(boundary::west, condition_type::dirichlet, 0, 0 ,false, 2 ); // unknown 2 - z
 
         bc.addCornerValue(boundary::southwest, 0.0, 0, 0); // (corner,value, patch, unknown)
 
-        bc.addCondition(boundary::east, condition_type::dirichlet, 0, 1 ); // unknown 1 - y
-        bc.addCondition(boundary::east, condition_type::dirichlet, 0, 2 ); // unknown 2 - z
+        bc.addCondition(boundary::east, condition_type::dirichlet, 0, 0 ,false, 1 ); // unknown 1 - y
+        bc.addCondition(boundary::east, condition_type::dirichlet, 0, 0 ,false, 2 ); // unknown 2 - z
 
         // Surface forces
         tmp << 0, 0, -90;
     }
     else if (testCase == 3)
     {
-        neu << 0, 0, -90;
-        neuData.setValue(neu,3);
-        // Diaphragm conditions
-        // bc.addCondition(boundary::west, condition_type::dirichlet, 0, 1 ); // unknown 1 - y
-        // bc.addCondition(boundary::west, condition_type::dirichlet, 0, 2 ); // unknown 2 - z
-        bc.addCondition(boundary::west, condition_type::neumann, &neuData );
+        bc.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 0 ); // unknown 0 - x
+        bc.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 1 - y
+        bc.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z
 
-        // ORIGINAL
-        // bc.addCornerValue(boundary::southwest, 0.0, 0, 0); // (corner,value, patch, unknown)
+        // Symmetry in x-direction:
+        bc.addCondition(boundary::east, condition_type::dirichlet, 0, 0, false, 0 );
+        bc.addCondition(boundary::east, condition_type::clamped, 0, 0, false, 1 );
+        bc.addCondition(boundary::east, condition_type::clamped, 0, 0, false, 2 );
 
-        bc.addCondition(boundary::east, condition_type::dirichlet, 0, 1 ); // unknown 1 - y
-        bc.addCondition(boundary::east, condition_type::dirichlet, 0, 2 ); // unknown 2 - z
-
-        // NOT ORIGINAL
-        // bc.addCondition(boundary::west, condition_type::dirichlet, 0, 0 ); // unknown 1 - x
-        bc.addCondition(boundary::east, condition_type::dirichlet, 0, 0 ); // unknown 1 - x
+        // Symmetry in y-direction:
+        bc.addCondition(boundary::west, condition_type::clamped, 0, 0, false, 0 );
+        bc.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 1 );
+        bc.addCondition(boundary::west, condition_type::clamped, 0, 0, false, 2 );
 
         // Surface forces
-        tmp << 0, 0, 0;
+        tmp.setZero();
+
+        // Point loads
+        gsVector<> point(2);
+        gsVector<> load (3);
+        point<< 0.0, 0.0 ; load << 1.0, 0.0, 0.0 ;
+        pLoads.addLoad(point, load, 0 );
+        point<< 1.0, 0.0 ; load << 0.0, -1.0, 0.0 ;
+        pLoads.addLoad(point, load, 0 );
+    }
+    else if (testCase == 4)
+    {
+        // Symmetry in y-direction for back side
+        bc.addCondition(boundary::north, condition_type::clamped, 0, 0, false, 0 );
+        bc.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 1 );
+        bc.addCondition(boundary::north, condition_type::clamped, 0, 0, false, 2 );
+
+        // Diaphragm conditions for left side
+        bc.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 1 - y
+        bc.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z
+
+        // Symmetry in x-direction: for right side
+        bc.addCondition(boundary::east, condition_type::dirichlet, 0, 0, false, 0 );
+        bc.addCondition(boundary::east, condition_type::clamped, 0, 0, false, 1 );
+        bc.addCondition(boundary::east, condition_type::clamped, 0, 0, false, 2 );
+
+        // Symmetry in z-direction:for the front side
+        bc.addCondition(boundary::south, condition_type::clamped, 0, 0, false, 0 );
+        bc.addCondition(boundary::south, condition_type::clamped, 0, 0, false, 1 );
+        bc.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 2 );
+
+        // Surface forces
+        tmp.setZero();
+
+        // Point loads
+        gsVector<> point(2); point<< 1.0, 1.0 ;
+        gsVector<> load (3); load << 0.0, 0.0, -0.25 ;
+        pLoads.addLoad(point, load, 0 );
     }
     // else if (testCase == 10)
     // {
@@ -246,10 +296,8 @@ int main(int argc, char *argv[])
     gsMaterialMatrix materialMatrixLinear(mp,mp_def,t,E,nu,rho);
 
     gsMaterialMatrix materialMatrixNonlinear(mp,mp_def,t,E,nu,rho);
-    // materialMatrixNonlinear.options().setInt("MaterialLaw",material_law::NHK);
-    materialMatrixNonlinear.options().setInt("MaterialLaw",2);
+    materialMatrixNonlinear.options().setInt("MaterialLaw",material);
     materialMatrixNonlinear.options().setInt("Compressibility",Compressibility);
-    // materialMatrixNonlinear.options().setInt("Compressible",compressibility::incompressible);
 
 
     // Linear anisotropic material model
@@ -282,7 +330,6 @@ int main(int argc, char *argv[])
     // ! TEST MATRIX INTEGRATION
 
     gsThinShellAssembler assembler(mp,dbasis,bc,force,materialMatrixNonlinear);
-    // gsThinShellAssembler assembler(mp,dbasis,bc,force,materialMatrixLinear);
     assembler.setPointLoads(pLoads);
 
 
@@ -302,8 +349,12 @@ int main(int argc, char *argv[])
     // solve system
     solver.compute( assembler.matrix() );
 
-    gsDebugVar(assembler.matrix().toDense());
-    gsDebugVar(assembler.rhs().transpose());
+    if (verbose)
+    {
+        gsInfo<<"Matrix: \n"<<assembler.matrix().toDense()<<"\n";
+        gsInfo<<"Vector: \n"<<assembler.rhs().transpose()<<"\n";
+    }
+
 
     gsVector<> solVector = solver.solve(assembler.rhs());
 
@@ -352,8 +403,12 @@ int main(int argc, char *argv[])
             // solve system
             solver.compute( assembler.matrix() );
 
-            gsDebugVar(assembler.matrix().toDense());
-            gsDebugVar(assembler.rhs().transpose());
+            if (verbose)
+            {
+                gsInfo<<"Matrix: \n"<<assembler.matrix().toDense()<<"\n";
+                gsInfo<<"Vector: \n"<<assembler.rhs().transpose()<<"\n";
+            }
+
 
             updateVector = solver.solve(assembler.rhs()); // this is the UPDATE
             residual = assembler.rhs().norm();
@@ -403,14 +458,14 @@ int main(int argc, char *argv[])
 
     // // ADD BOUNDARY CONDITIONS! (clamped will be tricky..............)
 
+    mp_def = assembler.constructSolution(solVector);
+    gsMultiPatch<> deformation = mp_def;
+    for (size_t k = 0; k != mp_def.nPatches(); ++k)
+        deformation.patch(0).coefs() -= mp.patch(0).coefs();
 
     // ! [Export visualization in ParaView]
     if ( (plot) && (nonlinear) )
     {
-        mp_def = assembler.constructSolution(solVector);
-        gsMultiPatch<> deformation = mp_def;
-        for (size_t k = 0; k != mp_def.nPatches(); ++k)
-            deformation.patch(0).coefs() -= mp.patch(0).coefs();
 
         gsField<> solField(mp, deformation);
         gsInfo<<"Plotting in Paraview...\n";
@@ -427,6 +482,12 @@ int main(int argc, char *argv[])
 
         // gsFileManager::open("solution.pvd");
     }
+
+    gsInfo <<"Maximum deformation coef: "
+           << deformation.patch(0).coefs().colwise().maxCoeff() <<".\n";
+    gsInfo <<"Minimum deformation coef: "
+           << deformation.patch(0).coefs().colwise().minCoeff() <<".\n";
+
 
     return EXIT_SUCCESS;
 
