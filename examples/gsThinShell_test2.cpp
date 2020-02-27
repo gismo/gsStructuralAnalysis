@@ -285,6 +285,20 @@ int main(int argc, char *argv[])
         bc.addCondition(boundary::east, condition_type::collapsed, 0, 0 ,false,0);
         bc.addCondition(boundary::east, condition_type::collapsed, 0, 0, false, 2 );
     }
+    else if (testCase == 14)
+    {
+        for (index_t i=0; i!=3; ++i)
+        {
+            bc.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, i ); // unknown 2 - z
+        }
+        bc.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z
+        bc.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z
+
+        tmp << 0,0,-1;
+
+        bc.addCondition(boundary::east, condition_type::collapsed, 0, 0 ,false,0);
+        bc.addCondition(boundary::east, condition_type::collapsed, 0, 0, false, 2 );
+    }
     //! [Refinement]
 
     // Linear isotropic material model
