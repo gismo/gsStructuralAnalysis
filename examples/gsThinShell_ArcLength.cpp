@@ -254,17 +254,15 @@ int main (int argc, char** argv)
     gsFunctionExpr<> displ2(std::to_string(-displ),3);
 
     gsVector<> tmp(3);
+    gsVector<> neu(3);
     tmp << 0, 0, 0;
-    gsFunctionExpr<> neuData1;
-    gsConstantFunction<> neuData(tmp,3);
-    gsConstantFunction<> neuData2(tmp,3);
-    gsConstantFunction<> neuData3(tmp,3);
-    gsConstantFunction<> neuData4(tmp,3);
+    neu << 0, 0, 0;
+    gsConstantFunction<> neuData(neu,3);
 
     // Buckling coefficient
     real_t fac = 1;
     // Unscaled load
-    real_t Load = 1e-1;
+    real_t Load = 0;
 
     std::string output = "solution";
 
@@ -407,9 +405,9 @@ int main (int argc, char** argv)
     }
     else if (testCase == 5)
     {
-      Load = 1e-8;
-      tmp << -Load, 0, 0;
-      neuData.setValue(tmp,3);
+      Load = 1e-1;
+      neu << -Load, 0, 0;
+      neuData.setValue(neu,3);
 
       BCs.addCondition(boundary::west, condition_type::neumann, &neuData ); // unknown 0 - x
       BCs.addCondition(boundary::west, condition_type::collapsed, 0, 0, false, 0 ); // unknown 0 - x
