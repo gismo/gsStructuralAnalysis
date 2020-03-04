@@ -135,6 +135,9 @@ int main (int argc, char** argv)
 
     try { cmd.getValues(argc,argv); } catch (int rv) { return rv; }
 
+    real_t aDim = 1;
+    real_t bDim = 1;
+
     if (testCase==0 || testCase==1)
     {
       E_modulus = 2.886751346e12;
@@ -165,6 +168,15 @@ int main (int argc, char** argv)
       PoissonRatio = 0.4999;
       Area = B*thickness;
       mp = RectangularDomain(numHref, numElevate, L, B);
+    }
+    else if (testCase==5)
+    {
+      E_modulus = 1e6;
+      PoissonRatio = 0.499;
+      aDim = 0.254*0.5;
+      bDim = 0.1016;
+      thickness = 0.1e-3;
+      mp = RectangularDomain(numHref, numElevate, aDim, bDim);
     }
     else if (testCase==9  )
     {
@@ -391,7 +403,27 @@ int main (int argc, char** argv)
 
       output = "Case" + std::to_string(testCase) + "solution";
       wn = output + "data.txt";
-      SingularPoint = false;
+      SingularPoint = true;
+    }
+    else if (testCase == 5)
+    {
+      Load = 1e-8;
+      tmp << -Load, 0, 0;
+      neuData.setValue(tmp,3);
+
+      BCs.addCondition(boundary::west, condition_type::neumann, &neuData ); // unknown 0 - x
+      BCs.addCondition(boundary::west, condition_type::collapsed, 0, 0, false, 0 ); // unknown 0 - x
+      BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 1 - y
+      BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z
+
+      BCs.addCondition(boundary::east, condition_type::dirichlet, 0, 0, false, 0 ); // unknown 0 - x
+
+      output = "Case" + std::to_string(testCase) + "solution";
+      wn = output + "data.txt";
+
+      tol = 1e-6;
+
+      SingularPoint = true;
     }
     else if (testCase == 9)
     {
