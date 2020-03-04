@@ -26,7 +26,8 @@ using namespace gismo;
 int main(int argc, char *argv[])
 {
     //! [Parse command line]
-    bool plot = false;
+    bool plot  = false;
+    bool stress= false;
     index_t numRefine  = 1;
     index_t numElevate = 1;
     index_t testCase = 1;
@@ -52,6 +53,7 @@ int main(int argc, char *argv[])
     cmd.addSwitch("nl", "Solve nonlinear problem", nonlinear);
     cmd.addSwitch("verbose", "Full matrix and vector output", verbose);
     cmd.addSwitch("plot", "Create a ParaView visualization file with the solution", plot);
+    cmd.addSwitch("stress", "Create a ParaView visualization file with the stresses", stress);
 
     try { cmd.getValues(argc,argv); } catch (int rv) { return rv; }
     //! [Parse command line]
@@ -299,6 +301,36 @@ int main(int argc, char *argv[])
         bc.addCondition(boundary::east, condition_type::collapsed, 0, 0 ,false,0);
         bc.addCondition(boundary::east, condition_type::collapsed, 0, 0, false, 2 );
     }
+    else if (testCase == 15)
+    {
+        for (index_t i=0; i!=3; ++i)
+        {
+            bc.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, i ); // unknown 2 - z
+        }
+        bc.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z
+        bc.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z
+
+        bc.addCondition(boundary::east, condition_type::collapsed, 0, 0 ,false,0);
+
+        gsVector<> point(2); point<< 1.0, 0.5 ;
+        gsVector<> load (3); load << 0.1, 0.0, 0.0 ;
+        pLoads.addLoad(point, load, 0 );
+    }
+    else if (testCase == 16)
+    {
+      bc.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 0 ); // unknown 0 - x
+      bc.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 1 - y
+      bc.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z
+
+      bc.addCondition(boundary::west, condition_type::clamped, 0, 0, false, 2 );
+
+        real_t Load = 1e-2;
+        gsVector<> point(2);
+        gsVector<> load (3);
+        point<< 1.0, 0.5 ;
+        load << 0.0, 0.0, Load ;
+        pLoads.addLoad(point, load, 0 );
+    }
     //! [Refinement]
 
     // Linear isotropic material model
@@ -333,15 +365,15 @@ int main(int argc, char *argv[])
     }
     gsMaterialMatrix materialMatrixComposite(mp,mp_def,tvec,Evec,Gvec,nuvec,phivec);
 
-    // TEST MATRIX INTEGRATION
-    gsMaterialMatrix materialMatrixTest(mp,mp_def,t,E,nu,rho);
-    materialMatrixTest.options().setInt("MaterialLaw",-1);
-    gsVector<> testPt(2);
-    testPt.setConstant(0.5);
-    gsMatrix<> testResult;
-    materialMatrixTest.eval_into(testPt,testResult);
-    gsDebugVar(testResult);
-    // ! TEST MATRIX INTEGRATION
+    // // TEST MATRIX INTEGRATION
+    // gsMaterialMatrix materialMatrixTest(mp,mp_def,t,E,nu,rho);
+    // materialMatrixTest.options().setInt("MaterialLaw",-1);
+    // gsVector<> testPt(2);
+    // testPt.setConstant(0.5);
+    // gsMatrix<> testResult;
+    // materialMatrixTest.eval_into(testPt,testResult);
+    // gsDebugVar(testResult);
+    // // ! TEST MATRIX INTEGRATION
 
     gsThinShellAssembler assembler(mp,dbasis,bc,force,materialMatrixNonlinear);
     assembler.setPointLoads(pLoads);
@@ -372,10 +404,17 @@ int main(int argc, char *argv[])
 
     gsVector<> solVector = solver.solve(assembler.rhs());
 
-    // gsInfo<<assembler.matrix().toDense()<<"\n";
-    // gsInfo<<assembler.rhs()<<"\n";
-    // gsInfo<<solVector<<"\n";
-    assembler.constructSolution(solVector,mp_def);
+    mp_def = assembler.constructSolution(solVector);
+    // assembler.assembleMatrix(mp_def);
+    // assembler.assembleVector(mp_def);
+    // gsDebugVar(assembler.matrix());
+    // gsDebugVar(assembler.rhs());
+
+    // assembler.assembleMatrix(solVector);
+    // assembler.assembleVector(solVector);
+    // gsDebugVar(assembler.matrix());
+    // gsDebugVar(assembler.rhs());
+
     if ((plot) && (!nonlinear))
     {
 
@@ -386,12 +425,18 @@ int main(int argc, char *argv[])
         gsField<> solField(mp, deformation);
         gsInfo<<"Plotting in Paraview...\n";
         gsWriteParaview<>( solField, "solution", 1000, true);
+    }
+    if ((stress) && (!nonlinear))
+    {
+        gsPiecewiseFunction<> stresses;
+        assembler.constructStress(mp_def,stresses,stress_type::principal_stretch);
+        gsField<> stressField(mp,stresses, true);
 
-        // gsPiecewiseFunction<> stresses;
-        // assembler.constructStress(mp_def,stresses,stress_type::principal_stretch);
-        // gsField<> stressField(mp,stresses, true);
+        gsWriteParaview( stressField, "stress", 5000);
 
-        // gsWriteParaview( stressField, "stress", 5000);
+        gsMatrix<> stretch;
+        stretch=assembler.computePrincipalStretches(pt,mp_def,0.0);
+        gsDebugVar(stretch);
     }
 
     /*Something with Dirichlet homogenization*/
@@ -484,17 +529,18 @@ int main(int argc, char *argv[])
         gsField<> solField(mp, deformation);
         gsInfo<<"Plotting in Paraview...\n";
         gsWriteParaview<>( solField, "solution", 1000, true);
-
-        // gsPiecewiseFunction<> stresses;
-        // assembler.constructStress(mp_def,stresses,stress_type::membrane);
-        // gsField<> stressField(mp,stresses, true);
-
-        // gsWriteParaview( stressField, "stress", 5000);
-
         // ev.options().setSwitch("plot.elements", true);
         // ev.writeParaview( u_sol   , G, "solution");
 
         // gsFileManager::open("solution.pvd");
+    }
+    if ((stress) && (nonlinear))
+    {
+        gsPiecewiseFunction<> stresses;
+        assembler.constructStress(mp_def,stresses,stress_type::principal_stretch);
+        gsField<> stressField(mp,stresses, true);
+
+        gsWriteParaview( stressField, "stress", 5000);
     }
 
     gsInfo <<"Maximum deformation coef: "
