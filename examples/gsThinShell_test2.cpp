@@ -83,6 +83,16 @@ int main(int argc, char *argv[])
         PoissonRatio = 0.3;
         gsReadFile<>("pinched_cylinder.xml", mp);
     }
+    else if (testCase == 17)
+    {
+        // Unit square
+        mp.addPatch( gsNurbsCreator<>::BSplineSquare(1) ); // degree
+        mp.addAutoBoundaries();
+        mp.embed(3);
+        E_modulus = 4.497000000e6;
+        thickness = 0.001;
+        PoissonRatio = 0.4999;
+    }
     else
     {
         // Unit square
@@ -330,6 +340,19 @@ int main(int argc, char *argv[])
         point<< 1.0, 0.5 ;
         load << 0.0, 0.0, Load ;
         pLoads.addLoad(point, load, 0 );
+    }
+    else if (testCase == 17)
+    {
+        real_t Load = 1e-1;
+        neu << -Load, 0, 0;
+        neuData.setValue(neu,3);
+
+        bc.addCondition(boundary::west, condition_type::neumann, &neuData ); // unknown 0 - x
+        bc.addCondition(boundary::west, condition_type::collapsed, 0, 0, false, 0 ); // unknown 0 - x
+        bc.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 1 - y
+        bc.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z
+
+        bc.addCondition(boundary::east, condition_type::dirichlet, 0, 0, false, 0 ); // unknown 0 - x
     }
     //! [Refinement]
 
