@@ -82,10 +82,10 @@ int main (int argc, char** argv)
     bool write = false;
 
     // Arc length method options
-    real_t dL = 0.5; // General arc length
-    real_t dLb = dL; // Ard length to find bifurcation
+    real_t dL = 0; // General arc length
+    real_t dLb = 0.5; // Ard length to find bifurcation
     real_t tol = 1e-6;
-    real_t tolU = 1e-6;
+    real_t tolU = 1e-4;
     real_t tolF = 1e-10;
 
     std::string wn("data.csv");
@@ -137,6 +137,12 @@ int main (int argc, char** argv)
 
     real_t aDim = 1;
     real_t bDim = 1;
+
+    if (dL==0)
+    {
+      dL = dLb;
+    }
+
 
     if (testCase==0 || testCase==1)
     {
@@ -265,6 +271,7 @@ int main (int argc, char** argv)
     real_t Load = 0;
 
     std::string output = "solution";
+    std::string dirname = "ArcLengthResults";
 
     if (testCase == 0)
     {
@@ -362,7 +369,7 @@ int main (int argc, char** argv)
       // dL =  3e-0;
       // dLb = 0.8e-4;
       tol = 1e-6;
-      tolU = 1e-6;
+      tolU = 1e-4;
       tolF = 1e-1;
 
       Load = 1e-1;
@@ -405,6 +412,7 @@ int main (int argc, char** argv)
     }
     else if (testCase == 5)
     {
+      dirname = "ArcLengthResults/Rectangle1_r" + std::to_string(numHref) + "_e" + std::to_string(numElevate) + "_dL" + std::to_string(dL) + "_dLb" + std::to_string(dLb) + "_mat" + std::to_string(material);
       Load = 1e-1;
       neu << -Load, 0, 0;
       neuData.setValue(neu,3);
@@ -417,7 +425,7 @@ int main (int argc, char** argv)
       BCs.addCondition(boundary::east, condition_type::dirichlet, 0, 0, false, 0 ); // unknown 0 - x
 
       output = "Case" + std::to_string(testCase) + "solution";
-      wn = output + "data.txt";
+      wn = dirname + "/" + output + "data.txt";
 
       tol = 1e-6;
 
@@ -511,7 +519,12 @@ int main (int argc, char** argv)
             << "\n";
       file.close();
     }
+    std::string commands = "mkdir -p " + dirname;
+    const char *command = commands.c_str();
+    system(command);
 
+    gsInfo<<"Results will be written in folder: "<<dirname<<"\n";
+    
     gsFunctionExpr<> surfForce(tx,ty,tz,3);
     // Initialise solution object
     gsMultiPatch<> mp_def = mp;
@@ -523,7 +536,6 @@ int main (int argc, char** argv)
     gsFunctionExpr<> E(std::to_string(E_modulus),3);
     gsFunctionExpr<> nu(std::to_string(PoissonRatio),3);
     gsFunctionExpr<> rho(std::to_string(Density),3);
-    gsMaterialMatrix materialMatrixLinear(mp,mp_def,t,E,nu,rho);
 
     gsMaterialMatrix materialMatrixNonlinear(mp,mp_def,t,E,nu,rho);
     materialMatrixNonlinear.options().setInt("MaterialLaw",material);
@@ -537,9 +549,12 @@ int main (int argc, char** argv)
     std::function<gsSparseMatrix<real_t> (gsVector<real_t> const &)> Jacobian;
     Jacobian = [&assembler,&mp_def](gsVector<real_t> const &x)
     {
-      assembler.assembleMatrix(x);
-      // gsSparseMatrix<real_t> m = ;
-      return assembler.matrix();
+      // assembler.constructSolution(x); // DOES NOT WORK!!
+      assembler.constructSolution(x,mp_def);
+      assembler.assembleMatrix(mp_def);
+      gsSparseMatrix<real_t> m = assembler.matrix();
+      // gsInfo<<"matrix = \n"<<m.toDense()<<"\n";
+      return m;
     };
     // Function for the Residual
     std::function<gsVector<real_t> (gsVector<real_t> const &, real_t, gsVector<real_t> const &) > Residual;
@@ -590,7 +605,7 @@ int main (int argc, char** argv)
     if (quasiNewtonInt>0)
       arcLength.quasiNewton(quasiNewtonInt);
 
-    gsParaviewCollection collection("ArcLengthResults/" + output);
+    gsParaviewCollection collection(dirname + "/" + output);
     gsMultiPatch<> deformation = mp;
 
     // Make objects for previous solutions
@@ -599,12 +614,15 @@ int main (int argc, char** argv)
     Uold.setZero();
 
     gsMatrix<> solVector;
+    real_t indicator = 0.0;
+    arcLength.setIndicator(indicator); // RESET INDICATOR
     for (index_t k=0; k<step; k++)
     {
       gsInfo<<"Load step "<< k<<"\n";
       // assembler.constructSolution(solVector,solution);
       arcLength.step();
 
+      // gsInfo<<"m_U = "<<arcLength.solutionU()<<"\n";
       if (!(arcLength.converged()))
       {
         gsInfo<<"Error: Loop terminated, arc length method did not converge.\n";
@@ -617,7 +635,7 @@ int main (int argc, char** argv)
         deformation.patch(0).coefs() -= mp.patch(0).coefs();// assuming 1 patch here
 
         gsField<> solField(mp,deformation);
-        std::string fileName = "ArcLengthResults/" + output + util::to_string(k);
+        std::string fileName = dirname + "/" + output + util::to_string(k);
         gsWriteParaview<>(solField, fileName, 5000);
         fileName = output + util::to_string(k) + "0";
         collection.addTimestep(fileName,k,".vts");
@@ -629,11 +647,13 @@ int main (int argc, char** argv)
         arcLength.computeStability(arcLength.solutionU(),!quasiNewton);
         if (arcLength.stabilityChange())
         {
-          gsInfo<<"Bifurcation spotted!"<<"\n";
+          gsInfo<<"Bifurcation spotted!"<<"\n";          
           arcLength.computeSingularPoint(1e-6, 5, Uold, Lold, 1e-12, 1e-2, false);
           arcLength.switchBranch();
+          arcLength.setLength(dL);
         }
       }
+      indicator = arcLength.indicator();
 
       solVector = arcLength.solutionU();
       Uold = solVector;
@@ -656,7 +676,7 @@ int main (int argc, char** argv)
       // gsWriteParaview( stressField, "stress", 5000);
 
       gsField<> solField(mp,deformation);
-      std::string fileName = "ArcLengthResults/" + output + util::to_string(k);
+      std::string fileName = dirname + "/" + output + util::to_string(k);
       gsWriteParaview<>(solField, fileName, 5000);
       fileName = output + util::to_string(k) + "0";
       collection.addTimestep(fileName,k,".vts");
@@ -666,26 +686,31 @@ int main (int argc, char** argv)
 
       if (write)
       {
-        // Compute mid-point displacement
-        gsMatrix<> u(2,1);
-        u << 0.5,0.5;
         gsMatrix<> mid;
-        deformation.patch(0).eval_into(u,mid);
-
+        gsMatrix<> P(2,1);
         // Compute end point displacement
-        u<<0,0.5;
+        if (testCase==5)
+          P<<0.0,0.5;
+
         gsMatrix<> left;
-        deformation.patch(0).eval_into(u,left);
+        deformation.patch(0).eval_into(P,left);
 
-        // Compute end point displacement
-        u<<1,0.5;
-        gsMatrix<> right;
-        deformation.patch(0).eval_into(u,right);
-
-        // Buckling factor
-        real_t loadResult = -arcLength.solutionL() * Load/EA * math::pow((fac * length),2) / (math::pow(3.1415926535,2) * EI);
-
-        gsInfo<<"\tLoad step finished: Displacement: "<<mid.at(2)<<"\t force factor: "<<loadResult<<"\n";
+        gsVector<> u(101);
+        gsVector<> v(101);
+        gsVector<> w(101);
+        for (int k = 0; k <= 100; k ++)
+        {
+          gsMatrix<> Q(2,1);
+          if (testCase==5 )
+            Q<<1.0, 1.0*k/100;
+         
+          gsMatrix<> res;
+          mp_def.patch(0).eval_into(Q,res);
+          u.at(k) = res.at(0);
+          v.at(k) = res.at(1);
+          w.at(k) = res.at(2);
+          // gsInfo<<res.at(0)<<","<<res.at(1)<<","<<res.at(2)<<"\n";
+        }
 
         std::ofstream file;
         file.open(wn,std::ofstream::out | std::ofstream::app);
@@ -694,14 +719,9 @@ int main (int argc, char** argv)
               << left.at(0) << ","
               << left.at(1) << ","
               << left.at(2) << ","
-              << mid.at(0) << ","
-              << mid.at(1) << ","
-              << mid.at(2) << ","
-              << right.at(0) << ","
-              << right.at(1) << ","
-              << right.at(2) << ","
-              << loadResult << ","
-              << -arcLength.solutionL()
+              << std::max(abs(w.maxCoeff()),abs(w.minCoeff())) << ","
+              << -arcLength.solutionL() << ","
+              << indicator
               << "\n";
         file.close();
       }
