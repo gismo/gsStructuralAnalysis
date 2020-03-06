@@ -362,7 +362,6 @@ int main(int argc, char *argv[])
     gsFunctionExpr<> E(std::to_string(E_modulus),3);
     gsFunctionExpr<> nu(std::to_string(PoissonRatio),3);
     gsFunctionExpr<> rho(std::to_string(Density),3);
-    gsMaterialMatrix materialMatrixLinear(mp,mp_def,t,E,nu,rho);
 
     gsMaterialMatrix materialMatrixNonlinear(mp,mp_def,t,E,nu,rho);
     materialMatrixNonlinear.options().setInt("MaterialLaw",material);
@@ -387,16 +386,6 @@ int main(int argc, char *argv[])
         phivec.push_back( k / kmax * pi/2.0);
     }
     gsMaterialMatrix materialMatrixComposite(mp,mp_def,tvec,Evec,Gvec,nuvec,phivec);
-
-    // // TEST MATRIX INTEGRATION
-    // gsMaterialMatrix materialMatrixTest(mp,mp_def,t,E,nu,rho);
-    // materialMatrixTest.options().setInt("MaterialLaw",-1);
-    // gsVector<> testPt(2);
-    // testPt.setConstant(0.5);
-    // gsMatrix<> testResult;
-    // materialMatrixTest.eval_into(testPt,testResult);
-    // gsDebugVar(testResult);
-    // // ! TEST MATRIX INTEGRATION
 
     gsThinShellAssembler assembler(mp,dbasis,bc,force,materialMatrixNonlinear);
     assembler.setPointLoads(pLoads);
@@ -424,6 +413,36 @@ int main(int argc, char *argv[])
         gsInfo<<"Vector: \n"<<assembler.rhs().transpose()<<"\n";
     }
 
+
+    // // TEST MATRIX INTEGRATION
+    gsMaterialMatrix materialMatrixNonlinear2(mp,mp_def,t,E,nu,rho);
+    materialMatrixNonlinear2.options().setInt("MaterialLaw",material);
+    materialMatrixNonlinear2.options().setInt("Compressibility",Compressibility);
+
+    gsMaterialMatrix materialMatrixTest(mp,mp_def,t,E,nu,rho);
+    materialMatrixTest.options().setInt("MaterialLaw",4);
+    gsVector<> testPt(2);
+    testPt<<0.887298,0.887298;
+    // testPt.setConstant(0.25);
+    gsMatrix<> testResult;
+    // materialMatrixTest.makeVector(0);
+    materialMatrixTest.makeMatrix(0);
+    materialMatrixTest.eval_into(testPt,testResult);
+    gsDebugVar(testResult);
+
+    // materialMatrixNonlinear2.makeVector(0);
+    materialMatrixNonlinear2.makeMatrix(0);
+    materialMatrixNonlinear2.eval_into(testPt,testResult);
+    gsDebugVar(testResult);
+
+    materialMatrixTest.makeVector(0);
+    materialMatrixTest.eval_into(testPt,testResult);
+    gsDebugVar(testResult);
+
+    materialMatrixNonlinear2.makeVector(0);
+    materialMatrixNonlinear2.eval_into(testPt,testResult);
+    gsDebugVar(testResult);
+    // // ! TEST MATRIX INTEGRATION
 
     gsVector<> solVector = solver.solve(assembler.rhs());
 
@@ -515,8 +534,30 @@ int main(int argc, char *argv[])
         }
     }
 
-    gsMatrix<> pts(2,1);
-    pts.col(0).setConstant(0.5);
+    // // TEST MATRIX INTEGRATION
+    materialMatrixNonlinear2.options().setInt("MaterialLaw",material);
+    materialMatrixNonlinear2.options().setInt("Compressibility",Compressibility);
+
+    materialMatrixTest.options().setInt("MaterialLaw",4);
+    // materialMatrixTest.makeVector(0);
+    materialMatrixTest.makeMatrix(0);
+    materialMatrixTest.eval_into(testPt,testResult);
+    gsDebugVar(testResult);
+
+    // materialMatrixNonlinear2.makeVector(0);
+    materialMatrixNonlinear2.makeMatrix(0);
+    materialMatrixNonlinear2.eval_into(testPt,testResult);
+    gsDebugVar(testResult);
+
+    materialMatrixTest.makeVector(0);
+    materialMatrixTest.eval_into(testPt,testResult);
+    gsDebugVar(testResult);
+
+    materialMatrixNonlinear2.makeVector(0);
+    materialMatrixNonlinear2.eval_into(testPt,testResult);
+    gsDebugVar(testResult);
+    // // ! TEST MATRIX INTEGRATION
+
     // gsDebugVar(assembler.computePrincipalStretches(pts,mp_def));
 
 
