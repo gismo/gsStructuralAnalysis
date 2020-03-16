@@ -524,7 +524,7 @@ int main (int argc, char** argv)
     system(command);
 
     gsInfo<<"Results will be written in folder: "<<dirname<<"\n";
-    
+
     gsFunctionExpr<> surfForce(tx,ty,tz,3);
     // Initialise solution object
     gsMultiPatch<> mp_def = mp;
@@ -647,7 +647,7 @@ int main (int argc, char** argv)
         arcLength.computeStability(arcLength.solutionU(),!quasiNewton);
         if (arcLength.stabilityChange())
         {
-          gsInfo<<"Bifurcation spotted!"<<"\n";          
+          gsInfo<<"Bifurcation spotted!"<<"\n";
           arcLength.computeSingularPoint(1e-6, 5, Uold, Lold, 1e-12, 1e-2, false);
           arcLength.switchBranch();
           arcLength.setLength(dL);
@@ -703,7 +703,7 @@ int main (int argc, char** argv)
           gsMatrix<> Q(2,1);
           if (testCase==5 )
             Q<<1.0, 1.0*k/100;
-         
+
           gsMatrix<> res;
           mp_def.patch(0).eval_into(Q,res);
           u.at(k) = res.at(0);
@@ -734,9 +734,7 @@ int main (int argc, char** argv)
 template <class T>
 gsMultiPatch<T> RectangularDomain(int n, int p, T L, T B)
 {
-  int q = p;
-  int m = n;
-  gsMultiPatch<T> mp = RectangularDomain(n, m, p, q, L, B);
+  gsMultiPatch<T> mp = RectangularDomain(n, n, p, p, L, B);
   return mp;
 }
 
