@@ -69,6 +69,7 @@ int main (int argc, char** argv)
     real_t Density = 1e0;
     gsMultiPatch<> mp;
     real_t eta = 0;
+    real_t tau = 1e4;
 
     index_t Compressibility = 0;
     index_t material = 0;
@@ -85,8 +86,8 @@ int main (int argc, char** argv)
     real_t dL = 0; // General arc length
     real_t dLb = 0.5; // Ard length to find bifurcation
     real_t tol = 1e-6;
-    real_t tolU = 1e-4;
-    real_t tolF = 1e-10;
+    real_t tolU = 1e-6;
+    real_t tolF = 1e-3;
 
     std::string wn("data.csv");
 
@@ -126,6 +127,9 @@ int main (int argc, char** argv)
     cmd.addSwitch("Q","QuasiNewton",
        "Use the Quasi Newton method",
        quasiNewton);
+    cmd.addReal("f","factor",
+       "factor for bifurcation perturbation",
+       tau);
     cmd.addInt("q","QuasiNewtonInt","Use the Quasi Newton method every INT iterations",quasiNewtonInt);
     cmd.addSwitch("A","adaptive", "Adaptive length ", adaptive);
     cmd.addSwitch("nl", "Nonlinear elasticity (otherwise linear)", nonlinear);
@@ -182,6 +186,15 @@ int main (int argc, char** argv)
       aDim = 0.254*0.5;
       bDim = 0.1016;
       thickness = 0.1e-3;
+      mp = RectangularDomain(numHref, numElevate, aDim, bDim);
+    }
+    else if (testCase==6)
+    {
+      E_modulus = 1e6;
+      PoissonRatio = 0.499;
+      aDim = 2.5*0.5;
+      bDim = 1.0;
+      thickness = 1e-3;
       mp = RectangularDomain(numHref, numElevate, aDim, bDim);
     }
     else if (testCase==9  )
@@ -299,31 +312,30 @@ int main (int argc, char** argv)
     }
     if (testCase == 1)
     {
-      Load = EA/width*1e-1;
-      tmp << Load, 0, 0;
-      // tmp << 0, 0, Load;
-      neuData.setValue(tmp,3);
-      // // Clamped-Clamped
-      BCs.addCondition(boundary::west, condition_type::neumann, &neuData ); // unknown 0 - x
-      BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 1 - y
-      BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z
+        Load = EA/width*1e-1;
+        tmp << Load, 0, 0;
+        // tmp << 0, 0, Load;
+        neuData.setValue(tmp,3);
+        // // Clamped-Clamped
+        BCs.addCondition(boundary::west, condition_type::neumann, &neuData ); // unknown 0 - x
+        BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 1 - y
+        BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z
 
-      BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 1 - y
-      BCs.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 1 - y
+        BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 1 - y
+        BCs.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 1 - y
 
-      BCs.addCondition(boundary::east, condition_type::dirichlet, 0, 0, false, 0 ); // unknown 0 - x
-      BCs.addCondition(boundary::east, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 1 - y
-      BCs.addCondition(boundary::east, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z
+        BCs.addCondition(boundary::east, condition_type::dirichlet, 0, 0, false, 0 ); // unknown 0 - x
+        BCs.addCondition(boundary::east, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 1 - y
+        BCs.addCondition(boundary::east, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z
 
-      BCs.addCondition(boundary::east, condition_type::clamped, 0, 0, false, 2 );
-      BCs.addCondition(boundary::west, condition_type::clamped, 0, 0, false, 2 );
+        BCs.addCondition(boundary::east, condition_type::clamped, 0, 0, false, 2 );
+        BCs.addCondition(boundary::west, condition_type::clamped, 0, 0, false, 2 );
 
 
         fac = 0.5;
 
         // dL =  1e-3;
         // dLb = 1e-3;
-        tol = 1e-6;
 
         output = "Case" + std::to_string(testCase) + "solution";
         wn = output + "data.txt";
@@ -346,7 +358,6 @@ int main (int argc, char** argv)
 
       // dL =  1e-3;
       // dLb = 2e0;
-      tol = 1e-4;
 
       output = "Case" + std::to_string(testCase) + "solution";
       wn = output + "data.txt";
@@ -368,9 +379,6 @@ int main (int argc, char** argv)
 
       // dL =  3e-0;
       // dLb = 0.8e-4;
-      tol = 1e-6;
-      tolU = 1e-4;
-      tolF = 1e-1;
 
       Load = 1e-1;
       gsVector<> point(2);
@@ -427,7 +435,24 @@ int main (int argc, char** argv)
       output = "Case" + std::to_string(testCase) + "solution";
       wn = dirname + "/" + output + "data.txt";
 
-      tol = 1e-6;
+      SingularPoint = true;
+    }
+    else if (testCase == 6)
+    {
+      dirname = "ArcLengthResults/Rectangle1_r" + std::to_string(numHref) + "_e" + std::to_string(numElevate) + "_dL" + std::to_string(dL) + "_dLb" + std::to_string(dLb) + "_mat" + std::to_string(material) + "_A" + std::to_string(aDim) + "_bDim" + std::to_string(bDim);
+      Load = 1e-1;
+      neu << -Load, 0, 0;
+      neuData.setValue(neu,3);
+
+      BCs.addCondition(boundary::west, condition_type::neumann, &neuData ); // unknown 0 - x
+      BCs.addCondition(boundary::west, condition_type::collapsed, 0, 0, false, 0 ); // unknown 0 - x
+      BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 1 - y
+      BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z
+
+      BCs.addCondition(boundary::east, condition_type::dirichlet, 0, 0, false, 0 ); // unknown 0 - x
+
+      output = "Case" + std::to_string(testCase) + "solution";
+      wn = dirname + "/" + output + "data.txt";
 
       SingularPoint = true;
     }
@@ -453,8 +478,6 @@ int main (int argc, char** argv)
 
       dL =  1e-4;
       dLb = 5;
-      tol = 1e-4;
-
 
       // dL =  750;
       // dLb = 750;
@@ -487,12 +510,9 @@ int main (int argc, char** argv)
 
       dL =  1e-4;
       dLb = 5;
-      tol = 1e-4;
-
 
       // dL =  750;
       // dLb = 750;
-      // tol = 1e-8;
 
       output = "Roof1_t="+ std::to_string(2*thickness) + "-r=" + std::to_string(numHref) + "-e" + std::to_string(numElevate) +"_solution";
       wn = output + "data.txt";
@@ -565,6 +585,7 @@ int main (int argc, char** argv)
       assembler.assembleVector(mp_def);
       gsVector<real_t> Fint = -(assembler.rhs() - force);
       gsVector<real_t> result = Fint - lam * force;
+
       // gsDebugVar(Fint);
       // gsDebugVar(result);
       // The residual is now defined as the internal forces minus lam*force
@@ -583,11 +604,11 @@ int main (int argc, char** argv)
     arcLength.setLength(dLb); // dLb
     arcLength.setBifurcationMethod("Determinant");
     arcLength.setLength(dLb,adaptive,5); // dLb
-    arcLength.setTau(1000);
+    arcLength.setTau(tau);
     arcLength.setTolerance(tol); //tol
     arcLength.setToleranceU(tolU);
     arcLength.setToleranceF(tolF);
-    arcLength.setMaxIterations(50);
+    arcLength.setMaxIterations(20);
     arcLength.verbose();
     arcLength.setAngleDeterminationMethod(1);
     // arcLength.setRelaxation(relax);
@@ -644,11 +665,11 @@ int main (int argc, char** argv)
 
       if (SingularPoint)
       {
-        arcLength.computeStability(arcLength.solutionU(),!quasiNewton);
+        arcLength.computeStability(arcLength.solutionU(),quasiNewton);
         if (arcLength.stabilityChange())
         {
-          gsInfo<<"Bifurcation spotted!"<<"\n";
-          arcLength.computeSingularPoint(1e-6, 5, Uold, Lold, 1e-12, 1e-2, false);
+          gsInfo<<"Bifurcation spotted!"<<"\n";          
+          arcLength.computeSingularPoint(1e-6, 5, Uold, Lold, 1e-10, 1e-2, false);
           arcLength.switchBranch();
           arcLength.setLength(dL);
         }
@@ -689,7 +710,7 @@ int main (int argc, char** argv)
         gsMatrix<> mid;
         gsMatrix<> P(2,1);
         // Compute end point displacement
-        if (testCase==5)
+        if (testCase==5 || testCase==6)
           P<<0.0,0.5;
 
         gsMatrix<> left;
@@ -701,7 +722,7 @@ int main (int argc, char** argv)
         for (int k = 0; k <= 100; k ++)
         {
           gsMatrix<> Q(2,1);
-          if (testCase==5 )
+          if (testCase==5 || testCase==6)
             Q<<1.0, 1.0*k/100;
 
           gsMatrix<> res;
