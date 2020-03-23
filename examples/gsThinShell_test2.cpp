@@ -21,6 +21,10 @@
 
 using namespace gismo;
 
+template <class T>
+gsMultiPatch<T> RectangularDomain(int n, int m, int p, int q, T L, T B);
+template <class T>
+gsMultiPatch<T> RectangularDomain(int n, int p, T L, T B);
 
 // Choose among various shell examples, default = Thin Plate
 int main(int argc, char *argv[])
@@ -96,9 +100,7 @@ int main(int argc, char *argv[])
     else
     {
         // Unit square
-        mp.addPatch( gsNurbsCreator<>::BSplineSquare(1) ); // degree
-        mp.addAutoBoundaries();
-        mp.embed(3);
+        mp = RectangularDomain(0,2,2.0,1.0);
         E_modulus = 1e0;
         thickness = 1e0;
         PoissonRatio = 0.0;
@@ -624,6 +626,67 @@ void evaluateFunction(gsExprEvaluator<T> ev, auto expression, gsVector<T> pt)
     gsInfo << "Eval on point ("<<pt.at(0)<<" , "<<pt.at(1)<<") :\n"<< evresult;
     gsInfo << "\nEnd ("<< evresult.rows()<< " x "<<evresult.cols()<<")\n";
 };
+
+template <class T>
+gsMultiPatch<T> RectangularDomain(int n, int p, T L, T B)
+{
+  gsMultiPatch<T> mp = RectangularDomain(n, n, p, p, L, B);
+  return mp;
+}
+
+template <class T>
+gsMultiPatch<T> RectangularDomain(int n, int m, int p, int q, T L, T B)
+{
+  // -------------------------------------------------------------------------
+  // --------------------------Make beam geometry-----------------------------
+  // -------------------------------------------------------------------------
+  int dim = 3; //physical dimension
+  gsKnotVector<> kv0;
+  kv0.initUniform(0,1,0,p+1,1);
+  gsKnotVector<> kv1;
+  kv1.initUniform(0,1,0,q+1,1);
+
+  for(index_t i = 0; i< n; ++i)
+      kv0.uniformRefine();
+  for(index_t i = 0; i< m; ++i)
+      kv1.uniformRefine();
+
+  // Make basis
+  gsTensorBSplineBasis<2,T> basis(kv0,kv1);
+
+  // Initiate coefficient matrix
+  gsMatrix<> coefs(basis.size(),dim);
+  // Number of control points needed per component
+  size_t len0 = basis.component(0).size();
+  size_t len1 = basis.component(1).size();
+  gsVector<> coefvec0(len0);
+  // Uniformly distribute control points per component
+  coefvec0.setLinSpaced(len0,0.0,L);
+  gsVector<> coefvec1(basis.component(1).size());
+  coefvec1.setLinSpaced(len1,0.0,B);
+
+  // Z coordinate is zero
+  coefs.col(2).setZero();
+
+  // Define a matrix with ones
+  gsVector<> temp(len0);
+  temp.setOnes();
+  for (index_t k = 0; k < len1; k++)
+  {
+    // First column contains x-coordinates (length)
+    coefs.col(0).segment(k*len0,len0) = coefvec0;
+    // Second column contains y-coordinates (width)
+    coefs.col(1).segment(k*len0,len0) = temp*coefvec1.at(k);
+  }
+  // Create gsGeometry-derived object for the patch
+  gsTensorBSpline<2,real_t> shape(basis,coefs);
+
+  gsMultiPatch<T> mp;
+  mp.addPatch(shape);
+  mp.addAutoBoundaries();
+
+  return mp;
+}
 
 /*
     to do:
