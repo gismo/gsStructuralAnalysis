@@ -87,12 +87,17 @@ int main(int argc, char *argv[])
         PoissonRatio = 0.3;
         gsReadFile<>("pinched_cylinder.xml", mp);
     }
+    else if (testCase == 5)
+    {
+        thickness = 1;
+        E_modulus = 1;
+        PoissonRatio = 0.5;
+        gsReadFile<>("planar/unitcircle.xml", mp);
+    }
     else if (testCase == 17)
     {
         // Unit square
-        mp.addPatch( gsNurbsCreator<>::BSplineSquare(1) ); // degree
-        mp.addAutoBoundaries();
-        mp.embed(3);
+        mp = RectangularDomain(0,2,1.0,1.0);
         E_modulus = 4.497000000e6;
         thickness = 0.001;
         PoissonRatio = 0.4999;
@@ -100,10 +105,10 @@ int main(int argc, char *argv[])
     else
     {
         // Unit square
-        mp = RectangularDomain(0,2,2.0,1.0);
+        mp = RectangularDomain(0,2,2.0,1.5);
         E_modulus = 1e0;
         thickness = 1e0;
-        PoissonRatio = 0.0;
+        PoissonRatio = 0.5;
         // PoissonRatio = 0.499;
     }
     //! [Read input file]
@@ -227,6 +232,21 @@ int main(int argc, char *argv[])
         // Point loads
         gsVector<> point(2); point<< 1.0, 1.0 ;
         gsVector<> load (3); load << 0.0, 0.0, -0.25 ;
+        pLoads.addLoad(point, load, 0 );
+    }
+    else if (testCase == 5)
+    {
+        for (index_t i = 0; i!=3; i++)
+        {
+            bc.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, i );
+            bc.addCondition(boundary::east, condition_type::dirichlet, 0, 0, false, i );
+            bc.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, i );
+            bc.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, i );
+        }
+
+        // Point loads
+        gsVector<> point(2); point<< 0.5,0.5 ;
+        gsVector<> load (3); load << 0.0, 0.0, -10 ;
         pLoads.addLoad(point, load, 0 );
     }
     // else if (testCase == 10)
