@@ -26,6 +26,17 @@ gsMultiPatch<T> RectangularDomain(int n, int m, int p, int q, T L, T B);
 template <class T>
 gsMultiPatch<T> RectangularDomain(int n, int p, T L, T B);
 
+template <class T>
+gsMultiPatch<T> RectangularDomainVert(int n, int m, int p, int q, T L, T B);
+template <class T>
+gsMultiPatch<T> RectangularDomainVert(int n, int p, T L, T B);
+
+template <class T>
+gsMultiPatch<T> RectangularDomain90(int n, int m, int p, int q, T L, T B);
+template <class T>
+gsMultiPatch<T> RectangularDomain90(int n, int p, T L, T B);
+
+
 // Choose among various shell examples, default = Thin Plate
 int main(int argc, char *argv[])
 {
@@ -105,7 +116,7 @@ int main(int argc, char *argv[])
     else
     {
         // Unit square
-        mp = RectangularDomain(0,2,2.0,1.5);
+        mp = RectangularDomain(0,2,1.0,1.0);
         E_modulus = 1e0;
         thickness = 1e0;
         PoissonRatio = 0.5;
@@ -140,7 +151,14 @@ int main(int argc, char *argv[])
 
 
     gsConstantFunction<> neuData(neu,3);
-    if (testCase == 1)
+    if (testCase == 0)
+    {
+        bc.addCornerValue(boundary::southwest, 0.0, 0, 0); // (corner,value, patch, unknown)
+        bc.addCornerValue(boundary::southwest, 0.0, 0, 1); // (corner,value, patch, unknown)
+        bc.addCornerValue(boundary::southwest, 0.0, 0, 2); // (corner,value, patch, unknown)
+
+    }
+    else if (testCase == 1)
     {
         for (index_t i=0; i!=3; ++i)
         {
@@ -176,7 +194,7 @@ int main(int argc, char *argv[])
         bc.addCondition(boundary::east, condition_type::dirichlet, 0, 0 ,false, 2 ); // unknown 2 - z
 
         // Surface forces
-        tmp << 0, 0, -90;
+        tmp << 0, 0, -900;
     }
     else if (testCase == 3)
     {
@@ -469,15 +487,19 @@ int main(int argc, char *argv[])
     gsVector<> solVector = solver.solve(assembler.rhs());
 
     mp_def = assembler.constructSolution(solVector);
-    // assembler.assembleMatrix(mp_def);
-    // assembler.assembleVector(mp_def);
-    // gsDebugVar(assembler.matrix());
-    // gsDebugVar(assembler.rhs());
 
-    // assembler.assembleMatrix(solVector);
-    // assembler.assembleVector(solVector);
-    // gsDebugVar(assembler.matrix());
-    // gsDebugVar(assembler.rhs());
+    // mp_def = RectangularDomain(0,2,2.0,1.0);
+    //     // p-refine
+    // if (numElevate!=0)
+    //     mp_def.degreeElevate(numElevate);
+
+    // // h-refine
+    // for (int r =0; r < numRefine; ++r)
+    //     mp_def.uniformRefine();
+
+    gsWriteParaview<>( mp    , "mp", 1000, true);
+    gsWriteParaview<>( mp_def, "mp_def", 1000, true);
+
 
     if ((plot) && (!nonlinear))
     {
@@ -697,6 +719,128 @@ gsMultiPatch<T> RectangularDomain(int n, int m, int p, int q, T L, T B)
     coefs.col(0).segment(k*len0,len0) = coefvec0;
     // Second column contains y-coordinates (width)
     coefs.col(1).segment(k*len0,len0) = temp*coefvec1.at(k);
+  }
+  // Create gsGeometry-derived object for the patch
+  gsTensorBSpline<2,real_t> shape(basis,coefs);
+
+  gsMultiPatch<T> mp;
+  mp.addPatch(shape);
+  mp.addAutoBoundaries();
+
+  return mp;
+}
+
+template <class T>
+gsMultiPatch<T> RectangularDomainVert(int n, int p, T L, T B)
+{
+  gsMultiPatch<T> mp = RectangularDomainVert(n, n, p, p, L, B);
+  return mp;
+}
+
+template <class T>
+gsMultiPatch<T> RectangularDomainVert(int n, int m, int p, int q, T L, T B)
+{
+  // -------------------------------------------------------------------------
+  // --------------------------Make beam geometry-----------------------------
+  // -------------------------------------------------------------------------
+  int dim = 3; //physical dimension
+  gsKnotVector<> kv0;
+  kv0.initUniform(0,1,0,p+1,1);
+  gsKnotVector<> kv1;
+  kv1.initUniform(0,1,0,q+1,1);
+
+  for(index_t i = 0; i< n; ++i)
+      kv0.uniformRefine();
+  for(index_t i = 0; i< m; ++i)
+      kv1.uniformRefine();
+
+  // Make basis
+  gsTensorBSplineBasis<2,T> basis(kv0,kv1);
+
+  // Initiate coefficient matrix
+  gsMatrix<> coefs(basis.size(),dim);
+  // Number of control points needed per component
+  size_t len0 = basis.component(0).size();
+  size_t len1 = basis.component(1).size();
+  gsVector<> coefvec0(len0);
+  // Uniformly distribute control points per component
+  coefvec0.setLinSpaced(len0,0.0,L);
+  gsVector<> coefvec1(basis.component(1).size());
+  coefvec1.setLinSpaced(len1,0.0,B);
+
+  // Z coordinate is zero
+  coefs.col(2).setZero();
+
+  // Define a matrix with ones
+  gsVector<> temp(len0);
+  temp.setOnes();
+  for (index_t k = 0; k < len1; k++)
+  {
+    // First column contains x-coordinates (length)
+    coefs.col(0).segment(k*len0,len0) = coefvec0;
+    // Second column contains z-coordinates (height)
+    coefs.col(2).segment(k*len0,len0) = temp*coefvec1.at(k);
+  }
+  // Create gsGeometry-derived object for the patch
+  gsTensorBSpline<2,real_t> shape(basis,coefs);
+
+  gsMultiPatch<T> mp;
+  mp.addPatch(shape);
+  mp.addAutoBoundaries();
+
+  return mp;
+}
+
+template <class T>
+gsMultiPatch<T> RectangularDomain90(int n, int p, T L, T B)
+{
+  gsMultiPatch<T> mp = RectangularDomain90(n, n, p, p, L, B);
+  return mp;
+}
+
+template <class T>
+gsMultiPatch<T> RectangularDomain90(int n, int m, int p, int q, T L, T B)
+{
+  // -------------------------------------------------------------------------
+  // --------------------------Make beam geometry-----------------------------
+  // -------------------------------------------------------------------------
+  int dim = 3; //physical dimension
+  gsKnotVector<> kv0;
+  kv0.initUniform(0,1,0,p+1,1);
+  gsKnotVector<> kv1;
+  kv1.initUniform(0,1,0,q+1,1);
+
+  for(index_t i = 0; i< n; ++i)
+      kv0.uniformRefine();
+  for(index_t i = 0; i< m; ++i)
+      kv1.uniformRefine();
+
+  // Make basis
+  gsTensorBSplineBasis<2,T> basis(kv0,kv1);
+
+  // Initiate coefficient matrix
+  gsMatrix<> coefs(basis.size(),dim);
+  // Number of control points needed per component
+  size_t len0 = basis.component(0).size();
+  size_t len1 = basis.component(1).size();
+  gsVector<> coefvec0(len0);
+  // Uniformly distribute control points per component
+  coefvec0.setLinSpaced(len0,0.0,L);
+  gsVector<> coefvec1(basis.component(1).size());
+  coefvec1.setLinSpaced(len1,0.0,B);
+
+  // Z coordinate is zero
+  coefs.col(2).setZero();
+
+  // Define a matrix with ones
+  gsVector<> temp(len0);
+  temp.setOnes();
+  for (index_t k = 0; k < len1; k++)
+  {
+    // First column contains x-coordinates (length)
+    coefs.col(1).segment(k*len0,len0) = coefvec0;
+    // Second column contains z-coordinates (height)
+    coefs.col(0).segment(k*len0,len0) = temp*coefvec1.at(k);
   }
   // Create gsGeometry-derived object for the patch
   gsTensorBSpline<2,real_t> shape(basis,coefs);
