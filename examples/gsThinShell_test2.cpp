@@ -194,7 +194,7 @@ int main(int argc, char *argv[])
         bc.addCondition(boundary::east, condition_type::dirichlet, 0, 0 ,false, 2 ); // unknown 2 - z
 
         // Surface forces
-        tmp << 0, 0, -900;
+        tmp << 0, 0, -90;
     }
     else if (testCase == 3)
     {
@@ -462,7 +462,7 @@ int main(int argc, char *argv[])
     gsMaterialMatrix materialMatrixTest(mp,mp_def,t,E,nu,rho);
     materialMatrixTest.options().setInt("MaterialLaw",4);
     gsVector<> testPt(2);
-    testPt<<0.887298,0.887298;
+    testPt<<0.351135,0.85235;
     // testPt.setConstant(0.25);
     gsMatrix<> testResult;
     // materialMatrixTest.makeVector(0);
