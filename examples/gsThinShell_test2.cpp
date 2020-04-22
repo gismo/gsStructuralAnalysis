@@ -464,24 +464,26 @@ int main(int argc, char *argv[])
     gsVector<> testPt(2);
     testPt<<0.351135,0.85235;
     // testPt.setConstant(0.25);
-    gsMatrix<> testResult;
+    gsMatrix<> testResult1, testResult2;
     // materialMatrixTest.makeVector(0);
     materialMatrixTest.makeMatrix(0);
-    materialMatrixTest.eval_into(testPt,testResult);
-    gsDebugVar(testResult);
+    materialMatrixTest.eval_into(testPt,testResult1);
+    gsDebugVar(testResult1);
 
     // materialMatrixNonlinear2.makeVector(0);
     materialMatrixNonlinear2.makeMatrix(0);
-    materialMatrixNonlinear2.eval_into(testPt,testResult);
-    gsDebugVar(testResult);
+    materialMatrixNonlinear2.eval_into(testPt,testResult2);
+    gsDebugVar(testResult2);
+    gsDebugVar(testResult1-testResult2);
 
     materialMatrixTest.makeVector(0);
-    materialMatrixTest.eval_into(testPt,testResult);
-    gsDebugVar(testResult);
+    materialMatrixTest.eval_into(testPt,testResult1);
+    gsDebugVar(testResult1);
 
     materialMatrixNonlinear2.makeVector(0);
-    materialMatrixNonlinear2.eval_into(testPt,testResult);
-    gsDebugVar(testResult);
+    materialMatrixNonlinear2.eval_into(testPt,testResult2);
+    gsDebugVar(testResult2);
+    gsDebugVar(testResult1-testResult2);
     // // ! TEST MATRIX INTEGRATION
 
     gsVector<> solVector = solver.solve(assembler.rhs());
@@ -585,21 +587,24 @@ int main(int argc, char *argv[])
     materialMatrixTest.options().setInt("MaterialLaw",4);
     // materialMatrixTest.makeVector(0);
     materialMatrixTest.makeMatrix(0);
-    materialMatrixTest.eval_into(testPt,testResult);
-    gsDebugVar(testResult);
+    materialMatrixTest.eval_into(testPt,testResult1);
+    gsDebugVar(testResult1);
 
     // materialMatrixNonlinear2.makeVector(0);
     materialMatrixNonlinear2.makeMatrix(0);
-    materialMatrixNonlinear2.eval_into(testPt,testResult);
-    gsDebugVar(testResult);
+    materialMatrixNonlinear2.eval_into(testPt,testResult2);
+    gsDebugVar(testResult2);
+    gsDebugVar(testResult1-testResult2);
 
     materialMatrixTest.makeVector(0);
-    materialMatrixTest.eval_into(testPt,testResult);
-    gsDebugVar(testResult);
+    materialMatrixTest.eval_into(testPt,testResult1);
+    gsDebugVar(testResult1);
 
     materialMatrixNonlinear2.makeVector(0);
-    materialMatrixNonlinear2.eval_into(testPt,testResult);
-    gsDebugVar(testResult);
+    materialMatrixNonlinear2.eval_into(testPt,testResult2);
+    gsDebugVar(testResult2);
+    gsDebugVar(testResult1-testResult2);
+
     // // ! TEST MATRIX INTEGRATION
 
     // gsDebugVar(assembler.computePrincipalStretches(pts,mp_def));
