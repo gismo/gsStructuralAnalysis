@@ -157,7 +157,7 @@ int main (int argc, char** argv)
       real_t L = 1.0;
       real_t B = 0.1;
       Area = B*thickness;
-      mp = RectangularDomain(numHref, 0, numElevate, 2, L, B);
+      mp = RectangularDomain(numHref, 0, numElevate+2, 2, L, B);
     }
     else if (testCase==2 || testCase==3)
     {
@@ -167,7 +167,7 @@ int main (int argc, char** argv)
       real_t L = 1.0;
       real_t B = 0.01;
       Area = B*thickness;
-      mp = RectangularDomain(numHref, 0, numElevate, 2, L, B);
+      mp = RectangularDomain(numHref, 0, numElevate+2, 2, L, B);
     }
     else if (testCase==4)
     {
@@ -177,7 +177,7 @@ int main (int argc, char** argv)
       thickness = 0.001;
       PoissonRatio = 0.4999;
       Area = B*thickness;
-      mp = RectangularDomain(numHref, numElevate, L, B);
+      mp = RectangularDomain(numHref, numElevate+2, L, B);
     }
     else if (testCase==5)
     {
@@ -186,7 +186,7 @@ int main (int argc, char** argv)
       aDim = 0.254*0.5;
       bDim = 0.1016;
       thickness = 0.1e-3;
-      mp = RectangularDomain(numHref, numElevate, aDim, bDim);
+      mp = RectangularDomain(numHref, numElevate+2, aDim, bDim);
     }
     else if (testCase==6)
     {
@@ -195,7 +195,7 @@ int main (int argc, char** argv)
       aDim = 2.5*0.5;
       bDim = 1.0;
       thickness = 1e-3;
-      mp = RectangularDomain(numHref, numElevate, aDim, bDim);
+      mp = RectangularDomain(numHref, numElevate+2, aDim, bDim);
     }
     else if (testCase==9  )
     {
@@ -391,7 +391,7 @@ int main (int argc, char** argv)
       wn = output + "data.txt";
       SingularPoint = true;
     }
-    if (testCase == 4)
+    if (testCase == 4) // Uniaxial tension; use with hyperelastic material model!
     {
       // Clamped-Clamped
       BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 0 ); // unknown 0 - x
@@ -668,7 +668,7 @@ int main (int argc, char** argv)
         arcLength.computeStability(arcLength.solutionU(),quasiNewton);
         if (arcLength.stabilityChange())
         {
-          gsInfo<<"Bifurcation spotted!"<<"\n";          
+          gsInfo<<"Bifurcation spotted!"<<"\n";
           arcLength.computeSingularPoint(1e-6, 5, Uold, Lold, 1e-10, 1e-2, false);
           arcLength.switchBranch();
           arcLength.setLength(dL);
