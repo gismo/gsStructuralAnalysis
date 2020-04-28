@@ -119,8 +119,8 @@ int main(int argc, char *argv[])
         mp = RectangularDomain(0,2,1.0,1.0);
         E_modulus = 1e0;
         thickness = 1e0;
-        PoissonRatio = 0.5;
-        // PoissonRatio = 0.499;
+        // PoissonRatio = 0.5;
+        PoissonRatio = 0.499;
     }
     //! [Read input file]
 
@@ -264,7 +264,7 @@ int main(int argc, char *argv[])
 
         // Point loads
         gsVector<> point(2); point<< 0.5,0.5 ;
-        gsVector<> load (3); load << 0.0, 0.0, -10 ;
+        gsVector<> load (3); load << 0.0, 0.0, -1 ;
         pLoads.addLoad(point, load, 0 );
     }
     // else if (testCase == 10)
@@ -402,8 +402,16 @@ int main(int argc, char *argv[])
     gsFunctionExpr<> E(std::to_string(E_modulus),3);
     gsFunctionExpr<> nu(std::to_string(PoissonRatio),3);
     gsFunctionExpr<> rho(std::to_string(Density),3);
+    gsConstantFunction<> ratio(7.0,3);
 
-    gsMaterialMatrix materialMatrixNonlinear(mp,mp_def,t,E,nu,rho);
+    // gsMaterialMatrix materialMatrixNonlinear(mp,mp_def,t,E,nu,rho);
+    std::vector<gsFunction<>*> parameters(3);
+    parameters[0] = &E;
+    parameters[1] = &nu;
+    parameters[2] = &ratio;
+    gsMaterialMatrix materialMatrixNonlinear(mp,mp_def,t,parameters,rho);
+
+
     materialMatrixNonlinear.options().setInt("MaterialLaw",material);
     materialMatrixNonlinear.options().setInt("Compressibility",Compressibility);
 
@@ -455,12 +463,15 @@ int main(int argc, char *argv[])
 
 
     // // TEST MATRIX INTEGRATION
-    gsMaterialMatrix materialMatrixNonlinear2(mp,mp_def,t,E,nu,rho);
+    gsMaterialMatrix materialMatrixNonlinear2(mp,mp_def,t,parameters,rho);
     materialMatrixNonlinear2.options().setInt("MaterialLaw",material);
     materialMatrixNonlinear2.options().setInt("Compressibility",Compressibility);
 
-    gsMaterialMatrix materialMatrixTest(mp,mp_def,t,E,nu,rho);
-    materialMatrixTest.options().setInt("MaterialLaw",4);
+    materialMatrixNonlinear2.info();
+
+    gsMaterialMatrix materialMatrixTest(mp,mp_def,t,parameters,rho);
+    materialMatrixTest.options().setInt("MaterialLaw",12);
+    materialMatrixTest.options().setInt("Compressibility",Compressibility);
     gsVector<> testPt(2);
     testPt<<0.351135,0.85235;
     // testPt.setConstant(0.25);
@@ -580,11 +591,13 @@ int main(int argc, char *argv[])
         }
     }
 
-    // // TEST MATRIX INTEGRATION
+    // TEST MATRIX INTEGRATION
     materialMatrixNonlinear2.options().setInt("MaterialLaw",material);
     materialMatrixNonlinear2.options().setInt("Compressibility",Compressibility);
 
-    materialMatrixTest.options().setInt("MaterialLaw",4);
+    materialMatrixTest.options().setInt("MaterialLaw",12);
+    materialMatrixTest.options().setInt("Compressibility",Compressibility);
+
     // materialMatrixTest.makeVector(0);
     materialMatrixTest.makeMatrix(0);
     materialMatrixTest.eval_into(testPt,testResult1);

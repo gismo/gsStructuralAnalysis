@@ -556,8 +556,15 @@ int main (int argc, char** argv)
     gsFunctionExpr<> E(std::to_string(E_modulus),3);
     gsFunctionExpr<> nu(std::to_string(PoissonRatio),3);
     gsFunctionExpr<> rho(std::to_string(Density),3);
+    gsConstantFunction<> ratio(7.0,3);
 
-    gsMaterialMatrix materialMatrixNonlinear(mp,mp_def,t,E,nu,rho);
+    // gsMaterialMatrix materialMatrixNonlinear(mp,mp_def,t,E,nu,rho);
+    std::vector<gsFunction<>*> parameters(3);
+    parameters[0] = &E;
+    parameters[1] = &nu;
+    parameters[2] = &ratio;
+    gsMaterialMatrix materialMatrixNonlinear(mp,mp_def,t,parameters,rho);
+
     materialMatrixNonlinear.options().setInt("MaterialLaw",material);
     materialMatrixNonlinear.options().setInt("Compressibility",Compressibility);
 
