@@ -470,7 +470,7 @@ int main(int argc, char *argv[])
     materialMatrixNonlinear2.info();
 
     gsMaterialMatrix materialMatrixTest(mp,mp_def,t,parameters,rho);
-    materialMatrixTest.options().setInt("MaterialLaw",12);
+    materialMatrixTest.options().setInt("MaterialLaw",13);
     materialMatrixTest.options().setInt("Compressibility",Compressibility);
     gsVector<> testPt(2);
     testPt<<0.351135,0.85235;
@@ -595,7 +595,7 @@ int main(int argc, char *argv[])
     materialMatrixNonlinear2.options().setInt("MaterialLaw",material);
     materialMatrixNonlinear2.options().setInt("Compressibility",Compressibility);
 
-    materialMatrixTest.options().setInt("MaterialLaw",12);
+    materialMatrixTest.options().setInt("MaterialLaw",13);
     materialMatrixTest.options().setInt("Compressibility",Compressibility);
 
     // materialMatrixTest.makeVector(0);
