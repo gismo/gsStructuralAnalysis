@@ -76,7 +76,7 @@ int main(int argc, char *argv[])
     //! [Read input file]
     gsMultiPatch<> mp;
     gsMultiPatch<> mp_def;
-    if (testCase == 2 )
+    if (testCase == 1 )
     {
         thickness = 0.25;
         E_modulus = 4.32E8;
@@ -84,14 +84,14 @@ int main(int argc, char *argv[])
         gsReadFile<>(fn, mp);
         PoissonRatio = 0.0;
     }
-    else if (testCase == 3)
+    else if (testCase == 2)
     {
         thickness = 0.04;
         E_modulus = 6.825E7;
         PoissonRatio = 0.3;
         gsReadFile<>("quarter_hemisphere.xml", mp);
     }
-    else if (testCase == 4)
+    else if (testCase == 3)
     {
         thickness = 3;
         E_modulus = 3E6;
@@ -116,11 +116,14 @@ int main(int argc, char *argv[])
     else
     {
         // Unit square
-        mp = RectangularDomain(0,2,1.0,1.0);
+        mp.addPatch( gsNurbsCreator<>::BSplineSquare(1) ); // degree
+        mp.addAutoBoundaries();
+        mp.embed(3);
         E_modulus = 1e0;
         thickness = 1e0;
         // PoissonRatio = 0.5;
-        PoissonRatio = 0.499;
+        // PoissonRatio = 0.499;
+        PoissonRatio = 0.0;
     }
     //! [Read input file]
 
@@ -151,14 +154,8 @@ int main(int argc, char *argv[])
 
 
     gsConstantFunction<> neuData(neu,3);
+    real_t pressure = 0.0;
     if (testCase == 0)
-    {
-        bc.addCornerValue(boundary::southwest, 0.0, 0, 0); // (corner,value, patch, unknown)
-        bc.addCornerValue(boundary::southwest, 0.0, 0, 1); // (corner,value, patch, unknown)
-        bc.addCornerValue(boundary::southwest, 0.0, 0, 2); // (corner,value, patch, unknown)
-
-    }
-    else if (testCase == 1)
     {
         for (index_t i=0; i!=3; ++i)
         {
@@ -182,7 +179,7 @@ int main(int argc, char *argv[])
         // point<< 0.5, 0.5 ; load << 0.0, 1.0, 0.0 ;
         // pLoads.addLoad(point, load, 0 );
     }
-    else if (testCase == 2)
+    else if (testCase == 1)
     {
         // Diaphragm conditions
         bc.addCondition(boundary::west, condition_type::dirichlet, 0, 0 ,false, 1 ); // unknown 1 - y
@@ -196,7 +193,7 @@ int main(int argc, char *argv[])
         // Surface forces
         tmp << 0, 0, -90;
     }
-    else if (testCase == 3)
+    else if (testCase == 2)
     {
         bc.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 0 ); // unknown 0 - x
         bc.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 1 - y
@@ -223,7 +220,7 @@ int main(int argc, char *argv[])
         point<< 1.0, 0.0 ; load << 0.0, -1.0, 0.0 ;
         pLoads.addLoad(point, load, 0 );
     }
-    else if (testCase == 4)
+    else if (testCase == 3)
     {
         // Symmetry in y-direction for back side
         bc.addCondition(boundary::north, condition_type::clamped, 0, 0, false, 0 );
@@ -251,6 +248,17 @@ int main(int argc, char *argv[])
         gsVector<> point(2); point<< 1.0, 1.0 ;
         gsVector<> load (3); load << 0.0, 0.0, -0.25 ;
         pLoads.addLoad(point, load, 0 );
+    }
+    else if (testCase == 4)
+    {
+        for (index_t i = 0; i!=3; i++)
+        {
+            bc.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, i );
+            bc.addCondition(boundary::east, condition_type::dirichlet, 0, 0, false, i );
+            bc.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, i );
+            bc.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, i );
+        }
+        pressure = -1.0;
     }
     else if (testCase == 5)
     {
@@ -398,6 +406,7 @@ int main(int argc, char *argv[])
 
     // Linear isotropic material model
     gsConstantFunction<> force(tmp,3);
+    gsConstantFunction<> pressFun(pressure,3);
     gsFunctionExpr<> t(std::to_string(thickness), 3);
     gsFunctionExpr<> E(std::to_string(E_modulus),3);
     gsFunctionExpr<> nu(std::to_string(PoissonRatio),3);
@@ -437,6 +446,8 @@ int main(int argc, char *argv[])
 
     gsThinShellAssembler assembler(mp,dbasis,bc,force,materialMatrixNonlinear);
     assembler.setPointLoads(pLoads);
+    if (pressure!= 0.0)
+        assembler.setPressure(pressFun);
 
 
     gsSparseSolver<>::CGDiagonal solver;
