@@ -50,6 +50,7 @@ int main (int argc, char** argv)
     int numElevate  = 1;
     int numHref     = 1;
     bool plot       = false;
+    bool stress       = false;
     bool nonlinear  = false;
     bool first  = false;
     bool SingularPoint = false;
@@ -134,6 +135,7 @@ int main (int argc, char** argv)
     cmd.addSwitch("A","adaptive", "Adaptive length ", adaptive);
     cmd.addSwitch("nl", "Nonlinear elasticity (otherwise linear)", nonlinear);
     cmd.addSwitch("plot", "Plot result in ParaView format", plot);
+    cmd.addSwitch("stress", "Plot stress in ParaView format", stress);
     cmd.addSwitch("first", "Plot only first", first);
     cmd.addSwitch("write", "Write convergence data to file", write);
 
@@ -169,32 +171,32 @@ int main (int argc, char** argv)
       Area = B*thickness;
       mp = RectangularDomain(numHref, 0, numElevate+2, 2, L, B);
     }
-    else if (testCase==4)
+    else if (testCase==4 || testCase==5)
     {
       real_t L = 1.0;
       real_t B = 1.0;
       E_modulus = 4.497000000e6;
       thickness = 0.001;
       PoissonRatio = 0.4999;
+      // PoissonRatio = 0;
       Area = B*thickness;
       mp = RectangularDomain(numHref, numElevate+2, L, B);
     }
-    else if (testCase==5)
+    else if (testCase == 6)
+    {
+        thickness = 0.1;
+        real_t mu = 4.225e5;
+        PoissonRatio = 0.3;
+        E_modulus = (2+PoissonRatio)*mu;
+        gsReadFile<>("quarter_sphere.xml", mp);
+    }
+    else if (testCase==7)
     {
       E_modulus = 1e6;
       PoissonRatio = 0.499;
       aDim = 0.254*0.5;
       bDim = 0.1016;
       thickness = 0.1e-3;
-      mp = RectangularDomain(numHref, numElevate+2, aDim, bDim);
-    }
-    else if (testCase==6)
-    {
-      E_modulus = 1e6;
-      PoissonRatio = 0.499;
-      aDim = 2.5*0.5;
-      bDim = 1.0;
-      thickness = 1e-3;
       mp = RectangularDomain(numHref, numElevate+2, aDim, bDim);
     }
     else if (testCase==9  )
@@ -285,6 +287,7 @@ int main (int argc, char** argv)
 
     std::string output = "solution";
     std::string dirname = "ArcLengthResults";
+    real_t pressure = 0.0;
 
     if (testCase == 0)
     {
@@ -393,13 +396,10 @@ int main (int argc, char** argv)
     }
     if (testCase == 4) // Uniaxial tension; use with hyperelastic material model!
     {
-      // Clamped-Clamped
       BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 0 ); // unknown 0 - x
-      // BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 1 - y
       BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z
 
       BCs.addCondition(boundary::east, condition_type::collapsed, 0, 0, false, 0 ); // unknown 1 - y
-      // BCs.addCondition(boundary::east, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 2 - z.
       BCs.addCondition(boundary::east, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z.
 
 
@@ -418,43 +418,63 @@ int main (int argc, char** argv)
       wn = output + "data.txt";
       SingularPoint = true;
     }
-    else if (testCase == 5)
+    if (testCase == 5) // Bi-axial tension; use with hyperelastic material model!
     {
-      dirname = "ArcLengthResults/Rectangle1_r" + std::to_string(numHref) + "_e" + std::to_string(numElevate) + "_dL" + std::to_string(dL) + "_dLb" + std::to_string(dLb) + "_mat" + std::to_string(material);
-      Load = 1e-1;
-      neu << -Load, 0, 0;
-      neuData.setValue(neu,3);
-
-      BCs.addCondition(boundary::west, condition_type::neumann, &neuData ); // unknown 0 - x
-      BCs.addCondition(boundary::west, condition_type::collapsed, 0, 0, false, 0 ); // unknown 0 - x
-      BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 1 - y
+      BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 0 ); // unknown 0 - x
       BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z
 
-      BCs.addCondition(boundary::east, condition_type::dirichlet, 0, 0, false, 0 ); // unknown 0 - x
+      BCs.addCondition(boundary::east, condition_type::collapsed, 0, 0, false, 0 ); // unknown 1 - y
+      BCs.addCondition(boundary::east, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z.
+
+      BCs.addCondition(boundary::north, condition_type::collapsed, 0, 0, false, 1 ); // unknown 1 - y
+      BCs.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z.
+
+      BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 1 - y
+      BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 1 - y
+
+      real_t load_factor = 2;
+      Load = 1e0;
+      gsVector<> point(2);
+      gsVector<> load (3);
+      point<< 1.0, 0.5 ;
+      load << Load,0.0, 0.0;
+      pLoads.addLoad(point, load, 0 );
+
+      point<< 0.5, 1.0 ;
+      load << 0.0, Load/load_factor, 0.0;
+      pLoads.addLoad(point, load, 0 );
 
       output = "Case" + std::to_string(testCase) + "solution";
-      wn = dirname + "/" + output + "data.txt";
-
+      wn = output + "data.txt";
       SingularPoint = true;
     }
+
     else if (testCase == 6)
     {
-      dirname = "ArcLengthResults/Rectangle1_r" + std::to_string(numHref) + "_e" + std::to_string(numElevate) + "_dL" + std::to_string(dL) + "_dLb" + std::to_string(dLb) + "_mat" + std::to_string(material) + "_A" + std::to_string(aDim) + "_bDim" + std::to_string(bDim);
-      Load = 1e-1;
-      neu << -Load, 0, 0;
-      neuData.setValue(neu,3);
+        // BCs.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 0 ); // unknown 0 - x
+        // BCs.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 1 - y
+        // BCs.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z
 
-      BCs.addCondition(boundary::west, condition_type::neumann, &neuData ); // unknown 0 - x
-      BCs.addCondition(boundary::west, condition_type::collapsed, 0, 0, false, 0 ); // unknown 0 - x
-      BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 1 - y
-      BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z
+        // BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 0 ); // unknown 0 - x
+        // BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 1 - y
+        BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z
 
-      BCs.addCondition(boundary::east, condition_type::dirichlet, 0, 0, false, 0 ); // unknown 0 - x
+        // Symmetry in x-direction:
+        BCs.addCondition(boundary::east, condition_type::dirichlet, 0, 0, false, 0 );
+        BCs.addCondition(boundary::east, condition_type::clamped, 0, 0, false, 1 );
+        BCs.addCondition(boundary::east, condition_type::clamped, 0, 0, false, 2 );
 
-      output = "Case" + std::to_string(testCase) + "solution";
-      wn = dirname + "/" + output + "data.txt";
+        // Symmetry in y-direction:
+        BCs.addCondition(boundary::west, condition_type::clamped, 0, 0, false, 0 );
+        BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 1 );
+        BCs.addCondition(boundary::west, condition_type::clamped, 0, 0, false, 2 );
 
-      SingularPoint = true;
+        // Pressure
+        pressure = 1e3;
+
+        output = "Balloon_solution";
+        wn = dirname + "/" + output + "data.txt";
+
     }
     else if (testCase == 9)
     {
@@ -546,6 +566,7 @@ int main (int argc, char** argv)
     gsInfo<<"Results will be written in folder: "<<dirname<<"\n";
 
     gsFunctionExpr<> surfForce(tx,ty,tz,3);
+    gsConstantFunction<> pressFun(pressure,3);
     // Initialise solution object
     gsMultiPatch<> mp_def = mp;
     gsSparseSolver<>::LU solver;
@@ -571,6 +592,9 @@ int main (int argc, char** argv)
     // Construct assembler object
     gsThinShellAssembler assembler(mp,dbasis,BCs,surfForce,materialMatrixNonlinear);
     assembler.setPointLoads(pLoads);
+    if (pressure!= 0.0)
+        assembler.setPressure(pressFun);
+
 
     // Function for the Jacobian
     std::function<gsSparseMatrix<real_t> (gsVector<real_t> const &)> Jacobian;
@@ -697,11 +721,16 @@ int main (int argc, char** argv)
 
       // gsDebugVar(mp_def.patch(0).coefs());
 
-      // gsPiecewiseFunction<> stresses;
-      // assembler.constructStress(mp_def,stresses,stress_type::principal_stretch);
-      // gsField<> stressField(mp,stresses, true);
+      if (stress)
+      {
+        gsPiecewiseFunction<> stresses;
+        assembler.constructStress(mp_def,stresses,stress_type::principal_stretch);
+        gsField<> stressField(mp,stresses, true);
+        gsWriteParaview( stressField, "stress", 5000);
+      }
 
-      // gsWriteParaview( stressField, "stress", 5000);
+
+
 
       gsField<> solField(mp,deformation);
       std::string fileName = dirname + "/" + output + util::to_string(k);

@@ -105,6 +105,14 @@ int main(int argc, char *argv[])
         PoissonRatio = 0.5;
         gsReadFile<>("planar/unitcircle.xml", mp);
     }
+    else if (testCase == 6)
+    {
+        thickness = 0.1;
+        real_t mu = 4.225e5;
+        PoissonRatio = 0.3;
+        E_modulus = (2+PoissonRatio)*mu;
+        gsReadFile<>("quarter_sphere.xml", mp);
+    }
     else if (testCase == 17)
     {
         // Unit square
@@ -144,6 +152,7 @@ int main(int argc, char *argv[])
     gsInfo << dbasis.basis(0)<<"\n";
 
     gsBoundaryConditions<> bc;
+    bc.setGeoMap(mp);
     gsVector<> tmp(3);
     tmp << 0, 0, 0;
 
@@ -152,6 +161,8 @@ int main(int argc, char *argv[])
 
     gsPointLoads<real_t> pLoads = gsPointLoads<real_t>();
 
+    gsFunctionExpr<> displx("1.0",3);
+    gsFunctionExpr<> disply("0.5",3);
 
     gsConstantFunction<> neuData(neu,3);
     real_t pressure = 0.0;
@@ -275,18 +286,50 @@ int main(int argc, char *argv[])
         gsVector<> load (3); load << 0.0, 0.0, -1 ;
         pLoads.addLoad(point, load, 0 );
     }
-    // else if (testCase == 10)
-    // {
-    //     for (index_t i=0; i!=3; ++i)
-    //     {
-    //         bc.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, i ); // unknown 0 - x
-    //         bc.addCondition(boundary::east, condition_type::dirichlet, 0, 0, false, i ); // unknown 1 - y
-    //         bc.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, i ); // unknown 2 - z
-    //         bc.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, i ); // unknown 2 - z
-    //     }
+    else if (testCase == 6) // balloon
+    {
+        // bc.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 0 ); // unknown 0 - x
+        // bc.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 1 - y
+        // bc.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z
 
+        // bc.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 0 ); // unknown 0 - x
+        // bc.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 1 - y
+        bc.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z
 
-    // }
+        // Symmetry in x-direction:
+        bc.addCondition(boundary::east, condition_type::dirichlet, 0, 0, false, 0 );
+        bc.addCondition(boundary::east, condition_type::clamped, 0, 0, false, 1 );
+        bc.addCondition(boundary::east, condition_type::clamped, 0, 0, false, 2 );
+
+        // Symmetry in y-direction:
+        bc.addCondition(boundary::west, condition_type::clamped, 0, 0, false, 0 );
+        bc.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 1 );
+        bc.addCondition(boundary::west, condition_type::clamped, 0, 0, false, 2 );
+
+        // Pressure
+        pressure = 5e3;
+    }
+    else if (testCase == 7) // Bi-axial tension; use with hyperelastic material model!
+    {
+      bc.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 0 ); // unknown 0 - x
+      bc.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z
+
+      bc.addCondition(boundary::east, condition_type::dirichlet, &displx, 0, false, 0 ); // unknown 1 - y
+      bc.addCondition(boundary::east, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z.
+
+      bc.addCondition(boundary::north, condition_type::dirichlet, &disply, 0, false, 1 ); // unknown 1 - y
+      bc.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z.
+
+      bc.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 1 - y
+      bc.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 1 - y
+    }
+    else if (testCase == 10)
+    {
+        bc.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 0 ); // unknown 0 - x
+        bc.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 1 - y
+        bc.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z
+        bc.addCondition(boundary::east, condition_type::dirichlet, &displx, 0, false,  0 ); // unknown 0 - x
+    }
     else if (testCase == 11)
     {
         for (index_t i=0; i!=3; ++i)
