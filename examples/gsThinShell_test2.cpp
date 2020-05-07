@@ -113,6 +113,14 @@ int main(int argc, char *argv[])
         E_modulus = (2+PoissonRatio)*mu;
         gsReadFile<>("quarter_sphere.xml", mp);
     }
+    else if (testCase == 7)
+    {
+        thickness = 0.1;
+        real_t mu = 4.225e5;
+        PoissonRatio = 0.3;
+        E_modulus = (2+PoissonRatio)*mu;
+        gsReadFile<>("quarter_frustrum.xml", mp);
+    }
     else if (testCase == 17)
     {
         // Unit square
@@ -309,19 +317,28 @@ int main(int argc, char *argv[])
         // Pressure
         pressure = 5e3;
     }
-    else if (testCase == 7) // Bi-axial tension; use with hyperelastic material model!
+    else if (testCase == 7)
     {
-      bc.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 0 ); // unknown 0 - x
-      bc.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z
+        neu << 0, 0, -100.0;
+        neuData.setValue(neu,3);
 
-      bc.addCondition(boundary::east, condition_type::dirichlet, &displx, 0, false, 0 ); // unknown 1 - y
-      bc.addCondition(boundary::east, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z.
+        bc.addCondition(boundary::north, condition_type::neumann, &neuData );
+        // bc.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 0 ); // unknown 2 - z
+        // bc.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 2 - z
 
-      bc.addCondition(boundary::north, condition_type::dirichlet, &disply, 0, false, 1 ); // unknown 1 - y
-      bc.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z.
+        bc.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 0 ); // unknown 0 - x
+        bc.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 1 - y
+        bc.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z
 
-      bc.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 1 - y
-      bc.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 1 - y
+        // Symmetry in x-direction:
+        bc.addCondition(boundary::east, condition_type::dirichlet, 0, 0, false, 0 );
+        bc.addCondition(boundary::east, condition_type::clamped, 0, 0, false, 1 );
+        bc.addCondition(boundary::east, condition_type::clamped, 0, 0, false, 2 );
+
+        // Symmetry in y-direction:
+        bc.addCondition(boundary::west, condition_type::clamped, 0, 0, false, 0 );
+        bc.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 1 );
+        bc.addCondition(boundary::west, condition_type::clamped, 0, 0, false, 2 );
     }
     else if (testCase == 10)
     {
@@ -456,12 +473,38 @@ int main(int argc, char *argv[])
     gsFunctionExpr<> rho(std::to_string(Density),3);
     gsConstantFunction<> ratio(7.0,3);
 
+    real_t mu = E_modulus / (2 * (1 + PoissonRatio));
+
+    gsDebugVar(mu);
+    gsConstantFunction<> alpha1(2.0,3);
+    gsConstantFunction<> mu1(7.0*mu/8.0,3);
+    gsConstantFunction<> alpha2(-2.0,3);
+    gsConstantFunction<> mu2(-mu/8.0,3);
+    // gsConstantFunction<> alpha3()
+    // gsConstantFunction<> mu3()
+
     // gsMaterialMatrix materialMatrixNonlinear(mp,mp_def,t,E,nu,rho);
     std::vector<gsFunction<>*> parameters(3);
     parameters[0] = &E;
     parameters[1] = &nu;
     parameters[2] = &ratio;
     gsMaterialMatrix materialMatrixNonlinear(mp,mp_def,t,parameters,rho);
+
+    std::vector<gsFunction<>*> parameters2(6);
+    if (material==14)
+    {
+        parameters2[0] = &E;
+        parameters2[1] = &nu;
+        parameters2[2] = &mu1;
+        parameters2[3] = &alpha1;
+
+        parameters2[4] = &mu2;
+        parameters2[5] = &alpha2;
+
+        // parameters[6] = ;
+        // parameters[7] = ;
+        materialMatrixNonlinear.setParameters(parameters2);
+    }
 
 
     materialMatrixNonlinear.options().setInt("MaterialLaw",material);
@@ -518,6 +561,8 @@ int main(int argc, char *argv[])
 
     // // TEST MATRIX INTEGRATION
     gsMaterialMatrix materialMatrixNonlinear2(mp,mp_def,t,parameters,rho);
+    if (material==14)
+        materialMatrixNonlinear2.setParameters(parameters2);
     materialMatrixNonlinear2.options().setInt("MaterialLaw",material);
     materialMatrixNonlinear2.options().setInt("Compressibility",Compressibility);
 
@@ -728,6 +773,8 @@ int main(int argc, char *argv[])
     gsInfo <<"Minimum deformation coef: "
            << deformation.patch(0).coefs().colwise().minCoeff() <<".\n";
 
+
+    gsInfo <<"Area (undeformed) = "<<assembler.getArea(mp)<<"\tArea (deformed) = "<<assembler.getArea(mp_def)<<"\n";
 
     return EXIT_SUCCESS;
 

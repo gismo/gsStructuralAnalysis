@@ -175,29 +175,47 @@ int main (int argc, char** argv)
     {
       real_t L = 1.0;
       real_t B = 1.0;
-      E_modulus = 4.497000000e6;
+      real_t mu = 4.225e5;
       thickness = 0.001;
-      PoissonRatio = 0.4999;
+      if (!Compressibility)
+        PoissonRatio = 0.5;
+      else
+        PoissonRatio = 0.45;
+      E_modulus = 2*mu*(1+PoissonRatio);
       // PoissonRatio = 0;
       Area = B*thickness;
       mp = RectangularDomain(numHref, numElevate+2, L, B);
     }
-    else if (testCase == 6)
+    else if (testCase==6)
+    {
+      real_t L = 10.0e-3;
+      real_t B = 10.0e-3;
+      real_t mu = 10e3;
+      thickness = 0.25e-3;
+      PoissonRatio = 0.4999;
+      E_modulus = 2*mu*(1+PoissonRatio);
+      gsDebugVar(E_modulus);
+
+      mp = RectangularDomain(numHref, numElevate+2, L, B);
+    }
+    else if (testCase == 7)
     {
         thickness = 0.1;
         real_t mu = 4.225e5;
-        PoissonRatio = 0.3;
-        E_modulus = (2+PoissonRatio)*mu;
+        if (!Compressibility)
+          PoissonRatio = 0.5;
+        else
+          PoissonRatio = 0.45;
+        E_modulus = 2*mu*(1+PoissonRatio);
         gsReadFile<>("quarter_sphere.xml", mp);
     }
-    else if (testCase==7)
+    else if (testCase == 8)
     {
-      E_modulus = 1e6;
-      PoissonRatio = 0.499;
-      aDim = 0.254*0.5;
-      bDim = 0.1016;
-      thickness = 0.1e-3;
-      mp = RectangularDomain(numHref, numElevate+2, aDim, bDim);
+        thickness = 0.1;
+        real_t mu = 4.225;
+        PoissonRatio = 0.5;
+        E_modulus = 2*mu*(1+PoissonRatio);
+        gsReadFile<>("quarter_frustrum.xml", mp);
     }
     else if (testCase==9  )
     {
@@ -215,13 +233,6 @@ int main (int argc, char** argv)
       fn = "scordelis_lo_roof_shallow.xml";
 
       gsReadFile<>(fn, mp);
-
-      for(index_t i = 0; i< numElevate; ++i)
-          mp.patch(0).degreeElevate();    // Elevate the degree
-
-      // h-refine
-      for(index_t i = 0; i< numHref; ++i)
-          mp.patch(0).uniformRefine();
     }
     else if (testCase==10 || testCase==11 )
     {
@@ -239,13 +250,16 @@ int main (int argc, char** argv)
       fn = "scordelis_lo_roof_shallow.xml";
 
       gsReadFile<>(fn, mp);
+    }
 
+    if (testCase > 5)
+    {
       for(index_t i = 0; i< numElevate; ++i)
-          mp.patch(0).degreeElevate();    // Elevate the degree
+        mp.patch(0).degreeElevate();    // Elevate the degree
 
       // h-refine
       for(index_t i = 0; i< numHref; ++i)
-          mp.patch(0).uniformRefine();
+        mp.patch(0).uniformRefine();
     }
 
     gsMultiBasis<> dbasis(mp);
@@ -449,14 +463,8 @@ int main (int argc, char** argv)
       SingularPoint = true;
     }
 
-    else if (testCase == 6)
+    else if (testCase == 7)
     {
-        // BCs.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 0 ); // unknown 0 - x
-        // BCs.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 1 - y
-        // BCs.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z
-
-        // BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 0 ); // unknown 0 - x
-        // BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 1 - y
         BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z
 
         // Symmetry in x-direction:
@@ -475,6 +483,33 @@ int main (int argc, char** argv)
         output = "Balloon_solution";
         wn = dirname + "/" + output + "data.txt";
 
+    }
+    else if (testCase == 8)
+    {
+        Load = -1;
+        neu << 0, 0, Load;
+        neuData.setValue(neu,3);
+
+        BCs.addCondition(boundary::north, condition_type::neumann, &neuData );
+        BCs.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 0 ); // unknown 2 - z
+        BCs.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 2 - z
+
+        BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 0 ); // unknown 0 - x
+        BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 1 - y
+        BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z
+
+        // Symmetry in x-direction:
+        BCs.addCondition(boundary::east, condition_type::dirichlet, 0, 0, false, 0 );
+        BCs.addCondition(boundary::east, condition_type::clamped, 0, 0, false, 1 );
+        BCs.addCondition(boundary::east, condition_type::clamped, 0, 0, false, 2 );
+
+        // Symmetry in y-direction:
+        BCs.addCondition(boundary::west, condition_type::clamped, 0, 0, false, 0 );
+        BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 1 );
+        BCs.addCondition(boundary::west, condition_type::clamped, 0, 0, false, 2 );
+
+        output = "Frustrum_solution";
+        wn = dirname + "/" + output + "data.txt";
     }
     else if (testCase == 9)
     {
@@ -579,12 +614,37 @@ int main (int argc, char** argv)
     gsFunctionExpr<> rho(std::to_string(Density),3);
     gsConstantFunction<> ratio(7.0,3);
 
+    real_t mu = E_modulus / (2 * (1 + PoissonRatio));
+    gsConstantFunction<> alpha1(1.3,3);
+    gsConstantFunction<> mu1(6.3e5/4.225e5*mu,3);
+    gsConstantFunction<> alpha2(5.0,3);
+    gsConstantFunction<> mu2(0.012e5/4.225e5*mu,3);
+    gsConstantFunction<> alpha3(-2.0,3);
+    gsConstantFunction<> mu3(-0.1e5/4.225e5*mu,3);
+
     // gsMaterialMatrix materialMatrixNonlinear(mp,mp_def,t,E,nu,rho);
     std::vector<gsFunction<>*> parameters(3);
     parameters[0] = &E;
     parameters[1] = &nu;
     parameters[2] = &ratio;
     gsMaterialMatrix materialMatrixNonlinear(mp,mp_def,t,parameters,rho);
+
+    std::vector<gsFunction<>*> parameters2(8);
+    if (material==14)
+    {
+        parameters2[0] = &E;
+        parameters2[1] = &nu;
+        parameters2[2] = &mu1;
+        parameters2[3] = &alpha1;
+
+        parameters2[4] = &mu2;
+        parameters2[5] = &alpha2;
+
+        parameters2[6] = &mu3;
+        parameters2[7] = &alpha3;
+        materialMatrixNonlinear.setParameters(parameters2);
+    }
+
 
     materialMatrixNonlinear.options().setInt("MaterialLaw",material);
     materialMatrixNonlinear.options().setInt("Compressibility",Compressibility);
@@ -729,6 +789,9 @@ int main (int argc, char** argv)
         gsWriteParaview( stressField, "stress", 5000);
       }
 
+
+      gsInfo<<"pressures:\n"<<pressure*arcLength.solutionL()<<"\n"
+                            <<pressure*arcLength.solutionL() * assembler.getArea(mp) / assembler.getArea(mp_def)<<"\n";
 
 
 
