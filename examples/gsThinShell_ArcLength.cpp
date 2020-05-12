@@ -272,7 +272,10 @@ int main (int argc, char** argv)
     gsInfo<<"EI = "<<EI<<"; EA = "<<EA<<"; r = "<<r<<"\n";
 
     gsInfo<<"Basis (patch 0): "<< mp.patch(0).basis() << "\n";
-    gsWriteParaview(mp,"mp",1000,true);
+    if (plot)
+    {
+      gsWriteParaview(mp,"mp",1000,true);
+    }
 
     // Boundary conditions
     std::vector< std::pair<patchSide,int> > clamped;
@@ -738,19 +741,22 @@ int main (int argc, char** argv)
       if (!(arcLength.converged()))
       {
         gsInfo<<"Error: Loop terminated, arc length method did not converge.\n";
-        solVector = arcLength.solutionU();
-        Uold = solVector;
-        Lold = arcLength.solutionL();
-        assembler.constructSolution(solVector,mp_def);
+        if (plot)
+        {
+          solVector = arcLength.solutionU();
+          Uold = solVector;
+          Lold = arcLength.solutionL();
+          assembler.constructSolution(solVector,mp_def);
 
-        deformation = mp_def;
-        deformation.patch(0).coefs() -= mp.patch(0).coefs();// assuming 1 patch here
+          deformation = mp_def;
+          deformation.patch(0).coefs() -= mp.patch(0).coefs();// assuming 1 patch here
 
-        gsField<> solField(mp,deformation);
-        std::string fileName = dirname + "/" + output + util::to_string(k);
-        gsWriteParaview<>(solField, fileName, 5000);
-        fileName = output + util::to_string(k) + "0";
-        collection.addTimestep(fileName,k,".vts");
+          gsField<> solField(mp,deformation);
+          std::string fileName = dirname + "/" + output + util::to_string(k);
+          gsWriteParaview<>(solField, fileName, 5000);
+          fileName = output + util::to_string(k) + "0";
+          collection.addTimestep(fileName,k,".vts");
+        }
         break;
       }
 
@@ -794,13 +800,14 @@ int main (int argc, char** argv)
                             <<pressure*arcLength.solutionL() * assembler.getArea(mp) / assembler.getArea(mp_def)<<"\n";
 
 
-
-      gsField<> solField(mp,deformation);
-      std::string fileName = dirname + "/" + output + util::to_string(k);
-      gsWriteParaview<>(solField, fileName, 5000);
-      fileName = output + util::to_string(k) + "0";
-      collection.addTimestep(fileName,k,".vts");
-
+      if (plot)
+      {
+        gsField<> solField(mp,deformation);
+        std::string fileName = dirname + "/" + output + util::to_string(k);
+        gsWriteParaview<>(solField, fileName, 5000);
+        fileName = output + util::to_string(k) + "0";
+        collection.addTimestep(fileName,k,".vts");
+      }
       // gsDebugVar(mp_def.patch(0).coefs());
 
 
@@ -846,9 +853,10 @@ int main (int argc, char** argv)
         file.close();
       }
     }
-    collection.save();
+    if (plot)
+      collection.save();
 
-        return result;
+  return result;
 }
 
 template <class T>
