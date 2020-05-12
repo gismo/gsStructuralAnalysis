@@ -251,8 +251,21 @@ int main (int argc, char** argv)
 
       gsReadFile<>(fn, mp);
     }
+    else if (testCase==12 )
+    {
+      real_t L = 1.25;
+      real_t B = 1.0;
+      thickness = 1e-3;
+        if ((!Compressibility) && (material!=0))
+          PoissonRatio = 0.5;
+        else
+          PoissonRatio = 0.499;
+      E_modulus = 1e6;
 
-    if (testCase > 5)
+      mp = RectangularDomain(numHref, numElevate+2, L, B);
+    }
+
+    if (testCase > 6 && testCase < 12)
     {
       for(index_t i = 0; i< numElevate; ++i)
         mp.patch(0).degreeElevate();    // Elevate the degree
@@ -575,6 +588,33 @@ int main (int argc, char** argv)
       output = "Roof1_t="+ std::to_string(2*thickness) + "-r=" + std::to_string(numHref) + "-e" + std::to_string(numElevate) +"_solution";
       wn = output + "data.txt";
       SingularPoint = false;
+    }
+    else if (testCase == 12)
+    {
+      BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 0 ); // unknown 0 - x
+      BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z
+
+      BCs.addCondition(boundary::east, condition_type::collapsed, 0, 0, false, 0 ); // unknown 1 - y
+      BCs.addCondition(boundary::east, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 2 - z.
+      BCs.addCondition(boundary::east, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z.
+
+
+      BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 1 - y
+      BCs.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 1 - y
+
+      Load = 1e0;
+      gsVector<> point(2);
+      gsVector<> load (3);
+      point<< 1.0, 0.5 ;
+      load << Load,0.0, 0.0;
+      pLoads.addLoad(point, load, 0 );
+
+      // dL =  750;
+      // dLb = 750;
+
+      output = "Case" + std::to_string(testCase) + "solution";
+      wn = output + "data.txt";
+      SingularPoint = true;
     }
 
     if (write)
