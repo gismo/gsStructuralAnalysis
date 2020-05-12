@@ -175,7 +175,7 @@ int main (int argc, char** argv)
     {
       real_t L = 1.0;
       real_t B = 1.0;
-      real_t mu = 4.225e5;
+      real_t mu = 1.5e6;
       thickness = 0.001;
       if (!Compressibility)
         PoissonRatio = 0.5;
