@@ -592,7 +592,6 @@ int main (int argc, char** argv)
     else if (testCase == 12)
     {
       BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 0 ); // unknown 0 - x
-      BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z
 
       BCs.addCondition(boundary::east, condition_type::collapsed, 0, 0, false, 0 ); // unknown 1 - y
       BCs.addCondition(boundary::east, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 2 - z.
@@ -612,8 +611,9 @@ int main (int argc, char** argv)
       // dL =  750;
       // dLb = 750;
 
-      output = "Case" + std::to_string(testCase) + "solution";
-      wn = output + "data.txt";
+      dirname = dirname + "/" + "Case" + std::to_string(testCase) + "-r" + std::to_string(numHref) + "-e" + std::to_string(numElevate);
+      output = "solution";
+      wn = dirname + "/" + output + "data.txt";
       SingularPoint = true;
     }
 
