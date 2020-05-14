@@ -462,7 +462,7 @@ int main (int argc, char** argv)
       BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 1 - y
       BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 1 - y
 
-      real_t load_factor = 2;
+      real_t load_factor = 1;
       Load = 1e0;
       gsVector<> point(2);
       gsVector<> load (3);
