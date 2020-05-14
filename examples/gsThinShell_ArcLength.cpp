@@ -611,7 +611,7 @@ int main (int argc, char** argv)
       // dL =  750;
       // dLb = 750;
 
-      dirname = dirname + "/" + "Case" + std::to_string(testCase) + "-r" + std::to_string(numHref) + "-e" + std::to_string(numElevate);
+      dirname = dirname + "/" + "Sheet_" + std::to_string(testCase) + "-r" + std::to_string(numHref) + "-e" + std::to_string(numElevate) + "-M" + std::to_string(material) + "-c" + std::to_string(Compressibility);
       output = "solution";
       wn = dirname + "/" + output + "data.txt";
       SingularPoint = true;
@@ -632,7 +632,6 @@ int main (int argc, char** argv)
             << "Right end - x" << ","
             << "Right end - y" << ","
             << "Right end - z" << ","
-            << "Lambda scaled" << ","
             << "Lambda"
             << "\n";
       file.close();
@@ -853,31 +852,22 @@ int main (int argc, char** argv)
 
       if (write)
       {
-        gsMatrix<> mid;
         gsMatrix<> P(2,1);
         // Compute end point displacement
-        if (testCase==5 || testCase==6)
-          P<<0.0,0.5;
+        P<<0.0,0.5;
 
         gsMatrix<> left;
         deformation.patch(0).eval_into(P,left);
 
-        gsVector<> u(101);
-        gsVector<> v(101);
-        gsVector<> w(101);
-        for (int k = 0; k <= 100; k ++)
-        {
-          gsMatrix<> Q(2,1);
-          if (testCase==5 || testCase==6)
-            Q<<1.0, 1.0*k/100;
+        P<<0.5,0.5;
 
-          gsMatrix<> res;
-          mp_def.patch(0).eval_into(Q,res);
-          u.at(k) = res.at(0);
-          v.at(k) = res.at(1);
-          w.at(k) = res.at(2);
-          // gsInfo<<res.at(0)<<","<<res.at(1)<<","<<res.at(2)<<"\n";
-        }
+        gsMatrix<> mid;
+        deformation.patch(0).eval_into(P,mid);
+        P<<1.0,0.5;
+
+        gsMatrix<> right;
+        deformation.patch(0).eval_into(P,right);
+
 
         std::ofstream file;
         file.open(wn,std::ofstream::out | std::ofstream::app);
@@ -886,9 +876,13 @@ int main (int argc, char** argv)
               << left.at(0) << ","
               << left.at(1) << ","
               << left.at(2) << ","
-              << std::max(abs(w.maxCoeff()),abs(w.minCoeff())) << ","
+              << mid.at(0) << ","
+              << mid.at(1) << ","
+              << mid.at(2) << ","
+              << right.at(0) << ","
+              << right.at(1) << ","
+              << right.at(2) << ","
               << -arcLength.solutionL() << ","
-              << indicator
               << "\n";
         file.close();
       }
