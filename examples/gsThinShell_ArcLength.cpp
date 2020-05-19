@@ -1040,7 +1040,8 @@ int main (int argc, char** argv)
     arcLength.setMaxIterations(50);
     arcLength.verbose();
     arcLength.setAngleDeterminationMethod(0);
-    if (testCase==8 || testCase==9 || testCase==21)
+    arcLength.setPhi(0.0);
+    if (testCase==4 || testCase==5 || testCase==8 || testCase==9 || testCase==21)
       arcLength.setPhi(0.0);
     // arcLength.setRelaxation(relax);
 
