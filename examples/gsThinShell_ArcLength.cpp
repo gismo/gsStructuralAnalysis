@@ -76,6 +76,7 @@ int main (int argc, char** argv)
 
     index_t Compressibility = 0;
     index_t material = 0;
+    real_t Ratio = 7.0;
 
     real_t relax = 1.0;
 
@@ -190,11 +191,27 @@ int main (int argc, char** argv)
     }
     else if (testCase==6)
     {
-      real_t L = 10.0e-3;
-      real_t B = 10.0e-3;
+      // real_t L = 10.0e-3;
+      // real_t B = 10.0e-3;
+      // real_t mu = 10e3;
+      // thickness = 0.25e-3;
+      // if ((!Compressibility) && (material!=0))
+      //   PoissonRatio = 0.5;
+      // else
+      //   PoissonRatio = 0.45;
+
+      // E_modulus = 2*mu*(1+PoissonRatio);
+      // gsDebugVar(E_modulus);
+
+      real_t L = 9e-3;
+      real_t B = 3e-3;
       real_t mu = 10e3;
-      thickness = 0.25e-3;
-      PoissonRatio = 0.4999;
+      thickness = 0.9e-3;
+      if ((!Compressibility) && (material!=0))
+        PoissonRatio = 0.5;
+      else
+        PoissonRatio = 0.45;
+
       E_modulus = 2*mu*(1+PoissonRatio);
       gsDebugVar(E_modulus);
 
@@ -228,6 +245,38 @@ int main (int argc, char** argv)
 
         // R1 is radius on bottom, R2 is radius on top
         mp = FrustrumDomain(numHref,numElevate+2,2.0,1.0,1.0);
+    }
+    else if (testCase == 10)
+    {
+        thickness = 0.5;
+        real_t mu = 200;
+        PoissonRatio = 0.5;
+        E_modulus = 2*mu*(1+PoissonRatio);
+        gsReadFile<>("quarterCircle.xml", mp);
+        Ratio = 4;
+
+        for(index_t i = 0; i< numElevate; ++i)
+          mp.patch(0).degreeElevate();    // Elevate the degree
+
+        // h-refine
+        for(index_t i = 0; i< numHref; ++i)
+          mp.patch(0).uniformRefine();
+
+    }
+    else if (testCase == 11)
+    {
+        thickness = 2e-3;
+        PoissonRatio = 0.4;
+        E_modulus = 168e9; // GPa
+        gsReadFile<>("half_cylinder.xml", mp);
+        Ratio = 4;
+
+        for(index_t i = 0; i< numElevate; ++i)
+          mp.patch(0).degreeElevate();    // Elevate the degree
+
+        // h-refine
+        for(index_t i = 0; i< numHref; ++i)
+          mp.patch(0).uniformRefine();
     }
     else if (testCase==12 || testCase==13 )
     {
@@ -441,6 +490,11 @@ int main (int argc, char** argv)
       BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 1 - y
       BCs.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 1 - y
 
+      // tmp << 1,0,0;
+      // neuData.setValue(tmp,3);
+      // // // Clamped-Clamped
+      // BCs.addCondition(boundary::east, condition_type::neumann, &neuData ); // unknown 0 - x
+
       Load = 1e0;
       gsVector<> point(2);
       gsVector<> load (3);
@@ -481,6 +535,54 @@ int main (int argc, char** argv)
       output = "Case" + std::to_string(testCase) + "solution";
       wn = output + "data.txt";
       SingularPoint = true;
+    }
+    // else if (testCase == 6) // Plate with pressure
+    // {
+    //   for (index_t k=0; k!=3; k++)
+    //   {
+    //     BCs.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, k ); // unknown 1 - x
+    //     BCs.addCondition(boundary::east,  condition_type::dirichlet, 0, 0, false, k ); // unknown 1 - x
+    //     BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, k ); // unknown 1 - x
+    //     BCs.addCondition(boundary::west,  condition_type::dirichlet, 0, 0, false, k ); // unknown 1 - x
+    //   }
+
+    //   BCs.addCondition(boundary::north, condition_type::clamped, 0, 0, false, 2 ); // unknown 2 - z.
+    //   BCs.addCondition(boundary::east,  condition_type::clamped, 0, 0, false, 2 ); // unknown 2 - z.
+    //   BCs.addCondition(boundary::south, condition_type::clamped, 0, 0, false, 2 ); // unknown 1 - y
+    //   BCs.addCondition(boundary::west,  condition_type::clamped, 0, 0, false, 2 ); // unknown 1 - y
+
+    //   pressure = 1.0;
+
+    //   output = "Case" + std::to_string(testCase) + "solution";
+    //   wn = output + "data.txt";
+    //   SingularPoint = false;
+    // }
+    else if (testCase == 6) // Plate with pressure
+    {
+      BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 0 ); // unknown 2 - z.
+      BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 2 - z.
+
+      BCs.addCondition(boundary::east, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 2 - z.
+      BCs.addCondition(boundary::east, condition_type::collapsed, 0, 0, false, 0 ); // unknown 2 - z.
+
+
+      BCs.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z.
+      BCs.addCondition(boundary::east,  condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z.
+      BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 1 - y
+      BCs.addCondition(boundary::west,  condition_type::dirichlet, 0, 0, false, 2 ); // unknown 1 - y
+
+      Load = 1e0;
+      gsVector<> point(2);
+      gsVector<> load (3);
+      point<< 1.0, 0.5 ;
+      load << Load,0.0, 0.0;
+      pLoads.addLoad(point, load, 0 );
+
+      output = "Case" + std::to_string(testCase) + "solution";
+      wn = output + "data.txt";
+      SingularPoint = false;
+
+
     }
 
     else if (testCase == 7)
@@ -561,6 +663,52 @@ int main (int argc, char** argv)
         dirname = dirname + "/" + "Frustrum2_-r=" + std::to_string(numHref) + "-e" + std::to_string(numElevate) + "_solution";
         output = "solution";
         wn = dirname + "/" + output + "data.txt";
+    }
+    else if (testCase == 10)
+    {
+        pressure = 1;
+
+        BCs.addCondition(boundary::east, condition_type::dirichlet, 0, 0, false, 0 ); // unknown 2 - z
+        BCs.addCondition(boundary::east, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 0 - x
+        BCs.addCondition(boundary::east, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 1 - y
+
+        BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 0 );
+        BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 1 );
+        BCs.addCondition(boundary::west, condition_type::collapsed, 0, 0, false, 2 );
+        BCs.addCondition(boundary::west, condition_type::clamped, 0, 0, false, 2 );
+
+        // Symmetry in x-direction:
+        BCs.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 0 );
+        BCs.addCondition(boundary::north, condition_type::clamped, 0, 0, false, 1 );
+        BCs.addCondition(boundary::north, condition_type::clamped, 0, 0, false, 2 );
+
+        // Symmetry in y-direction:
+        BCs.addCondition(boundary::south, condition_type::clamped, 0, 0, false, 0 );
+        BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 1 );
+        BCs.addCondition(boundary::south, condition_type::clamped, 0, 0, false, 2 );
+
+        output = "Case" + std::to_string(testCase) + "solution";
+        wn = output + "data.txt";
+        SingularPoint = false;
+    }
+    else if (testCase == 11)
+    {
+      Load = -1;
+      neu << 0, 0, Load;
+      neuData.setValue(neu,3);
+
+      BCs.addCondition(boundary::north, condition_type::neumann, &neuData );
+      BCs.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 1 );
+      BCs.addCondition(boundary::north, condition_type::clamped, 0, 0, false, 2 );
+
+      BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 0 );
+      BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 1 );
+      BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 2 );
+      BCs.addCondition(boundary::south, condition_type::clamped, 0, 0, false, 2 );
+
+      output = "Case" + std::to_string(testCase) + "solution";
+      wn = output + "data.txt";
+      SingularPoint = false;
     }
     // Anti-symmetric
     else if (testCase == 12)
@@ -690,6 +838,41 @@ int main (int argc, char** argv)
       wn = dirname + "/" + output + "data.txt";
       SingularPoint = true;
     }
+    else if (testCase == 16)
+    {
+      // Symmetry in y-direction for back side
+      BCs.addCondition(boundary::north, condition_type::clamped, 0, 0, false, 0 );
+      BCs.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 1 );
+      BCs.addCondition(boundary::north, condition_type::clamped, 0, 0, false, 2 );
+
+      // Diaphragm conditions for left side
+      BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 1 - y
+      BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z
+
+      // Symmetry in x-direction: for right side
+      BCs.addCondition(boundary::east, condition_type::dirichlet, 0, 0, false, 0 );
+      BCs.addCondition(boundary::east, condition_type::clamped, 0, 0, false, 1 );
+      BCs.addCondition(boundary::east, condition_type::clamped, 0, 0, false, 2 );
+
+      // Symmetry in z-direction:for the front side
+      BCs.addCondition(boundary::south, condition_type::clamped, 0, 0, false, 0 );
+      BCs.addCondition(boundary::south, condition_type::clamped, 0, 0, false, 1 );
+      BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 2 );
+
+      // Surface forces
+      tmp.setZero();
+
+      // Point loads
+      gsVector<> point(2); point<< 1.0, 1.0 ;
+      gsVector<> load (3); load << 0.0, 0.0, -0.25 ;
+      pLoads.addLoad(point, load, 0 );
+
+      output = "Case" + std::to_string(testCase) + "solution";
+      wn = output + "data.txt";
+      SingularPoint = true;
+    }
+
+
     else if (testCase == 21)
     {
       // Diaphragm conditions
@@ -838,6 +1021,8 @@ int main (int argc, char** argv)
     assembler.assemble();
     gsVector<> Force = assembler.rhs();
 
+    gsDebugVar(Force.sum());
+
     gsArcLengthIterator<real_t> arcLength(Jacobian, Residual, Force);
     arcLength.setLength(dLb); // dLb
     arcLength.setBifurcationMethod("Determinant");
@@ -846,10 +1031,11 @@ int main (int argc, char** argv)
     arcLength.setTolerance(tol); //tol
     arcLength.setToleranceU(tolU);
     arcLength.setToleranceF(tolF);
-    arcLength.setMaxIterations(250);
+    arcLength.setMaxIterations(50);
     arcLength.verbose();
     arcLength.setAngleDeterminationMethod(0);
-    if (testCase==8 || testCase==9 || testCase==21)
+    arcLength.setPhi(0.0);
+    if (testCase==4 || testCase==5 || testCase==8 || testCase==9 || testCase==21)
       arcLength.setPhi(0.0);
     arcLength.setRelaxation(relax);
 
