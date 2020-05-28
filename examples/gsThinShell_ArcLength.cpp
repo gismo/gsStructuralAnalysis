@@ -282,7 +282,8 @@ int main (int argc, char** argv)
     {
       real_t L = 2.5;
       real_t B = 1.0;
-      thickness = 1e-3;
+      thickness = 0.5e-3;
+      gsInfo<<"Warning, I changed the thickness!";
         if ((!Compressibility) && (material!=0))
           PoissonRatio = 0.5;
         else
@@ -290,7 +291,7 @@ int main (int argc, char** argv)
       E_modulus = 1e6;
 
       // We model symmetry over the width axis
-      mp = RectangularDomain(1,numHref, 4, numElevate+2, L, B/2., true, 0.05);
+      mp = RectangularDomain(4,numHref, 2, numElevate+2, L, B/2., true, 0.001);
     }
     else if (testCase==14 || testCase==15 )
     {
@@ -304,22 +305,7 @@ int main (int argc, char** argv)
       E_modulus = 1e6;
 
       // We model symmetry over the width axis
-      mp = RectangularDomain(1,numHref, 4, numElevate+2, L/2., B/2., true, 0.05);
-    }
-    else if (testCase == 16)
-    {
-        thickness = 1e-3;
-        real_t mu = 11538.46e6;
-        PoissonRatio = 0.4999999;
-        E_modulus = 2*mu*(1+PoissonRatio);
-        gsReadFile<>("pinched_cylinder2.xml", mp);
-
-        for(index_t i = 0; i< numElevate; ++i)
-          mp.patch(0).degreeElevate();    // Elevate the degree
-
-        // h-refine
-        for(index_t i = 0; i< numHref; ++i)
-          mp.patch(0).uniformRefine();
+      mp = RectangularDomain(4,numHref, 2, numElevate+2, L/2., B/2., true, 0.001);
     }
     else if (testCase==21  )
     {
@@ -740,6 +726,8 @@ int main (int argc, char** argv)
       BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 2 - z.
       BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z.
 
+      BCs.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z.
+      
       Load = 1e0;
       gsVector<> point(2);
       gsVector<> load (3);
@@ -771,6 +759,8 @@ int main (int argc, char** argv)
       BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 2 - z.
       BCs.addCondition(boundary::south, condition_type::clamped, 0, 0, false, 2 ); // unknown 2 - z.
 
+      BCs.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z.
+      
       Load = 1e0;
       gsVector<> point(2);
       gsVector<> load (3);
@@ -799,6 +789,8 @@ int main (int argc, char** argv)
 
       BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 2 - z.
       BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z.
+
+      // BCs.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z.
 
       Load = 1e0;
       gsVector<> point(2);
@@ -829,6 +821,8 @@ int main (int argc, char** argv)
       BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 2 - z.
       BCs.addCondition(boundary::south, condition_type::clamped, 0, 0, false, 2 ); // unknown 2 - z.
 
+      BCs.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z.
+      
       Load = 1e0;
       gsVector<> point(2);
       gsVector<> load (3);
@@ -1044,7 +1038,7 @@ int main (int argc, char** argv)
     arcLength.setPhi(0.0);
     if (testCase==4 || testCase==5 || testCase==8 || testCase==9 || testCase==21)
       arcLength.setPhi(0.0);
-    // arcLength.setRelaxation(relax);
+    arcLength.setRelaxation(relax);
 
     if (method==1)
       arcLength.setMethod("Crisfield");
@@ -1080,7 +1074,8 @@ int main (int argc, char** argv)
       if (!(arcLength.converged()))
       {
         gsInfo<<"Error: Loop terminated, arc length method did not converge.\n";
-        arcLength.setLength(dLb/2.);
+        dLb = dLb / 2.;
+        arcLength.setLength(dLb);
         arcLength.setSolution(Uold,Lold);
         k -= 1;
         continue;
@@ -1191,34 +1186,27 @@ int main (int argc, char** argv)
 
         std::ofstream file;
         file.open(wn,std::ofstream::out | std::ofstream::app);
-        if (testCase!=12)
+        if (testCase>11 && testCase < 16)
         {
-          file  << std::setprecision(6)
-                << arcLength.solutionU().norm() << ","
-                << left.at(0) << ","
-                << left.at(1) << ","
-                << left.at(2) << ","
-                << mid.at(0) << ","
-                << mid.at(1) << ","
-                << mid.at(2) << ","
-                << right.at(0) << ","
-                << right.at(1) << ","
-                << right.at(2) << ","
-                << -arcLength.solutionL() << ","
-                << indicator << ","
-                << "\n";
-        }
-        else
-        {
-          gsVector<> w(101);
+          index_t kmax = 201;
+          gsVector<> wL(kmax);
+          gsVector<> wM(kmax);
+          gsVector<> wR(kmax);
           gsMatrix<> Q(2,1);
-          for (int k = 0; k <= 100; k ++)
+          gsMatrix<> res;
+          for (int k = 0; k != kmax; k ++)
           {
-            Q<<0.0,1.0*k/100;
-
-            gsMatrix<> res;
+            Q<<0.0,1.0*k/(kmax-1);
             deformation.patch(0).eval_into(Q,res);
-            w.at(k) = res.at(2);
+            wL.at(k) = res.at(2);
+
+            Q<<0.5,1.0*k/(kmax-1);
+            deformation.patch(0).eval_into(Q,res);
+            wM.at(k) = res.at(2);
+
+            Q<<1.0,1.0*k/(kmax-1);
+            deformation.patch(0).eval_into(Q,res);
+            wR.at(k) = res.at(2);
             // gsInfo<<res.at(0)<<","<<res.at(1)<<","<<res.at(2)<<"\n";
           }
           file  << std::setprecision(6)
@@ -1226,7 +1214,24 @@ int main (int argc, char** argv)
                 << left.at(0) << ","
                 << left.at(1) << ","
                 // << left.at(2) << ","
-                << std::max(abs(w.maxCoeff()),abs(w.minCoeff())) << ","
+                << std::max(abs(wL.maxCoeff()),abs(wL.minCoeff())) << ","
+                << mid.at(0) << ","
+                << mid.at(1) << ","
+                << std::max(abs(wM.maxCoeff()),abs(wM.minCoeff())) << ","
+                << right.at(0) << ","
+                << right.at(1) << ","
+                << std::max(abs(wR.maxCoeff()),abs(wR.minCoeff())) << ","
+                << -arcLength.solutionL() << ","
+                << indicator << ","
+                << "\n";
+        }
+        else
+        {
+          file  << std::setprecision(6)
+                << arcLength.solutionU().norm() << ","
+                << left.at(0) << ","
+                << left.at(1) << ","
+                << left.at(2) << ","
                 << mid.at(0) << ","
                 << mid.at(1) << ","
                 << mid.at(2) << ","
