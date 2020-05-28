@@ -1021,13 +1021,14 @@ int main (int argc, char** argv)
       // gsDebugVar(lam * force);
       // gsDebugVar(assembler.rhs());
       // gsDebugVar(Fint);
+      // gsDebugVar((lam*force).sum());
       return result; // - lam * force;
     };
     // Assemble linear system to obtain the force vector
     assembler.assemble();
     gsVector<> Force = assembler.rhs();
 
-    gsDebugVar(Force.sum());
+    // gsDebugVar(Force.sum());
 
     gsArcLengthIterator<real_t> arcLength(Jacobian, Residual, Force);
     arcLength.setLength(dLb); // dLb
@@ -1081,7 +1082,7 @@ int main (int argc, char** argv)
         gsInfo<<"Error: Loop terminated, arc length method did not converge.\n";
         arcLength.setLength(dLb/2.);
         arcLength.setSolution(Uold,Lold);
-        k =- 1;
+        k -= 1;
         continue;
         // if (plot)
         // {

@@ -36,6 +36,8 @@ gsMultiPatch<T> RectangularDomain90(int n, int m, int p, int q, T L, T B);
 template <class T>
 gsMultiPatch<T> RectangularDomain90(int n, int p, T L, T B);
 
+template <class T>
+gsMultiPatch<T> FrustrumDomain(int n, int p, T R1, T R2, T h);
 
 // Choose among various shell examples, default = Thin Plate
 int main(int argc, char *argv[])
@@ -82,7 +84,7 @@ int main(int argc, char *argv[])
         E_modulus = 4.32E8;
         fn = "../extensions/unsupported/filedata/scordelis_lo_roof.xml";
         gsReadFile<>(fn, mp);
-        PoissonRatio = 0.0;
+        PoissonRatio = 0.5;
     }
     else if (testCase == 2)
     {
@@ -110,7 +112,7 @@ int main(int argc, char *argv[])
         thickness = 0.1;
         real_t mu = 4.225e5;
         PoissonRatio = 0.3;
-        E_modulus = (2+PoissonRatio)*mu;
+        E_modulus = 2*mu*(1+PoissonRatio);
         gsReadFile<>("quarter_sphere.xml", mp);
     }
     else if (testCase == 7)
@@ -118,8 +120,31 @@ int main(int argc, char *argv[])
         thickness = 0.1;
         real_t mu = 4.225e5;
         PoissonRatio = 0.3;
-        E_modulus = (2+PoissonRatio)*mu;
+        E_modulus = 2*mu*(1+PoissonRatio);
         gsReadFile<>("quarter_frustrum.xml", mp);
+    }
+    // else if (testCase == 8)
+    // {
+    //     thickness = 1;
+    //     PoissonRatio = 0.4998999999;
+    //     E_modulus = 240.5653612;
+    //     gsReadFile<>("surfaces/cooks_membrane.xml", mp);
+    //     mp.embed(3);
+
+    //     real_t mu = E_modulus/(2*(1+PoissonRatio));
+    //     real_t K = E_modulus/(3-6*PoissonRatio);
+    //     gsDebug<<"K = "<<K<<"\tmu = "<<mu<<"\n";
+    // }
+    else if (testCase == 8 || testCase == 9)
+    {
+        thickness = 0.1;
+        real_t mu = 4.225;
+        PoissonRatio = 0.5;
+        E_modulus = 2*mu*(1+PoissonRatio);
+        // gsReadFile<>("quarter_frustrum.xml", mp);
+
+        // R1 is radius on bottom, R2 is radius on top
+        mp = FrustrumDomain(numRefine,numElevate+2,2.0,1.0,1.0);
     }
     else if (testCase == 17)
     {
@@ -144,13 +169,15 @@ int main(int argc, char *argv[])
     //! [Read input file]
 
     // p-refine
-    if (numElevate!=0)
-        mp.degreeElevate(numElevate);
+    if (testCase != 8 && testCase != 9)
+    {
+        if (numElevate!=0)
+            mp.degreeElevate(numElevate);
 
-    // h-refine
-    for (int r =0; r < numRefine; ++r)
-        mp.uniformRefine();
-
+        // h-refine
+        for (int r =0; r < numRefine; ++r)
+            mp.uniformRefine();
+    }
     mp_def = mp;
 
     //! [Refinement]
@@ -169,8 +196,8 @@ int main(int argc, char *argv[])
 
     gsPointLoads<real_t> pLoads = gsPointLoads<real_t>();
 
-    gsFunctionExpr<> displx("1.0",3);
-    gsFunctionExpr<> disply("0.5",3);
+    gsConstantFunction<> displx(1.0,3);
+    gsConstantFunction<> disply(0.25,3);
 
     gsConstantFunction<> neuData(neu,3);
     real_t pressure = 0.0;
@@ -340,12 +367,91 @@ int main(int argc, char *argv[])
         bc.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 1 );
         bc.addCondition(boundary::west, condition_type::clamped, 0, 0, false, 2 );
     }
+    // else if (testCase == 8)
+    // {
+    //     bc.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 0 ); // unknown 0 - x
+    //     bc.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 1 - y
+
+    //     // Symmetry in x-direction:
+    //     neu << 0, 6.25, 0;
+    //     neuData.setValue(neu,3);
+    //     bc.addCondition(boundary::east, condition_type::neumann, &neuData );
+
+    //     bc.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 2 );
+    //     bc.addCondition(boundary::east,  condition_type::dirichlet, 0, 0, false, 2 );
+    //     bc.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 2 );
+    //     bc.addCondition(boundary::west,  condition_type::dirichlet, 0, 0, false, 2 );
+    // }
+    else if (testCase == 8)
+    {
+    //     real_t Load = -0.0168288;
+    //     neu << 0, 0, Load;
+    //     neuData.setValue(neu,3);
+
+    //     bc.addCondition(boundary::north, condition_type::neumann, &neuData );
+    //     bc.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 0 ); // unknown 2 - z
+    //     bc.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 2 - z
+    //     bc.addCondition(boundary::north, condition_type::collapsed, 0, 0, false, 2 ); // unknown 1 - y
+
+        //-0.027815
+        displx.setValue(0,3);
+        bc.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 0 ); // unknown 2 - z
+        bc.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 2 - z
+        bc.addCondition(boundary::north, condition_type::dirichlet, &displx, 0, false, 2 ); // unknown 1 - y
+
+        bc.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 0 ); // unknown 0 - x
+        bc.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 1 - y
+        bc.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z
+
+        // Symmetry in x-direction:
+        bc.addCondition(boundary::east, condition_type::dirichlet, 0, 0, false, 0 );
+        bc.addCondition(boundary::east, condition_type::clamped, 0, 0, false, 1 );
+        bc.addCondition(boundary::east, condition_type::clamped, 0, 0, false, 2 );
+
+        // Symmetry in y-direction:
+        bc.addCondition(boundary::west, condition_type::clamped, 0, 0, false, 0 );
+        bc.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 1 );
+        bc.addCondition(boundary::west, condition_type::clamped, 0, 0, false, 2 );
+
+    }
+    else if (testCase == 9)
+    {
+        real_t  Load = -0.0168288;
+        neu << 0, 0, Load;
+        neuData.setValue(neu,3);
+
+        bc.addCondition(boundary::north, condition_type::neumann, &neuData );
+        // bc.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 0 ); // unknown 2 - z
+        // bc.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 2 - z
+        bc.addCondition(boundary::north, condition_type::collapsed, 0, 0, false, 2 ); // unknown 1 - y
+
+        bc.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 0 ); // unknown 0 - x
+        bc.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 1 - y
+        bc.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z
+
+        // Symmetry in x-direction:
+        bc.addCondition(boundary::east, condition_type::dirichlet, 0, 0, false, 0 );
+        bc.addCondition(boundary::east, condition_type::clamped, 0, 0, false, 1 );
+        bc.addCondition(boundary::east, condition_type::clamped, 0, 0, false, 2 );
+
+        // Symmetry in y-direction:
+        bc.addCondition(boundary::west, condition_type::clamped, 0, 0, false, 0 );
+        bc.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 1 );
+        bc.addCondition(boundary::west, condition_type::clamped, 0, 0, false, 2 );
+
+    }
     else if (testCase == 10)
     {
         bc.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 0 ); // unknown 0 - x
         bc.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 1 - y
         bc.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z
-        bc.addCondition(boundary::east, condition_type::dirichlet, &displx, 0, false,  0 ); // unknown 0 - x
+        bc.addCondition(boundary::west, condition_type::clamped, 0, 0, false, 2 ); // unknown 2 - z
+
+
+        bc.addCondition(boundary::east, condition_type::dirichlet, &disply, 0, false,  2 ); // unknown 0 - x
+        // bc.addCondition(boundary::east, condition_type::collapsed, 0, 0, false, 0 ); // unknown 2 - z
+
+        tmp.setZero();
     }
     else if (testCase == 11)
     {
@@ -475,7 +581,6 @@ int main(int argc, char *argv[])
 
     real_t mu = E_modulus / (2 * (1 + PoissonRatio));
 
-    gsDebugVar(mu);
     gsConstantFunction<> alpha1(2.0,3);
     gsConstantFunction<> mu1(7.0*mu/8.0,3);
     gsConstantFunction<> alpha2(-2.0,3);
@@ -530,11 +635,15 @@ int main(int argc, char *argv[])
     }
     gsMaterialMatrix materialMatrixComposite(mp,mp_def,tvec,Evec,Gvec,nuvec,phivec);
 
+    gsDebug<<bc<<"\n";
+
     gsThinShellAssembler assembler(mp,dbasis,bc,force,materialMatrixNonlinear);
     assembler.setPointLoads(pLoads);
     if (pressure!= 0.0)
         assembler.setPressure(pressFun);
 
+    displx.setValue(-0.027815,3);
+    assembler.updateBCs(bc);
 
     gsSparseSolver<>::CGDiagonal solver;
 
@@ -557,6 +666,8 @@ int main(int argc, char *argv[])
         gsInfo<<"Matrix: \n"<<assembler.matrix().toDense()<<"\n";
         gsInfo<<"Vector: \n"<<assembler.rhs().transpose()<<"\n";
     }
+
+    gsVector<> Force = assembler.rhs();
 
 
     // // TEST MATRIX INTEGRATION
@@ -776,6 +887,21 @@ int main(int argc, char *argv[])
 
     gsInfo <<"Area (undeformed) = "<<assembler.getArea(mp)<<"\tArea (deformed) = "<<assembler.getArea(mp_def)<<"\n";
 
+    assembler.constructSolution(solVector,mp_def);
+    assembler.assembleVector(mp_def);
+    // gsDebugVar(assembler.rhs());
+    patchSide ps(0,boundary::north);
+    gsVector<real_t> Fint = assembler.boundaryForceVector(mp_def,ps,2);
+    gsDebugVar(Fint);
+    gsDebugVar(Fint.sum());
+    // gsDebugVar(Force);
+
+    // gsDebugVar(Force.size());
+    // gsDebugVar(Fint.size());
+
+    // gsDebugVar(Force.sum());
+    // gsDebugVar(Fint.sum());
+
     return EXIT_SUCCESS;
 
 }// end main
@@ -970,6 +1096,71 @@ gsMultiPatch<T> RectangularDomain90(int n, int m, int p, int q, T L, T B)
 
   return mp;
 }
+
+template <class T>
+gsMultiPatch<T> FrustrumDomain(int n, int p, T R1, T R2, T h)
+{
+  // -------------------------------------------------------------------------
+  // --------------------------Make beam geometry-----------------------------
+  // -------------------------------------------------------------------------
+  // n = number of uniform refinements over the height; n = 0, only top and bottom part
+
+  int dim = 3; //physical dimension
+  gsKnotVector<> kv0;
+  kv0.initUniform(0,1,0,3,1);
+  gsKnotVector<> kv1;
+  kv1.initUniform(0,1,0,3,1);
+
+  // Refine n times
+  for(index_t i = 0; i< n; ++i)
+      kv1.uniformRefine();
+
+  gsDebug<<kv1;
+
+  // Make basis
+  // gsTensorNurbsBasis<2,T> basis(kv0,kv1);
+
+  // Initiate coefficient matrix
+  index_t N = math::pow(2,n)+2;
+  gsMatrix<> coefs(3*N,dim);
+  gsMatrix<> tmp(3,3);
+  T R,H;
+
+  gsMatrix<> weights(3*N,1);
+  for (index_t k=0; k!= N; k++)
+  {
+    R = k*(R2-R1)/(N-1) + R1;
+    H = k*h/(N-1);
+    tmp<< R,0,H,
+          R,R,H,
+          0,R,H;
+
+    coefs.block(3*k,0,3,3) = tmp;
+
+    weights.block(3*k,0,3,1) << 1,0.70711,1;
+  }
+
+  // Create gsGeometry-derived object for the patch
+  gsTensorNurbs<2,real_t> shape(kv0,kv1,coefs,weights);
+
+  gsMultiPatch<T> mp;
+  mp.addPatch(shape);
+  mp.addAutoBoundaries();
+
+  // Elevate up to order p
+  if (p>2)
+  {
+    for(index_t i = 2; i< p; ++i)
+        mp.patch(0).degreeElevate();    // Elevate the degree
+  }
+
+  // // Refine n times
+  // for(index_t i = 0; i< n; ++i)
+  //     mp.patch(0).uniformRefine();
+
+  return mp;
+}
+
 
 /*
     to do:
