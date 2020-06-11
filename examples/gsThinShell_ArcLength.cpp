@@ -51,9 +51,10 @@ int main (int argc, char** argv)
     // Input options
     int numElevate  = 1;
     int numHref     = 1;
+    int numElevateL = -1;
+    int numHrefL    = -1;
     bool plot       = false;
     bool stress       = false;
-    bool nonlinear  = false;
     bool first  = false;
     bool SingularPoint = false;
     bool quasiNewton = false;
@@ -62,7 +63,7 @@ int main (int argc, char** argv)
     int step = 10;
     int method = 1; // (1: Crisfield's method; 2: Riks' method)
 
-    real_t thickness = 1e-1;
+    real_t thickness = 1e-3;
     real_t width = 0.1; // Width of the strip is equal to 0.1.
     real_t length = 1; // Length of the strip is equal to 1.
     real_t Area = thickness*width;
@@ -77,6 +78,9 @@ int main (int argc, char** argv)
     index_t Compressibility = 0;
     index_t material = 0;
     real_t Ratio = 7.0;
+
+    real_t aDim = 2.5;
+    real_t bDim = 1.0;
 
     real_t relax = 1.0;
 
@@ -96,47 +100,32 @@ int main (int argc, char** argv)
     std::string wn("data.csv");
 
     gsCmdLine cmd("Thin shell plate example.");
-    cmd.addInt("r","hRefine",
-       "Number of dyadic h-refinement (bisection) steps to perform before solving",
-       numHref);
-    cmd.addInt("t", "testcase",
-        "Test case: 0: clamped-clamped, 1: pinned-pinned, 2: clamped-free",
-       testCase);
-    cmd.addInt("N", "maxsteps",
-       "Maximum number of steps",
-      step);
-    cmd.addInt("e","degreeElevation",
-      "Number of degree elevation steps to perform on the Geometry's basis before solving",
-      numElevate);
-    cmd.addInt("m","Method",
-      "Arc length method; 1: Crisfield's method; 2: RIks' method.",
-      method);
+
+    cmd.addInt("t", "testcase", "Test case: 0: clamped-clamped, 1: pinned-pinned, 2: clamped-free", testCase);
+
+    cmd.addInt("r","hRefine", "Number of dyadic h-refinement (bisection) steps to perform before solving", numHref);
+    cmd.addInt("e","degreeElevation", "Number of degree elevation steps to perform on the Geometry's basis before solving", numElevate);
+    cmd.addInt("R","hRefine2", "Number of dyadic h-refinement (bisection) steps to perform before solving (secondary direction)", numHrefL);
+    cmd.addInt("E","degreeElevation2", "Number of degree elevation steps to perform on the Geometry's basis before solving (secondary direction)", numElevateL);
     cmd.addInt( "M", "Material", "Material law",  material );
     cmd.addInt( "c", "Compressibility", "1: compressible, 0: incompressible",  Compressibility );
-    cmd.addReal("T","thickness",
-       "thickenss of the plate",
-       thickness);
-    cmd.addReal("L","dLb",
-       "arc length",
-       dLb);
-    cmd.addReal("l","dL",
-       "arc length after bifurcation",
-       dL);
-    cmd.addReal("R","relaxation",
-    "Relaxation factor for arc length method",
-       relax);
-    cmd.addSwitch("B","BifurcationPath",
-       "Compute singular points and bifurcation paths",
-       SingularPoint);
-    cmd.addSwitch("Q","QuasiNewton",
-       "Use the Quasi Newton method",
-       quasiNewton);
-    cmd.addReal("f","factor",
-       "factor for bifurcation perturbation",
-       tau);
+
+    cmd.addReal("T","hdim", "thickness of the plate", thickness);
+    cmd.addReal("a","adim", "dimension a", aDim);
+    cmd.addReal("b","bdim", "dimension b", bDim);
+    
+    cmd.addInt("m","Method", "Arc length method; 1: Crisfield's method; 2: RIks' method.", method);
+    cmd.addReal("L","dLb", "arc length", dLb);
+    cmd.addReal("l","dL", "arc length after bifurcation", dL);
+    cmd.addReal("A","relaxation", "Relaxation factor for arc length method", relax);
+    
+    cmd.addReal("f","factor", "factor for bifurcation perturbation", tau);
     cmd.addInt("q","QuasiNewtonInt","Use the Quasi Newton method every INT iterations",quasiNewtonInt);
-    cmd.addSwitch("A","adaptive", "Adaptive length ", adaptive);
-    cmd.addSwitch("nl", "Nonlinear elasticity (otherwise linear)", nonlinear);
+    cmd.addInt("N", "maxsteps", "Maximum number of steps", step);
+
+    cmd.addSwitch("adaptive", "Adaptive length ", adaptive);
+    cmd.addSwitch("bifurcation", "Compute singular points and bifurcation paths", SingularPoint);
+    cmd.addSwitch("quasi", "Use the Quasi Newton method", quasiNewton);
     cmd.addSwitch("plot", "Plot result in ParaView format", plot);
     cmd.addSwitch("stress", "Plot stress in ParaView format", stress);
     cmd.addSwitch("first", "Plot only first", first);
@@ -144,14 +133,15 @@ int main (int argc, char** argv)
 
     try { cmd.getValues(argc,argv); } catch (int rv) { return rv; }
 
-    real_t aDim = 1;
-    real_t bDim = 1;
-
     if (dL==0)
     {
       dL = dLb;
     }
 
+    if (numHrefL==-1)
+      numHrefL = numHref;
+    if (numElevateL==-1)
+      numElevateL = numElevate;
 
     if (testCase==0 || testCase==1)
     {
@@ -280,32 +270,46 @@ int main (int argc, char** argv)
     }
     else if (testCase==12 || testCase==13 )
     {
-      real_t L = 2.5;
-      real_t B = 1.0;
-      thickness = 0.5e-3;
-      gsInfo<<"Warning, I changed the thickness!";
         if ((!Compressibility) && (material!=0))
           PoissonRatio = 0.5;
         else
           PoissonRatio = 0.499;
       E_modulus = 1e6;
 
+      Ratio = 10.;
+
       // We model symmetry over the width axis
-      mp = RectangularDomain(4,numHref, 2, numElevate+2, L, B/2., true, 0.001);
+      mp = RectangularDomain(numHrefL,numHref, numElevateL+2, numElevate+2, aDim, bDim/2.);//, true, 0.001);
     }
     else if (testCase==14 || testCase==15 )
     {
-      real_t L = 2.5;
-      real_t B = 1.0;
-      thickness = 1e-3;
         if ((!Compressibility) && (material!=0))
           PoissonRatio = 0.5;
         else
           PoissonRatio = 0.499;
       E_modulus = 1e6;
 
+      Ratio = 10.; 
+
       // We model symmetry over the width axis
-      mp = RectangularDomain(4,numHref, 2, numElevate+2, L/2., B/2., true, 0.001);
+      mp = RectangularDomain(numHrefL,numHref, numElevateL+2, numElevate+2, aDim/2., bDim/2.);//, true, 0.001);
+    }
+    else if (testCase==16 )
+    {
+        if ((!Compressibility) && (material!=0))
+          PoissonRatio = 0.5;
+        else
+          PoissonRatio = 0.499;
+      E_modulus = 330150;
+
+      aDim = 0.28;
+      bDim = 0.14;
+      thickness = 140e-6;
+
+      Ratio = 2.5442834138486314;
+
+      // We model symmetry over the width axis
+      mp = RectangularDomain(numHrefL,numHref, numElevateL+2, numElevate+2, aDim/2., bDim/2.);//, true, 0.001);
     }
     else if (testCase==21  )
     {
@@ -331,6 +335,12 @@ int main (int argc, char** argv)
       for(index_t i = 0; i< numHref; ++i)
         mp.patch(0).uniformRefine();
     }
+
+    real_t alpha, beta;
+    alpha = bDim/thickness;
+    beta = aDim/bDim;
+    gsInfo<<"alpha = "<<alpha<<"; beta = "<<beta<<"\n";
+
 
     gsMultiBasis<> dbasis(mp);
 
@@ -631,7 +641,7 @@ int main (int argc, char** argv)
         BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 1 );
         BCs.addCondition(boundary::west, condition_type::clamped, 0, 0, false, 2 );
 
-        dirname = dirname + "/" + "Frustrum_-r=" + std::to_string(numHref) + "-e" + std::to_string(numElevate) + "_solution";
+        dirname = dirname + "/" + "Frustrum_-r=" + std::to_string(numHref) + "-e" + std::to_string(numElevate) + "-M" + std::to_string(material) + "_solution";
         output = "solution";
         wn = dirname + "/" + output + "data.txt";
     }
@@ -660,7 +670,7 @@ int main (int argc, char** argv)
         BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 1 );
         BCs.addCondition(boundary::west, condition_type::clamped, 0, 0, false, 2 );
 
-        dirname = dirname + "/" + "Frustrum2_-r=" + std::to_string(numHref) + "-e" + std::to_string(numElevate) + "_solution";
+        dirname = dirname + "/" + "Frustrum2_-r=" + std::to_string(numHref) + "-e" + std::to_string(numElevate) + "-M" + std::to_string(material) + "_solution";
         output = "solution";
         wn = dirname + "/" + output + "data.txt";
     }
@@ -716,17 +726,17 @@ int main (int argc, char** argv)
       BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 0 ); // unknown 0 - x
       BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 2 - z.
       BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z.
-      BCs.addCondition(boundary::west, condition_type::clamped, 0, 0, false, 2 ); // unknown 2 - z.
+      // BCs.addCondition(boundary::west, condition_type::clamped, 0, 0, false, 2 ); // unknown 2 - z.
 
       BCs.addCondition(boundary::east, condition_type::collapsed, 0, 0, false, 0 ); // unknown 1 - y
       BCs.addCondition(boundary::east, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 2 - z.
       BCs.addCondition(boundary::east, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z.
-      BCs.addCondition(boundary::east, condition_type::clamped, 0, 0, false, 2 ); // unknown 2 - z.
+      // BCs.addCondition(boundary::east, condition_type::clamped, 0, 0, false, 2 ); // unknown 2 - z.
 
       BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 2 - z.
       BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z.
 
-      BCs.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z.
+      // BCs.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z.
       
       Load = 1e0;
       gsVector<> point(2);
@@ -738,7 +748,7 @@ int main (int argc, char** argv)
       // dL =  750;
       // dLb = 750;
 
-      dirname = dirname + "/" + "Sheet_Symm_Half_" + "-r" + std::to_string(numHref) + "-e" + std::to_string(numElevate) + "-M" + std::to_string(material) + "-c" + std::to_string(Compressibility);
+      dirname = dirname + "/" + "Sheet_Symm_Half_" + "-r" + std::to_string(numHref) + "-R" + std::to_string(numHrefL) + "-e" + std::to_string(numElevate) + "-E" + std::to_string(numElevateL) + "-M" + std::to_string(material) + "-c" + std::to_string(Compressibility) + "-alpha" + std::to_string(alpha) + "-beta" + std::to_string(beta);
       output = "solution";
       wn = dirname + "/" + output + "data.txt";
       SingularPoint = true;
@@ -749,17 +759,17 @@ int main (int argc, char** argv)
       BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 0 ); // unknown 0 - x
       BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 2 - z.
       BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z.
-      BCs.addCondition(boundary::west, condition_type::clamped, 0, 0, false, 2 ); // unknown 2 - z.
+      // BCs.addCondition(boundary::west, condition_type::clamped, 0, 0, false, 2 ); // unknown 2 - z.
 
       BCs.addCondition(boundary::east, condition_type::collapsed, 0, 0, false, 0 ); // unknown 1 - y
       BCs.addCondition(boundary::east, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 2 - z.
       BCs.addCondition(boundary::east, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z.
-      BCs.addCondition(boundary::east, condition_type::clamped, 0, 0, false, 2 ); // unknown 2 - z.
+      // BCs.addCondition(boundary::east, condition_type::clamped, 0, 0, false, 2 ); // unknown 2 - z.
 
       BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 2 - z.
       BCs.addCondition(boundary::south, condition_type::clamped, 0, 0, false, 2 ); // unknown 2 - z.
 
-      BCs.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z.
+      // BCs.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z.
       
       Load = 1e0;
       gsVector<> point(2);
@@ -771,21 +781,21 @@ int main (int argc, char** argv)
       // dL =  750;
       // dLb = 750;
 
-      dirname = dirname + "/" + "Sheet_Asymm_Half_" + "-r" + std::to_string(numHref) + "-e" + std::to_string(numElevate) + "-M" + std::to_string(material) + "-c" + std::to_string(Compressibility);
+      dirname = dirname + "/" + "Sheet_Asymm_Half_" + "-r" + std::to_string(numHref) + "-R" + std::to_string(numHrefL) + "-e" + std::to_string(numElevate) + "-E" + std::to_string(numElevateL) + "-M" + std::to_string(material) + "-c" + std::to_string(Compressibility) + "-alpha" + std::to_string(alpha) + "-beta" + std::to_string(beta);
       output = "solution";
       wn = dirname + "/" + output + "data.txt";
       SingularPoint = true;
     }
     // Anti-symmetric
-    else if (testCase == 14)
+    else if (testCase == 14 || testCase == 16)
     {
       BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 0 ); // unknown 0 - x
-      BCs.addCondition(boundary::west, condition_type::clamped, 0, 0, false, 2 ); // unknown 2 - z.
+      BCs.addCondition(boundary::west, condition_type::clamped, 0, 0, false, 2 ); // unknown 2 - z
 
       BCs.addCondition(boundary::east, condition_type::collapsed, 0, 0, false, 0 ); // unknown 1 - y
       BCs.addCondition(boundary::east, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 2 - z.
       BCs.addCondition(boundary::east, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z.
-      BCs.addCondition(boundary::east, condition_type::clamped, 0, 0, false, 2 ); // unknown 2 - z.
+      // BCs.addCondition(boundary::east, condition_type::clamped, 0, 0, false, 2 ); // unknown 2 - z.
 
       BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 2 - z.
       BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z.
@@ -802,7 +812,11 @@ int main (int argc, char** argv)
       // dL =  750;
       // dLb = 750;
 
-      dirname = dirname + "/" + "Sheet_Symm_Quarter_" + "-r" + std::to_string(numHref) + "-e" + std::to_string(numElevate) + "-M" + std::to_string(material) + "-c" + std::to_string(Compressibility);
+      if (testCase==16)
+        dirname = dirname + "/" + "Sheet_Symm_Quarter_tc16_" + "-r" + std::to_string(numHref) + "-R" + std::to_string(numHrefL) + "-e" + std::to_string(numElevate) + "-E" + std::to_string(numElevateL) + "-M" + std::to_string(material) + "-c" + std::to_string(Compressibility) + "-alpha" + std::to_string(alpha) + "-beta" + std::to_string(beta);
+      else 
+        dirname = dirname + "/" + "Sheet_Symm_Quarter_" + "-r" + std::to_string(numHref) + "-R" + std::to_string(numHrefL) + "-e" + std::to_string(numElevate) + "-E" + std::to_string(numElevateL) + "-M" + std::to_string(material) + "-c" + std::to_string(Compressibility) + "-alpha" + std::to_string(alpha) + "-beta" + std::to_string(beta);
+
       output = "solution";
       wn = dirname + "/" + output + "data.txt";
       SingularPoint = true;
@@ -816,12 +830,12 @@ int main (int argc, char** argv)
       BCs.addCondition(boundary::east, condition_type::collapsed, 0, 0, false, 0 ); // unknown 1 - y
       BCs.addCondition(boundary::east, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 2 - z.
       BCs.addCondition(boundary::east, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z.
-      BCs.addCondition(boundary::east, condition_type::clamped, 0, 0, false, 2 ); // unknown 2 - z.
+      // BCs.addCondition(boundary::east, condition_type::clamped, 0, 0, false, 2 ); // unknown 2 - z.
 
       BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 2 - z.
       BCs.addCondition(boundary::south, condition_type::clamped, 0, 0, false, 2 ); // unknown 2 - z.
 
-      BCs.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z.
+      // BCs.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z.
       
       Load = 1e0;
       gsVector<> point(2);
@@ -833,7 +847,7 @@ int main (int argc, char** argv)
       // dL =  750;
       // dLb = 750;
 
-      dirname = dirname + "/" + "Sheet_Asymm_Quarter_" + "-r" + std::to_string(numHref) + "-e" + std::to_string(numElevate) + "-M" + std::to_string(material) + "-c" + std::to_string(Compressibility);
+      dirname = dirname + "/" + "Sheet_Asymm_Quarter_" + "-r" + std::to_string(numHref) + "-R" + std::to_string(numHrefL) + "-e" + std::to_string(numElevate) + "-E" + std::to_string(numElevateL) + "-M" + std::to_string(material) + "-c" + std::to_string(Compressibility) + "-alpha" + std::to_string(alpha) + "-beta" + std::to_string(beta);
       output = "solution";
       wn = dirname + "/" + output + "data.txt";
       SingularPoint = true;
@@ -942,7 +956,7 @@ int main (int argc, char** argv)
     gsFunctionExpr<> E(std::to_string(E_modulus),3);
     gsFunctionExpr<> nu(std::to_string(PoissonRatio),3);
     gsFunctionExpr<> rho(std::to_string(Density),3);
-    gsConstantFunction<> ratio(7.0,3);
+    gsConstantFunction<> ratio(Ratio,3);
 
     real_t mu = E_modulus / (2 * (1 + PoissonRatio));
     gsConstantFunction<> alpha1(1.3,3);
@@ -1032,7 +1046,7 @@ int main (int argc, char** argv)
     arcLength.setTolerance(tol); //tol
     arcLength.setToleranceU(tolU);
     arcLength.setToleranceF(tolF);
-    arcLength.setMaxIterations(50);
+    arcLength.setMaxIterations(20);
     arcLength.verbose();
     arcLength.setAngleDeterminationMethod(0);
     arcLength.setPhi(0.0);
@@ -1064,6 +1078,8 @@ int main (int argc, char** argv)
     gsMatrix<> solVector;
     real_t indicator = 0.0;
     arcLength.setIndicator(indicator); // RESET INDICATOR
+    bool bisected = false;
+    real_t dLb0 = dLb;
     for (index_t k=0; k<step; k++)
     {
       gsInfo<<"Load step "<< k<<"\n";
@@ -1077,6 +1093,7 @@ int main (int argc, char** argv)
         dLb = dLb / 2.;
         arcLength.setLength(dLb);
         arcLength.setSolution(Uold,Lold);
+        bisected = true;
         k -= 1;
         continue;
         // if (plot)
@@ -1104,9 +1121,10 @@ int main (int argc, char** argv)
         if (arcLength.stabilityChange())
         {
           gsInfo<<"Bifurcation spotted!"<<"\n";
-          arcLength.computeSingularPoint(1e-6, 5, Uold, Lold, 1e-10, 0, false);
+          arcLength.computeSingularPoint(1e-4, 5, Uold, Lold, 1e-10, 0, false);
           arcLength.switchBranch();
-          arcLength.setLength(dL);
+          dLb0 = dLb = dL;
+          arcLength.setLength(dLb);
         }
       }
       indicator = arcLength.indicator();
@@ -1149,7 +1167,7 @@ int main (int argc, char** argv)
       {
         gsField<> solField(mp,deformation);
         std::string fileName = dirname + "/" + output + util::to_string(k);
-        gsWriteParaview<>(solField, fileName, 5000);
+        gsWriteParaview<>(solField, fileName, 5000,true);
         fileName = output + util::to_string(k) + "0";
         collection.addTimestep(fileName,k,".vts");
       }
@@ -1186,7 +1204,7 @@ int main (int argc, char** argv)
 
         std::ofstream file;
         file.open(wn,std::ofstream::out | std::ofstream::app);
-        if (testCase>11 && testCase < 16)
+        if (testCase>11 && testCase < 17)
         {
           index_t kmax = 201;
           gsVector<> wL(kmax);
@@ -1245,7 +1263,16 @@ int main (int argc, char** argv)
         file.close();
 
       }
+
+      if (!bisected)
+      {
+        dLb = dLb0;
+        arcLength.setLength(dLb);
+      }
+      bisected = false;
+
     }
+
     if (plot)
       collection.save();
 
