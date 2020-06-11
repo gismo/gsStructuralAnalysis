@@ -300,7 +300,7 @@ int main (int argc, char** argv)
           PoissonRatio = 0.5;
         else
           PoissonRatio = 0.499;
-      E_modulus = 110050;
+      E_modulus = 330150;
 
       aDim = 0.28;
       bDim = 0.14;
