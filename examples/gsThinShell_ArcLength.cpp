@@ -51,6 +51,8 @@ int main (int argc, char** argv)
     // Input options
     int numElevate  = 1;
     int numHref     = 1;
+    int numElevateL = -1;
+    int numHrefL    = -1;
     bool plot       = false;
     bool stress       = false;
     bool first  = false;
@@ -103,6 +105,8 @@ int main (int argc, char** argv)
 
     cmd.addInt("r","hRefine", "Number of dyadic h-refinement (bisection) steps to perform before solving", numHref);
     cmd.addInt("e","degreeElevation", "Number of degree elevation steps to perform on the Geometry's basis before solving", numElevate);
+    cmd.addInt("R","hRefine2", "Number of dyadic h-refinement (bisection) steps to perform before solving (secondary direction)", numHrefL);
+    cmd.addInt("E","degreeElevation2", "Number of degree elevation steps to perform on the Geometry's basis before solving (secondary direction)", numElevateL);
     cmd.addInt( "M", "Material", "Material law",  material );
     cmd.addInt( "c", "Compressibility", "1: compressible, 0: incompressible",  Compressibility );
 
@@ -113,14 +117,15 @@ int main (int argc, char** argv)
     cmd.addInt("m","Method", "Arc length method; 1: Crisfield's method; 2: RIks' method.", method);
     cmd.addReal("L","dLb", "arc length", dLb);
     cmd.addReal("l","dL", "arc length after bifurcation", dL);
-    cmd.addReal("R","relaxation", "Relaxation factor for arc length method", relax);
-    cmd.addSwitch("B","BifurcationPath", "Compute singular points and bifurcation paths", SingularPoint);
-    cmd.addSwitch("Q","QuasiNewton", "Use the Quasi Newton method", quasiNewton);
+    cmd.addReal("A","relaxation", "Relaxation factor for arc length method", relax);
+    
     cmd.addReal("f","factor", "factor for bifurcation perturbation", tau);
     cmd.addInt("q","QuasiNewtonInt","Use the Quasi Newton method every INT iterations",quasiNewtonInt);
-    cmd.addSwitch("A","adaptive", "Adaptive length ", adaptive);
     cmd.addInt("N", "maxsteps", "Maximum number of steps", step);
 
+    cmd.addSwitch("adaptive", "Adaptive length ", adaptive);
+    cmd.addSwitch("bifurcation", "Compute singular points and bifurcation paths", SingularPoint);
+    cmd.addSwitch("quasi", "Use the Quasi Newton method", quasiNewton);
     cmd.addSwitch("plot", "Plot result in ParaView format", plot);
     cmd.addSwitch("stress", "Plot stress in ParaView format", stress);
     cmd.addSwitch("first", "Plot only first", first);
@@ -128,15 +133,15 @@ int main (int argc, char** argv)
 
     try { cmd.getValues(argc,argv); } catch (int rv) { return rv; }
 
-    real_t alpha, beta;
-    alpha = bDim/thickness;
-    beta = aDim/bDim;
-
     if (dL==0)
     {
       dL = dLb;
     }
 
+    if (numHrefL==-1)
+      numHrefL = numHref;
+    if (numElevateL==-1)
+      numElevateL = numElevate;
 
     if (testCase==0 || testCase==1)
     {
@@ -265,31 +270,46 @@ int main (int argc, char** argv)
     }
     else if (testCase==12 || testCase==13 )
     {
-      gsInfo<<"alpha = "<<alpha<<"; beta = "<<beta<<"\n";
         if ((!Compressibility) && (material!=0))
           PoissonRatio = 0.5;
         else
           PoissonRatio = 0.499;
       E_modulus = 1e6;
 
-      Ratio = 1./21.;
+      Ratio = 10.;
 
       // We model symmetry over the width axis
-      mp = RectangularDomain(6,numHref, 2, numElevate+2, aDim, bDim/2.);//, true, 0.001);
+      mp = RectangularDomain(numHrefL,numHref, numElevateL+2, numElevate+2, aDim, bDim/2.);//, true, 0.001);
     }
     else if (testCase==14 || testCase==15 )
     {
-      gsInfo<<"alpha = "<<alpha<<"; beta = "<<beta<<"\n";
         if ((!Compressibility) && (material!=0))
           PoissonRatio = 0.5;
         else
           PoissonRatio = 0.499;
       E_modulus = 1e6;
 
-      Ratio = 1./21.; 
+      Ratio = 10.; 
 
       // We model symmetry over the width axis
-      mp = RectangularDomain(5,numHref, 2, numElevate+2, aDim/2., bDim/2.);//, true, 0.001);
+      mp = RectangularDomain(numHrefL,numHref, numElevateL+2, numElevate+2, aDim/2., bDim/2.);//, true, 0.001);
+    }
+    else if (testCase==16 )
+    {
+        if ((!Compressibility) && (material!=0))
+          PoissonRatio = 0.5;
+        else
+          PoissonRatio = 0.499;
+      E_modulus = 110050;
+
+      aDim = 0.28;
+      bDim = 0.14;
+      thickness = 140e-6;
+
+      Ratio = 2.5442834138486314;
+
+      // We model symmetry over the width axis
+      mp = RectangularDomain(numHrefL,numHref, numElevateL+2, numElevate+2, aDim/2., bDim/2.);//, true, 0.001);
     }
     else if (testCase==21  )
     {
@@ -315,6 +335,12 @@ int main (int argc, char** argv)
       for(index_t i = 0; i< numHref; ++i)
         mp.patch(0).uniformRefine();
     }
+
+    real_t alpha, beta;
+    alpha = bDim/thickness;
+    beta = aDim/bDim;
+    gsInfo<<"alpha = "<<alpha<<"; beta = "<<beta<<"\n";
+
 
     gsMultiBasis<> dbasis(mp);
 
@@ -722,7 +748,7 @@ int main (int argc, char** argv)
       // dL =  750;
       // dLb = 750;
 
-      dirname = dirname + "/" + "Sheet_Symm_Half_" + "-r" + std::to_string(numHref) + "-e" + std::to_string(numElevate) + "-M" + std::to_string(material) + "-c" + std::to_string(Compressibility) + "-alpha" + std::to_string(alpha) + "-beta" + std::to_string(beta);
+      dirname = dirname + "/" + "Sheet_Symm_Half_" + "-r" + std::to_string(numHref) + "-R" + std::to_string(numHrefL) + "-e" + std::to_string(numElevate) + "-E" + std::to_string(numElevateL) + "-M" + std::to_string(material) + "-c" + std::to_string(Compressibility) + "-alpha" + std::to_string(alpha) + "-beta" + std::to_string(beta);
       output = "solution";
       wn = dirname + "/" + output + "data.txt";
       SingularPoint = true;
@@ -755,13 +781,13 @@ int main (int argc, char** argv)
       // dL =  750;
       // dLb = 750;
 
-      dirname = dirname + "/" + "Sheet_Asymm_Half_" + "-r" + std::to_string(numHref) + "-e" + std::to_string(numElevate) + "-M" + std::to_string(material) + "-c" + std::to_string(Compressibility) + "-alpha" + std::to_string(alpha) + "-beta" + std::to_string(beta);
+      dirname = dirname + "/" + "Sheet_Asymm_Half_" + "-r" + std::to_string(numHref) + "-R" + std::to_string(numHrefL) + "-e" + std::to_string(numElevate) + "-E" + std::to_string(numElevateL) + "-M" + std::to_string(material) + "-c" + std::to_string(Compressibility) + "-alpha" + std::to_string(alpha) + "-beta" + std::to_string(beta);
       output = "solution";
       wn = dirname + "/" + output + "data.txt";
       SingularPoint = true;
     }
     // Anti-symmetric
-    else if (testCase == 14)
+    else if (testCase == 14 || testCase == 16)
     {
       BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 0 ); // unknown 0 - x
       BCs.addCondition(boundary::west, condition_type::clamped, 0, 0, false, 2 ); // unknown 2 - z
@@ -786,7 +812,11 @@ int main (int argc, char** argv)
       // dL =  750;
       // dLb = 750;
 
-      dirname = dirname + "/" + "Sheet_Symm_Quarter_" + "-r" + std::to_string(numHref) + "-e" + std::to_string(numElevate) + "-M" + std::to_string(material) + "-c" + std::to_string(Compressibility) + "-alpha" + std::to_string(alpha) + "-beta" + std::to_string(beta);
+      if (testCase==16)
+        dirname = dirname + "/" + "Sheet_Symm_Quarter_tc16_" + "-r" + std::to_string(numHref) + "-R" + std::to_string(numHrefL) + "-e" + std::to_string(numElevate) + "-E" + std::to_string(numElevateL) + "-M" + std::to_string(material) + "-c" + std::to_string(Compressibility) + "-alpha" + std::to_string(alpha) + "-beta" + std::to_string(beta);
+      else 
+        dirname = dirname + "/" + "Sheet_Symm_Quarter_" + "-r" + std::to_string(numHref) + "-R" + std::to_string(numHrefL) + "-e" + std::to_string(numElevate) + "-E" + std::to_string(numElevateL) + "-M" + std::to_string(material) + "-c" + std::to_string(Compressibility) + "-alpha" + std::to_string(alpha) + "-beta" + std::to_string(beta);
+
       output = "solution";
       wn = dirname + "/" + output + "data.txt";
       SingularPoint = true;
@@ -817,7 +847,7 @@ int main (int argc, char** argv)
       // dL =  750;
       // dLb = 750;
 
-      dirname = dirname + "/" + "Sheet_Asymm_Quarter_" + "-r" + std::to_string(numHref) + "-e" + std::to_string(numElevate) + "-M" + std::to_string(material) + "-c" + std::to_string(Compressibility) + "-alpha" + std::to_string(alpha) + "-beta" + std::to_string(beta);
+      dirname = dirname + "/" + "Sheet_Asymm_Quarter_" + "-r" + std::to_string(numHref) + "-R" + std::to_string(numHrefL) + "-e" + std::to_string(numElevate) + "-E" + std::to_string(numElevateL) + "-M" + std::to_string(material) + "-c" + std::to_string(Compressibility) + "-alpha" + std::to_string(alpha) + "-beta" + std::to_string(beta);
       output = "solution";
       wn = dirname + "/" + output + "data.txt";
       SingularPoint = true;
@@ -1015,7 +1045,7 @@ int main (int argc, char** argv)
     arcLength.setTolerance(tol); //tol
     arcLength.setToleranceU(tolU);
     arcLength.setToleranceF(tolF);
-    arcLength.setMaxIterations(50);
+    arcLength.setMaxIterations(20);
     arcLength.verbose();
     arcLength.setAngleDeterminationMethod(0);
     arcLength.setPhi(0.0);
@@ -1090,7 +1120,7 @@ int main (int argc, char** argv)
         if (arcLength.stabilityChange())
         {
           gsInfo<<"Bifurcation spotted!"<<"\n";
-          arcLength.computeSingularPoint(1e-6, 5, Uold, Lold, 1e-10, 0, false);
+          arcLength.computeSingularPoint(1e-4, 5, Uold, Lold, 1e-10, 0, false);
           arcLength.switchBranch();
           dLb0 = dLb = dL;
           arcLength.setLength(dLb);
@@ -1173,7 +1203,7 @@ int main (int argc, char** argv)
 
         std::ofstream file;
         file.open(wn,std::ofstream::out | std::ofstream::app);
-        if (testCase>11 && testCase < 16)
+        if (testCase>11 && testCase < 17)
         {
           index_t kmax = 201;
           gsVector<> wL(kmax);
