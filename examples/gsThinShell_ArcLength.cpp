@@ -324,6 +324,20 @@ int main (int argc, char** argv)
       // We model symmetry over the width axis
       mp = RectangularDomain(numHrefL,numHref, numElevateL+2, numElevate+2, aDim/2., bDim/2.);//, true, 0.001);
     }
+    else if (testCase==17 )
+    {
+      PoissonRatio = 0.3;
+      E_modulus = 7e4;
+
+      thickness = 1e-5;
+
+      aDim = bDim = 1;
+
+      // Ratio = 2.5442834138486314;
+
+      // We model symmetry over the width axis
+      mp = RectangularDomain(numHrefL,numHref, numElevateL+2, numElevate+2, aDim/2., bDim/2.);//, true, 0.001);
+    }
     else if (testCase==21  )
     {
       std::string fn;
@@ -398,10 +412,11 @@ int main (int argc, char** argv)
     if (testCase == -1)
     {
         // Pinned-Pinned
-        tmp << 1e-4, 0, 0;
-        neuData.setValue(tmp,3);
+        // tmp << 1e-4, 0, 0;
+        // neuData.setValue(tmp,3);
         // // Clamped-Clamped
-        BCs.addCondition(boundary::east, condition_type::neumann, &neuData ); // unknown 0 - x
+        // BCs.addCondition(boundary::east, condition_type::neumann, &neuData ); // unknown 0 - x
+        BCs.addCondition(boundary::east, condition_type::collapsed, 0, 0, false, 0 ); // unknown 1 - y
         BCs.addCondition(boundary::east, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 1 - y
         BCs.addCondition(boundary::east, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z
 
@@ -411,9 +426,12 @@ int main (int argc, char** argv)
 
         fac = 1;
 
-        // dL =  1e-2;
-        // dLb = 1e-4;
-        // tol = 1e-3;
+        Load = 1e-4;
+        gsVector<> point(2);
+        gsVector<> load (3);
+        point<< 1.0, 0.5 ;
+        load << Load, 0.0, 0.0 ;
+        pLoads.addLoad(point, load, 0 );
 
         output = "Case" + std::to_string(testCase) + "solution";
         wn = output + "data.txt";
@@ -890,34 +908,20 @@ int main (int argc, char** argv)
       wn = dirname + "/" + output + "data.txt";
       SingularPoint = true;
     }
-    else if (testCase == 16)
+    else if (testCase == 17)
     {
-      // Symmetry in y-direction for back side
-      BCs.addCondition(boundary::north, condition_type::clamped, 0, 0, false, 0 );
-      BCs.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 1 );
-      BCs.addCondition(boundary::north, condition_type::clamped, 0, 0, false, 2 );
+      BCs.addCondition(boundary::north, condition_type::dirichlet,0,0,false,2);
+      BCs.addCondition(boundary::east, condition_type::dirichlet,0,0,false,2);
 
-      // Diaphragm conditions for left side
-      BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 1 - y
-      BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z
+      BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 1 );
+      BCs.addCondition(boundary::south, condition_type::clamped, 0, 0, false, 2 );
 
-      // Symmetry in x-direction: for right side
-      BCs.addCondition(boundary::east, condition_type::dirichlet, 0, 0, false, 0 );
-      BCs.addCondition(boundary::east, condition_type::clamped, 0, 0, false, 1 );
-      BCs.addCondition(boundary::east, condition_type::clamped, 0, 0, false, 2 );
+      BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 0 );
+      BCs.addCondition(boundary::west, condition_type::clamped, 0, 0, false, 2 );
 
-      // Symmetry in z-direction:for the front side
-      BCs.addCondition(boundary::south, condition_type::clamped, 0, 0, false, 0 );
-      BCs.addCondition(boundary::south, condition_type::clamped, 0, 0, false, 1 );
-      BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 2 );
-
-      // Surface forces
-      tmp.setZero();
-
-      // Point loads
-      gsVector<> point(2); point<< 1.0, 1.0 ;
-      gsVector<> load (3); load << 0.0, 0.0, -0.25 ;
-      pLoads.addLoad(point, load, 0 );
+      pressure = 0.01;
+      // dL =  750;
+      // dLb = 750;
 
       output = "Case" + std::to_string(testCase) + "solution";
       wn = output + "data.txt";
