@@ -145,14 +145,33 @@ int main (int argc, char** argv)
 
     if (testCase==-1)
     {
-      E_modulus = 1;
-      thickness = 1;
-      PoissonRatio = 0.499;
+      // E_modulus = 1;
+      // thickness = 1;
+      // PoissonRatio = 0.499;
 
-      real_t L = 1.0;
-      real_t B = 1;
-      Area = B*thickness;
-      mp = RectangularDomain(numHref, 0, numElevate+2, 2, L, B);
+      // E_modulus = 330150;
+
+      // aDim = 0.28;
+      // bDim = 0.14;
+      // thickness = 140e-6;
+
+      // Ratio = 2.5442834138486314;
+      // Ratio = 0.5;
+
+      E_modulus = 1;
+      thickness = 0.15;
+      PoissonRatio = 0.45;
+      Compressibility = 1;
+      E_modulus = 1;
+
+      bDim = thickness / 1.9e-3;
+      aDim = 2*bDim;
+
+      // Ratio = 2.5442834138486314;
+      Ratio = 0.5;
+
+
+      mp = RectangularDomain(numHref, numHrefL, numElevate+2, numElevateL + 2, aDim, bDim);
     }
     else if (testCase==0 || testCase==1)
     {
@@ -194,30 +213,27 @@ int main (int argc, char** argv)
     }
     else if (testCase==6)
     {
-      // real_t L = 10.0e-3;
-      // real_t B = 10.0e-3;
-      // real_t mu = 10e3;
-      // thickness = 0.25e-3;
-      // if ((!Compressibility) && (material!=0))
-      //   PoissonRatio = 0.5;
-      // else
-      //   PoissonRatio = 0.45;
-
-      // E_modulus = 2*mu*(1+PoissonRatio);
-      // gsDebugVar(E_modulus);
-
-      real_t L = 9e-3;
-      real_t B = 3e-3;
+      aDim = 10.0e-3;
+      bDim = 10.0e-3;
       real_t mu = 10e3;
-      thickness = 0.9e-3;
+      thickness = 0.25e-3;
       if ((!Compressibility) && (material!=0))
         PoissonRatio = 0.5;
       else
         PoissonRatio = 0.45;
 
-      E_modulus = 2*mu*(1+PoissonRatio);
+      if (material==2 || material==12)
+        mu = 10e3;
+      else if (material==3 || material==13)
+        mu = 30e3;
 
-      mp = RectangularDomain(numHref, numElevate+2, L, B);
+      E_modulus = 2*mu*(1+PoissonRatio);
+      gsDebugVar(E_modulus);
+
+      Ratio = 0.5;
+
+
+      mp = RectangularDomain(numHref, numElevate+2, aDim/2., bDim/2.);
     }
     else if (testCase == 7)
     {
@@ -427,7 +443,7 @@ int main (int argc, char** argv)
 
         output = "Case" + std::to_string(testCase) + "solution";
         wn = output + "data.txt";
-        SingularPoint = true;
+        SingularPoint = false;
     }
 
     if (testCase == 0)
@@ -594,55 +610,29 @@ int main (int argc, char** argv)
       wn = output + "data.txt";
       SingularPoint = true;
     }
-    // else if (testCase == 6) // Plate with pressure
-    // {
-    //   for (index_t k=0; k!=3; k++)
-    //   {
-    //     BCs.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, k ); // unknown 1 - x
-    //     BCs.addCondition(boundary::east,  condition_type::dirichlet, 0, 0, false, k ); // unknown 1 - x
-    //     BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, k ); // unknown 1 - x
-    //     BCs.addCondition(boundary::west,  condition_type::dirichlet, 0, 0, false, k ); // unknown 1 - x
-    //   }
-
-    //   BCs.addCondition(boundary::north, condition_type::clamped, 0, 0, false, 2 ); // unknown 2 - z.
-    //   BCs.addCondition(boundary::east,  condition_type::clamped, 0, 0, false, 2 ); // unknown 2 - z.
-    //   BCs.addCondition(boundary::south, condition_type::clamped, 0, 0, false, 2 ); // unknown 1 - y
-    //   BCs.addCondition(boundary::west,  condition_type::clamped, 0, 0, false, 2 ); // unknown 1 - y
-
-    //   pressure = 1.0;
-
-    //   output = "Case" + std::to_string(testCase) + "solution";
-    //   wn = output + "data.txt";
-    //   SingularPoint = false;
-    // }
     else if (testCase == 6) // Plate with pressure
     {
-      BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 0 ); // unknown 2 - z.
-      BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 2 - z.
 
-      BCs.addCondition(boundary::east, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 2 - z.
-      BCs.addCondition(boundary::east, condition_type::collapsed, 0, 0, false, 0 ); // unknown 2 - z.
+      BCs.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 0 ); // unknown 1 - x
+      BCs.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 1 - x
+      BCs.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 1 - x
 
+      BCs.addCondition(boundary::east,  condition_type::dirichlet, 0, 0, false, 0 ); // unknown 1 - x
+      BCs.addCondition(boundary::east,  condition_type::dirichlet, 0, 0, false, 1 ); // unknown 1 - x
+      BCs.addCondition(boundary::east,  condition_type::dirichlet, 0, 0, false, 2 ); // unknown 1 - x
 
-      BCs.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z.
-      BCs.addCondition(boundary::east,  condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z.
-      BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 1 - y
-      BCs.addCondition(boundary::west,  condition_type::dirichlet, 0, 0, false, 2 ); // unknown 1 - y
+      BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 1 - x
+      BCs.addCondition(boundary::south, condition_type::clamped,   0, 0, false, 2 ); // unknown 1 - x
 
-      Load = 1e0;
-      gsVector<> point(2);
-      gsVector<> load (3);
-      point<< 1.0, 0.5 ;
-      load << Load,0.0, 0.0;
-      pLoads.addLoad(point, load, 0 );
+      BCs.addCondition(boundary::west,  condition_type::dirichlet, 0, 0, false, 0 ); // unknown 1 - x
+      BCs.addCondition(boundary::west,  condition_type::clamped,   0, 0, false, 2 ); // unknown 1 - x
+
+      pressure = 1.0;
 
       output = "Case" + std::to_string(testCase) + "solution";
       wn = output + "data.txt";
       SingularPoint = false;
-
-
     }
-
     else if (testCase == 7)
     {
         BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z
@@ -764,8 +754,9 @@ int main (int argc, char** argv)
       BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 2 );
       BCs.addCondition(boundary::south, condition_type::clamped, 0, 0, false, 2 );
 
-      output = "Case" + std::to_string(testCase) + "solution";
-      wn = output + "data.txt";
+      dirname = "Cylinder-r=" + std::to_string(numHref) + "-e" + std::to_string(numElevate) + "-M" + std::to_string(material) + "_solution";
+      output = "solution";
+      wn = dirname + "/" + output + "data.txt";
       SingularPoint = false;
     }
     // Anti-symmetric
@@ -1213,7 +1204,9 @@ int main (int argc, char** argv)
       {
         gsMatrix<> P(2,1);
         // Compute end point displacement
-        if (testCase==8 || testCase==9|| testCase==11)
+        if (testCase==6)
+          P<<0.0,0.0;
+        else if (testCase==8 || testCase==9|| testCase==11)
           P<<0.0,1.0;
         else if (testCase==17)
           P<<0.0,0.0;
@@ -1223,7 +1216,9 @@ int main (int argc, char** argv)
         gsMatrix<> left;
         deformation.patch(0).eval_into(P,left);
 
-        if (testCase==8 || testCase==9|| testCase==11)
+        if (testCase==6)
+          P<<0.5,0.5;
+        else if (testCase==8 || testCase==9|| testCase==11)
           P<<0.5,1.0;
         else if (testCase==17)
           P<<0.0,0.5;
@@ -1233,7 +1228,9 @@ int main (int argc, char** argv)
         gsMatrix<> mid;
         deformation.patch(0).eval_into(P,mid);
 
-        if (testCase==8 || testCase==9|| testCase==11)
+        if (testCase==6)
+          P<<1.0,1.0;
+        else if (testCase==8 || testCase==9|| testCase==11)
           P<<1.0,1.0;
         else if (testCase==17)
           P<<0.0,1.0;
