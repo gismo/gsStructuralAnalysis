@@ -147,7 +147,7 @@ int main (int argc, char** argv)
     {
       E_modulus = 1;
       thickness = 1;
-      PoissonRatio = 0.0;
+      PoissonRatio = 0.499;
 
       real_t L = 1.0;
       real_t B = 1;
@@ -216,7 +216,6 @@ int main (int argc, char** argv)
         PoissonRatio = 0.45;
 
       E_modulus = 2*mu*(1+PoissonRatio);
-      gsDebugVar(E_modulus);
 
       mp = RectangularDomain(numHref, numElevate+2, L, B);
     }
@@ -411,26 +410,19 @@ int main (int argc, char** argv)
 
     if (testCase == -1)
     {
-        // Pinned-Pinned
-        // tmp << 1e-4, 0, 0;
-        // neuData.setValue(tmp,3);
-        // // Clamped-Clamped
-        // BCs.addCondition(boundary::east, condition_type::neumann, &neuData ); // unknown 0 - x
-        BCs.addCondition(boundary::east, condition_type::collapsed, 0, 0, false, 0 ); // unknown 1 - y
-        BCs.addCondition(boundary::east, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 1 - y
-        BCs.addCondition(boundary::east, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z
+        for (index_t i=0; i!=3; ++i)
+        {
+            BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, i ); // unknown 2 - z
+        }
+        BCs.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z
+        BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z
 
-        BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 0 ); // unknown 0 - x
-        BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 1 - y
-        BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z
+        BCs.addCondition(boundary::east, condition_type::dirichlet, 0, 0 ,false,1);
+        BCs.addCondition(boundary::east, condition_type::dirichlet, 0, 0 ,false,2);
+        BCs.addCondition(boundary::east, condition_type::collapsed, 0, 0 ,false,0);
 
-        fac = 1;
-
-        Load = 1e-4;
-        gsVector<> point(2);
-        gsVector<> load (3);
-        point<< 1.0, 0.5 ;
-        load << Load, 0.0, 0.0 ;
+        gsVector<> point(2); point<< 1.0, 0.5 ;
+        gsVector<> load (3); load << 0.1, 0.0, 0.0 ;
         pLoads.addLoad(point, load, 0 );
 
         output = "Case" + std::to_string(testCase) + "solution";
@@ -1054,6 +1046,7 @@ int main (int argc, char** argv)
       return m;
     };
     // Function for the Residual
+
     std::function<gsVector<real_t> (gsVector<real_t> const &, real_t, gsVector<real_t> const &) > Residual;
     Residual = [&assembler,&mp_def](gsVector<real_t> const &x, real_t lam, gsVector<real_t> const &force)
     {
@@ -1068,7 +1061,7 @@ int main (int argc, char** argv)
       // The residual is now defined as the internal forces minus lam*force
       // gsVector<real_t> r =
       // gsVector<> result = Fint - lam * force;
-      // gsDebugVar(lam * force);
+      // gsDebugVar((lam * force).transpose());
       // gsDebugVar(assembler.rhs());
       // gsDebugVar(Fint);
       // gsDebugVar((lam*force).sum());
@@ -1077,8 +1070,8 @@ int main (int argc, char** argv)
     // Assemble linear system to obtain the force vector
     assembler.assemble();
     gsVector<> Force = assembler.rhs();
+    // gsDebugVar(Force);
 
-    // gsDebugVar(Force.sum());
 
     gsArcLengthIterator<real_t> arcLength(Jacobian, Residual, Force);
     arcLength.setLength(dLb); // dLb
@@ -1220,24 +1213,30 @@ int main (int argc, char** argv)
       {
         gsMatrix<> P(2,1);
         // Compute end point displacement
-        if (testCase==8 || testCase==9)
+        if (testCase==8 || testCase==9|| testCase==11)
           P<<0.0,1.0;
+        else if (testCase==17)
+          P<<0.0,0.0;
         else
           P<<0.0,0.5;
 
         gsMatrix<> left;
         deformation.patch(0).eval_into(P,left);
 
-        if (testCase==8 || testCase==9)
+        if (testCase==8 || testCase==9|| testCase==11)
           P<<0.5,1.0;
+        else if (testCase==17)
+          P<<0.0,0.5;
         else
           P<<0.5,0.5;
 
         gsMatrix<> mid;
         deformation.patch(0).eval_into(P,mid);
 
-        if (testCase==8 || testCase==9)
+        if (testCase==8 || testCase==9|| testCase==11)
           P<<1.0,1.0;
+        else if (testCase==17)
+          P<<0.0,1.0;
         else
           P<<1.0,0.5;
 
