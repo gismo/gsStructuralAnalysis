@@ -49,7 +49,6 @@ int main(int argc, char *argv[])
     index_t numElevate = 1;
     index_t testCase = 1;
     index_t Compressibility = 0;
-    index_t CompressibilityFunction = 0;
     index_t material = 0;
     bool nonlinear = false;
     bool verbose = false;
@@ -618,7 +617,6 @@ int main(int argc, char *argv[])
 
     materialMatrixNonlinear.options().setInt("MaterialLaw",material);
     materialMatrixNonlinear.options().setInt("Compressibility",Compressibility);
-    materialMatrixNonlinear.options().setInt("CompressibilityFunction",CompressibilityFunction);
 
 
     // Linear anisotropic material model
@@ -681,14 +679,12 @@ int main(int argc, char *argv[])
         materialMatrixNonlinear2.setParameters(parameters2);
     materialMatrixNonlinear2.options().setInt("MaterialLaw",material);
     materialMatrixNonlinear2.options().setInt("Compressibility",Compressibility);
-    materialMatrixNonlinear2.options().setInt("CompressibilityFunction",CompressibilityFunction);
 
     materialMatrixNonlinear2.info();
 
     gsMaterialMatrix materialMatrixTest(mp,mp_def,t,parameters,rho);
     materialMatrixTest.options().setInt("MaterialLaw",13);
     materialMatrixTest.options().setInt("Compressibility",Compressibility);
-    materialMatrixTest.options().setInt("CompressibilityFunction",CompressibilityFunction);
 
     gsVector<> testPt(2);
     testPt<<0.351135,0.85235;
@@ -812,11 +808,9 @@ int main(int argc, char *argv[])
     // TEST MATRIX INTEGRATION
     materialMatrixNonlinear2.options().setInt("MaterialLaw",material);
     materialMatrixNonlinear2.options().setInt("Compressibility",Compressibility);
-    materialMatrixNonlinear2.options().setInt("CompressibilityFunction",CompressibilityFunction);
 
     materialMatrixTest.options().setInt("MaterialLaw",13);
     materialMatrixTest.options().setInt("Compressibility",Compressibility);
-    materialMatrixTest.options().setInt("CompressibilityFunction",CompressibilityFunction);
 
     // materialMatrixTest.makeVector(0);
     materialMatrixTest.makeMatrix(0);

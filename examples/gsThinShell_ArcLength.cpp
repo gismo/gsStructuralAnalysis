@@ -76,7 +76,6 @@ int main (int argc, char** argv)
     real_t tau = 1e4;
 
     index_t Compressibility = 0;
-    index_t CompressibilityFunction = 0;
     index_t material = 0;
     real_t Ratio = 7.0;
 
@@ -110,7 +109,6 @@ int main (int argc, char** argv)
     cmd.addInt("E","degreeElevation2", "Number of degree elevation steps to perform on the Geometry's basis before solving (secondary direction)", numElevateL);
     cmd.addInt( "M", "Material", "Material law",  material );
     cmd.addInt( "c", "Compressibility", "1: compressible, 0: incompressible",  Compressibility );
-    cmd.addInt( "C", "CompressibilityFunction", "1: bulkModulus, 0: laméParameters",  CompressibilityFunction );
 
     cmd.addReal("T","hdim", "thickness of the plate", thickness);
     cmd.addReal("a","adim", "dimension a", aDim);
@@ -1014,7 +1012,6 @@ int main (int argc, char** argv)
 
     materialMatrixNonlinear.options().setInt("MaterialLaw",material);
     materialMatrixNonlinear.options().setInt("Compressibility",Compressibility);
-    materialMatrixNonlinear.options().setInt("CompressibilityFunction",CompressibilityFunction);
 
     // Construct assembler object
     gsThinShellAssembler assembler(mp,dbasis,BCs,surfForce,materialMatrixNonlinear);
