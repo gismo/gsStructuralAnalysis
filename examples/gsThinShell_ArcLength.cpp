@@ -76,6 +76,7 @@ int main (int argc, char** argv)
     real_t tau = 1e4;
 
     index_t Compressibility = 0;
+    index_t CompressibilityFunction = 0;
     index_t material = 0;
     real_t Ratio = 7.0;
 
@@ -109,6 +110,7 @@ int main (int argc, char** argv)
     cmd.addInt("E","degreeElevation2", "Number of degree elevation steps to perform on the Geometry's basis before solving (secondary direction)", numElevateL);
     cmd.addInt( "M", "Material", "Material law",  material );
     cmd.addInt( "c", "Compressibility", "1: compressible, 0: incompressible",  Compressibility );
+    cmd.addInt( "C", "CompressibilityFunction", "1: bulkModulus, 0: laméParameters",  CompressibilityFunction );
 
     cmd.addReal("T","hdim", "thickness of the plate", thickness);
     cmd.addReal("a","adim", "dimension a", aDim);
@@ -145,30 +147,30 @@ int main (int argc, char** argv)
 
     if (testCase==-1)
     {
-      // E_modulus = 1;
-      // thickness = 1;
-      // PoissonRatio = 0.499;
-
-      // E_modulus = 330150;
-
-      // aDim = 0.28;
-      // bDim = 0.14;
-      // thickness = 140e-6;
-
-      // Ratio = 2.5442834138486314;
-      // Ratio = 0.5;
-
       E_modulus = 1;
-      thickness = 0.15;
-      PoissonRatio = 0.45;
-      Compressibility = 1;
-      E_modulus = 1;
+      thickness = 1;
+      PoissonRatio = 0.499;
 
-      bDim = thickness / 1.9e-3;
-      aDim = 2*bDim;
+      E_modulus = 330150;
+
+      aDim = 0.28;
+      bDim = 0.14;
+      thickness = 140e-6;
 
       // Ratio = 2.5442834138486314;
       Ratio = 0.5;
+
+      // E_modulus = 1;
+      // thickness = 0.15;
+      // PoissonRatio = 0.45;
+      // Compressibility = 1;
+      // E_modulus = 1;
+
+      // bDim = thickness / 1.9e-3;
+      // aDim = 2*bDim;
+
+      // // Ratio = 2.5442834138486314;
+      // Ratio = 0.5;
 
 
       mp = RectangularDomain(numHref, numHrefL, numElevate+2, numElevateL + 2, aDim, bDim);
@@ -1017,6 +1019,7 @@ int main (int argc, char** argv)
 
     materialMatrixNonlinear.options().setInt("MaterialLaw",material);
     materialMatrixNonlinear.options().setInt("Compressibility",Compressibility);
+    materialMatrixNonlinear.options().setInt("CompressibilityFunction",CompressibilityFunction);
 
     // Construct assembler object
     gsThinShellAssembler assembler(mp,dbasis,BCs,surfForce,materialMatrixNonlinear);

@@ -49,6 +49,7 @@ int main(int argc, char *argv[])
     index_t numElevate = 1;
     index_t testCase = 1;
     index_t Compressibility = 0;
+    index_t CompressibilityFunction = 0;
     index_t material = 0;
     bool nonlinear = false;
     bool verbose = false;
@@ -84,7 +85,7 @@ int main(int argc, char *argv[])
         E_modulus = 4.32E8;
         fn = "../extensions/unsupported/filedata/scordelis_lo_roof.xml";
         gsReadFile<>(fn, mp);
-        PoissonRatio = 0.5;
+        PoissonRatio = 0.0;
     }
     else if (testCase == 2)
     {
@@ -163,8 +164,8 @@ int main(int argc, char *argv[])
         E_modulus = 1e0;
         thickness = 1e0;
         // PoissonRatio = 0.5;
-        // PoissonRatio = 0.499;
-        PoissonRatio = 0.0;
+        PoissonRatio = 0.499;
+        // PoissonRatio = 0.5;
     }
     //! [Read input file]
 
@@ -534,6 +535,9 @@ int main(int argc, char *argv[])
         bc.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z
         bc.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z
 
+
+        bc.addCondition(boundary::east, condition_type::dirichlet, 0, 0 ,false,1);
+        bc.addCondition(boundary::east, condition_type::dirichlet, 0, 0 ,false,2);
         bc.addCondition(boundary::east, condition_type::collapsed, 0, 0 ,false,0);
 
         gsVector<> point(2); point<< 1.0, 0.5 ;
@@ -614,6 +618,7 @@ int main(int argc, char *argv[])
 
     materialMatrixNonlinear.options().setInt("MaterialLaw",material);
     materialMatrixNonlinear.options().setInt("Compressibility",Compressibility);
+    materialMatrixNonlinear.options().setInt("CompressibilityFunction",CompressibilityFunction);
 
 
     // Linear anisotropic material model
@@ -676,12 +681,15 @@ int main(int argc, char *argv[])
         materialMatrixNonlinear2.setParameters(parameters2);
     materialMatrixNonlinear2.options().setInt("MaterialLaw",material);
     materialMatrixNonlinear2.options().setInt("Compressibility",Compressibility);
+    materialMatrixNonlinear2.options().setInt("CompressibilityFunction",CompressibilityFunction);
 
     materialMatrixNonlinear2.info();
 
     gsMaterialMatrix materialMatrixTest(mp,mp_def,t,parameters,rho);
     materialMatrixTest.options().setInt("MaterialLaw",13);
     materialMatrixTest.options().setInt("Compressibility",Compressibility);
+    materialMatrixTest.options().setInt("CompressibilityFunction",CompressibilityFunction);
+
     gsVector<> testPt(2);
     testPt<<0.351135,0.85235;
     // testPt.setConstant(0.25);
@@ -804,9 +812,11 @@ int main(int argc, char *argv[])
     // TEST MATRIX INTEGRATION
     materialMatrixNonlinear2.options().setInt("MaterialLaw",material);
     materialMatrixNonlinear2.options().setInt("Compressibility",Compressibility);
+    materialMatrixNonlinear2.options().setInt("CompressibilityFunction",CompressibilityFunction);
 
     materialMatrixTest.options().setInt("MaterialLaw",13);
     materialMatrixTest.options().setInt("Compressibility",Compressibility);
+    materialMatrixTest.options().setInt("CompressibilityFunction",CompressibilityFunction);
 
     // materialMatrixTest.makeVector(0);
     materialMatrixTest.makeMatrix(0);
@@ -885,23 +895,41 @@ int main(int argc, char *argv[])
            << deformation.patch(0).coefs().colwise().minCoeff() <<".\n";
 
 
-    gsInfo <<"Area (undeformed) = "<<assembler.getArea(mp)<<"\tArea (deformed) = "<<assembler.getArea(mp_def)<<"\n";
+    // gsInfo <<"Area (undeformed) = "<<assembler.getArea(mp)<<"\tArea (deformed) = "<<assembler.getArea(mp_def)<<"\n";
 
-    assembler.constructSolution(solVector,mp_def);
-    assembler.assembleVector(mp_def);
-    // gsDebugVar(assembler.rhs());
-    patchSide ps(0,boundary::north);
-    gsVector<real_t> Fint = assembler.boundaryForceVector(mp_def,ps,2);
-    gsDebugVar(Fint);
-    gsDebugVar(Fint.sum());
-    // gsDebugVar(Force);
-
-    // gsDebugVar(Force.size());
-    // gsDebugVar(Fint.size());
-
-    // gsDebugVar(Force.sum());
+    // assembler.constructSolution(solVector,mp_def);
+    // assembler.assembleVector(mp_def);
+    // // gsDebugVar(assembler.rhs());
+    // patchSide ps(0,boundary::north);
+    // gsVector<real_t> Fint = assembler.boundaryForceVector(mp_def,ps,2);
+    // gsDebugVar(Fint);
     // gsDebugVar(Fint.sum());
 
+    gsMatrix<> coords(2,1);
+    if (testCase==0)
+      coords<<0.5,0.5;
+    else if (testCase==1)
+      coords<<0.5,0;
+    else if (testCase==2)
+      coords<<0,0;
+    else if (testCase==3)
+      coords<<1,1;
+    else
+      coords<<0,0;
+
+    gsMatrix<> res(3,1);
+    mp.patch(0).eval_into(coords,res);
+    real_t x=res.at(0);
+    real_t y=res.at(1);
+    real_t z=res.at(2);
+
+    deformation.patch(0).eval_into(coords,res);
+    real_t u=res.at(0);
+    real_t v=res.at(1);
+    real_t w=res.at(2);
+
+    gsInfo<<"Deformation on point ("<<x<<","<<y<<","<<z<<"):\n";
+    gsInfo<<std::setprecision(20)<<"("<<v<<","<<u<<","<<w<<")"<<"\n";
     return EXIT_SUCCESS;
 
 }// end main
