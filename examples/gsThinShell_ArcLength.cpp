@@ -172,8 +172,7 @@ int main (int argc, char** argv)
       // // Ratio = 2.5442834138486314;
       // Ratio = 0.5;
 
-
-      mp = RectangularDomain(numHref, numHrefL, numElevate+2, numElevateL + 2, aDim, bDim);
+      mp = RectangularDomain(numHrefL, numHref, numElevateL+2, numElevate + 2, aDim, bDim);
     }
     else if (testCase==0 || testCase==1)
     {
@@ -268,20 +267,22 @@ int main (int argc, char** argv)
     }
     else if (testCase == 10)
     {
-        thickness = 0.5;
-        real_t mu = 200;
+      E_modulus = 1;
+      thickness = 0.15;
+      if (!Compressibility)
         PoissonRatio = 0.5;
-        E_modulus = 2*mu*(1+PoissonRatio);
-        gsReadFile<>("quarterCircle.xml", mp);
-        Ratio = 4;
+      else
+        PoissonRatio = 0.45;
 
-        for(index_t i = 0; i< numElevate; ++i)
-          mp.patch(0).degreeElevate();    // Elevate the degree
+      E_modulus = 1;
 
-        // h-refine
-        for(index_t i = 0; i< numHref; ++i)
-          mp.patch(0).uniformRefine();
+      bDim = thickness / 1.9e-3;
+      aDim = 2*bDim;
 
+      // Ratio = 2.5442834138486314;
+      Ratio = 0.5;
+
+      mp = RectangularDomain(numHrefL, numHref, numElevateL+2, numElevate + 2, aDim, bDim);
     }
     else if (testCase == 11)
     {
@@ -714,32 +715,26 @@ int main (int argc, char** argv)
         output = "solution";
         wn = dirname + "/" + output + "data.txt";
     }
-    else if (testCase == 10)
+    else if (testCase == 10) // Uniaxial tension with fixed ends
     {
-        pressure = 1;
+       for (index_t i=0; i!=3; ++i)
+       {
+           BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, i ); // unknown 2 - z
+       }
+       BCs.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z
+       BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z
 
-        BCs.addCondition(boundary::east, condition_type::dirichlet, 0, 0, false, 0 ); // unknown 2 - z
-        BCs.addCondition(boundary::east, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 0 - x
-        BCs.addCondition(boundary::east, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 1 - y
+       BCs.addCondition(boundary::east, condition_type::dirichlet, 0, 0 ,false,1);
+       BCs.addCondition(boundary::east, condition_type::dirichlet, 0, 0 ,false,2);
+       BCs.addCondition(boundary::east, condition_type::collapsed, 0, 0 ,false,0);
 
-        BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 0 );
-        BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 1 );
-        BCs.addCondition(boundary::west, condition_type::collapsed, 0, 0, false, 2 );
-        BCs.addCondition(boundary::west, condition_type::clamped, 0, 0, false, 2 );
+       gsVector<> point(2); point<< 1.0, 0.5 ;
+       gsVector<> load (3); load << 0.1, 0.0, 0.0 ;
+       pLoads.addLoad(point, load, 0 );
 
-        // Symmetry in x-direction:
-        BCs.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 0 );
-        BCs.addCondition(boundary::north, condition_type::clamped, 0, 0, false, 1 );
-        BCs.addCondition(boundary::north, condition_type::clamped, 0, 0, false, 2 );
-
-        // Symmetry in y-direction:
-        BCs.addCondition(boundary::south, condition_type::clamped, 0, 0, false, 0 );
-        BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 1 );
-        BCs.addCondition(boundary::south, condition_type::clamped, 0, 0, false, 2 );
-
-        output = "Case" + std::to_string(testCase) + "solution";
-        wn = output + "data.txt";
-        SingularPoint = false;
+        dirname = dirname + "/" + "Tension_-r" + std::to_string(numHref) + "-R" + std::to_string(numHrefL) + "-e" + std::to_string(numElevate) + "-E" + std::to_string(numElevateL) + "-M" + std::to_string(material) + "-c" + std::to_string(Compressibility) + "-alpha" + std::to_string(alpha) + "-beta" + std::to_string(beta);
+        output = "solution";
+        wn = dirname + "/" + output + "data.txt";
     }
     else if (testCase == 11)
     {
