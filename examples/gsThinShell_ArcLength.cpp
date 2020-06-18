@@ -1011,7 +1011,7 @@ int main (int argc, char** argv)
 
     // plot geometry
     if (plot)
-      gsWriteParaview(mp,"mp",5000,true);
+      gsWriteParaview(mp,"mp",1000,true);
 
     if (write)
       initStepOutput(wn, writePoints);
