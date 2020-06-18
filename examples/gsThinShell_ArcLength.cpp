@@ -52,11 +52,10 @@ void initStepOutput( const std::string name, const gsMatrix<T> & points);
 template <class T>
 void writeStepOutput(const gsArcLengthIterator<T> & arcLength, const gsMultiPatch<T> & deformation, const std::string name, const gsMatrix<T> & points, const index_t extreme=-1, const index_t kmax=100);
 
-template <class T>
-void initSectionOutput( const std::string name, const gsMatrix<T> & points);
+void initSectionOutput( const std::string dirname, bool undeformed=false);
 
-// template <class T>
-// void writeSectionpOutput( std::string name );
+template <class T>
+void writeSectionOutput(const gsMultiPatch<T> & mp, const std::string dirname, const index_t coordinate=0, const T coordVal=0.0, const index_t N=100, bool undeformed=false);
 
 int main (int argc, char** argv)
 {
@@ -143,7 +142,7 @@ int main (int argc, char** argv)
     cmd.addSwitch("stress", "Plot stress in ParaView format", stress);
     cmd.addSwitch("first", "Plot only first", first);
     cmd.addSwitch("write", "Write output to file", write);
-    cmd.addSwitch("crosssection", "Write cross-section to file", crosssection);
+    cmd.addSwitch("cross", "Write cross-section to file", crosssection);
 
     try { cmd.getValues(argc,argv); } catch (int rv) { return rv; }
 
@@ -443,6 +442,8 @@ int main (int argc, char** argv)
     writePoints.col(0)<< 0.0,0.5;
     writePoints.col(1)<< 0.5,0.5;
     writePoints.col(2)<< 1.0,0.5;
+    index_t cross_coordinate = -1;
+    real_t cross_val = 0.0;
 
     if (testCase == -1)
     {
@@ -462,7 +463,7 @@ int main (int argc, char** argv)
         pLoads.addLoad(point, load, 0 );
 
         dirname = dirname + "/" + "Case" + std::to_string(testCase) + "solution";
-        output = dirname + "/" + "solution";
+        output =  "solution";
         wn = output + "data.txt";
         SingularPoint = false;
     }
@@ -488,7 +489,7 @@ int main (int argc, char** argv)
         // tol = 1e-3;
 
         dirname = dirname + "/" + "Case" + std::to_string(testCase) + "solution";
-        output = dirname + "/" + "solution";
+        output =  "solution";
         wn = output + "data.txt";
         SingularPoint = true;
     }
@@ -520,7 +521,7 @@ int main (int argc, char** argv)
         // dLb = 1e-3;
 
         dirname = dirname + "/" + "Case" + std::to_string(testCase) + "solution";
-        output = dirname + "/" + "solution";
+        output =  "solution";
         wn = output + "data.txt";
         SingularPoint = true;
     }
@@ -543,7 +544,7 @@ int main (int argc, char** argv)
       // dLb = 2e0;
 
       dirname = dirname + "/" + "Case" + std::to_string(testCase) + "solution";
-      output = dirname + "/" + "solution";
+      output =  "solution";
       wn = output + "data.txt";
       SingularPoint = false;
     }
@@ -572,7 +573,7 @@ int main (int argc, char** argv)
       pLoads.addLoad(point, load, 0 );
 
       dirname = dirname + "/" + "Case" + std::to_string(testCase) + "solution_r" + std::to_string(numHref) + "_e" + std::to_string(numElevate);
-      output = dirname + "/" + "solution";
+      output =  "solution";
       wn = output + "data.txt";
       SingularPoint = true;
     }
@@ -602,7 +603,7 @@ int main (int argc, char** argv)
       pLoads.addLoad(point, load, 0 );
 
       dirname = dirname + "/" + "Case" + std::to_string(testCase);
-      output = dirname + "/" + "solution";
+      output =  "solution";
       wn = output + "data.txt";
       SingularPoint = true;
     }
@@ -633,7 +634,7 @@ int main (int argc, char** argv)
       pLoads.addLoad(point, load, 0 );
 
       dirname = dirname + "/" + "Case" + std::to_string(testCase);
-      output = dirname + "/" + "solution";
+      output =  "solution";
       wn = output + "data.txt";
       SingularPoint = true;
     }
@@ -657,7 +658,7 @@ int main (int argc, char** argv)
       pressure = 1.0;
 
       dirname = dirname + "/" + "Case" + std::to_string(testCase);
-      output = dirname + "/" + "solution";
+      output =  "solution";
       wn = output + "data.txt";
       SingularPoint = false;
 
@@ -684,7 +685,7 @@ int main (int argc, char** argv)
         pressure = 1e3;
 
         dirname = dirname + "/" + "Balloon";
-        output = dirname + "/" + "solution";
+        output =  "solution";
         wn = output + "data.txt";
 
     }
@@ -714,7 +715,7 @@ int main (int argc, char** argv)
         BCs.addCondition(boundary::west, condition_type::clamped, 0, 0, false, 2 );
 
         dirname = dirname + "/" + "Frustrum_-r=" + std::to_string(numHref) + "-e" + std::to_string(numElevate) + "-M" + std::to_string(material) + "_solution";
-        output = dirname + "/" + "solution";
+        output =  "solution";
         wn = output + "data.txt";
 
         writePoints.resize(2,3);
@@ -748,7 +749,7 @@ int main (int argc, char** argv)
         BCs.addCondition(boundary::west, condition_type::clamped, 0, 0, false, 2 );
 
         dirname = dirname + "/" + "Frustrum2_-r=" + std::to_string(numHref) + "-e" + std::to_string(numElevate) + "-M" + std::to_string(material) + "_solution";
-        output = dirname + "/" +"solution";
+        output = "solution";
         wn = output + "data.txt";
 
         writePoints.resize(2,3);
@@ -774,8 +775,11 @@ int main (int argc, char** argv)
        pLoads.addLoad(point, load, 0 );
 
         dirname = dirname + "/" + "Tension_-r" + std::to_string(numHref) + "-R" + std::to_string(numHrefL) + "-e" + std::to_string(numElevate) + "-E" + std::to_string(numElevateL) + "-M" + std::to_string(material) + "-c" + std::to_string(Compressibility) + "-alpha" + std::to_string(alpha) + "-beta" + std::to_string(beta);
-        output = dirname + "/" + "solution";
+        output =  "solution";
         wn = output + "data.txt";
+
+        cross_coordinate = 1;
+        cross_val = 1.0;
     }
     else if (testCase == 11)
     {
@@ -795,8 +799,8 @@ int main (int argc, char** argv)
       BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 2 );
       BCs.addCondition(boundary::south, condition_type::clamped, 0, 0, false, 2 );
 
-      dirname = "Cylinder-r=" + std::to_string(numHref) + "-e" + std::to_string(numElevate) + "-M" + std::to_string(material) + "_solution";
-      output = dirname + "/" + "solution";
+      dirname = dirname + "/" + "Cylinder-r=" + std::to_string(numHref) + "-e" + std::to_string(numElevate) + "-M" + std::to_string(material) + "_solution";
+      output =  "solution";
       wn = output + "data.txt";
       SingularPoint = false;
 
@@ -804,6 +808,9 @@ int main (int argc, char** argv)
       writePoints.col(0)<<0.0,1.0;
       writePoints.col(1)<<0.5,1.0;
       writePoints.col(2)<<1.0,1.0;
+
+      cross_coordinate = 0; // Constant on x-axis
+      cross_val = 1.0; // parametric value x=1.0; this corresponds with the symmetry edge
     }
     // Anti-symmetric
     else if (testCase == 12)
@@ -834,9 +841,12 @@ int main (int argc, char** argv)
       // dLb = 750;
 
       dirname = dirname + "/" + "Sheet_Symm_Half_" + "-r" + std::to_string(numHref) + "-R" + std::to_string(numHrefL) + "-e" + std::to_string(numElevate) + "-E" + std::to_string(numElevateL) + "-M" + std::to_string(material) + "-c" + std::to_string(Compressibility) + "-alpha" + std::to_string(alpha) + "-beta" + std::to_string(beta);
-      output = dirname + "/" + "solution";
+      output =  "solution";
       wn = output + "data.txt";
       SingularPoint = true;
+
+      cross_coordinate = 0;
+      cross_val = 0.0;
     }
     // Symmetric
     else if (testCase == 13)
@@ -867,9 +877,12 @@ int main (int argc, char** argv)
       // dLb = 750;
 
       dirname = dirname + "/" + "Sheet_Asymm_Half_" + "-r" + std::to_string(numHref) + "-R" + std::to_string(numHrefL) + "-e" + std::to_string(numElevate) + "-E" + std::to_string(numElevateL) + "-M" + std::to_string(material) + "-c" + std::to_string(Compressibility) + "-alpha" + std::to_string(alpha) + "-beta" + std::to_string(beta);
-      output = dirname + "/" + "solution";
+      output =  "solution";
       wn = output + "data.txt" ;
       SingularPoint = true;
+
+      cross_coordinate = 0;
+      cross_val = 0.0;
     }
     // Anti-symmetric
     else if (testCase == 14 || testCase == 16)
@@ -902,9 +915,12 @@ int main (int argc, char** argv)
       else
         dirname = dirname + "/" + "Sheet_Symm_Quarter_" + "-r" + std::to_string(numHref) + "-R" + std::to_string(numHrefL) + "-e" + std::to_string(numElevate) + "-E" + std::to_string(numElevateL) + "-M" + std::to_string(material) + "-c" + std::to_string(Compressibility) + "-alpha" + std::to_string(alpha) + "-beta" + std::to_string(beta);
 
-      output = dirname + "/" +"solution";
+      output = "solution";
       wn = output + "data.txt" ;
       SingularPoint = true;
+
+      cross_coordinate = 0;
+      cross_val = 0.0;
     }
     // Symmetric
     else if (testCase == 15)
@@ -933,7 +949,7 @@ int main (int argc, char** argv)
       // dLb = 750;
 
       dirname = dirname + "/" + "Sheet_Asymm_Quarter_" + "-r" + std::to_string(numHref) + "-R" + std::to_string(numHrefL) + "-e" + std::to_string(numElevate) + "-E" + std::to_string(numElevateL) + "-M" + std::to_string(material) + "-c" + std::to_string(Compressibility) + "-alpha" + std::to_string(alpha) + "-beta" + std::to_string(beta);
-      output = dirname + "/" + "solution";
+      output =  "solution";
       wn = output + "data.txt";
       SingularPoint = true;
     }
@@ -952,7 +968,7 @@ int main (int argc, char** argv)
       // dL =  750;
       // dLb = 750;
 
-      output = dirname + "/" + "Case" + std::to_string(testCase) + "solution";
+      output =  "Case" + std::to_string(testCase) + "solution";
       wn = output + "data.txt";
       SingularPoint = true;
 
@@ -984,7 +1000,7 @@ int main (int argc, char** argv)
       pLoads.addLoad(point, load, 0 );
 
       dirname = dirname + "/" +  "Roof1_t="+ std::to_string(thickness) + "-r=" + std::to_string(numHref) + "-e" + std::to_string(numElevate) +"_solution";
-      output = dirname + "/" + "solution";
+      output =  "solution";
       wn = output + "data.txt";
       SingularPoint = false;
     }
@@ -995,12 +1011,21 @@ int main (int argc, char** argv)
 
     // plot geometry
     if (plot)
-      gsWriteParaview(mp,"mp",1000,true);
+      gsWriteParaview(mp,"mp",5000,true);
 
     if (write)
       initStepOutput(wn, writePoints);
-    if (crosssection)
-      initSectionOutput(dirname, writePoints);
+    if (crosssection && cross_coordinate!=-1)
+    {
+      initSectionOutput(dirname,false); // write pointdataX.txt, pointdataY.txt, pointdataZ.txt
+      initSectionOutput(dirname,true); // write pointdataX0.txt, pointdataY0.txt, pointdataZ0.txt
+      writeSectionOutput(mp,dirname,cross_coordinate,cross_val,201,true);
+    }
+    else if (crosssection && cross_coordinate==-1)
+    {
+      gsInfo<<"No cross section can be exported if no coordinate is given...\n";
+      crosssection=false;
+    }
 
 
     gsFunctionExpr<> surfForce(tx,ty,tz,3);
@@ -1234,15 +1259,12 @@ int main (int argc, char** argv)
       // gsDebugVar(mp_def.patch(0).coefs());
 
 
-      if (crosssection)
-      {
-
-      }
 
       if (write)
-      {
         writeStepOutput(arcLength,deformation, wn, writePoints,1, 201);
-      }
+
+      if (crosssection && cross_coordinate!=-1)
+        writeSectionOutput(deformation,dirname,cross_coordinate,cross_val,201,false);
 
       if (!bisected)
       {
@@ -1535,23 +1557,92 @@ void writeStepOutput(const gsArcLengthIterator<T> & arcLength, const gsMultiPatc
   file.close();
 }
 
-template <class T>
-void initSectionOutput(const std::string dirname, const gsMatrix<T> & points)
+void initSectionOutput(const std::string dirname, bool undeformed)
 {
-  std::ofstream file2;
-  std::string wn2 = dirname + "/" + "pointdataX.txt";
+  std::ofstream file2, file3, file4;
+  std::string wn2,wn3,wn4;
+
+  if (! undeformed)
+  {
+    wn2 = dirname + "/" + "pointdataX.txt";
+    wn3 = dirname + "/" + "pointdataY.txt";
+    wn4 = dirname + "/" + "pointdataZ.txt";
+  }
+  else
+  {
+    wn2 = dirname + "/" + "pointdataX0.txt";
+    wn3 = dirname + "/" + "pointdataY0.txt";
+    wn4 = dirname + "/" + "pointdataZ0.txt";
+  }
+
   file2.open(wn2,std::ofstream::out);
   file2.close();
 
-  std::ofstream file3;
-  std::string wn3 = dirname + "/" + "pointdataY.txt";
   file3.open(wn3,std::ofstream::out);
   file3.close();
 
-  std::ofstream file4;
-  std::string wn4 = dirname + "/" + "pointdataZ.txt";
   file4.open(wn4,std::ofstream::out);
   file4.close();
 
   gsInfo<<"Cross-section results will be written in directory: "<<dirname<<"\n";
+}
+
+template <class T>
+void writeSectionOutput(const gsMultiPatch<T> & mp, const std::string dirname, const index_t coordinate, const T coordVal, const index_t N, bool undeformed) // coordinate: the column which remains constant at coordVal
+{
+  gsMatrix<T> P(2,1);
+  gsMatrix<T> tmp;
+  P.setZero();
+  P.at(coordinate) = coordVal;
+
+  std::ofstream file2, file3, file4;
+  std::string wn2,wn3,wn4;
+
+  if (! undeformed)
+  {
+    wn2 = dirname + "/" + "pointdataX.txt";
+    wn3 = dirname + "/" + "pointdataY.txt";
+    wn4 = dirname + "/" + "pointdataZ.txt";
+  }
+  else
+  {
+    wn2 = dirname + "/" + "pointdataX0.txt";
+    wn3 = dirname + "/" + "pointdataY0.txt";
+    wn4 = dirname + "/" + "pointdataZ0.txt";
+  }
+
+  file2.open(wn2,std::ofstream::out | std::ofstream::app);
+  file3.open(wn3,std::ofstream::out | std::ofstream::app);
+  file4.open(wn4,std::ofstream::out | std::ofstream::app);
+
+
+  gsMatrix<T> out(3,N); // evaluation points in the rows, output (per coordinate) in columns
+    for (int k = 0; k != N; k ++)
+    {
+      P.at(1-coordinate) = 1.0*k/(N-1);
+
+      mp.patch(0).eval_into(P,tmp);
+      out.col(k) = tmp; // z coordinate
+
+      std::string str2 = std::to_string(out(0,k));
+      std::string str3 = std::to_string(out(1,k));
+      std::string str4 = std::to_string(out(2,k));
+      if(k+1 == N)
+      {
+          file2<<str2;
+          file3<<str3;
+          file4<<str4;
+      }
+      else{
+          file2<<str2<<',';
+          file3<<str3<<',';
+          file4<<str4<<',';
+      }
+    }
+    file2<<'\n';
+    file2.close();
+    file3<<'\n';
+    file3.close();
+    file4<<'\n';
+    file4.close();
 }
