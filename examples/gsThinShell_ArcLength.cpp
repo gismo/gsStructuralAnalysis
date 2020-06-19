@@ -1014,7 +1014,7 @@ int main (int argc, char** argv)
       gsWriteParaview(mp,"mp",1000,true);
 
     if (write)
-      initStepOutput(wn, writePoints);
+      initStepOutput(dirname + "/" + wn, writePoints);
     if (crosssection && cross_coordinate!=-1)
     {
       initSectionOutput(dirname,false); // write pointdataX.txt, pointdataY.txt, pointdataZ.txt
@@ -1261,7 +1261,7 @@ int main (int argc, char** argv)
 
 
       if (write)
-        writeStepOutput(arcLength,deformation, wn, writePoints,1, 201);
+        writeStepOutput(arcLength,deformation, dirname + "/" + wn, writePoints,1, 201);
 
       if (crosssection && cross_coordinate!=-1)
         writeSectionOutput(deformation,dirname,cross_coordinate,cross_val,201,false);
