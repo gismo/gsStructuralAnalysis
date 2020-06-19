@@ -168,8 +168,8 @@ int main (int argc, char** argv)
       bDim = 0.14;
       thickness = 140e-6;
 
-      // Ratio = 2.5442834138486314;
-      Ratio = 0.5;
+      Ratio = 2.5442834138486314;
+      // Ratio = 0.5;
 
       // E_modulus = 1;
       // thickness = 0.15;
