@@ -471,6 +471,9 @@ int main (int argc, char** argv)
         output =  "solution";
         wn = output + "data.txt";
         SingularPoint = false;
+
+        cross_coordinate = 1;
+        cross_val = 1.0;
     }
 
     if (testCase == 0)
