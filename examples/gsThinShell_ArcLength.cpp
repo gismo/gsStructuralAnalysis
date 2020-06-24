@@ -158,30 +158,26 @@ int main (int argc, char** argv)
 
     if (testCase==-1)
     {
-      E_modulus = 1;
-      thickness = 1;
-      PoissonRatio = 0.499;
+      if ((!Compressibility) && (material!=0))
+        PoissonRatio = 0.5;
+      else
+        PoissonRatio = 0.499;
 
-      E_modulus = 330150;
+      real_t mu;
+      if (material==3||material==13||material==23)
+        mu = 110050;
+      else
+        mu = 1.91e5;
+      PoissonRatio = 0.5;
+      E_modulus = 2*mu*(1+PoissonRatio);
+
+      gsDebug<<"E = "<<E_modulus<<"; nu = "<<PoissonRatio<<"; mu = "<<mu<<"\n";
 
       aDim = 0.28;
       bDim = 0.14;
       thickness = 140e-6;
 
       Ratio = 2.5442834138486314;
-      // Ratio = 0.5;
-
-      // E_modulus = 1;
-      // thickness = 0.15;
-      // PoissonRatio = 0.45;
-      // Compressibility = 1;
-      // E_modulus = 1;
-
-      // bDim = thickness / 1.9e-3;
-      // aDim = 2*bDim;
-
-      // // Ratio = 2.5442834138486314;
-      // Ratio = 0.5;
 
       mp = RectangularDomain(numHrefL, numHref, numElevateL+2, numElevate + 2, aDim, bDim);
     }
@@ -338,11 +334,20 @@ int main (int argc, char** argv)
     }
     else if (testCase==16 )
     {
-        if ((!Compressibility) && (material!=0))
-          PoissonRatio = 0.5;
-        else
-          PoissonRatio = 0.499;
-      E_modulus = 330150;
+      if ((!Compressibility) && (material!=0))
+        PoissonRatio = 0.5;
+      else
+        PoissonRatio = 0.499;
+
+      real_t mu;
+      if (material==3||material==13||material==23)
+        mu = 110050;
+      else
+        mu = 1.91e5;
+      PoissonRatio = 0.5;
+      E_modulus = 2*mu*(1+PoissonRatio);
+
+      gsDebug<<"E = "<<E_modulus<<"; nu = "<<PoissonRatio<<"; mu = "<<mu<<"\n";
 
       aDim = 0.28;
       bDim = 0.14;
@@ -459,10 +464,10 @@ int main (int argc, char** argv)
         BCs.addCondition(boundary::east, condition_type::collapsed, 0, 0 ,false,0);
 
         gsVector<> point(2); point<< 1.0, 0.5 ;
-        gsVector<> load (3); load << 0.1, 0.0, 0.0 ;
+        gsVector<> load (3); load << 1, 0.0, 0.0 ;
         pLoads.addLoad(point, load, 0 );
 
-        dirname = dirname + "/" + "Case" + std::to_string(testCase) + "solution";
+        dirname = dirname + "/" + "Case" + std::to_string(testCase) + "solution_-r" + std::to_string(numHref) + "-R" + std::to_string(numHrefL) + "-e" + std::to_string(numElevate) + "-E" + std::to_string(numElevateL) + "-M" + std::to_string(material) + "-c" + std::to_string(Compressibility) + "-alpha" + std::to_string(alpha) + "-beta" + std::to_string(beta);
         output =  "solution";
         wn = output + "data.txt";
         SingularPoint = false;
@@ -1011,7 +1016,7 @@ int main (int argc, char** argv)
 
     // plot geometry
     if (plot)
-      gsWriteParaview(mp,"mp",1000,true);
+      gsWriteParaview(mp,"mp",10000,true);
 
     if (write)
       initStepOutput(dirname + "/" + wn, writePoints);
