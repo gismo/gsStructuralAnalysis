@@ -165,9 +165,9 @@ int main (int argc, char** argv)
 
       real_t mu;
       if (material==3||material==13||material==23)
-        mu = 110050;
+        mu = 440200;
       else
-        mu = 1.91e5;
+        mu = 2*1.91e5;
       PoissonRatio = 0.5;
       E_modulus = 2*mu*(1+PoissonRatio);
 
@@ -415,7 +415,6 @@ int main (int argc, char** argv)
     gsInfo<<"Basis (patch 0): "<< mp.patch(0).basis() << "\n";
 
     // Boundary conditions
-    std::vector< std::pair<patchSide,int> > clamped;
     gsBoundaryConditions<> BCs;
     gsPointLoads<real_t> pLoads = gsPointLoads<real_t>();
 
@@ -423,10 +422,6 @@ int main (int argc, char** argv)
     std::string tx("0");
     std::string ty("0");
     std::string tz("0");
-
-    real_t displ = 1;
-    gsFunctionExpr<> displ1(std::to_string( displ),3);
-    gsFunctionExpr<> displ2(std::to_string(-displ),3);
 
     gsVector<> tmp(3);
     gsVector<> neu(3);
@@ -1019,7 +1014,7 @@ int main (int argc, char** argv)
 
     // plot geometry
     if (plot)
-      gsWriteParaview(mp,"mp",10000,true);
+      gsWriteParaview(mp,"mp",1000,true);
 
     if (write)
       initStepOutput(dirname + "/" + wn, writePoints);
