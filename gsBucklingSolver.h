@@ -57,7 +57,7 @@ public:
   }
 public:
 
-    void verbose();
+    void verbose() {m_verbose=true; };
 
     void compute();
 
