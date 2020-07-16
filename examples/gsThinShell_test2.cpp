@@ -738,11 +738,42 @@ int main(int argc, char *argv[])
         gsField<> solField(mp, deformation);
         gsInfo<<"Plotting in Paraview...\n";
         gsWriteParaview<>( solField, "solution", 1000, true);
+
+        gsInfo <<"Maximum deformation coef: "
+               << deformation.patch(0).coefs().colwise().maxCoeff() <<".\n";
+        gsInfo <<"Minimum deformation coef: "
+               << deformation.patch(0).coefs().colwise().minCoeff() <<".\n";
+
+        gsMatrix<> coords(2,1);
+        if (testCase==0)
+         coords<<0.5,0.5;
+        else if (testCase==1)
+         coords<<0.5,0;
+        else if (testCase==2)
+         coords<<0,0;
+        else if (testCase==3)
+         coords<<1,1;
+        else
+         coords<<0,0;
+
+        gsMatrix<> res(3,1);
+        mp.patch(0).eval_into(coords,res);
+        real_t x=res.at(0);
+        real_t y=res.at(1);
+        real_t z=res.at(2);
+
+        deformation.patch(0).eval_into(coords,res);
+        real_t u=res.at(0);
+        real_t v=res.at(1);
+        real_t w=res.at(2);
+
+        gsInfo<<"Deformation on point ("<<x<<","<<y<<","<<z<<"):\n";
+        gsInfo<<std::setprecision(20)<<"("<<v<<","<<u<<","<<w<<")"<<"\n";
     }
     if ((stress) && (!nonlinear))
     {
         gsPiecewiseFunction<> stresses;
-        assembler.constructStress(mp_def,stresses,stress_type::principal_stretch);
+        assembler.constructStress(mp_def,stresses,stress_type::membrane);
         gsField<> stressField(mp,stresses, true);
 
         gsWriteParaview( stressField, "stress", 5000);
@@ -873,6 +904,11 @@ int main(int argc, char *argv[])
         // ev.writeParaview( u_sol   , G, "solution");
 
         // gsFileManager::open("solution.pvd");
+
+        gsInfo <<"Maximum deformation coef: "
+               << deformation.patch(0).coefs().colwise().maxCoeff() <<".\n";
+        gsInfo <<"Minimum deformation coef: "
+               << deformation.patch(0).coefs().colwise().minCoeff() <<".\n";
     }
     if ((stress) && (nonlinear))
     {
@@ -882,11 +918,6 @@ int main(int argc, char *argv[])
 
         gsWriteParaview( stressField, "stress", 5000);
     }
-
-    gsInfo <<"Maximum deformation coef: "
-           << deformation.patch(0).coefs().colwise().maxCoeff() <<".\n";
-    gsInfo <<"Minimum deformation coef: "
-           << deformation.patch(0).coefs().colwise().minCoeff() <<".\n";
 
 
     // gsInfo <<"Area (undeformed) = "<<assembler.getArea(mp)<<"\tArea (deformed) = "<<assembler.getArea(mp_def)<<"\n";
@@ -899,31 +930,6 @@ int main(int argc, char *argv[])
     // gsDebugVar(Fint);
     // gsDebugVar(Fint.sum());
 
-    gsMatrix<> coords(2,1);
-    if (testCase==0)
-      coords<<0.5,0.5;
-    else if (testCase==1)
-      coords<<0.5,0;
-    else if (testCase==2)
-      coords<<0,0;
-    else if (testCase==3)
-      coords<<1,1;
-    else
-      coords<<0,0;
-
-    gsMatrix<> res(3,1);
-    mp.patch(0).eval_into(coords,res);
-    real_t x=res.at(0);
-    real_t y=res.at(1);
-    real_t z=res.at(2);
-
-    deformation.patch(0).eval_into(coords,res);
-    real_t u=res.at(0);
-    real_t v=res.at(1);
-    real_t w=res.at(2);
-
-    gsInfo<<"Deformation on point ("<<x<<","<<y<<","<<z<<"):\n";
-    gsInfo<<std::setprecision(20)<<"("<<v<<","<<u<<","<<w<<")"<<"\n";
     return EXIT_SUCCESS;
 
 }// end main
