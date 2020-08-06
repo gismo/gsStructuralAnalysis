@@ -1,3 +1,4 @@
+
 /** @file gsThinShell_BucklingArcLength.cpp
 
     @brief Code for the arc-length method of a shell based on loads
@@ -186,9 +187,8 @@ int main (int argc, char** argv)
 
       gsDebug<<"E = "<<E_modulus<<"; nu = "<<PoissonRatio<<"; mu = "<<mu<<"\n";
 
-      // aDim = 0.28;
-      aDim = 0.14; // half-sheet
-      bDim = 0.14;
+      aDim = 0.28/2.;
+      bDim = 0.14/2.;
       thickness = 140e-6;
 
       mp = RectangularDomain(numHrefL, numHref, numElevateL+2, numElevate + 2, aDim, bDim);
@@ -469,6 +469,7 @@ int main (int argc, char** argv)
     
         BCs.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z
         BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z
+	BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 2 - y
 
         BCs.addCondition(boundary::east, condition_type::dirichlet, 0, 0 ,false,1);
         BCs.addCondition(boundary::east, condition_type::dirichlet, 0, 0 ,false,2);
