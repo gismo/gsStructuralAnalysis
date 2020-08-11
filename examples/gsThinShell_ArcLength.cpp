@@ -1,3 +1,4 @@
+
 /** @file gsThinShell_BucklingArcLength.cpp
 
     @brief Code for the arc-length method of a shell based on loads
@@ -163,21 +164,32 @@ int main (int argc, char** argv)
       else
         PoissonRatio = 0.499;
 
-      real_t mu;
+      real_t mu, C01,C10;
       if (material==3||material==13||material==23)
-        mu = 440200;
+      {
+        C01 = 15.8114570e4;
+        // C01 = 19.1010178e4;
+        C10 = 6.21485502e4;
+        // C10 = 1e-10;
+
+        // C01 = 146733.333333333;
+        // C10 = 73366.6666666667;
+        Ratio = C01/C10;
+        mu = 2*(C01+C10);
+      }
       else
-        mu = 2*1.91e5;
+      {
+        C10 = 19.1010178e4;
+        mu = 2*C10;
+      }
       PoissonRatio = 0.5;
       E_modulus = 2*mu*(1+PoissonRatio);
 
       gsDebug<<"E = "<<E_modulus<<"; nu = "<<PoissonRatio<<"; mu = "<<mu<<"\n";
 
-      aDim = 0.28;
-      bDim = 0.14;
+      aDim = 0.28/2.;
+      bDim = 0.14/2.;
       thickness = 140e-6;
-
-      Ratio = 2.5442834138486314;
 
       mp = RectangularDomain(numHrefL, numHref, numElevateL+2, numElevate + 2, aDim, bDim);
     }
@@ -447,12 +459,17 @@ int main (int argc, char** argv)
 
     if (testCase == -1)
     {
-        for (index_t i=0; i!=3; ++i)
-        {
-            BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, i ); // unknown 2 - z
-        }
+        // for (index_t i=0; i!=3; ++i)
+        // {
+        //     BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, i ); // unknown 2 - z
+        // }
+        
+        BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 0 ); // unknown 2 - z
+        BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z
+    
         BCs.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z
         BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z
+	BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 2 - y
 
         BCs.addCondition(boundary::east, condition_type::dirichlet, 0, 0 ,false,1);
         BCs.addCondition(boundary::east, condition_type::dirichlet, 0, 0 ,false,2);
