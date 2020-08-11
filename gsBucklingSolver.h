@@ -60,6 +60,7 @@ public:
     void verbose() {m_verbose=true; };
 
     void compute();
+    void computePower();
 
     gsMatrix<T> values() const { return m_values; };
     T value(int k) const { return m_values.at(k); };
@@ -130,6 +131,39 @@ void gsBucklingSolver<T>::compute()
     if (m_verbose) { gsInfo<<"." ; }
     if (m_verbose) { gsInfo<<"Finished\n" ; }
 };
+
+template <class T>
+void gsBucklingSolver<T>::computePower()
+{
+    if (m_verbose) { gsInfo<<"Solving eigenvalue problem" ; }
+    gsMatrix<T> D = m_linear.toDense().inverse() * (m_nonlinear.toDense() - m_linear.toDense());
+
+    gsVector<T> v(D.cols());
+    v.setOnes();
+    gsVector<T> v_old(D.cols());
+    v_old.setZero();
+
+    index_t kmax = 100;
+    real_t error,tol = 1e-5;
+    for (index_t k=0; k!=kmax; k++)
+    {
+      v = D*v;
+      v.normalize();
+
+      error = (v-v_old).norm();
+
+      if ( error < tol )
+        break;
+
+      v_old = v;
+    }
+
+    m_vectors = v;
+    m_values =  (v.transpose() * v) / (v.transpose() * D * v);
+
+    if (m_verbose) { gsInfo<<"Finished\n" ; }
+};
+
 
 template <class T>
 void gsBucklingSolver<T>::makeMode(int k)
