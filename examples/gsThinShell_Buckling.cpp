@@ -1,0 +1,685 @@
+/** @file gsThinShell_Buckling.cpp
+
+    @brief Example to compute eigenvalues and eigenmodes of a buckled shell
+
+    This file is part of the G+Smo library.
+
+    This Source Code Form is subject to the terms of the Mozilla Public
+    License, v. 2.0. If a copy of the MPL was not distributed with this
+    file, You can obtain one at http://mozilla.org/MPL/2.0/.
+
+    Author(s): H.M. Verhelst
+*/
+
+#include <gismo.h>
+#include <gismo_dev.h>
+
+#include <gsIO/gsMatrixToFile.h>
+#include <gsThinShell2/gsThinShellAssembler.h>
+
+#include <gsStructuralAnalysis/gsBucklingSolver.h>
+
+using namespace gismo;
+
+void writeToCSVfile(std::string name, gsMatrix<> matrix)
+{
+    std::ofstream file(name.c_str());
+    for(int  i = 0; i < matrix.rows(); i++){
+        for(int j = 0; j < matrix.cols(); j++){
+           std::string str = std::to_string(matrix(i,j));
+           if(j+1 == matrix.cols()){
+               file<<std::setprecision(10)<<str;
+           }else{
+               file<<std::setprecision(10)<<str<<',';
+           }
+        }
+        file<<'\n';
+    }
+  }
+
+template <class T>
+gsMultiPatch<T> RectangularDomain(int n, int m, int p, int q, T L, T B);
+template <class T>
+gsMultiPatch<T> RectangularDomain(int n, int p, T L, T B);
+template <class T>
+gsMultiPatch<T> AnnularDomain(int n, int p, T R1, T R2);
+
+int main (int argc, char** argv)
+{
+    // Input options
+    int numElevate  = 1;
+    int numHref     = 1;
+    int numElevateL = -1;
+    int numHrefL    = -1;
+    bool plot       = false;
+    bool nonlinear  = false;
+    bool first  = false;
+    int mode = 0;
+
+
+    real_t E_modulus     = 1e8;
+    real_t PoissonRatio = 0;
+    real_t Density = 1e0;
+
+    real_t thickness = 2*1e-3;
+    real_t aDim = 1.0;
+    real_t bDim = 1.0;
+
+    index_t Compressibility = 0;
+    index_t material = 0;
+    real_t Ratio = 7.0;
+    real_t fac = 1;
+
+    int testCase = -1;
+
+    int result = 0;
+
+    bool write = false;
+
+    gsCmdLine cmd("Thin shell plate example.");
+
+    cmd.addInt("t", "testcase", "Test case: 0: clamped-clamped, 1: pinned-pinned, 2: clamped-free", testCase);
+
+    cmd.addInt("r","hRefine", "Number of dyadic h-refinement (bisection) steps to perform before solving", numHref);
+    cmd.addInt("e","degreeElevation", "Number of degree elevation steps to perform on the Geometry's basis before solving", numElevate);
+    cmd.addInt("R","hRefine2", "Number of dyadic h-refinement (bisection) steps to perform before solving (secondary direction)", numHrefL);
+    cmd.addInt("E","degreeElevation2", "Number of degree elevation steps to perform on the Geometry's basis before solving (secondary direction)", numElevateL);
+    cmd.addInt( "M", "Material", "Material law",  material );
+    cmd.addInt( "c", "Compressibility", "1: compressible, 0: incompressible",  Compressibility );
+
+    cmd.addInt("m", "nmode",
+               "Mode shape number, starting from 0",
+              mode);
+
+    cmd.addReal("T","hdim", "thickness of the plate", thickness);
+    cmd.addReal("a","adim", "dimension a", aDim);
+    cmd.addReal("b","bdim", "dimension b", bDim);
+
+    cmd.addReal("f","fac", "factor linear problem", fac);
+
+
+    cmd.addSwitch("nl", "Nonlinear elasticity (otherwise linear)", nonlinear);
+    cmd.addSwitch("plot", "Plot result in ParaView format", plot);
+    cmd.addSwitch("first", "Plot only first", first);
+    cmd.addSwitch("write", "Write convergence data to file", write);
+
+    try { cmd.getValues(argc,argv); } catch (int rv) { return rv; }
+
+    gsMultiPatch<> mp;
+
+    if (numHrefL==-1)
+      numHrefL = numHref;
+    if (numElevateL==-1)
+      numElevateL = numElevate;
+
+    real_t length,width;
+    if (testCase==0 || testCase==1)
+    {
+      thickness = 2*0.005313292845913;
+      length = 1.0;
+      width = 0.1;
+      E_modulus = 1e10;
+      PoissonRatio = 0.0;
+
+      mp = RectangularDomain(numHref,1,numElevate,2,length,width);
+    }
+    else if (testCase==2)
+    {
+      E_modulus = 1;
+      thickness = 0.01;
+      PoissonRatio = 0.0;
+      length = 1.0;
+      width = 0.01;
+
+      mp = RectangularDomain(numHref,1,numElevate,1,length,width);
+    }
+    else if (testCase==3 || testCase==4 || testCase==5 || testCase==6)
+    {
+      length = aDim;
+      width = bDim;
+      thickness = 1e-2;
+      E_modulus = 200e9;
+      PoissonRatio = 0.3;
+
+      // length = 1.0;
+      // width = 1.0;
+      // thickness = 0.5*0.01;
+      // E_modulus = 200e9;
+      // PoissonRatio = 0.3;
+
+      mp = RectangularDomain(numHrefL,numHref,numElevateL,numElevate,length,width);
+    }
+    else if (testCase==10)
+    {
+      if ((!Compressibility) && (material!=0))
+        PoissonRatio = 0.5;
+      else
+        PoissonRatio = 0.499;
+
+      real_t mu;
+      if (material==3||material==13||material==23)
+        mu = 440200;
+      else
+        mu = 2*1.91e5;
+      PoissonRatio = 0.5;
+      E_modulus = 2*mu*(1+PoissonRatio);
+
+      gsDebug<<"E = "<<E_modulus<<"; nu = "<<PoissonRatio<<"; mu = "<<mu<<"\n";
+
+      aDim = 0.28;
+      bDim = 0.14;
+      thickness = 140e-6;
+
+      Ratio = 2.5442834138486314;
+
+      mp = RectangularDomain(numHrefL, numHref, numElevateL+2, numElevate + 2, aDim, bDim);
+    }
+    gsMultiBasis<> dbasis(mp);
+
+
+    gsInfo<<"Basis (patch 0): "<< mp.patch(0).basis() << "\n";
+
+    // Boundary conditions
+    gsBoundaryConditions<> BCs;
+    gsPointLoads<real_t> pLoads = gsPointLoads<real_t>();
+
+    // Initiate Surface forces
+    std::string tx("0");
+    std::string ty("0");
+    std::string tz("0");
+
+    gsVector<> tmp(3);
+    gsVector<> neu(3);
+    tmp << 0, 0, 0;
+    neu << 0, 0, 0;
+    gsConstantFunction<> neuData(neu,3);
+    gsConstantFunction<> neuData2(neu,3);
+
+    // Buckling coefficient
+    real_t Load = -1e4;
+    real_t pressure = 0.0;
+
+    if (testCase == 0)
+    {
+        tmp << Load, 0, 0;
+        neuData.setValue(tmp,3);
+        // // Clamped-Clamped
+        BCs.addCondition(boundary::west, condition_type::neumann, &neuData ); // unknown 0 - x
+        // BCs.addCondition(boundary::west, condition_type::dirichlet, &displ1, 0 ); // unknown 0 - x
+        BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0,false,1 ); // unknown 1 - y
+        BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0,false,2 ); // unknown 2 - z
+
+        BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0,false,1 ); // unknown 1 - y
+        BCs.addCondition(boundary::north, condition_type::dirichlet, 0, 0,false,1 ); // unknown 1 - y
+
+
+        // BCs.addCondition(boundary::east, condition_type::dirichlet, &displ2, 0 ); // unknown 0 - x
+        BCs.addCondition(boundary::east, condition_type::dirichlet, 0, 0,false,0 ); // unknown 0 - x
+        BCs.addCondition(boundary::east, condition_type::dirichlet, 0, 0,false,1 ); // unknown 1 - y
+        BCs.addCondition(boundary::east, condition_type::dirichlet, 0, 0,false,2 ); // unknown 2 - z
+    }
+    else if (testCase == 1)
+    {
+        tmp << Load, 0, 0;
+        neuData.setValue(tmp,3);
+        // // Clamped-Clamped
+        BCs.addCondition(boundary::west, condition_type::neumann, &neuData ); // unknown 0 - x
+        // BCs.addCondition(boundary::west, condition_type::dirichlet, &displ1, 0 ); // unknown 0 - x
+        BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0,false,1 ); // unknown 1 - y
+        BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0,false,2 ); // unknown 2 - z
+
+        BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0,false,1 ); // unknown 1 - y
+        BCs.addCondition(boundary::north, condition_type::dirichlet, 0, 0,false,1 ); // unknown 1 - y
+
+
+        // BCs.addCondition(boundary::east, condition_type::dirichlet, &displ2, 0 ); // unknown 0 - x
+        BCs.addCondition(boundary::east, condition_type::dirichlet, 0, 0,false,0 ); // unknown 0 - x
+        BCs.addCondition(boundary::east, condition_type::dirichlet, 0, 0,false,1 ); // unknown 1 - y
+        BCs.addCondition(boundary::east, condition_type::dirichlet, 0, 0,false,2 ); // unknown 2 - z
+
+        BCs.addCondition(boundary::east, condition_type::clamped,0,0,false,2);
+        BCs.addCondition(boundary::west, condition_type::clamped,0,0,false,2);
+    }
+    else if (testCase == 2)
+    {
+      // Clamped-Clamped
+      BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0,false,0 ); // unknown 0 - x
+      BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0,false,1 ); // unknown 1 - y
+      BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0,false,2 ); // unknown 2 - z
+
+      BCs.addCondition(boundary::west, condition_type::clamped,0,0,false,2);
+
+      BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0,false,1 ); // unknown 1 - y
+      BCs.addCondition(boundary::north, condition_type::dirichlet, 0, 0,false,1 ); // unknown 1 - y
+
+      Load = 1e-6;
+      gsVector<> point(2);
+      gsVector<> load (3);
+      point<< 1.0, 0.5 ;
+      load << -Load, 0.0, 0.0 ;
+      pLoads.addLoad(point, load, 0 );
+    }
+    else if (testCase == 3)
+    {
+        // PoissonRatio = 0.0;
+        Load = 1e-2;
+        tmp << Load, 0, 0;
+        neuData.setValue(tmp,3);
+        // // Clamped-Clamped
+        BCs.addCondition(boundary::east, condition_type::neumann, &neuData ); // unknown 0 - x
+        BCs.addCondition(boundary::east, condition_type::dirichlet, 0, 0, false,1 ); // unknown 1 - y
+        BCs.addCondition(boundary::east, condition_type::dirichlet, 0, 0, false,2 ); // unknown 2 - z
+
+        // BCs.addCondition(boundary::north, condition_type::dirichlet, 0, 0 ); // unknown 0 - x
+        BCs.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false,1 ); // unknown 1 - y
+        BCs.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false,2 ); // unknown 2 - z
+
+        // BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0 ); // unknown 0 - x
+        BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false,1 ); // unknown 1 - y
+        BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false,2 ); // unknown 2 - z
+
+
+        BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false,0 ); // unknown 0 - x
+        BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false,1 ); // unknown 1 - y
+        BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false,2 ); // unknown 2 - z
+
+    }
+    else if (testCase == 4)
+    {
+        PoissonRatio = 0.0;
+        Load = 1e-4;
+        tmp << Load, 0, 0;
+        neuData.setValue(tmp,3);
+        // // Clamped-Clamped
+        BCs.addCondition(boundary::east, condition_type::neumann, &neuData ); // unknown 0 - x
+        // BCs.addCondition(boundary::east, condition_type::dirichlet, 0, 1 ); // unknown 1 - y
+        BCs.addCondition(boundary::east, condition_type::dirichlet, 0, 0, false,2 ); // unknown 2 - z
+
+        // BCs.addCondition(boundary::north, condition_type::dirichlet, 0, 0 ); // unknown 0 - x
+        // BCs.addCondition(boundary::north, condition_type::dirichlet, 0, 1 ); // unknown 1 - y
+        BCs.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false,2 ); // unknown 2 - z
+
+        // BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0 ); // unknown 0 - x
+        // BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 1 ); // unknown 1 - y
+        BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false,2 ); // unknown 2 - z
+
+
+        // BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0 ); // unknown 0 - x
+        // BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 1 ); // unknown 1 - y
+        BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false,2 ); // unknown 2 - z
+
+        BCs.addCornerValue(boundary::southwest,0,0,0);
+        BCs.addCornerValue(boundary::southwest,0,0,1);
+    }
+    else if (testCase == 5)
+    {
+        PoissonRatio = 0.3;
+        Load = 1e-8;
+        tmp << Load, 0, 0;
+        neuData.setValue(tmp,3);
+        // // Clamped-Clamped
+        BCs.addCondition(boundary::east, condition_type::neumann, &neuData ); // unknown 0 - x
+        BCs.addCondition(boundary::east, condition_type::dirichlet, 0, 0, false,1 ); // unknown 1 - y
+        BCs.addCondition(boundary::east, condition_type::dirichlet, 0, 0, false,2 ); // unknown 2 - z
+
+        BCs.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false,1 ); // unknown 1 - y
+        BCs.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false,2 ); // unknown 2 - z
+
+        BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false,1 ); // unknown 1 - y
+        BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false,2 ); // unknown 2 - z
+
+
+        BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false,0 ); // unknown 0 - x
+        BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false,1 ); // unknown 1 - y
+        BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false,2 ); // unknown 2 - z
+
+        BCs.addCondition(boundary::north, condition_type::clamped,0,0,false,2);
+        BCs.addCondition(boundary::east, condition_type::clamped,0,0,false,2);
+        BCs.addCondition(boundary::south, condition_type::clamped,0,0,false,2);
+        BCs.addCondition(boundary::west, condition_type::clamped,0,0,false,2);
+
+    }
+    else if (testCase == 6)
+    {
+        PoissonRatio = 0.;
+        Load = 1e-8;
+        tmp << Load, 0, 0;
+        neuData.setValue(tmp,3);
+        tmp << -Load, 0, 0;
+        neuData2.setValue(tmp,3);
+        // // Clamped-Clamped
+        BCs.addCondition(boundary::east, condition_type::neumann, &neuData ); // unknown 0 - x
+        BCs.addCondition(boundary::east, condition_type::dirichlet, 0, 0,false,2 ); // unknown 2 - z
+
+        BCs.addCondition(boundary::north, condition_type::dirichlet, 0, 0,false,1 ); // unknown 1 - y
+        BCs.addCondition(boundary::north, condition_type::dirichlet, 0, 0,false,2 ); // unknown 2 - z
+
+        BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0,false,2 ); // unknown 2 - z
+
+
+        BCs.addCondition(boundary::west, condition_type::neumann, &neuData2 ); // unknown 0 - x
+        BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0,false,2 ); // unknown 2 - z
+    }
+    else if (testCase == 10)
+    {
+        for (index_t i=0; i!=3; ++i)
+        {
+            BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, i ); // unknown 2 - z
+        }
+        BCs.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z
+        BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z
+
+        BCs.addCondition(boundary::east, condition_type::dirichlet, 0, 0 ,false,1);
+        BCs.addCondition(boundary::east, condition_type::dirichlet, 0, 0 ,false,2);
+        BCs.addCondition(boundary::east, condition_type::collapsed, 0, 0 ,false,0);
+
+        Load = fac*1;
+        gsVector<> point(2); point<< 1.0, 0.5 ;
+        gsVector<> load (3); load << Load, 0.0, 0.0 ;
+        pLoads.addLoad(point, load, 0 );
+    }
+    gsFunctionExpr<> surfForce(tx,ty,tz,3);
+    gsConstantFunction<> pressFun(pressure,3);
+    // Initialise solution object
+    gsMultiPatch<> mp_def = mp;
+    gsSparseSolver<>::LU solver;
+
+    // Linear isotropic material model
+    gsConstantFunction<> force(tmp,3);
+    gsFunctionExpr<> t(std::to_string(thickness), 3);
+    gsFunctionExpr<> E(std::to_string(E_modulus),3);
+    gsFunctionExpr<> nu(std::to_string(PoissonRatio),3);
+    gsFunctionExpr<> rho(std::to_string(Density),3);
+    gsConstantFunction<> ratio(Ratio,3);
+
+    real_t mu = E_modulus / (2 * (1 + PoissonRatio));
+    gsConstantFunction<> alpha1(1.3,3);
+    gsConstantFunction<> mu1(6.3e5/4.225e5*mu,3);
+    gsConstantFunction<> alpha2(5.0,3);
+    gsConstantFunction<> mu2(0.012e5/4.225e5*mu,3);
+    gsConstantFunction<> alpha3(-2.0,3);
+    gsConstantFunction<> mu3(-0.1e5/4.225e5*mu,3);
+
+    // gsMaterialMatrix materialMatrixNonlinear(mp,mp_def,t,E,nu,rho);
+    std::vector<gsFunction<>*> parameters(3);
+    parameters[0] = &E;
+    parameters[1] = &nu;
+    parameters[2] = &ratio;
+    gsMaterialMatrix materialMatrixNonlinear(mp,mp_def,t,parameters,rho);
+
+    std::vector<gsFunction<>*> parameters2(8);
+    if (material==14)
+    {
+        parameters2[0] = &E;
+        parameters2[1] = &nu;
+        parameters2[2] = &mu1;
+        parameters2[3] = &alpha1;
+
+        parameters2[4] = &mu2;
+        parameters2[5] = &alpha2;
+
+        parameters2[6] = &mu3;
+        parameters2[7] = &alpha3;
+        materialMatrixNonlinear.setParameters(parameters2);
+    }
+
+    materialMatrixNonlinear.options().setInt("MaterialLaw",material);
+    materialMatrixNonlinear.options().setInt("Compressibility",Compressibility);
+
+    gsThinShellAssembler assembler(mp,dbasis,BCs,surfForce,materialMatrixNonlinear);
+    assembler.setPointLoads(pLoads);
+
+    // Initialise solution object
+    gsMultiPatch<> solution = mp;
+
+    assembler.assemble();
+    gsSparseMatrix<> K_L =  assembler.matrix();
+    gsVector<> rhs = assembler.rhs();
+
+//Method 1
+
+    std::function<gsSparseMatrix<real_t> (gsVector<real_t> const &)> K_NL;
+    K_NL = [&assembler,&mp_def](gsVector<real_t> const &x)
+    {
+      assembler.constructSolution(x,mp_def);
+      assembler.assemble(mp_def);
+      gsSparseMatrix<real_t> m = assembler.matrix();
+      return m;
+    };
+
+
+
+      gsBucklingSolver<real_t> buckling(K_L,rhs,K_NL);
+      buckling.verbose();
+      buckling.computePower();
+      gsMatrix<> values = buckling.values();
+      gsMatrix<> vectors = buckling.vectors();
+
+//Method 2
+/*
+      // Alternatively,
+      solver.compute(K_L);
+      gsMatrix<> solVector = solver.solve( assembler.rhs() );
+      assembler.constructSolution(solVector, solution);
+
+      assembler.assemble(solution);
+      gsSparseMatrix<> K_NL =  assembler.matrix()+Kspring;
+
+      gsBucklingSolver<real_t> buckling(K_L,K_T);
+      buckling.compute();
+      gsMatrix<> values = buckling.values();
+      gsMatrix<> vectors = buckling.vectors();
+*/
+
+
+
+
+
+    // solver.compute(K_L);
+    // gsMatrix<> solVector = solver.solve( assembler.rhs() );
+    // assembler.constructSolution(solVector, solution);
+
+    // gsMultiPatch<> deformation = solution;
+    // deformation.patch(0).coefs() -= mp.patch(0).coefs();// assuming 1 patch here
+    // gsInfo<<deformation;
+    // gsField<> solField(mp,deformation);
+    // gsWriteParaview<>(solField, "linearProblem", 1000);
+
+    // // Now assemble the tangential stiffness matrix K_T
+    // // This matrix consists of a linear part (the matrix from the linear problem) K_L
+    // // And a nonlinear part due to the deformation, K_NL
+    // // Since K_T = K_L + K_NL, K_NL = K_T-K_L
+    // assembler.assemble(solution);
+    // gsSparseMatrix<> K_T =  assembler.matrix()+Kspring;
+    // gsSparseMatrix<> K_NL = K_T-K_L;
+    // // gsInfo<<K_T<<"\n";
+    // // gsInfo<<K_L<<"\n";
+    // // gsInfo<<K_NL<<"\n";
+
+    // // Now solve the generalised eigenvalue problem
+
+    // // Compute eigenvalues and eigenvectors
+    // Eigen::GeneralizedSelfAdjointEigenSolver< gsMatrix<real_t>::Base > eig;
+    // eig.compute(K_L,K_NL);
+    // gsMatrix<> values = eig.eigenvalues();
+    // gsMatrix<> vectors = eig.eigenvectors();
+
+    gsInfo<< "First 10 eigenvalues:\n";
+    for (index_t k = 0; k<10; k++)
+        gsInfo<<"\t"<<std::setprecision(20)<<values.at(k)<<"\n";
+    gsInfo<<"\n";
+
+    for (index_t k = 0; k<10; k++)
+    {
+      gsInfo<<"\t"<<values.at(k)*Load<<"\n";
+    }
+
+    if (plot)
+    {
+        gsInfo<<"Plotting in Paraview...\n";
+        system("mkdir -p BucklingResults");
+        gsMultiPatch<> deformation = solution;
+        gsMatrix<> modeShape;
+        gsParaviewCollection collection("BucklingResults/modes");
+
+        int N = 1;
+        if (!first)
+          N = vectors.cols();
+        for (index_t m=0; m<N; m++)
+        {
+
+          // Compute solution based on eigenmode with number 'mode'
+          modeShape = vectors.col(m);//solver.solve( assembler.rhs() );
+          assembler.constructSolution(modeShape, solution);
+
+          // compute the deformation spline
+          deformation = solution;
+          deformation.patch(0).coefs() -= mp.patch(0).coefs();// assuming 1 patch here
+
+          // gsField<> solField(mp,deformation);
+          // gsField<> mpField(mp,mp);
+          //
+          // real_t norm = solField.distanceL2(mpField);
+
+          // Normalize mode shape amplitude in z coordinate
+          real_t maxAmpl = std::max(math::abs(deformation.patch(0).coefs().col(2).maxCoeff()),math::abs(deformation.patch(0).coefs().col(2).minCoeff()));
+          if (maxAmpl!=0.0)
+          {
+            deformation.patch(0).coefs() = deformation.patch(0).coefs()/maxAmpl;
+          }
+
+          gsField<> solField(mp,deformation);
+          std::string fileName = "BucklingResults/modes" + util::to_string(m);
+          gsWriteParaview<>(solField, fileName, 5000);
+          fileName = "modes" + util::to_string(m) + "0";
+          collection.addTimestep(fileName,m,".vts");
+        }
+        collection.save();
+    }
+
+    if (write)
+    {
+        system("mkdir -p BucklingResults");
+        std::string wnM = "BucklingResults/eigenvalues.txt";
+        writeToCSVfile(wnM,values);
+    }
+
+    return result;
+}
+
+template <class T>
+gsMultiPatch<T> RectangularDomain(int n, int p, T L, T B)
+{
+  int q = p;
+  int m = n;
+  gsMultiPatch<T> mp = RectangularDomain(n, m, p, q, L, B);
+  return mp;
+}
+
+template <class T>
+gsMultiPatch<T> RectangularDomain(int n, int m, int p, int q, T L, T B)
+{
+  // -------------------------------------------------------------------------
+  // --------------------------Make beam geometry-----------------------------
+  // -------------------------------------------------------------------------
+  int dim = 3; //physical dimension
+  gsKnotVector<> kv0;
+  kv0.initUniform(0,1,0,p+1,1);
+  gsKnotVector<> kv1;
+  kv1.initUniform(0,1,0,q+1,1);
+
+  for(index_t i = 0; i< n; ++i)
+      kv0.uniformRefine();
+  for(index_t i = 0; i< m; ++i)
+      kv1.uniformRefine();
+
+  // Make basis
+  gsTensorBSplineBasis<2,T> basis(kv0,kv1);
+
+  // Initiate coefficient matrix
+  gsMatrix<> coefs(basis.size(),dim);
+  // Number of control points needed per component
+  size_t len0 = basis.component(0).size();
+  size_t len1 = basis.component(1).size();
+  gsVector<> coefvec0(len0);
+  // Uniformly distribute control points per component
+  coefvec0.setLinSpaced(len0,0.0,L);
+  gsVector<> coefvec1(basis.component(1).size());
+  coefvec1.setLinSpaced(len1,0.0,B);
+
+  // Z coordinate is zero
+  coefs.col(2).setZero();
+
+  // Define a matrix with ones
+  gsVector<> temp(len0);
+  temp.setOnes();
+  for (index_t k = 0; k < len1; k++)
+  {
+    // First column contains x-coordinates (length)
+    coefs.col(0).segment(k*len0,len0) = coefvec0;
+    // Second column contains y-coordinates (width)
+    coefs.col(1).segment(k*len0,len0) = temp*coefvec1.at(k);
+  }
+  // Create gsGeometry-derived object for the patch
+  gsTensorBSpline<2,real_t> shape(basis,coefs);
+
+  gsMultiPatch<T> mp;
+  mp.addPatch(shape);
+  mp.addAutoBoundaries();
+
+  return mp;
+}
+
+template <class T>
+gsMultiPatch<T> AnnularDomain(int n, int p, T R1, T R2)
+{
+  // -------------------------------------------------------------------------
+  // --------------------------Make beam geometry-----------------------------
+  // -------------------------------------------------------------------------
+  int dim = 3; //physical dimension
+  gsKnotVector<> kv0;
+  kv0.initUniform(0,1,0,3,1);
+  gsKnotVector<> kv1;
+  kv1.initUniform(0,1,0,3,1);
+
+  // Make basis
+  // gsTensorNurbsBasis<2,T> basis(kv0,kv1);
+
+  // Initiate coefficient matrix
+  gsMatrix<> coefs(9,dim);
+
+  coefs<<R1,0,0,
+  (R1+R2)/2,0,0,
+  R2,0,0,
+  R1,R1,0,
+  (R1+R2)/2,(R1+R2)/2,0,
+  R2,R2,0,
+  0,R1,0,
+  0,(R1+R2)/2,0,
+  0,R2,0;
+
+  gsMatrix<> weights(9,1);
+  weights<<1,1,1,
+  0.707106781186548,0.707106781186548,0.707106781186548,
+  1,1,1;
+
+  // Create gsGeometry-derived object for the patch
+  gsTensorNurbs<2,real_t> shape(kv0,kv1,coefs,weights);
+
+
+  gsMultiPatch<T> mp;
+  mp.addPatch(shape);
+  mp.addAutoBoundaries();
+
+  // Refine n times
+  for(index_t i = 0; i< n; ++i)
+      mp.patch(0).uniformRefine();
+  // Elevate up to order p
+  if (p>2)
+  {
+    for(index_t i = 2; i< p; ++i)
+        mp.patch(0).degreeElevate();    // Elevate the degree
+  }
+
+  return mp;
+}

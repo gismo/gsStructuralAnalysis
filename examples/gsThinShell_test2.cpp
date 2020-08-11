@@ -17,6 +17,9 @@
 #include <gsThinShell2/gsThinShellAssembler.h>
 #include <gsThinShell2/gsMaterialMatrix.h>
 
+#include <gsElasticity/gsWriteParaviewMultiPhysics.h>
+
+
 //#include <gsThinShell/gsNewtonIterator.h>
 
 using namespace gismo;
@@ -25,6 +28,9 @@ template <class T>
 gsMultiPatch<T> RectangularDomain(int n, int m, int p, int q, T L, T B);
 template <class T>
 gsMultiPatch<T> RectangularDomain(int n, int p, T L, T B);
+
+template <class T>
+gsMultiPatch<T> Rectangle(T L, T B);
 
 template <class T>
 gsMultiPatch<T> RectangularDomainVert(int n, int m, int p, int q, T L, T B);
@@ -58,6 +64,7 @@ int main(int argc, char *argv[])
     real_t PoissonRatio = 0.0;
     real_t Density = 1.0;
     real_t thickness = 1.0;
+    real_t Ratio = 7.0;
 
     gsCmdLine cmd("Tutorial on solving a Poisson problem.");
     cmd.addInt( "e", "degreeElevation",
@@ -146,6 +153,39 @@ int main(int argc, char *argv[])
         // R1 is radius on bottom, R2 is radius on top
         mp = FrustrumDomain(numRefine,numElevate+2,2.0,1.0,1.0);
     }
+    else if (testCase == 10)
+    {
+        E_modulus = 1;
+        // thickness = 0.15;
+        thickness = 1;
+        if (!Compressibility)
+          PoissonRatio = 0.4999;
+        else
+          PoissonRatio = 0.45;
+
+        E_modulus = 1;
+
+        // real_t bDim = thickness / 1.9e-3;
+        // real_t aDim = 2*bDim;
+
+        real_t bDim = 1;
+        real_t aDim = 1;
+
+
+        // Ratio = 2.5442834138486314;
+        Ratio = 0.5;
+
+        mp = Rectangle(aDim, bDim);
+
+        // mp.addPatch( gsNurbsCreator<>::BSplineSquare(1) ); // degree
+        // mp.addAutoBoundaries();
+        // mp.embed(3);
+        // E_modulus = 1e0;
+        // thickness = 1e0;
+        // // PoissonRatio = 0.0;
+        // PoissonRatio = 0.4999;
+
+    }
     else if (testCase == 17)
     {
         // Unit square
@@ -163,7 +203,8 @@ int main(int argc, char *argv[])
         E_modulus = 1e0;
         thickness = 1e0;
         // PoissonRatio = 0.5;
-        PoissonRatio = 0.499;
+        // PoissonRatio = 0.499;
+        PoissonRatio = 0.0;
         // PoissonRatio = 0.5;
     }
     //! [Read input file]
@@ -179,6 +220,8 @@ int main(int argc, char *argv[])
             mp.uniformRefine();
     }
     mp_def = mp;
+    gsWriteParaview<>( mp    , "mp", 1000, true);
+
 
     //! [Refinement]
     gsMultiBasis<> dbasis(mp);
@@ -196,7 +239,7 @@ int main(int argc, char *argv[])
 
     gsPointLoads<real_t> pLoads = gsPointLoads<real_t>();
 
-    gsConstantFunction<> displx(1.0,3);
+    gsConstantFunction<> displx(0.1,3);
     gsConstantFunction<> disply(0.25,3);
 
     gsConstantFunction<> neuData(neu,3);
@@ -393,8 +436,7 @@ int main(int argc, char *argv[])
     //     bc.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 2 - z
     //     bc.addCondition(boundary::north, condition_type::collapsed, 0, 0, false, 2 ); // unknown 1 - y
 
-        //-0.027815
-        displx.setValue(0,3);
+        displx.setValue(-0.027815,3);
         bc.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 0 ); // unknown 2 - z
         bc.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 2 - z
         bc.addCondition(boundary::north, condition_type::dirichlet, &displx, 0, false, 2 ); // unknown 1 - y
@@ -442,16 +484,21 @@ int main(int argc, char *argv[])
     }
     else if (testCase == 10)
     {
-        bc.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 0 ); // unknown 0 - x
-        bc.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 1 - y
-        bc.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z
-        bc.addCondition(boundary::west, condition_type::clamped, 0, 0, false, 2 ); // unknown 2 - z
+        for (index_t i=0; i!=3; ++i)
+        {
+            bc.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, i ); // unknown 2 - z
+        }
+        bc.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z
+        bc.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z
 
+        bc.addCondition(boundary::east, condition_type::dirichlet, 0, 0 ,false,1);
+        bc.addCondition(boundary::east, condition_type::dirichlet, 0, 0 ,false,2);
+        bc.addCondition(boundary::east, condition_type::collapsed, 0, 0 ,false,0);
+        // bc.addCondition(boundary::east, condition_type::dirichlet, &displx, 0 ,false,0);
 
-        bc.addCondition(boundary::east, condition_type::dirichlet, &disply, 0, false,  2 ); // unknown 0 - x
-        // bc.addCondition(boundary::east, condition_type::collapsed, 0, 0, false, 0 ); // unknown 2 - z
-
-        tmp.setZero();
+        gsVector<> point(2); point<< 1.0, 0.5 ;
+        gsVector<> load (3); load << 0.1, 0.0, 0.0 ;
+        pLoads.addLoad(point, load, 0 );
     }
     else if (testCase == 11)
     {
@@ -580,7 +627,7 @@ int main(int argc, char *argv[])
     gsFunctionExpr<> E(std::to_string(E_modulus),3);
     gsFunctionExpr<> nu(std::to_string(PoissonRatio),3);
     gsFunctionExpr<> rho(std::to_string(Density),3);
-    gsConstantFunction<> ratio(7.0,3);
+    gsConstantFunction<> ratio(Ratio,3);
 
     real_t mu = E_modulus / (2 * (1 + PoissonRatio));
 
@@ -638,19 +685,12 @@ int main(int argc, char *argv[])
     }
     gsMaterialMatrix materialMatrixComposite(mp,mp_def,tvec,Evec,Gvec,nuvec,phivec);
 
-    gsDebug<<bc<<"\n";
-
     gsThinShellAssembler assembler(mp,dbasis,bc,force,materialMatrixNonlinear);
     assembler.setPointLoads(pLoads);
     if (pressure!= 0.0)
         assembler.setPressure(pressFun);
 
-    displx.setValue(-0.027815,3);
-    assembler.updateBCs(bc);
-
     gsSparseSolver<>::CGDiagonal solver;
-
-    // gsInfo<< A.numDofs() <<"\n"<<std::flush;
 
     // assembler.assembleMass();
 
@@ -672,7 +712,7 @@ int main(int argc, char *argv[])
 
     gsVector<> Force = assembler.rhs();
 
-
+/*
     // // TEST MATRIX INTEGRATION
     gsMaterialMatrix materialMatrixNonlinear2(mp,mp_def,t,parameters,rho);
     if (material==14)
@@ -710,10 +750,14 @@ int main(int argc, char *argv[])
     gsDebugVar(testResult2);
     gsDebugVar(testResult1-testResult2);
     // // ! TEST MATRIX INTEGRATION
+*/
 
     gsVector<> solVector = solver.solve(assembler.rhs());
 
     mp_def = assembler.constructSolution(solVector);
+    gsMultiPatch<> deformation = mp_def;
+    for (size_t k = 0; k != mp_def.nPatches(); ++k)
+        deformation.patch(0).coefs() -= mp.patch(0).coefs();
 
     // mp_def = RectangularDomain(0,2,2.0,1.0);
     //     // p-refine
@@ -724,7 +768,6 @@ int main(int argc, char *argv[])
     // for (int r =0; r < numRefine; ++r)
     //     mp_def.uniformRefine();
 
-    gsWriteParaview<>( mp    , "mp", 1000, true);
     gsWriteParaview<>( mp_def, "mp_def", 1000, true);
 
 
@@ -772,15 +815,34 @@ int main(int argc, char *argv[])
     }
     if ((stress) && (!nonlinear))
     {
-        gsPiecewiseFunction<> stresses;
-        assembler.constructStress(mp_def,stresses,stress_type::membrane);
-        gsField<> stressField(mp,stresses, true);
+        gsPiecewiseFunction<> membraneStresses;
+        assembler.constructStress(mp_def,membraneStresses,stress_type::membrane);
+        gsField<> membraneStress(mp_def,membraneStresses, true);
 
-        gsWriteParaview( stressField, "stress", 5000);
+        gsPiecewiseFunction<> flexuralStresses;
+        assembler.constructStress(mp_def,flexuralStresses,stress_type::flexural);
+        gsField<> flexuralStress(mp_def,flexuralStresses, true);
 
-        gsMatrix<> stretch;
-        stretch=assembler.computePrincipalStretches(pt,mp_def,0.0);
-        gsDebugVar(stretch);
+        gsField<> solutionField(mp,deformation, true);
+
+
+        // gsField<> stressField = assembler.constructStress(mp_def,stress_type::membrane_strain);
+
+        std::map<std::string,const gsField<> *> fields;
+        fields["Deformation"] = &solutionField;
+        fields["Membrane Stress"] = &membraneStress;
+        fields["Flexural Stress"] = &flexuralStress;
+
+        gsWriteParaviewMultiPhysics(fields,"stress",5000,true);
+
+        // gsWriteParaview( stressField, "stress", 5000);
+
+
+
+
+        // gsMatrix<> stretch;
+        // stretch=assembler.computePrincipalStretches(pt,mp_def,0.0);
+        // gsDebugVar(stretch);
     }
 
     /*Something with Dirichlet homogenization*/
@@ -836,7 +898,7 @@ int main(int argc, char *argv[])
         }
     }
 
-    // TEST MATRIX INTEGRATION
+/*  // TEST MATRIX INTEGRATION
     materialMatrixNonlinear2.options().setInt("MaterialLaw",material);
     materialMatrixNonlinear2.options().setInt("Compressibility",Compressibility);
 
@@ -862,7 +924,7 @@ int main(int argc, char *argv[])
     materialMatrixNonlinear2.eval_into(testPt,testResult2);
     gsDebugVar(testResult2);
     gsDebugVar(testResult1-testResult2);
-
+*/
     // // ! TEST MATRIX INTEGRATION
 
     // gsDebugVar(assembler.computePrincipalStretches(pts,mp_def));
@@ -888,11 +950,6 @@ int main(int argc, char *argv[])
 
     // // ADD BOUNDARY CONDITIONS! (clamped will be tricky..............)
 
-    mp_def = assembler.constructSolution(solVector);
-    gsMultiPatch<> deformation = mp_def;
-    for (size_t k = 0; k != mp_def.nPatches(); ++k)
-        deformation.patch(0).coefs() -= mp.patch(0).coefs();
-
     // ! [Export visualization in ParaView]
     if ( (plot) && (nonlinear) )
     {
@@ -913,10 +970,16 @@ int main(int argc, char *argv[])
     if ((stress) && (nonlinear))
     {
         gsPiecewiseFunction<> stresses;
-        assembler.constructStress(mp_def,stresses,stress_type::principal_stretch);
-        gsField<> stressField(mp,stresses, true);
+        assembler.constructStress(mp_def,stresses,stress_type::membrane);
+        // gsField<> stressField = assembler.constructStress(mp_def,stress_type::membrane_strain);
 
+        gsField<> stressField(mp_def,stresses, true);
         gsWriteParaview( stressField, "stress", 5000);
+
+
+        gsMatrix<> stretch;
+        stretch=assembler.computePrincipalStretches(pt,mp_def,0.0);
+        gsDebugVar(stretch);
     }
 
 
@@ -1002,6 +1065,56 @@ gsMultiPatch<T> RectangularDomain(int n, int m, int p, int q, T L, T B)
 
   return mp;
 }
+
+template <class T>
+gsMultiPatch<T> Rectangle(T L, T B)
+{
+  // -------------------------------------------------------------------------
+  // --------------------------Make beam geometry-----------------------------
+  // -------------------------------------------------------------------------
+  int dim = 3; //physical dimension
+  gsKnotVector<> kv0;
+  kv0.initUniform(0,1,0,2,1);
+  gsKnotVector<> kv1;
+  kv1.initUniform(0,1,0,2,1);
+
+  // Make basis
+  gsTensorBSplineBasis<2,T> basis(kv0,kv1);
+
+  // Initiate coefficient matrix
+  gsMatrix<> coefs(basis.size(),dim);
+  // Number of control points needed per component
+  size_t len0 = basis.component(0).size();
+  size_t len1 = basis.component(1).size();
+  gsVector<> coefvec0(len0);
+  // Uniformly distribute control points per component
+  coefvec0.setLinSpaced(len0,0.0,L);
+  gsVector<> coefvec1(basis.component(1).size());
+  coefvec1.setLinSpaced(len1,0.0,B);
+
+  // Z coordinate is zero
+  coefs.col(2).setZero();
+
+  // Define a matrix with ones
+  gsVector<> temp(len0);
+  temp.setOnes();
+  for (size_t k = 0; k < len1; k++)
+  {
+    // First column contains x-coordinates (length)
+    coefs.col(0).segment(k*len0,len0) = coefvec0;
+    // Second column contains y-coordinates (width)
+    coefs.col(1).segment(k*len0,len0) = temp*coefvec1.at(k);
+  }
+  // Create gsGeometry-derived object for the patch
+  gsTensorBSpline<2,real_t> shape(basis,coefs);
+
+  gsMultiPatch<T> mp;
+  mp.addPatch(shape);
+  mp.addAutoBoundaries();
+
+  return mp;
+}
+
 
 template <class T>
 gsMultiPatch<T> RectangularDomainVert(int n, int p, T L, T B)
