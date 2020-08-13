@@ -823,6 +823,31 @@ int main(int argc, char *argv[])
         assembler.constructStress(mp_def,flexuralStresses,stress_type::flexural);
         gsField<> flexuralStress(mp_def,flexuralStresses, true);
 
+        gsPiecewiseFunction<> stretches;
+        assembler.constructStress(mp_def,stretches,stress_type::principal_stretch);
+        gsField<> Stretches(mp_def,stretches, true);
+
+        gsPiecewiseFunction<> membraneStresses_p;
+        assembler.constructStress(mp_def,membraneStresses_p,stress_type::principal_stress_membrane);
+        gsField<> membraneStress_p(mp_def,membraneStresses_p, true);
+
+        gsPiecewiseFunction<> flexuralStresses_p;
+        assembler.constructStress(mp_def,flexuralStresses_p,stress_type::principal_stress_flexural);
+        gsField<> flexuralStress_p(mp_def,flexuralStresses_p, true);
+
+        gsPiecewiseFunction<> stretch1;
+        assembler.constructStress(mp_def,stretch1,stress_type::principal_stretch_dir1);
+        gsField<> stretchDir1(mp_def,stretch1, true);
+
+        gsPiecewiseFunction<> stretch2;
+        assembler.constructStress(mp_def,stretch2,stress_type::principal_stretch_dir2);
+        gsField<> stretchDir2(mp_def,stretch2, true);
+
+        gsPiecewiseFunction<> stretch3;
+        assembler.constructStress(mp_def,stretch3,stress_type::principal_stretch_dir3);
+        gsField<> stretchDir3(mp_def,stretch3, true);
+
+
         gsField<> solutionField(mp,deformation, true);
 
 
@@ -832,8 +857,14 @@ int main(int argc, char *argv[])
         fields["Deformation"] = &solutionField;
         fields["Membrane Stress"] = &membraneStress;
         fields["Flexural Stress"] = &flexuralStress;
+        fields["Principal Stretch"] = &Stretches;
+        fields["Principal Membrane Stress"] = &membraneStress_p;
+        fields["Principal Flexural Stress"] = &flexuralStress_p;
+        fields["Principal Direction 1"] = &stretchDir1;
+        fields["Principal Direction 2"] = &stretchDir2;
+        fields["Principal Direction 3"] = &stretchDir3;
 
-        gsWriteParaviewMultiPhysics(fields,"stress",5000,true);
+        gsWriteParaviewMultiPhysics(fields,"stress",500,true);
 
         // gsWriteParaview( stressField, "stress", 5000);
 
