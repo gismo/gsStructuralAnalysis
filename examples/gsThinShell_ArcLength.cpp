@@ -26,6 +26,10 @@ template <class T>
 gsMultiPatch<T> RectangularDomain(int n, int m, int p, int q, T L, T B, bool clamped = false, T offset = 0.1);
 template <class T>
 gsMultiPatch<T> RectangularDomain(int n, int p, T L, T B, bool clamped = false, T offset = 0.1);
+
+template <class T>
+gsMultiPatch<T> Rectangle(T L, T B);
+
 template <class T>
 gsMultiPatch<T> AnnularDomain(int n, int p, T R1, T R2);
 template <class T>
@@ -121,6 +125,7 @@ int main (int argc, char** argv)
     cmd.addInt("R","hRefine2", "Number of dyadic h-refinement (bisection) steps to perform before solving (secondary direction)", numHrefL);
     cmd.addInt("E","degreeElevation2", "Number of degree elevation steps to perform on the Geometry's basis before solving (secondary direction)", numElevateL);
     cmd.addInt( "M", "Material", "Material law",  material );
+    cmd.addReal("C", "MaterialRatio", "Material Ratio",  Ratio );
     cmd.addInt( "c", "Compressibility", "1: compressible, 0: incompressible",  Compressibility );
 
     cmd.addReal("T","hdim", "thickness of the plate", thickness);
@@ -164,34 +169,44 @@ int main (int argc, char** argv)
       else
         PoissonRatio = 0.499;
 
-      real_t mu, C01,C10;
-      if (material==3||material==13||material==23)
-      {
-        C01 = 15.8114570e4;
-        // C01 = 19.1010178e4;
-        C10 = 6.21485502e4;
-        // C10 = 1e-10;
+      // real_t mu, C01,C10;
+      // if (material==3||material==13||material==23)
+      // {
+      //   C01 = 15.8114570e4;
+      //   C10 = 6.21485502e4;
 
-        // C01 = 146733.333333333;
-        // C10 = 73366.6666666667;
-        Ratio = C01/C10;
-        mu = 2*(C01+C10);
-      }
-      else
-      {
-        C10 = 19.1010178e4;
-        mu = 2*C10;
-      }
-      PoissonRatio = 0.5;
-      E_modulus = 2*mu*(1+PoissonRatio);
+      //   Ratio = C01/C10;
+      //   mu = 2*(C01+C10);
+      // }
+      // else
+      // {
+      //   C10 = 19.1010178e4;
+      //   mu = 2*C10;
+      // }
+      // PoissonRatio = 0.5;
+      // E_modulus = 2*mu*(1+PoissonRatio);
 
-      gsDebug<<"E = "<<E_modulus<<"; nu = "<<PoissonRatio<<"; mu = "<<mu<<"\n";
+      E_modulus = 1;
 
-      aDim = 0.28/2.;
-      bDim = 0.14/2.;
-      thickness = 140e-6;
+      gsDebug<<"E = "<<E_modulus<<"; nu = "<<PoissonRatio<<"\n";
 
-      mp = RectangularDomain(numHrefL, numHref, numElevateL+2, numElevate + 2, aDim, bDim);
+      // aDim = 0.28/2.;
+      // bDim = 0.14/2.;
+      // thickness = 140e-6;
+
+      aDim = 1/2.;
+      bDim = 1/2.;
+      thickness = 1;
+
+
+      mp = Rectangle(aDim, bDim);
+
+      for(index_t i = 0; i< numElevate; ++i)
+        mp.patch(0).degreeElevate();    // Elevate the degree
+
+      // h-refine
+      for(index_t i = 0; i< numHref; ++i)
+        mp.patch(0).uniformRefine();
     }
     else if (testCase==0 || testCase==1)
     {
@@ -463,10 +478,10 @@ int main (int argc, char** argv)
         // {
         //     BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, i ); // unknown 2 - z
         // }
-        
+
         BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 0 ); // unknown 2 - z
         BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z
-    
+
         BCs.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z
         BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z
 	BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 2 - y
@@ -1371,6 +1386,56 @@ gsMultiPatch<T> RectangularDomain(int n, int m, int p, int q, T L, T B, bool cla
 
   return mp;
 }
+
+template <class T>
+gsMultiPatch<T> Rectangle(T L, T B)
+{
+  // -------------------------------------------------------------------------
+  // --------------------------Make beam geometry-----------------------------
+  // -------------------------------------------------------------------------
+  int dim = 3; //physical dimension
+  gsKnotVector<> kv0;
+  kv0.initUniform(0,1,0,2,1);
+  gsKnotVector<> kv1;
+  kv1.initUniform(0,1,0,2,1);
+
+  // Make basis
+  gsTensorBSplineBasis<2,T> basis(kv0,kv1);
+
+  // Initiate coefficient matrix
+  gsMatrix<> coefs(basis.size(),dim);
+  // Number of control points needed per component
+  size_t len0 = basis.component(0).size();
+  size_t len1 = basis.component(1).size();
+  gsVector<> coefvec0(len0);
+  // Uniformly distribute control points per component
+  coefvec0.setLinSpaced(len0,0.0,L);
+  gsVector<> coefvec1(basis.component(1).size());
+  coefvec1.setLinSpaced(len1,0.0,B);
+
+  // Z coordinate is zero
+  coefs.col(2).setZero();
+
+  // Define a matrix with ones
+  gsVector<> temp(len0);
+  temp.setOnes();
+  for (size_t k = 0; k < len1; k++)
+  {
+    // First column contains x-coordinates (length)
+    coefs.col(0).segment(k*len0,len0) = coefvec0;
+    // Second column contains y-coordinates (width)
+    coefs.col(1).segment(k*len0,len0) = temp*coefvec1.at(k);
+  }
+  // Create gsGeometry-derived object for the patch
+  gsTensorBSpline<2,real_t> shape(basis,coefs);
+
+  gsMultiPatch<T> mp;
+  mp.addPatch(shape);
+  mp.addAutoBoundaries();
+
+  return mp;
+}
+
 
 template <class T>
 gsMultiPatch<T> AnnularDomain(int n, int p, T R1, T R2)
