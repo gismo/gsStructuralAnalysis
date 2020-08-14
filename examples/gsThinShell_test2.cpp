@@ -59,6 +59,8 @@ int main(int argc, char *argv[])
     bool nonlinear = false;
     bool verbose = false;
     std::string fn;
+    bool membrane = false;
+
 
     real_t E_modulus = 1.0;
     real_t PoissonRatio = 0.0;
@@ -70,6 +72,7 @@ int main(int argc, char *argv[])
     cmd.addInt( "e", "degreeElevation",
                 "Number of degree elevation steps to perform before solving (0: equalize degree in all directions)", numElevate );
     cmd.addInt( "r", "uniformRefine", "Number of Uniform h-refinement steps to perform before solving",  numRefine );
+    cmd.addReal( "R", "Ratio", "Mooney Rivlin Ratio",  Ratio );
     cmd.addInt( "t", "testCase", "Test case to run: 1 = unit square; 2 = Scordelis Lo Roof",  testCase );
     cmd.addInt( "m", "Material", "Material law",  material );
     cmd.addInt( "c", "Compressibility", "1: compressible, 0: incompressible",  Compressibility );
@@ -78,6 +81,7 @@ int main(int argc, char *argv[])
     cmd.addSwitch("verbose", "Full matrix and vector output", verbose);
     cmd.addSwitch("plot", "Create a ParaView visualization file with the solution", plot);
     cmd.addSwitch("stress", "Create a ParaView visualization file with the stresses", stress);
+    cmd.addSwitch("membrane", "Use membrane model (no bending)", membrane);
 
     try { cmd.getValues(argc,argv); } catch (int rv) { return rv; }
     //! [Parse command line]
@@ -159,7 +163,7 @@ int main(int argc, char *argv[])
         // thickness = 0.15;
         thickness = 1;
         if (!Compressibility)
-          PoissonRatio = 0.4999;
+          PoissonRatio = 0.499;
         else
           PoissonRatio = 0.45;
 
@@ -173,7 +177,7 @@ int main(int argc, char *argv[])
 
 
         // Ratio = 2.5442834138486314;
-        Ratio = 0.5;
+        // Ratio = 1e2;
 
         mp = Rectangle(aDim, bDim);
 
@@ -497,7 +501,7 @@ int main(int argc, char *argv[])
         // bc.addCondition(boundary::east, condition_type::dirichlet, &displx, 0 ,false,0);
 
         gsVector<> point(2); point<< 1.0, 0.5 ;
-        gsVector<> load (3); load << 0.1, 0.0, 0.0 ;
+        gsVector<> load (3); load << 0.25, 0.0, 0.0 ;
         pLoads.addLoad(point, load, 0 );
     }
     else if (testCase == 11)
@@ -687,6 +691,8 @@ int main(int argc, char *argv[])
 
     gsThinShellAssembler assembler(mp,dbasis,bc,force,materialMatrixNonlinear);
     assembler.setPointLoads(pLoads);
+    if (membrane)
+        assembler.setMembrane();
     if (pressure!= 0.0)
         assembler.setPressure(pressFun);
 
@@ -768,13 +774,11 @@ int main(int argc, char *argv[])
     // for (int r =0; r < numRefine; ++r)
     //     mp_def.uniformRefine();
 
-    gsWriteParaview<>( mp_def, "mp_def", 1000, true);
 
 
     if ((plot) && (!nonlinear))
     {
-
-        gsMultiPatch<> deformation = mp_def;
+        deformation = mp_def;
         for (size_t k = 0; k != mp_def.nPatches(); ++k)
             deformation.patch(0).coefs() -= mp.patch(0).coefs();
 
@@ -782,10 +786,7 @@ int main(int argc, char *argv[])
         gsInfo<<"Plotting in Paraview...\n";
         gsWriteParaview<>( solField, "solution", 1000, true);
 
-        gsInfo <<"Maximum deformation coef: "
-               << deformation.patch(0).coefs().colwise().maxCoeff() <<".\n";
-        gsInfo <<"Minimum deformation coef: "
-               << deformation.patch(0).coefs().colwise().minCoeff() <<".\n";
+        gsWriteParaview<>( mp_def, "mp_def", 1000, true);
 
         gsMatrix<> coords(2,1);
         if (testCase==0)
@@ -827,13 +828,13 @@ int main(int argc, char *argv[])
         assembler.constructStress(mp_def,stretches,stress_type::principal_stretch);
         gsField<> Stretches(mp_def,stretches, true);
 
-        gsPiecewiseFunction<> membraneStresses_p;
-        assembler.constructStress(mp_def,membraneStresses_p,stress_type::principal_stress_membrane);
-        gsField<> membraneStress_p(mp_def,membraneStresses_p, true);
+        // gsPiecewiseFunction<> membraneStresses_p;
+        // assembler.constructStress(mp_def,membraneStresses_p,stress_type::principal_stress_membrane);
+        // gsField<> membraneStress_p(mp_def,membraneStresses_p, true);
 
-        gsPiecewiseFunction<> flexuralStresses_p;
-        assembler.constructStress(mp_def,flexuralStresses_p,stress_type::principal_stress_flexural);
-        gsField<> flexuralStress_p(mp_def,flexuralStresses_p, true);
+        // gsPiecewiseFunction<> flexuralStresses_p;
+        // assembler.constructStress(mp_def,flexuralStresses_p,stress_type::principal_stress_flexural);
+        // gsField<> flexuralStress_p(mp_def,flexuralStresses_p, true);
 
         gsPiecewiseFunction<> stretch1;
         assembler.constructStress(mp_def,stretch1,stress_type::principal_stretch_dir1);
@@ -858,8 +859,8 @@ int main(int argc, char *argv[])
         fields["Membrane Stress"] = &membraneStress;
         fields["Flexural Stress"] = &flexuralStress;
         fields["Principal Stretch"] = &Stretches;
-        fields["Principal Membrane Stress"] = &membraneStress_p;
-        fields["Principal Flexural Stress"] = &flexuralStress_p;
+        // fields["Principal Membrane Stress"] = &membraneStress_p;
+        // fields["Principal Flexural Stress"] = &flexuralStress_p;
         fields["Principal Direction 1"] = &stretchDir1;
         fields["Principal Direction 2"] = &stretchDir2;
         fields["Principal Direction 3"] = &stretchDir3;
@@ -981,10 +982,19 @@ int main(int argc, char *argv[])
 
     // // ADD BOUNDARY CONDITIONS! (clamped will be tricky..............)
 
+    deformation = mp_def;
+    for (size_t k = 0; k != mp_def.nPatches(); ++k)
+        deformation.patch(0).coefs() -= mp.patch(0).coefs();
+
+    gsInfo <<"Maximum deformation coef: "
+           << deformation.patch(0).coefs().colwise().maxCoeff() <<".\n";
+    gsInfo <<"Minimum deformation coef: "
+           << deformation.patch(0).coefs().colwise().minCoeff() <<".\n";
+
+
     // ! [Export visualization in ParaView]
     if ( (plot) && (nonlinear) )
     {
-
         gsField<> solField(mp, deformation);
         gsInfo<<"Plotting in Paraview...\n";
         gsWriteParaview<>( solField, "solution", 1000, true);
@@ -1000,17 +1010,57 @@ int main(int argc, char *argv[])
     }
     if ((stress) && (nonlinear))
     {
-        gsPiecewiseFunction<> stresses;
-        assembler.constructStress(mp_def,stresses,stress_type::membrane);
+
+        gsPiecewiseFunction<> membraneStresses;
+        assembler.constructStress(mp_def,membraneStresses,stress_type::membrane);
+        gsField<> membraneStress(mp_def,membraneStresses, true);
+
+        gsPiecewiseFunction<> flexuralStresses;
+        assembler.constructStress(mp_def,flexuralStresses,stress_type::flexural);
+        gsField<> flexuralStress(mp_def,flexuralStresses, true);
+
+        gsPiecewiseFunction<> stretches;
+        assembler.constructStress(mp_def,stretches,stress_type::principal_stretch);
+        gsField<> Stretches(mp_def,stretches, true);
+
+        // gsPiecewiseFunction<> membraneStresses_p;
+        // assembler.constructStress(mp_def,membraneStresses_p,stress_type::principal_stress_membrane);
+        // gsField<> membraneStress_p(mp_def,membraneStresses_p, true);
+
+        // gsPiecewiseFunction<> flexuralStresses_p;
+        // assembler.constructStress(mp_def,flexuralStresses_p,stress_type::principal_stress_flexural);
+        // gsField<> flexuralStress_p(mp_def,flexuralStresses_p, true);
+
+        gsPiecewiseFunction<> stretch1;
+        assembler.constructStress(mp_def,stretch1,stress_type::principal_stretch_dir1);
+        gsField<> stretchDir1(mp_def,stretch1, true);
+
+        gsPiecewiseFunction<> stretch2;
+        assembler.constructStress(mp_def,stretch2,stress_type::principal_stretch_dir2);
+        gsField<> stretchDir2(mp_def,stretch2, true);
+
+        gsPiecewiseFunction<> stretch3;
+        assembler.constructStress(mp_def,stretch3,stress_type::principal_stretch_dir3);
+        gsField<> stretchDir3(mp_def,stretch3, true);
+
+
+        gsField<> solutionField(mp,deformation, true);
+
+
         // gsField<> stressField = assembler.constructStress(mp_def,stress_type::membrane_strain);
 
-        gsField<> stressField(mp_def,stresses, true);
-        gsWriteParaview( stressField, "stress", 5000);
+        std::map<std::string,const gsField<> *> fields;
+        fields["Deformation"] = &solutionField;
+        fields["Membrane Stress"] = &membraneStress;
+        fields["Flexural Stress"] = &flexuralStress;
+        fields["Principal Stretch"] = &Stretches;
+        // fields["Principal Membrane Stress"] = &membraneStress_p;
+        // fields["Principal Flexural Stress"] = &flexuralStress_p;
+        fields["Principal Direction 1"] = &stretchDir1;
+        fields["Principal Direction 2"] = &stretchDir2;
+        fields["Principal Direction 3"] = &stretchDir3;
 
-
-        gsMatrix<> stretch;
-        stretch=assembler.computePrincipalStretches(pt,mp_def,0.0);
-        gsDebugVar(stretch);
+        gsWriteParaviewMultiPhysics(fields,"stress",5000,true);
     }
 
 
