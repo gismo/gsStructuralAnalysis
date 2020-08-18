@@ -71,6 +71,7 @@ int main (int argc, char** argv)
     int numHrefL    = -1;
     bool plot       = false;
     bool stress       = false;
+    bool membrane       = false;
     bool first  = false;
     bool SingularPoint = false;
     bool quasiNewton = false;
@@ -149,6 +150,7 @@ int main (int argc, char** argv)
     cmd.addSwitch("first", "Plot only first", first);
     cmd.addSwitch("write", "Write output to file", write);
     cmd.addSwitch("cross", "Write cross-section to file", crosssection);
+    cmd.addSwitch("membrane", "Use membrane model (no bending)", membrane);
 
     try { cmd.getValues(argc,argv); } catch (int rv) { return rv; }
 
@@ -169,34 +171,33 @@ int main (int argc, char** argv)
       else
         PoissonRatio = 0.499;
 
-      // real_t mu, C01,C10;
-      // if (material==3||material==13||material==23)
-      // {
-      //   C01 = 15.8114570e4;
-      //   C10 = 6.21485502e4;
+      real_t mu, C01,C10;
+      if (material==3||material==13||material==23)
+      {
+        C01 = 6.21485502e4;
+        C10 = 15.8114570e4;
 
-      //   Ratio = C01/C10;
-      //   mu = 2*(C01+C10);
-      // }
-      // else
-      // {
-      //   C10 = 19.1010178e4;
-      //   mu = 2*C10;
-      // }
-      // PoissonRatio = 0.5;
-      // E_modulus = 2*mu*(1+PoissonRatio);
+        Ratio = C01/C10;
+        mu = 2*(C01+C10);
+      }
+      else
+      {
+        C10 = 19.1010178e4;
+        mu = 2*C10;
+      }
+      E_modulus = 2*mu*(1+PoissonRatio);
 
-      E_modulus = 1;
+      // E_modulus = 1;
 
       gsDebug<<"E = "<<E_modulus<<"; nu = "<<PoissonRatio<<"\n";
 
-      // aDim = 0.28/2.;
-      // bDim = 0.14/2.;
-      // thickness = 140e-6;
+      aDim = 0.28;
+      bDim = 0.14;
+      thickness = 140e-6;
 
-      aDim = 1/2.;
-      bDim = 1/2.;
-      thickness = 1;
+      // aDim = 1;
+      // bDim = 1.;
+      // thickness = 1;
 
 
       mp = Rectangle(aDim, bDim);
@@ -366,24 +367,36 @@ int main (int argc, char** argv)
       else
         PoissonRatio = 0.499;
 
-      real_t mu;
+      real_t mu, C01,C10;
       if (material==3||material==13||material==23)
-        mu = 110050;
-      else
-        mu = 1.91e5;
-      PoissonRatio = 0.5;
-      E_modulus = 2*mu*(1+PoissonRatio);
+      {
+        C01 = (1/22.)*1e6;
+        C10 = (0.5-1/22.)*1e6;
 
-      gsDebug<<"E = "<<E_modulus<<"; nu = "<<PoissonRatio<<"; mu = "<<mu<<"\n";
+        Ratio = C01/C10;
+        mu = 2*(C01+C10);
+      }
+      else
+      {
+        C10 = (0.5)*1e6;
+        mu = 2*C10;
+      }
+      E_modulus = 2*mu*(1+PoissonRatio);
+      gsDebug<<"E = "<<E_modulus<<"; nu = "<<PoissonRatio<<"\n";
 
       aDim = 0.28;
       bDim = 0.14;
       thickness = 140e-6;
 
-      Ratio = 2.5442834138486314;
-
       // We model symmetry over the width axis
-      mp = RectangularDomain(numHrefL,numHref, numElevateL+2, numElevate+2, aDim/2., bDim/2.);//, true, 0.001);
+      mp = Rectangle(aDim/2., bDim/2.);//, true, 0.001);
+
+      for(index_t i = 0; i< numElevate; ++i)
+        mp.patch(0).degreeElevate();    // Elevate the degree
+
+      // h-refine
+      for(index_t i = 0; i< numHref; ++i)
+        mp.patch(0).uniformRefine();
     }
     else if (testCase==17 )
     {
@@ -474,24 +487,24 @@ int main (int argc, char** argv)
 
     if (testCase == -1)
     {
-        // for (index_t i=0; i!=3; ++i)
-        // {
-        //     BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, i ); // unknown 2 - z
-        // }
+        for (index_t i=0; i!=3; ++i)
+        {
+            BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, i ); // unknown 2 - z
+        }
 
-        BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 0 ); // unknown 2 - z
-        BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z
+        // BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 0 ); // unknown 2 - z
+        // BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z
 
         BCs.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z
         BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z
-	BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 2 - y
+	      // BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 2 - y
 
         BCs.addCondition(boundary::east, condition_type::dirichlet, 0, 0 ,false,1);
         BCs.addCondition(boundary::east, condition_type::dirichlet, 0, 0 ,false,2);
         BCs.addCondition(boundary::east, condition_type::collapsed, 0, 0 ,false,0);
 
         gsVector<> point(2); point<< 1.0, 0.5 ;
-        gsVector<> load (3); load << 1, 0.0, 0.0 ;
+        gsVector<> load (3); load << 0.25, 0.0, 0.0 ;
         pLoads.addLoad(point, load, 0 );
 
         dirname = dirname + "/" + "Case" + std::to_string(testCase) + "solution_-r" + std::to_string(numHref) + "-R" + std::to_string(numHrefL) + "-e" + std::to_string(numElevate) + "-E" + std::to_string(numElevateL) + "-M" + std::to_string(material) + "-c" + std::to_string(Compressibility) + "-alpha" + std::to_string(alpha) + "-beta" + std::to_string(beta);
@@ -1114,6 +1127,8 @@ int main (int argc, char** argv)
 
     // Construct assembler object
     gsThinShellAssembler assembler(mp,dbasis,BCs,surfForce,materialMatrixNonlinear);
+    if (membrane)
+        assembler.setMembrane();
     assembler.setPointLoads(pLoads);
     if (pressure!= 0.0)
         assembler.setPressure(pressFun);
@@ -1155,7 +1170,6 @@ int main (int argc, char** argv)
     // Assemble linear system to obtain the force vector
     assembler.assemble();
     gsVector<> Force = assembler.rhs();
-    // gsDebugVar(Force);
 
 
     gsArcLengthIterator<real_t> arcLength(Jacobian, Residual, Force);
