@@ -89,7 +89,7 @@ int main (int argc, char** argv)
     real_t E_modulus     = 1;
     real_t PoissonRatio = 0;
     real_t Density = 1e0;
-    gsMultiPatch<> mp;
+    gsMultiPatch<> mp, mpBspline;
     real_t eta = 0;
     real_t tau = 1e4;
 
@@ -108,6 +108,8 @@ int main (int argc, char** argv)
 
     bool write = false;
     bool crosssection = false;
+
+    bool THB = false;
 
     // Arc length method options
     real_t dL = 0; // General arc length
@@ -152,6 +154,8 @@ int main (int argc, char** argv)
     cmd.addSwitch("write", "Write output to file", write);
     cmd.addSwitch("cross", "Write cross-section to file", crosssection);
     cmd.addSwitch("membrane", "Use membrane model (no bending)", membrane);
+
+    cmd.addSwitch("THB", "Use refinement", THB);
 
     try { cmd.getValues(argc,argv); } catch (int rv) { return rv; }
 
@@ -201,14 +205,14 @@ int main (int argc, char** argv)
       // thickness = 1;
 
 
-      mp = Rectangle(aDim, bDim);
+      mpBspline = Rectangle(aDim, bDim);
 
       for(index_t i = 0; i< numElevate; ++i)
-        mp.patch(0).degreeElevate();    // Elevate the degree
+        mpBspline.patch(0).degreeElevate();    // Elevate the degree
 
       // h-refine
       for(index_t i = 0; i< numHref; ++i)
-        mp.patch(0).uniformRefine();
+        mpBspline.patch(0).uniformRefine();
     }
     else if (testCase==0 || testCase==1)
     {
@@ -219,7 +223,7 @@ int main (int argc, char** argv)
       real_t L = 1.0;
       real_t B = 0.1;
       Area = B*thickness;
-      mp = RectangularDomain(numHref, 0, numElevate+2, 2, L, B);
+      mpBspline = RectangularDomain(numHref, 0, numElevate+2, 2, L, B);
     }
     else if (testCase==2 || testCase==3)
     {
@@ -229,7 +233,7 @@ int main (int argc, char** argv)
       real_t L = 1.0;
       real_t B = 0.01;
       Area = B*thickness;
-      mp = RectangularDomain(numHref, 0, numElevate+2, 2, L, B);
+      mpBspline = RectangularDomain(numHref, 0, numElevate+2, 2, L, B);
     }
     else if (testCase==4 || testCase==5)
     {
@@ -244,7 +248,7 @@ int main (int argc, char** argv)
       E_modulus = 2*mu*(1+PoissonRatio);
       // PoissonRatio = 0;
       Area = B*thickness;
-      mp = RectangularDomain(numHref, numElevate+2, L, B);
+      mpBspline = RectangularDomain(numHref, numElevate+2, L, B);
 
       gsInfo<<"mu = "<<E_modulus / (2 * (1 + PoissonRatio))<<"\n";
     }
@@ -270,7 +274,7 @@ int main (int argc, char** argv)
       Ratio = 0.5;
 
 
-      mp = RectangularDomain(numHref, numElevate+2, aDim/2., bDim/2.);
+      mpBspline = RectangularDomain(numHref, numElevate+2, aDim/2., bDim/2.);
     }
     else if (testCase == 7)
     {
@@ -281,14 +285,14 @@ int main (int argc, char** argv)
         else
           PoissonRatio = 0.45;
         E_modulus = 2*mu*(1+PoissonRatio);
-        gsReadFile<>("quarter_sphere.xml", mp);
+        gsReadFile<>("quarter_sphere.xml", mpBspline);
 
         for(index_t i = 0; i< numElevate; ++i)
-          mp.patch(0).degreeElevate();    // Elevate the degree
+          mpBspline.patch(0).degreeElevate();    // Elevate the degree
 
         // h-refine
         for(index_t i = 0; i< numHref; ++i)
-          mp.patch(0).uniformRefine();
+          mpBspline.patch(0).uniformRefine();
     }
     else if (testCase == 8 || testCase == 9)
     {
@@ -296,10 +300,10 @@ int main (int argc, char** argv)
         real_t mu = 4.225;
         PoissonRatio = 0.5;
         E_modulus = 2*mu*(1+PoissonRatio);
-        // gsReadFile<>("quarter_frustrum.xml", mp);
+        // gsReadFile<>("quarter_frustrum.xml", mpBspline);
 
         // R1 is radius on bottom, R2 is radius on top
-        mp = FrustrumDomain(numHref,numElevate+2,2.0,1.0,1.0);
+        mpBspline = FrustrumDomain(numHref,numElevate+2,2.0,1.0,1.0);
     }
     else if (testCase == 10)
     {
@@ -318,22 +322,22 @@ int main (int argc, char** argv)
       // Ratio = 2.5442834138486314;
       Ratio = 0.5;
 
-      mp = RectangularDomain(numHrefL, numHref, numElevateL+2, numElevate + 2, aDim, bDim);
+      mpBspline = RectangularDomain(numHrefL, numHref, numElevateL+2, numElevate + 2, aDim, bDim);
     }
     else if (testCase == 11)
     {
         thickness = 2e-3;
         PoissonRatio = 0.4;
         E_modulus = 168e9; // GPa
-        gsReadFile<>("half_cylinder.xml", mp);
+        gsReadFile<>("half_cylinder.xml", mpBspline);
         Ratio = 4;
 
         for(index_t i = 0; i< numElevate; ++i)
-          mp.patch(0).degreeElevate();    // Elevate the degree
+          mpBspline.patch(0).degreeElevate();    // Elevate the degree
 
         // h-refine
         for(index_t i = 0; i< numHref; ++i)
-          mp.patch(0).uniformRefine();
+          mpBspline.patch(0).uniformRefine();
     }
     else if (testCase==12 || testCase==13 )
     {
@@ -346,7 +350,7 @@ int main (int argc, char** argv)
       Ratio = 10.;
 
       // We model symmetry over the width axis
-      mp = RectangularDomain(numHrefL,numHref, numElevateL+2, numElevate+2, aDim, bDim/2.);//, true, 0.001);
+      mpBspline = RectangularDomain(numHrefL,numHref, numElevateL+2, numElevate+2, aDim, bDim/2.);//, true, 0.001);
     }
     else if (testCase==14 || testCase==15 )
     {
@@ -359,7 +363,7 @@ int main (int argc, char** argv)
       Ratio = 10.;
 
       // We model symmetry over the width axis
-      mp = RectangularDomain(numHrefL,numHref, numElevateL+2, numElevate+2, aDim/2., bDim/2.);//, true, 0.001);
+      mpBspline = RectangularDomain(numHrefL,numHref, numElevateL+2, numElevate+2, aDim/2., bDim/2.);//, true, 0.001);
     }
     else if (testCase==16 )
     {
@@ -390,14 +394,14 @@ int main (int argc, char** argv)
       thickness = 140e-6;
 
       // We model symmetry over the width axis
-      mp = Rectangle(aDim/2., bDim/2.);//, true, 0.001);
+      mpBspline = Rectangle(aDim/2., bDim/2.);//, true, 0.001);
 
       for(index_t i = 0; i< numElevate; ++i)
-        mp.patch(0).degreeElevate();    // Elevate the degree
+        mpBspline.patch(0).degreeElevate();    // Elevate the degree
 
       // h-refine
       for(index_t i = 0; i< numHref; ++i)
-        mp.patch(0).uniformRefine();
+        mpBspline.patch(0).uniformRefine();
     }
     else if (testCase==17 )
     {
@@ -411,7 +415,7 @@ int main (int argc, char** argv)
       // Ratio = 2.5442834138486314;
 
       // We model symmetry over the width axis
-      mp = RectangularDomain(numHrefL,numHref, numElevateL+2, numElevate+2, aDim/2., bDim/2.);//, true, 0.001);
+      mpBspline = RectangularDomain(numHrefL,numHref, numElevateL+2, numElevate+2, aDim/2., bDim/2.);//, true, 0.001);
     }
     else if (testCase==21  )
     {
@@ -428,14 +432,14 @@ int main (int argc, char** argv)
 
       fn = "scordelis_lo_roof_shallow.xml";
 
-      gsReadFile<>(fn, mp);
+      gsReadFile<>(fn, mpBspline);
 
       for(index_t i = 0; i< numElevate; ++i)
-        mp.patch(0).degreeElevate();    // Elevate the degree
+        mpBspline.patch(0).degreeElevate();    // Elevate the degree
 
       // h-refine
       for(index_t i = 0; i< numHref; ++i)
-        mp.patch(0).uniformRefine();
+        mpBspline.patch(0).uniformRefine();
     }
 
     real_t alpha, beta;
@@ -443,6 +447,25 @@ int main (int argc, char** argv)
     beta = aDim/bDim;
     gsInfo<<"alpha = "<<alpha<<"; beta = "<<beta<<"\n";
 
+
+    // Cast all patches of the mp object to THB splines
+    gsTHBSpline<2,real_t> thb;
+    for (index_t k=0; k!=mpBspline.nPatches(); ++k)
+    {
+        gsTensorBSpline<2,real_t> *geoL = dynamic_cast< gsTensorBSpline<2,real_t> * > (&mpBspline.patch(k));
+        thb = gsTHBSpline<2,real_t>(*geoL);
+        mp.addPatch(thb);
+    }
+
+    if (testCase == 16 && THB)
+    {
+      gsMatrix<> refBoxes(2,2);
+      refBoxes.col(0) << 0,0;
+      refBoxes.col(1) << 0.25,0.25;
+      int refExtension = 1;
+      std::vector<index_t> elements = mp.patch(0).basis().asElements(refBoxes, refExtension);
+      mp.patch(0).refineElements( elements );
+    }
 
     gsMultiBasis<> dbasis(mp);
 
@@ -959,8 +982,10 @@ int main (int argc, char** argv)
       // dL =  750;
       // dLb = 750;
 
-      if (testCase==16)
+      if (testCase==16 && !THB)
         dirname = dirname + "/" + "Sheet_Symm_Quarter_tc16_" + "-r" + std::to_string(numHref) + "-R" + std::to_string(numHrefL) + "-e" + std::to_string(numElevate) + "-E" + std::to_string(numElevateL) + "-M" + std::to_string(material) + "-c" + std::to_string(Compressibility) + "-alpha" + std::to_string(alpha) + "-beta" + std::to_string(beta);
+      else if (testCase==16 && THB)
+        dirname = dirname + "/" + "Sheet_Symm_Quarter_THB_tc16_" + "-r" + std::to_string(numHref) + "-R" + std::to_string(numHrefL) + "-e" + std::to_string(numElevate) + "-E" + std::to_string(numElevateL) + "-M" + std::to_string(material) + "-c" + std::to_string(Compressibility) + "-alpha" + std::to_string(alpha) + "-beta" + std::to_string(beta);
       else
         dirname = dirname + "/" + "Sheet_Symm_Quarter_" + "-r" + std::to_string(numHref) + "-R" + std::to_string(numHrefL) + "-e" + std::to_string(numElevate) + "-E" + std::to_string(numElevateL) + "-M" + std::to_string(material) + "-c" + std::to_string(Compressibility) + "-alpha" + std::to_string(alpha) + "-beta" + std::to_string(beta);
 
@@ -1176,13 +1201,18 @@ int main (int argc, char** argv)
     gsArcLengthIterator<real_t> arcLength(Jacobian, Residual, Force);
 
     if (!membrane)
+    {
       arcLength.options().setInt("Solver",0); // LDLT solver
+      arcLength.options().setInt("BifurcationMethod",0); // 0: determinant, 1: eigenvalue
+    }
     else
+    {
       arcLength.options().setInt("Solver",1); // LU solver
+      arcLength.options().setInt("BifurcationMethod",1); // 0: determinant, 1: eigenvalue
+    }
 
     arcLength.options().setInt("Method",method);
     arcLength.options().setReal("Length",dLb);
-    arcLength.options().setInt("BifurcationMethod",1); // 0: determinant, 1: eigenvalue
     arcLength.options().setInt("AngleMethod",0); // 0: step, 1: iteration
     arcLength.options().setSwitch("AdaptiveLength",adaptive);
     arcLength.options().setInt("AdaptiveIterations",5);
@@ -1194,9 +1224,12 @@ int main (int argc, char** argv)
     arcLength.options().setInt("MaxIter",20);
     arcLength.options().setSwitch("Verbose",true);
     arcLength.options().setReal("Relaxation",relax);
-    arcLength.options().setSwitch("Quasi",quasiNewton);
     if (quasiNewtonInt>0)
+    {
+      quasiNewton = true;
       arcLength.options().setInt("QuasiIterations",quasiNewtonInt);
+    }
+    arcLength.options().setSwitch("Quasi",quasiNewton);
 
 
 
@@ -1301,11 +1334,12 @@ int main (int argc, char** argv)
 
       if (plot)
       {
-        gsField<> solField(mp,deformation);
+        gsField<> solField(mp_def,deformation);
         std::string fileName = dirname + "/" + output + util::to_string(k);
-        gsWriteParaview<>(solField, fileName, 5000);
+        gsWriteParaview<>(solField, fileName, 1000,true);
         fileName = output + util::to_string(k) + "0";
         collection.addTimestep(fileName,k,".vts");
+        collection.addTimestep(fileName,k,"_mesh.vtp");
       }
       // gsDebugVar(mp_def.patch(0).coefs());
 
