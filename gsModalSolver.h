@@ -29,7 +29,7 @@ template <class T>
 class gsModalSolver
 {
 protected:
-    typedef std::vector<std::pair<T,gsMatrix<T>> > modes_t;
+    // typedef std::vector<std::pair<T,gsMatrix<T>> > modes_t;
 public:
 
   /// Constructor giving access to the gsShellAssembler object to create a linear system per iteration
@@ -51,7 +51,7 @@ public:
     gsMatrix<T> vectors() const { return m_vectors; };
     gsMatrix<T> vector(int k) const { return m_vectors.col(k); };
 
-    modes_t mode(int k) const {makeMode(k); return m_mode; }
+    std::vector<std::pair<T,gsMatrix<T>> > mode(int k) const {return makeMode(k); }
 
 protected:
 
@@ -63,43 +63,13 @@ protected:
     gsVector<T> m_solVec;
     gsMatrix<T> m_values,m_vectors;
 
-    modes_t m_mode;
-
     bool m_verbose;
 
 protected:
 
-    void makeMode(int k);
+    std::vector<std::pair<T,gsMatrix<T>> > makeMode(int k) const;
 
 };
 
-
-} // namespace gismo
-
-//////////////////////////////////////////////////
-//////////////////////////////////////////////////
-
-namespace gismo
-{
-
-template <class T>
-void gsModalSolver<T>::compute()
-{
-    if (m_verbose) { gsInfo<<"Solving eigenvalue problem" ; }
-    m_eigSolver.compute(m_stiffness,m_mass);
-
-    if (m_verbose) { gsInfo<<"." ; }
-    m_values  = m_eigSolver.eigenvalues();
-    if (m_verbose) { gsInfo<<"." ; }
-    m_vectors = m_eigSolver.eigenvectors();
-    if (m_verbose) { gsInfo<<"." ; }
-    if (m_verbose) { gsInfo<<"Finished\n" ; }
-};
-
-template <class T>
-void gsModalSolver<T>::makeMode(int k)
-{
-    m_mode.push_back( std::make_pair( m_values.at(k), m_vectors.col(k) ) );
-};
 
 } // namespace gismo
