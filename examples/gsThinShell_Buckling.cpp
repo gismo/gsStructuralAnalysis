@@ -451,7 +451,8 @@ int main (int argc, char** argv)
 
       gsBucklingSolver<real_t> buckling(K_L,rhs,K_NL);
       buckling.verbose();
-      buckling.computePower();
+      // buckling.computePower();
+      buckling.compute();
       gsMatrix<> values = buckling.values();
       gsMatrix<> vectors = buckling.vectors();
 

@@ -18,7 +18,8 @@
 #include <gsIO/gsMatrixToFile.h>
 #include <gsThinShell2/gsThinShellAssembler.h>
 
-#include <gsThinShell/gsArcLengthIterator.h>
+// #include <gsThinShell/gsArcLengthIterator.h>
+#include <gsStructuralAnalysis/gsArcLengthIterator.h>
 
 using namespace gismo;
 
@@ -78,7 +79,7 @@ int main (int argc, char** argv)
     int quasiNewtonInt = -1;
     bool adaptive = false;
     int step = 10;
-    int method = 1; // (1: Crisfield's method; 2: Riks' method)
+    int method = 1; // (0: Riks' method; 1: Crisfield's method; 2: consistent crisfield method; 3: extended iterations)
 
     real_t thickness = 1e-3;
     real_t width = 0.1; // Width of the strip is equal to 0.1.
@@ -1173,33 +1174,34 @@ int main (int argc, char** argv)
 
 
     gsArcLengthIterator<real_t> arcLength(Jacobian, Residual, Force);
-    arcLength.setLength(dLb); // dLb
-    arcLength.setBifurcationMethod("Determinant");
-    arcLength.setLength(dLb,adaptive,5); // dLb
-    arcLength.setTau(tau);
-    arcLength.setTolerance(tol); //tol
-    arcLength.setToleranceU(tolU);
-    arcLength.setToleranceF(tolF);
-    arcLength.setMaxIterations(20);
-    arcLength.verbose();
-    arcLength.setAngleDeterminationMethod(0);
-    arcLength.setPhi(0.0);
-    if (testCase==4 || testCase==5 || testCase==8 || testCase==9 || testCase==21)
-      arcLength.setPhi(0.0);
-    arcLength.setRelaxation(relax);
 
-    if (method==1)
-      arcLength.setMethod("Crisfield");
-    else if (method==2)
-      arcLength.setMethod("Riks");
-    else if (method==3)
-      arcLength.setMethod("ConsistentCrisfield");
+    if (!membrane)
+      arcLength.options().setInt("Solver",0); // LDLT solver
+    else
+      arcLength.options().setInt("Solver",1); // LU solver
 
-    if (quasiNewton)
-      arcLength.quasiNewton();
-
+    arcLength.options().setInt("Method",method);
+    arcLength.options().setReal("Length",dLb);
+    arcLength.options().setInt("BifurcationMethod",1); // 0: determinant, 1: eigenvalue
+    arcLength.options().setInt("AngleMethod",0); // 0: step, 1: iteration
+    arcLength.options().setSwitch("AdaptiveLength",adaptive);
+    arcLength.options().setInt("AdaptiveIterations",5);
+    arcLength.options().setReal("Perturbation",tau);
+    arcLength.options().setReal("Scaling",0.0);
+    arcLength.options().setReal("Tol",tol);
+    arcLength.options().setReal("TolU",tolU);
+    arcLength.options().setReal("TolF",tolF);
+    arcLength.options().setInt("MaxIter",20);
+    arcLength.options().setSwitch("Verbose",true);
+    arcLength.options().setReal("Relaxation",relax);
+    arcLength.options().setSwitch("Quasi",quasiNewton);
     if (quasiNewtonInt>0)
-      arcLength.quasiNewton(quasiNewtonInt);
+      arcLength.options().setInt("QuasiIterations",quasiNewtonInt);
+
+
+
+    arcLength.applyOptions();
+
 
     gsParaviewCollection collection(dirname + "/" + output);
     gsMultiPatch<> deformation = mp;
