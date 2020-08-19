@@ -782,7 +782,7 @@ int main(int argc, char *argv[])
         for (size_t k = 0; k != mp_def.nPatches(); ++k)
             deformation.patch(0).coefs() -= mp.patch(0).coefs();
 
-        gsField<> solField(mp, deformation);
+        gsField<> solField(mp_def, deformation);
         gsInfo<<"Plotting in Paraview...\n";
         gsWriteParaview<>( solField, "solution", 1000, true);
 
@@ -995,7 +995,7 @@ int main(int argc, char *argv[])
     // ! [Export visualization in ParaView]
     if ( (plot) && (nonlinear) )
     {
-        gsField<> solField(mp, deformation);
+        gsField<> solField(mp_def, deformation);
         gsInfo<<"Plotting in Paraview...\n";
         gsWriteParaview<>( solField, "solution", 1000, true);
         // ev.options().setSwitch("plot.elements", true);
