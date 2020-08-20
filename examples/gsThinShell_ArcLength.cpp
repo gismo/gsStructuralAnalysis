@@ -179,10 +179,10 @@ int main (int argc, char** argv)
       real_t mu, C01,C10;
       if (material==3||material==13||material==23)
       {
-        C01 = 6.21485502e4;
-        C10 = 15.8114570e4;
+        C10 = 6.21485502e4; // c1/2
+        C01 = 15.8114570e4; // c2/2
 
-        Ratio = C01/C10;
+        Ratio = C10/C01;
         mu = 2*(C01+C10);
       }
       else
@@ -194,7 +194,7 @@ int main (int argc, char** argv)
 
       // E_modulus = 1;
 
-      gsDebug<<"E = "<<E_modulus<<"; nu = "<<PoissonRatio<<"\n";
+      gsDebug<<"E = "<<E_modulus<<"; nu = "<<PoissonRatio<<"; mu = "<<mu<<"; ratio = "<<Ratio<<"\n";
 
       aDim = 0.28;
       bDim = 0.14;
@@ -375,10 +375,10 @@ int main (int argc, char** argv)
       real_t mu, C01,C10;
       if (material==3||material==13||material==23)
       {
-        C01 = (1/22.)*1e6;
-        C10 = (0.5-1/22.)*1e6;
+        C10 = (0.5-1/22.)*1e6;      // c1/2
+        C01 = (1/22.)*1e6;          // c2/2
 
-        Ratio = C01/C10;
+        Ratio = C10/C01;
         mu = 2*(C01+C10);
       }
       else
@@ -387,7 +387,7 @@ int main (int argc, char** argv)
         mu = 2*C10;
       }
       E_modulus = 2*mu*(1+PoissonRatio);
-      gsDebug<<"E = "<<E_modulus<<"; nu = "<<PoissonRatio<<"\n";
+      gsDebug<<"E = "<<E_modulus<<"; nu = "<<PoissonRatio<<"; mu = "<<mu<<"; ratio = "<<Ratio<<"\n";
 
       aDim = 0.28;
       bDim = 0.14;
