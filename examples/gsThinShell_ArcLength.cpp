@@ -995,7 +995,7 @@ int main (int argc, char** argv)
         dirname = dirname + "/" + "Sheet_Symm_Quarter_" + "-r" + std::to_string(numHref) + "-R" + std::to_string(numHrefL) + "-e" + std::to_string(numElevate) + "-E" + std::to_string(numElevateL) + "-M" + std::to_string(material) + "-c" + std::to_string(Compressibility) + "-alpha" + std::to_string(alpha) + "-beta" + std::to_string(beta);
 
       if (symmetry)
-        dirname = dirname + "_symmetryBC"
+        dirname = dirname + "_symmetryBC";
 
       output = "solution";
       wn = output + "data.txt" ;
