@@ -80,6 +80,7 @@ int main (int argc, char** argv)
     bool adaptive = false;
     int step = 10;
     int method = 1; // (0: Riks' method; 1: Crisfield's method; 2: consistent crisfield method; 3: extended iterations)
+    bool symmetry = false;
 
     real_t thickness = 1e-3;
     real_t width = 0.1; // Width of the strip is equal to 0.1.
@@ -154,6 +155,7 @@ int main (int argc, char** argv)
     cmd.addSwitch("write", "Write output to file", write);
     cmd.addSwitch("cross", "Write cross-section to file", crosssection);
     cmd.addSwitch("membrane", "Use membrane model (no bending)", membrane);
+    cmd.addSwitch("symmetry", "Use symmetry boundary condition (different per problem)", symmetry);
 
     cmd.addSwitch("THB", "Use refinement", THB);
 
@@ -966,11 +968,14 @@ int main (int argc, char** argv)
       BCs.addCondition(boundary::east, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 2 - z.
       BCs.addCondition(boundary::east, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z.
       // BCs.addCondition(boundary::east, condition_type::clamped, 0, 0, false, 2 ); // unknown 2 - z.
+      // BCs.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z.
 
       BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 2 - z.
-      BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z.
 
-      // BCs.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z.
+      if (symmetry)
+        BCs.addCondition(boundary::south, condition_type::clamped, 0, 0, false, 2 ); // unknown 2 - z.
+      else
+        BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z.
 
       Load = 1e0;
       gsVector<> point(2);
@@ -988,6 +993,9 @@ int main (int argc, char** argv)
         dirname = dirname + "/" + "Sheet_Symm_Quarter_THB_tc16_" + "-r" + std::to_string(numHref) + "-R" + std::to_string(numHrefL) + "-e" + std::to_string(numElevate) + "-E" + std::to_string(numElevateL) + "-M" + std::to_string(material) + "-c" + std::to_string(Compressibility) + "-alpha" + std::to_string(alpha) + "-beta" + std::to_string(beta);
       else
         dirname = dirname + "/" + "Sheet_Symm_Quarter_" + "-r" + std::to_string(numHref) + "-R" + std::to_string(numHrefL) + "-e" + std::to_string(numElevate) + "-E" + std::to_string(numElevateL) + "-M" + std::to_string(material) + "-c" + std::to_string(Compressibility) + "-alpha" + std::to_string(alpha) + "-beta" + std::to_string(beta);
+
+      if (symmetry)
+        dirname = dirname + "_symmetryBC"
 
       output = "solution";
       wn = output + "data.txt" ;
