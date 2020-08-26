@@ -81,6 +81,7 @@ int main (int argc, char** argv)
     int step = 10;
     int method = 1; // (0: Riks' method; 1: Crisfield's method; 2: consistent crisfield method; 3: extended iterations)
     bool symmetry = false;
+    bool deformed = false;
 
     real_t thickness = 1e-3;
     real_t width = 0.1; // Width of the strip is equal to 0.1.
@@ -156,6 +157,7 @@ int main (int argc, char** argv)
     cmd.addSwitch("cross", "Write cross-section to file", crosssection);
     cmd.addSwitch("membrane", "Use membrane model (no bending)", membrane);
     cmd.addSwitch("symmetry", "Use symmetry boundary condition (different per problem)", symmetry);
+    cmd.addSwitch("deformed", "plot on deformed shape", deformed);
 
     cmd.addSwitch("THB", "Use refinement", THB);
 
@@ -1336,7 +1338,12 @@ int main (int argc, char** argv)
 
       if (plot)
       {
-        gsField<> solField(mp_def,deformation);
+        gsField<> solField;
+        if (deformed)
+          solField= gsField<>(mp_def,deformation);
+        else
+          solField= gsField<>(mp,deformation);
+
         std::string fileName = dirname + "/" + output + util::to_string(k);
         gsWriteParaview<>(solField, fileName, 1000,true);
         fileName = output + util::to_string(k) + "0";
@@ -1345,17 +1352,28 @@ int main (int argc, char** argv)
       }
       if (stress)
       {
+        gsField<> membraneStress, flexuralStress, membraneStress_p;
+
         gsPiecewiseFunction<> membraneStresses;
         assembler.constructStress(mp_def,membraneStresses,stress_type::membrane);
-        gsField<> membraneStress(mp_def,membraneStresses, true);
+        if (deformed)
+          membraneStress = gsField<>(mp_def,membraneStresses,true);
+        else
+          membraneStress = gsField<>(mp,membraneStresses,true);
 
         gsPiecewiseFunction<> flexuralStresses;
         assembler.constructStress(mp_def,flexuralStresses,stress_type::flexural);
-        gsField<> flexuralStress(mp_def,flexuralStresses, true);
+        if (deformed)
+          flexuralStress = gsField<>(mp_def,flexuralStresses, true);
+        else
+          flexuralStress = gsField<>(mp,flexuralStresses, true);
 
         gsPiecewiseFunction<> membraneStresses_p;
         assembler.constructStress(mp_def,membraneStresses_p,stress_type::principal_stress_membrane);
-        gsField<> membraneStress_p(mp_def,membraneStresses_p, true);
+        if (deformed)
+          membraneStress_p = gsField<>(mp_def,membraneStresses_p, true);
+        else
+          membraneStress_p = gsField<>(mp,membraneStresses_p, true);
 
         std::string fileName;
         fileName = dirname + "/" + "membrane" + util::to_string(k);
