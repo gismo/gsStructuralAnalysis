@@ -393,7 +393,7 @@ int main (int argc, char** argv)
 
       aDim = 0.28;
       bDim = 0.14;
-      thickness = 140e-6;
+      thickness = 0.14e-3;
 
       // We model symmetry over the width axis
       mpBspline = Rectangle(aDim/2., bDim/2.);//, true, 0.001);
@@ -1245,6 +1245,9 @@ int main (int argc, char** argv)
 
 
     gsParaviewCollection collection(dirname + "/" + output);
+    gsParaviewCollection Smembrane(dirname + "/" + "membrane");
+    gsParaviewCollection Sflexural(dirname + "/" + "flexural");
+    gsParaviewCollection Smembrane_p(dirname + "/" + "membrane_p");
     gsMultiPatch<> deformation = mp;
 
     // Make objects for previous solutions
@@ -1327,15 +1330,6 @@ int main (int argc, char** argv)
 
       // gsDebugVar(mp_def.patch(0).coefs());
 
-      if (stress)
-      {
-        gsPiecewiseFunction<> stresses;
-        assembler.constructStress(mp_def,stresses,stress_type::principal_stretch);
-        gsField<> stressField(mp,stresses, true);
-        gsWriteParaview( stressField, "stress", 5000);
-      }
-
-
       gsInfo<<"pressures:\n"<<pressure*arcLength.solutionL()<<"\n"
                             <<pressure*arcLength.solutionL() * assembler.getArea(mp) / assembler.getArea(mp_def)<<"\n";
 
@@ -1349,7 +1343,36 @@ int main (int argc, char** argv)
         collection.addTimestep(fileName,k,".vts");
         collection.addTimestep(fileName,k,"_mesh.vtp");
       }
-      // gsDebugVar(mp_def.patch(0).coefs());
+      if (stress)
+      {
+        gsPiecewiseFunction<> membraneStresses;
+        assembler.constructStress(mp_def,membraneStresses,stress_type::membrane);
+        gsField<> membraneStress(mp_def,membraneStresses, true);
+
+        gsPiecewiseFunction<> flexuralStresses;
+        assembler.constructStress(mp_def,flexuralStresses,stress_type::flexural);
+        gsField<> flexuralStress(mp_def,flexuralStresses, true);
+
+        gsPiecewiseFunction<> membraneStresses_p;
+        assembler.constructStress(mp_def,membraneStresses_p,stress_type::principal_stress_membrane);
+        gsField<> membraneStress_p(mp_def,membraneStresses_p, true);
+
+        std::string fileName;
+        fileName = dirname + "/" + "membrane" + util::to_string(k);
+        gsWriteParaview( membraneStress, fileName, 1000);
+        fileName = "membrane" + util::to_string(k) + "0";
+        Smembrane.addTimestep(fileName,k,".vts");
+
+        fileName = dirname + "/" + "flexural" + util::to_string(k);
+        gsWriteParaview( flexuralStress, fileName, 1000);
+        fileName = "flexural" + util::to_string(k) + "0";
+        Sflexural.addTimestep(fileName,k,".vts");
+
+        fileName = dirname + "/" + "membrane_p" + util::to_string(k);
+        gsWriteParaview( membraneStress_p, fileName, 1000);
+        fileName = "membrane_p" + util::to_string(k) + "0";
+        Smembrane_p.addTimestep(fileName,k,".vts");
+      }
 
 
 
@@ -1369,7 +1392,12 @@ int main (int argc, char** argv)
     }
 
     if (plot)
+    {
       collection.save();
+      Smembrane.save();
+      Sflexural.save();
+      Smembrane_p.save();
+    }
 
   return result;
 }
