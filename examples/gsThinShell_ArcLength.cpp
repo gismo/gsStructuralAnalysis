@@ -82,6 +82,7 @@ int main (int argc, char** argv)
     int method = 1; // (0: Riks' method; 1: Crisfield's method; 2: consistent crisfield method; 3: extended iterations)
     bool symmetry = false;
     bool deformed = false;
+    real_t perturbation = 0;
 
     real_t thickness = 1e-3;
     real_t width = 0.1; // Width of the strip is equal to 0.1.
@@ -142,6 +143,8 @@ int main (int argc, char** argv)
     cmd.addReal("L","dLb", "arc length", dLb);
     cmd.addReal("l","dL", "arc length after bifurcation", dL);
     cmd.addReal("A","relaxation", "Relaxation factor for arc length method", relax);
+
+    cmd.addReal("P","perturbation", "perturbation factor", perturbation);
 
     cmd.addReal("f","factor", "factor for bifurcation perturbation", tau);
     cmd.addInt("q","QuasiNewtonInt","Use the Quasi Newton method every INT iterations",quasiNewtonInt);
@@ -451,13 +454,49 @@ int main (int argc, char** argv)
     beta = aDim/bDim;
     gsInfo<<"alpha = "<<alpha<<"; beta = "<<beta<<"\n";
 
+    // to do: make neat functions for this block
+      if (perturbation != 0 && testCase==16)
+      {
+        std::string fn = "fitting/wrinkling.xml";
+        gsFileData<> fd_in(fn);
+        gsMatrix<> uv, xyz;
+        fd_in.getId<gsMatrix<> >(0, uv );
+        fd_in.getId<gsMatrix<> >(1, xyz);
+        real_t u_min = uv.row(0).minCoeff();
+        real_t u_max = uv.row(0).maxCoeff();
+        real_t v_min = uv.row(1).minCoeff();
+        real_t v_max = uv.row(1).maxCoeff();
+
+
+        gsTensorBSpline<2,real_t> *geo = dynamic_cast< gsTensorBSpline<2,real_t> * > (&mpBspline.patch(0));
+        gsTensorBSplineBasis<2,real_t> tbasis = geo->basis();
+        tbasis.knots(0).transform(u_min,u_max);
+        tbasis.knots(1).transform(v_min,v_max);
+
+        gsFitting<> fitting( uv, xyz, tbasis);
+        fitting.compute(0.000001);
+        fitting.computeErrors();
+        gsInfo<<"Maximum fitting error = "<<fitting.maxPointError()<<"; Minimum fitting error = "<<fitting.minPointError()<<"\n";
+        gsMultiPatch<> mpPerturbed;
+        mpPerturbed.addPatch(*fitting.result());
+
+        gsMultiPatch<> mp_perturbation = mpBspline;
+
+        mp_perturbation.patch(0).coefs() -= perturbation * mpPerturbed.patch(0).coefs();
+        mpBspline.patch(0).coefs() += perturbation * mp_perturbation.patch(0).coefs();
+
+        gsField<> perturb(mpBspline,mp_perturbation);
+        gsWriteParaview<>(perturb,"perturbation");
+        gsWriteParaview<>(mpBspline,"perturbed");
+      }
+    // ! make neat functions ...
 
     // Cast all patches of the mp object to THB splines
     gsTHBSpline<2,real_t> thb;
     for (index_t k=0; k!=mpBspline.nPatches(); ++k)
     {
-        gsTensorBSpline<2,real_t> *geoL = dynamic_cast< gsTensorBSpline<2,real_t> * > (&mpBspline.patch(k));
-        thb = gsTHBSpline<2,real_t>(*geoL);
+        gsTensorBSpline<2,real_t> *geo = dynamic_cast< gsTensorBSpline<2,real_t> * > (&mpBspline.patch(k));
+        thb = gsTHBSpline<2,real_t>(*geo);
         mp.addPatch(thb);
     }
 
@@ -998,10 +1037,15 @@ int main (int argc, char** argv)
 
       if (symmetry)
         dirname = dirname + "_symmetryBC";
+      if (perturbation!=0)
+        dirname = dirname + "_perturb="+std::to_string(perturbation);
+
 
       output = "solution";
       wn = output + "data.txt" ;
-      SingularPoint = true;
+
+      if (perturbation == 0)
+        SingularPoint = true;
 
       cross_coordinate = 0;
       cross_val = 0.0;
