@@ -372,7 +372,7 @@ int main (int argc, char** argv)
       // We model symmetry over the width axis
       mpBspline = RectangularDomain(numHrefL,numHref, numElevateL+2, numElevate+2, aDim/2., bDim/2.);//, true, 0.001);
     }
-    else if (testCase==16 )
+    else if (testCase==16 || testCase==18)
     {
       if ((!Compressibility) && (material!=0))
         PoissonRatio = 0.5;
@@ -382,15 +382,26 @@ int main (int argc, char** argv)
       real_t mu, C01,C10;
       if (material==3||material==13||material==23)
       {
-        C10 = (0.5-1/22.)*1e6;      // c1/2
-        C01 = (1/22.)*1e6;          // c2/2
-
+        if (testCase==16)
+        {
+          C10 = (0.5-1/22.)*1e6;      // c1/2
+          C01 = (1/22.)*1e6;          // c2/2
+        }
+        else if (testCase==18)
+        {
+          C10 = 6.21485502e4; // c1/2
+          C01 = 15.8114570e4; // c2/2
+        }
         Ratio = C10/C01;
         mu = 2*(C01+C10);
       }
       else
       {
-        C10 = (0.5)*1e6;
+        if (testCase==16)
+          C10 = (0.5)*1e6;
+        else if (testCase==18)
+          C10 = 19.1010178e4;
+
         mu = 2*C10;
       }
       E_modulus = 2*mu*(1+PoissonRatio);
@@ -455,7 +466,7 @@ int main (int argc, char** argv)
     gsInfo<<"alpha = "<<alpha<<"; beta = "<<beta<<"\n";
 
     // to do: make neat functions for this block
-      if (perturbation != 0 && testCase==16)
+      if (perturbation != 0 && (testCase==16 || testCase==18))
       {
         std::string fn = "fitting/wrinkling.xml";
         gsFileData<> fd_in(fn);
@@ -500,7 +511,7 @@ int main (int argc, char** argv)
         mp.addPatch(thb);
     }
 
-    if (testCase == 16 && THB)
+    if ((testCase == 16 || testCase==18) && THB)
     {
       gsMatrix<> refBoxes(2,2);
       refBoxes.col(0) << 0,0;
@@ -1000,7 +1011,7 @@ int main (int argc, char** argv)
       cross_val = 0.0;
     }
     // Anti-symmetric
-    else if (testCase == 14 || testCase == 16)
+    else if (testCase == 14 || testCase == 16 || testCase==18)
     {
       BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 0 ); // unknown 0 - x
       BCs.addCondition(boundary::west, condition_type::clamped, 0, 0, false, 2 ); // unknown 2 - z
@@ -1032,6 +1043,10 @@ int main (int argc, char** argv)
         dirname = dirname + "/" + "Sheet_Symm_Quarter_tc16_" + "-r" + std::to_string(numHref) + "-R" + std::to_string(numHrefL) + "-e" + std::to_string(numElevate) + "-E" + std::to_string(numElevateL) + "-M" + std::to_string(material) + "-c" + std::to_string(Compressibility) + "-alpha" + std::to_string(alpha) + "-beta" + std::to_string(beta);
       else if (testCase==16 && THB)
         dirname = dirname + "/" + "Sheet_Symm_Quarter_THB_tc16_" + "-r" + std::to_string(numHref) + "-R" + std::to_string(numHrefL) + "-e" + std::to_string(numElevate) + "-E" + std::to_string(numElevateL) + "-M" + std::to_string(material) + "-c" + std::to_string(Compressibility) + "-alpha" + std::to_string(alpha) + "-beta" + std::to_string(beta);
+      if (testCase==18 && !THB)
+        dirname = dirname + "/" + "Sheet_Symm_Quarter_tc18_" + "-r" + std::to_string(numHref) + "-R" + std::to_string(numHrefL) + "-e" + std::to_string(numElevate) + "-E" + std::to_string(numElevateL) + "-M" + std::to_string(material) + "-c" + std::to_string(Compressibility) + "-alpha" + std::to_string(alpha) + "-beta" + std::to_string(beta);
+      else if (testCase==18 && THB)
+        dirname = dirname + "/" + "Sheet_Symm_Quarter_THB_tc18_" + "-r" + std::to_string(numHref) + "-R" + std::to_string(numHrefL) + "-e" + std::to_string(numElevate) + "-E" + std::to_string(numElevateL) + "-M" + std::to_string(material) + "-c" + std::to_string(Compressibility) + "-alpha" + std::to_string(alpha) + "-beta" + std::to_string(beta);
       else
         dirname = dirname + "/" + "Sheet_Symm_Quarter_" + "-r" + std::to_string(numHref) + "-R" + std::to_string(numHrefL) + "-e" + std::to_string(numElevate) + "-E" + std::to_string(numElevateL) + "-M" + std::to_string(material) + "-c" + std::to_string(Compressibility) + "-alpha" + std::to_string(alpha) + "-beta" + std::to_string(beta);
 
