@@ -1019,7 +1019,10 @@ int main (int argc, char** argv)
       BCs.addCondition(boundary::east, condition_type::collapsed, 0, 0, false, 0 ); // unknown 1 - y
       BCs.addCondition(boundary::east, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 2 - z.
       BCs.addCondition(boundary::east, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z.
-      // BCs.addCondition(boundary::east, condition_type::clamped, 0, 0, false, 2 ); // unknown 2 - z.
+
+      BCs.addCondition(boundary::east, condition_type::clamped, 0, 0, false, 0 ); // unknown 2 - z.
+      BCs.addCondition(boundary::west, condition_type::clamped, 0, 0, false, 1 ); // unknown 2 - z
+      BCs.addCondition(boundary::west, condition_type::clamped, 0, 0, false, 2 ); // unknown 2 - z
       // BCs.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z.
 
       BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 2 - z.
@@ -1095,6 +1098,11 @@ int main (int argc, char** argv)
       output =  "solution";
       wn = output + "data.txt";
       SingularPoint = true;
+
+      writePoints.resize(2,3);
+      writePoints.col(0)<<0.0,1.0;
+      writePoints.col(1)<<0.5,1.0;
+      writePoints.col(2)<<1.0,1.0;
     }
     else if (testCase == 17)
     {
