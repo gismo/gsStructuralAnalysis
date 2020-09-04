@@ -1021,7 +1021,7 @@ int main (int argc, char** argv)
       BCs.addCondition(boundary::east, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z.
 
       BCs.addCondition(boundary::east, condition_type::clamped, 0, 0, false, 0 ); // unknown 2 - z.
-      BCs.addCondition(boundary::west, condition_type::clamped, 0, 0, false, 1 ); // unknown 2 - z
+      // BCs.addCondition(boundary::west, condition_type::clamped, 0, 0, false, 1 ); // unknown 2 - z
       BCs.addCondition(boundary::west, condition_type::clamped, 0, 0, false, 2 ); // unknown 2 - z
       // BCs.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z.
 
