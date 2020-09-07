@@ -1021,8 +1021,8 @@ int main (int argc, char** argv)
       BCs.addCondition(boundary::east, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z.
 
       BCs.addCondition(boundary::east, condition_type::clamped, 0, 0, false, 0 ); // unknown 2 - z.
-      // BCs.addCondition(boundary::west, condition_type::clamped, 0, 0, false, 1 ); // unknown 2 - z
-      BCs.addCondition(boundary::west, condition_type::clamped, 0, 0, false, 2 ); // unknown 2 - z
+      BCs.addCondition(boundary::east, condition_type::clamped, 0, 0, false, 1 ); // unknown 2 - z
+      BCs.addCondition(boundary::east, condition_type::clamped, 0, 0, false, 2 ); // unknown 2 - z
       // BCs.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z.
 
       BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 2 - z.
@@ -1370,7 +1370,7 @@ int main (int argc, char** argv)
         if (arcLength.stabilityChange())
         {
           gsInfo<<"Bifurcation spotted!"<<"\n";
-          arcLength.computeSingularPoint(1e-4, 5, Uold, Lold, 1e-10, 0, false);
+          arcLength.computeSingularPoint(1e-4, 5, Uold, Lold, 1e-10, 1e-1, false);
           arcLength.switchBranch();
           dLb0 = dLb = dL;
           arcLength.setLength(dLb);
