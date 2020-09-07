@@ -198,6 +198,19 @@ int main(int argc, char *argv[])
         thickness = 0.001;
         PoissonRatio = 0.4999;
     }
+    else if (testCase == 20)
+    {
+        // Unit square
+        // gsReadFile<>("planar/annulus_4p.xml", mp);
+        gsMultiPatch<> mp_old;
+        mp_old.addPatch( gsNurbsCreator<>::BSplineSquare(1) ); // degree
+        mp = mp_old.uniformSplit();
+        mp.computeTopology();
+        mp.embed(3);
+        E_modulus = 1;
+        thickness = 1;
+        PoissonRatio = 0;
+    }
     else
     {
         // Unit square
@@ -224,13 +237,14 @@ int main(int argc, char *argv[])
             mp.uniformRefine();
     }
     mp_def = mp;
-    gsWriteParaview<>( mp    , "mp", 1000, true);
+    gsWriteParaview<>( mp_def    , "mp", 1000, true);
 
 
     //! [Refinement]
     gsMultiBasis<> dbasis(mp);
 
     gsInfo << "Patches: "<< mp.nPatches() <<", degree: "<< dbasis.minCwiseDegree() <<"\n";
+    gsInfo<<mp_def<<"\n";
     gsInfo << dbasis.basis(0)<<"\n";
 
     gsBoundaryConditions<> bc;
@@ -246,6 +260,7 @@ int main(int argc, char *argv[])
     gsConstantFunction<> displx(0.1,3);
     gsConstantFunction<> disply(0.25,3);
 
+    gsFunctionExpr<> neuDataFun1;
     gsConstantFunction<> neuData(neu,3);
     real_t pressure = 0.0;
     if (testCase == 0)
@@ -622,6 +637,64 @@ int main(int argc, char *argv[])
 
         bc.addCondition(boundary::east, condition_type::dirichlet, 0, 0, false, 0 ); // unknown 0 - x
     }
+    else if (testCase == 20)
+    {
+        real_t Load = 1e-1;
+        neu << 0, 0, -Load;
+        neuData.setValue(neu,3);
+
+        real_t T1 = 0.5;
+        std::string nx = std::to_string(-T1) + "*cos(atan2(y,x))";
+        std::string ny = std::to_string(-T1) + "*sin(atan2(y,x))";
+        std::string nz = "0";
+        neuDataFun1 = gsFunctionExpr<>(nx,ny,nz,3);
+
+        // for (index_t p=0; p!=mp.nPatches(); p++)
+        // {
+        //     // bc.addCondition(p,boundary::west, condition_type::neumann, &neuDataFun1 ); // unknown 0 - x
+        //     bc.addCondition(p,boundary::west, condition_type::neumann, &neuData ); // unknown 0 - x
+        //     bc.addCondition(p,boundary::east, condition_type::dirichlet, 0, 0, false, 0 ); // unknown 1 - y
+        //     bc.addCondition(p,boundary::east, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 1 - y
+        //     bc.addCondition(p,boundary::east, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z
+        // }
+
+        bc.addCondition(0,boundary::south, condition_type::neumann, &neuDataFun1 ); // unknown 0 - x
+        // bc.addCondition(0,boundary::south, condition_type::dirichlet, 0, 0, false, 0 ); // unknown 0 - x
+        // bc.addCondition(0,boundary::south, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 0 - x
+        // bc.addCondition(0,boundary::south, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 0 - x
+        bc.addCondition(0,boundary::west, condition_type::dirichlet, 0, 0, false, 0 ); // unknown 0 - x
+        bc.addCondition(0,boundary::west, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 0 - x
+        bc.addCondition(0,boundary::west, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 0 - x
+
+        // bc.addCondition(1,boundary::west, condition_type::neumann, &neuDataFun1 ); // unknown 0 - x
+        bc.addCondition(1,boundary::west, condition_type::dirichlet, 0, 0, false, 0 ); // unknown 0 - x
+        bc.addCondition(1,boundary::west, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 0 - x
+        bc.addCondition(1,boundary::west, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 0 - x
+        bc.addCondition(1,boundary::north, condition_type::dirichlet, 0, 0, false, 0 ); // unknown 0 - x
+        bc.addCondition(1,boundary::north, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 0 - x
+        bc.addCondition(1,boundary::north, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 0 - x
+
+        // bc.addCondition(2,boundary::south, condition_type::neumann, &neuDataFun1 ); // unknown 0 - x
+        bc.addCondition(2,boundary::south, condition_type::dirichlet, 0, 0, false, 0 ); // unknown 0 - x
+        bc.addCondition(2,boundary::south, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 0 - x
+        bc.addCondition(2,boundary::south, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 0 - x
+        bc.addCondition(2,boundary::east, condition_type::dirichlet, 0, 0, false, 0 ); // unknown 0 - x
+        bc.addCondition(2,boundary::east, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 0 - x
+        bc.addCondition(2,boundary::east, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 0 - x
+
+        // bc.addCondition(3,boundary::east, condition_type::neumann, &neuDataFun1 ); // unknown 0 - x
+        bc.addCondition(3,boundary::east, condition_type::dirichlet, 0, 0, false, 0 ); // unknown 0 - x
+        bc.addCondition(3,boundary::east, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 0 - x
+        bc.addCondition(3,boundary::east, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 0 - x
+        bc.addCondition(3,boundary::north, condition_type::dirichlet, 0, 0, false, 0 ); // unknown 0 - x
+        bc.addCondition(3,boundary::north, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 0 - x
+        bc.addCondition(3,boundary::north, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 0 - x
+
+
+        tmp << 0,0,-1e-6;
+    }
+
+    gsDebugVar(bc);
     //! [Refinement]
 
     // Linear isotropic material model
@@ -760,10 +833,12 @@ int main(int argc, char *argv[])
 
     gsVector<> solVector = solver.solve(assembler.rhs());
 
+    gsDebugVar(solVector);
+
     mp_def = assembler.constructSolution(solVector);
     gsMultiPatch<> deformation = mp_def;
     for (size_t k = 0; k != mp_def.nPatches(); ++k)
-        deformation.patch(0).coefs() -= mp.patch(0).coefs();
+        deformation.patch(k).coefs() -= mp.patch(k).coefs();
 
     // mp_def = RectangularDomain(0,2,2.0,1.0);
     //     // p-refine
@@ -780,7 +855,7 @@ int main(int argc, char *argv[])
     {
         deformation = mp_def;
         for (size_t k = 0; k != mp_def.nPatches(); ++k)
-            deformation.patch(0).coefs() -= mp.patch(0).coefs();
+            deformation.patch(k).coefs() -= mp.patch(k).coefs();
 
         gsField<> solField(mp_def, deformation);
         gsInfo<<"Plotting in Paraview...\n";
@@ -984,7 +1059,7 @@ int main(int argc, char *argv[])
 
     deformation = mp_def;
     for (size_t k = 0; k != mp_def.nPatches(); ++k)
-        deformation.patch(0).coefs() -= mp.patch(0).coefs();
+        deformation.patch(k).coefs() -= mp.patch(k).coefs();
 
     gsInfo <<"Maximum deformation coef: "
            << deformation.patch(0).coefs().colwise().maxCoeff() <<".\n";
