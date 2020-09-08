@@ -36,6 +36,9 @@ gsMultiPatch<T> AnnularDomain(int n, int p, T R1, T R2);
 template <class T>
 gsMultiPatch<T> FrustrumDomain(int n, int p, T R1, T R2, T h);
 
+template <class T>
+gsMultiPatch<T> addClamping(gsMultiPatch<T> &mp, index_t patch, std::vector<boxSide> sides, T offset);
+
 void writeToCSVfile(std::string name, gsMatrix<> matrix)
 {
     std::ofstream file(name.c_str());
@@ -346,19 +349,6 @@ int main (int argc, char** argv)
         for(index_t i = 0; i< numHref; ++i)
           mpBspline.patch(0).uniformRefine();
     }
-    else if (testCase==12 || testCase==13 )
-    {
-        if ((!Compressibility) && (material!=0))
-          PoissonRatio = 0.5;
-        else
-          PoissonRatio = 0.499;
-      E_modulus = 1e6;
-
-      Ratio = 10.;
-
-      // We model symmetry over the width axis
-      mpBspline = RectangularDomain(numHrefL,numHref, numElevateL+2, numElevate+2, aDim, bDim/2.);//, true, 0.001);
-    }
     else if (testCase==12)
     {
         if ((!Compressibility) && (material!=0))
@@ -412,7 +402,13 @@ int main (int argc, char** argv)
       thickness = 0.14e-3;
 
       // We model symmetry over the width axis
-      mpBspline = Rectangle(aDim/2., bDim/2.);//, true, 0.001);
+      std::vector<boxSide> sides;
+      sides.push_back(boundary::west);
+      sides.push_back(boundary::east);
+      if (symmetry)
+        sides.push_back(boundary::south);
+
+      mpBspline = Rectangle(aDim/2., bDim/2.);
 
       for(index_t i = 0; i< numElevate; ++i)
         mpBspline.patch(0).degreeElevate();    // Elevate the degree
@@ -420,6 +416,9 @@ int main (int argc, char** argv)
       // h-refine
       for(index_t i = 0; i< numHref; ++i)
         mpBspline.patch(0).uniformRefine();
+
+      addClamping(mpBspline,0,sides, 1e-2);
+
     }
     else if (testCase==15 )
     {
@@ -434,6 +433,22 @@ int main (int argc, char** argv)
 
       // We model symmetry over the width axis
       mpBspline = RectangularDomain(numHrefL,numHref, numElevateL+2, numElevate+2, aDim/2., bDim/2.);//, true, 0.001);
+    }
+    else if (testCase==16)
+    {
+      E_modulus = 3500e6;
+      PoissonRatio = 0.31;
+      aDim = 380e-3;
+      bDim = 128e-3;
+      thickness = 0.0025e-3*0.5;
+      mpBspline = Rectangle(aDim, bDim);
+
+      for(index_t i = 0; i< numElevate; ++i)
+        mpBspline.patch(0).degreeElevate();    // Elevate the degree
+
+      // h-refine
+      for(index_t i = 0; i< numHref; ++i)
+        mpBspline.patch(0).uniformRefine();
     }
     else if (testCase==21  )
     {
@@ -1011,7 +1026,40 @@ int main (int argc, char** argv)
       writePoints.col(1)<<0.0,0.5;
       writePoints.col(2)<<0.0,1.0;
     }
+    else if (testCase == 16)
+    {
+      real_t alpha = bDim/(2*thickness);
+      real_t beta = 2*aDim/bDim;
+      dirname = "ArcLengthResults/SheetShear_alpha" + std::to_string(alpha) + "_beta" + std::to_string(beta) + "_nu"  + std::to_string(PoissonRatio) + "_r" + std::to_string(numHref) + "e" + std::to_string(numElevate);
 
+      BCs.addCondition(boundary::north, condition_type::collapsed, 0, 0, false, 0 ); // unknown 0 - x
+      BCs.addCondition(boundary::north, condition_type::collapsed, 0, 0, false, 1 ); // unknown 0 - x
+      BCs.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z
+      BCs.addCondition(boundary::north, condition_type::clamped, 0, 0, false, 2 ); // unknown 2 - z
+
+      BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 0 ); // unknown 0 - x
+      BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 1 - y
+      BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z
+      BCs.addCondition(boundary::north, condition_type::clamped, 0, 0, false, 2 ); // unknown 2 - z
+
+      Load = 1e-8;
+      gsVector<> point(2);
+      gsVector<> load (3);
+      point<< 1.0, 1.0 ;
+      load << Load,0.0, 0.0;
+      pLoads.addLoad(point, load, 0 );
+
+      output = "solution";
+      wn = dirname + "/" + output + "data.txt";
+
+      tolU = 1e-5;
+      tolU = 1e-5;
+
+      SingularPoint = true;
+
+      cross_coordinate = 0;
+      cross_val = 0.0;
+    }
 
     else if (testCase == 21)
     {
@@ -1442,7 +1490,38 @@ gsMultiPatch<T> RectangularDomain(int n, int m, int p, int q, T L, T B, bool cla
 }
 
 template <class T>
-gsMultiPatch<T> Rectangle(T L, T B)
+gsMultiPatch<T> addClamping(gsMultiPatch<T>& mp, index_t patch, std::vector<boxSide> sides, T offset) //, std::vector<boxSide> sides, T offset)
+{
+
+    gsTensorBSpline<2,T> *geo = dynamic_cast< gsTensorBSpline<2,real_t> * > (&mp.patch(patch));
+
+    T dknot0 = geo->basis().component(0).knots().minIntervalLength();
+    T dknot1 = geo->basis().component(1).knots().minIntervalLength();
+
+    for (index_t k=0; k!=sides.size(); k++)
+    {
+      if (sides[k]==boundary::west || sides[k]==boundary::east) // west or east
+      {
+        if (sides[k]==boundary::east) // east, val = 1
+          geo->insertKnot(1 - std::min(offset, dknot0 / 2),0);
+        else if (sides[k]==boundary::west) // west
+          geo->insertKnot(std::min(offset, dknot0 / 2),0);
+      }
+      else if (sides[k]==boundary::south || sides[k]==boundary::north) // west or east
+      {
+       if (sides[k]==boundary::north) // north
+         geo->insertKnot(1 - std::min(offset, dknot0 / 2),1);
+       else if (sides[k]==boundary::south) // south
+         geo->insertKnot(std::min(offset, dknot0 / 2),1);
+      }
+      else
+        gsInfo<<"Side unknown";
+    }
+
+}
+
+template <class T>
+gsMultiPatch<T> Rectangle(T L, T B) //, int n, int m, std::vector<boxSide> sides, T offset)
 {
   // -------------------------------------------------------------------------
   // --------------------------Make beam geometry-----------------------------
