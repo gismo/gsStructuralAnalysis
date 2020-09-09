@@ -37,7 +37,7 @@ template <class T>
 gsMultiPatch<T> FrustrumDomain(int n, int p, T R1, T R2, T h);
 
 template <class T>
-gsMultiPatch<T> addClamping(gsMultiPatch<T> &mp, index_t patch, std::vector<boxSide> sides, T offset);
+void addClamping(gsMultiPatch<T> &mp, index_t patch, std::vector<boxSide> sides, T offset);
 
 void writeToCSVfile(std::string name, gsMatrix<> matrix)
 {
@@ -1490,7 +1490,7 @@ gsMultiPatch<T> RectangularDomain(int n, int m, int p, int q, T L, T B, bool cla
 }
 
 template <class T>
-gsMultiPatch<T> addClamping(gsMultiPatch<T>& mp, index_t patch, std::vector<boxSide> sides, T offset) //, std::vector<boxSide> sides, T offset)
+void addClamping(gsMultiPatch<T>& mp, index_t patch, std::vector<boxSide> sides, T offset) //, std::vector<boxSide> sides, T offset)
 {
 
     gsTensorBSpline<2,T> *geo = dynamic_cast< gsTensorBSpline<2,real_t> * > (&mp.patch(patch));
@@ -1498,26 +1498,37 @@ gsMultiPatch<T> addClamping(gsMultiPatch<T>& mp, index_t patch, std::vector<boxS
     T dknot0 = geo->basis().component(0).knots().minIntervalLength();
     T dknot1 = geo->basis().component(1).knots().minIntervalLength();
 
-    for (index_t k=0; k!=sides.size(); k++)
+    gsInfo<<"sides.size() = "<<sides.size()<<"\n";
+
+    index_t k =0;
+
+
+    for (std::vector<boxSide>::iterator it = sides.begin(); it != sides.end(); it++)
     {
-      if (sides[k]==boundary::west || sides[k]==boundary::east) // west or east
+        gsInfo<<"side = "<<(*it)<<"\n";
+
+      if (*it==boundary::west || *it==boundary::east) // west or east
       {
-        if (sides[k]==boundary::east) // east, val = 1
+        if (*it==boundary::east) // east, val = 1
           geo->insertKnot(1 - std::min(offset, dknot0 / 2),0);
-        else if (sides[k]==boundary::west) // west
+        else if (*it==boundary::west) // west
           geo->insertKnot(std::min(offset, dknot0 / 2),0);
       }
-      else if (sides[k]==boundary::south || sides[k]==boundary::north) // west or east
+      else if (*it==boundary::south || *it==boundary::north) // west or east
       {
-       if (sides[k]==boundary::north) // north
+       if (*it==boundary::north) // north
          geo->insertKnot(1 - std::min(offset, dknot0 / 2),1);
-       else if (sides[k]==boundary::south) // south
+       else if (*it==boundary::south) // south
          geo->insertKnot(std::min(offset, dknot0 / 2),1);
       }
+      else if (*it==boundary::none)
+        gsWarn<<*it<<"\n";
       else
-        gsInfo<<"Side unknown";
-    }
+        GISMO_ERROR("Side unknown, side = " <<*it);
 
+        k++;
+gsInfo<<"k = "<<k<<"\n";
+    }
 }
 
 template <class T>
