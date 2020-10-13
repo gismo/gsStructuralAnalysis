@@ -32,6 +32,26 @@ void gsModalSolver<T>::compute()
 };
 
 template <class T>
+void gsBucklingSolver<T>::computeSparse(index_t number)
+{
+    if (m_verbose) { gsInfo<<"Solving eigenvalue problem" ; }
+    gsSpectraGenSymSolver<gsSparseMatrix<T>,Spectra::SMALLEST_ALGE> solver(m_stiffness,m_mass,number,2*number);
+    if (m_verbose) { gsInfo<<"." ; }
+    solver.init();
+    if (m_verbose) { gsInfo<<"." ; }
+    solver.compute();
+    if (m_verbose) { gsInfo<<"." ; }
+    m_values  = solver.eigenvalues();
+    if (m_verbose) { gsInfo<<"." ; }
+    m_vectors = solver.eigenvectors();
+    if (m_verbose) { gsInfo<<"." ; }
+    m_values = m_values.reverse();
+    if (m_verbose) { gsInfo<<"." ; }
+    m_vectors = m_vectors.rowwise().reverse();
+    if (m_verbose) { gsInfo<<"Finished\n" ; }
+};
+
+template <class T>
 std::vector<std::pair<T,gsMatrix<T>> > gsModalSolver<T>::makeMode(int k) const
 {
     std::vector<std::pair<T,gsMatrix<T>> > mode;

@@ -12,6 +12,7 @@
 */
 
 #include <typeinfo>
+#include <gsSpectra/gsSpectra.h>
 #pragma once
 
 
@@ -44,6 +45,7 @@ public:
 public:
 
     void compute();
+    void computeSparse(index_t number = 10);
 
     gsMatrix<T> values() const { return m_values; };
     T value(int k) const { return m_values.at(k); };
