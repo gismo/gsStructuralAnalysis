@@ -54,6 +54,7 @@ int main (int argc, char** argv)
     int numElevateL = -1;
     int numHrefL    = -1;
     bool plot       = false;
+    bool sparse     = false;
     bool nonlinear  = false;
     bool first  = false;
     int mode = 0;
@@ -104,6 +105,7 @@ int main (int argc, char** argv)
     cmd.addSwitch("plot", "Plot result in ParaView format", plot);
     cmd.addSwitch("first", "Plot only first", first);
     cmd.addSwitch("write", "Write convergence data to file", write);
+    cmd.addSwitch("sparse", "Use sparse solver", sparse);
 
     try { cmd.getValues(argc,argv); } catch (int rv) { return rv; }
 
@@ -290,9 +292,16 @@ int main (int argc, char** argv)
       BCs.addCondition(boundary::west, condition_type::clamped,0,0,false,2);
 
       BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0,false,1 ); // unknown 1 - y
+      BCs.addCondition(boundary::south, condition_type::clamped, 0, 0,false,2 ); // unknown 1 - y
       BCs.addCondition(boundary::north, condition_type::dirichlet, 0, 0,false,1 ); // unknown 1 - y
+      BCs.addCondition(boundary::north, condition_type::clamped, 0, 0,false,2 ); // unknown 1 - y
 
-      Load = 1e-6;
+      BCs.addCondition(boundary::east, condition_type::collapsed, 0, 0,false,0 ); // unknown 1 - y
+      BCs.addCondition(boundary::east, condition_type::collapsed, 0, 0,false,1 ); // unknown 1 - y
+      BCs.addCondition(boundary::east, condition_type::collapsed, 0, 0,false,2 ); // unknown 1 - y
+
+
+      Load = 1e-3;
       gsVector<> point(2);
       gsVector<> load (3);
       point<< 1.0, 0.5 ;
@@ -327,34 +336,35 @@ int main (int argc, char** argv)
     else if (testCase == 4)
     {
         PoissonRatio = 0.0;
-        Load = 1e-4;
+        Load = 1e-2;
         tmp << Load, 0, 0;
         neuData.setValue(tmp,3);
         // // Clamped-Clamped
         BCs.addCondition(boundary::east, condition_type::neumann, &neuData ); // unknown 0 - x
-        // BCs.addCondition(boundary::east, condition_type::dirichlet, 0, 1 ); // unknown 1 - y
+        BCs.addCondition(boundary::east, condition_type::dirichlet, 0, 0, false,1 ); // unknown 1 - y
         BCs.addCondition(boundary::east, condition_type::dirichlet, 0, 0, false,2 ); // unknown 2 - z
+        BCs.addCondition(boundary::east, condition_type::clamped, 0, 0, false,2 ); // unknown 2 - z
 
         // BCs.addCondition(boundary::north, condition_type::dirichlet, 0, 0 ); // unknown 0 - x
-        // BCs.addCondition(boundary::north, condition_type::dirichlet, 0, 1 ); // unknown 1 - y
+        BCs.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false,1 ); // unknown 1 - y
         BCs.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false,2 ); // unknown 2 - z
+        BCs.addCondition(boundary::north, condition_type::clamped, 0, 0, false,2 ); // unknown 2 - z
 
         // BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0 ); // unknown 0 - x
-        // BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 1 ); // unknown 1 - y
+        BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false,1 ); // unknown 1 - y
         BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false,2 ); // unknown 2 - z
+        BCs.addCondition(boundary::south, condition_type::clamped, 0, 0, false,2 ); // unknown 2 - z
 
 
-        // BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0 ); // unknown 0 - x
-        // BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 1 ); // unknown 1 - y
+        BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false,0 ); // unknown 0 - x
+        BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false,1 ); // unknown 1 - y
         BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false,2 ); // unknown 2 - z
-
-        BCs.addCornerValue(boundary::southwest,0,0,0);
-        BCs.addCornerValue(boundary::southwest,0,0,1);
+        BCs.addCondition(boundary::west, condition_type::clamped, 0, 0, false,2 ); // unknown 2 - z
     }
     else if (testCase == 5)
     {
         PoissonRatio = 0.3;
-        Load = 1e-8;
+        Load = 1e-2;
         tmp << Load, 0, 0;
         neuData.setValue(tmp,3);
         // // Clamped-Clamped
@@ -400,24 +410,6 @@ int main (int argc, char** argv)
         BCs.addCondition(boundary::west, condition_type::neumann, &neuData2 ); // unknown 0 - x
         BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0,false,2 ); // unknown 2 - z
     }
-    else if (testCase == 10)
-    {
-        for (index_t i=0; i!=3; ++i)
-        {
-            BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, i ); // unknown 2 - z
-        }
-        BCs.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z
-        BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z
-
-        BCs.addCondition(boundary::east, condition_type::dirichlet, 0, 0 ,false,1);
-        BCs.addCondition(boundary::east, condition_type::dirichlet, 0, 0 ,false,2);
-        BCs.addCondition(boundary::east, condition_type::collapsed, 0, 0 ,false,0);
-
-        Load = fac*1;
-        gsVector<> point(2); point<< 1.0, 0.5 ;
-        gsVector<> load (3); load << Load, 0.0, 0.0 ;
-        pLoads.addLoad(point, load, 0 );
-    }
     else if (testCase == 16)
     {
       BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 0 ); // unknown 0 - x
@@ -426,22 +418,23 @@ int main (int argc, char** argv)
       BCs.addCondition(boundary::east, condition_type::collapsed, 0, 0, false, 0 ); // unknown 1 - y
       BCs.addCondition(boundary::east, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 2 - z.
       BCs.addCondition(boundary::east, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z.
-      // BCs.addCondition(boundary::east, condition_type::clamped, 0, 0, false, 2 ); // unknown 2 - z.
+
+      BCs.addCondition(boundary::east, condition_type::clamped, 0, 0, false, 0 ); // unknown 2 - z.
+      // BCs.addCondition(boundary::east, condition_type::clamped, 0, 0, false, 1 ); // unknown 2 - z
+      BCs.addCondition(boundary::east, condition_type::clamped, 0, 0, false, 2 ); // unknown 2 - z
       // BCs.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z.
 
       BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 2 - z.
 
       BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z.
 
-      Load = fac*1e0;
+      Load = 1e0;
       gsVector<> point(2);
       gsVector<> load (3);
       point<< 1.0, 0.5 ;
       load << Load,0.0, 0.0;
       pLoads.addLoad(point, load, 0 );
 
-      // dL =  750;
-      // dLb = 750;
     }
 
     gsFunctionExpr<> surfForce(tx,ty,tz,3);
@@ -518,9 +511,16 @@ int main (int argc, char** argv)
       gsBucklingSolver<real_t> buckling(K_L,rhs,K_NL);
       buckling.verbose();
       // buckling.computePower();
-      buckling.compute();
+
+      if (!sparse)
+        buckling.compute();
+      else
+        buckling.computeSparse(10);
+
       gsMatrix<> values = buckling.values();
       gsMatrix<> vectors = buckling.vectors();
+
+      gsDebugVar(buckling.vectors().cols());
 
 //Method 2
 /*
@@ -572,11 +572,11 @@ int main (int argc, char** argv)
     // gsMatrix<> vectors = eig.eigenvectors();
 
     gsInfo<< "First 10 eigenvalues:\n";
-    for (index_t k = 0; k<10; k++)
+    for (index_t k = 0; k<2; k++)
         gsInfo<<"\t"<<std::setprecision(20)<<values.at(k)<<"\n";
     gsInfo<<"\n";
 
-    for (index_t k = 0; k<10; k++)
+    for (index_t k = 0; k<2; k++)
     {
       gsInfo<<"\t"<<values.at(k)*Load<<"\n";
     }
