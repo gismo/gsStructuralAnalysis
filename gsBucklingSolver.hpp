@@ -34,7 +34,7 @@ void gsBucklingSolver<T>::initializeMatrix()
 };
 
 template <class T>
-void gsBucklingSolver<T>::compute()
+void gsBucklingSolver<T>::compute(index_t number)
 {
     if (m_verbose) { gsInfo<<"Solving eigenvalue problem" ; }
     m_eigSolver.compute(m_linear,m_nonlinear - m_linear);
@@ -44,6 +44,19 @@ void gsBucklingSolver<T>::compute()
     m_vectors = m_eigSolver.eigenvectors();
     if (m_verbose) { gsInfo<<"." ; }
     if (m_verbose) { gsInfo<<"Finished\n" ; }
+};
+
+template <class T>
+void gsBucklingSolver<T>::computeSparse(index_t number)
+{
+    gsSpectraGenSymSolver<gsSparseMatrix<T>,Spectra::SMALLEST_ALGE> solver(m_linear,m_nonlinear - m_linear,number,2*number);
+    solver.init();
+    solver.compute();
+    m_values  = solver.eigenvalues();
+    m_vectors = solver.eigenvectors();
+
+    m_values = m_values.reverse();
+    m_vectors = m_vectors.rowwise().reverse();
 };
 
 template <class T>

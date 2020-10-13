@@ -12,6 +12,7 @@
 */
 
 #include <typeinfo>
+#include <gsSpectra/gsSpectra.h>
 #pragma once
 
 
@@ -59,7 +60,8 @@ public:
 
     void verbose() {m_verbose=true; };
 
-    void compute();
+    void compute(index_t number = 10);
+    void computeSparse(index_t number = 10);
     void computePower();
 
     gsMatrix<T> values() const { return m_values; };
@@ -87,6 +89,8 @@ protected:
     gsMatrix<T> m_values,m_vectors;
 
     bool m_verbose;
+
+    index_t m_num;
 
 protected:
 
