@@ -19,7 +19,6 @@
 
 #include <gsElasticity/gsWriteParaviewMultiPhysics.h>
 
-
 //#include <gsThinShell/gsNewtonIterator.h>
 
 using namespace gismo;
@@ -198,6 +197,17 @@ int main(int argc, char *argv[])
         thickness = 0.001;
         PoissonRatio = 0.4999;
     }
+    else if (testCase == 18)
+    {
+        // Unit square
+        // gsReadFile<>("planar/annulus_4p.xml", mp);
+        gsReadFile<>("frustrum.xml", mp);
+        mp.computeTopology();
+
+        E_modulus = 1;
+        thickness = 1;
+        PoissonRatio = 0;
+    }
     else if (testCase == 20)
     {
         // Unit square
@@ -225,7 +235,6 @@ int main(int argc, char *argv[])
         // PoissonRatio = 0.5;
     }
     //! [Read input file]
-
     // p-refine
     if (testCase != 8 && testCase != 9)
     {
