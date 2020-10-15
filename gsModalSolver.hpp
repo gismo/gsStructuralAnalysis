@@ -32,7 +32,7 @@ void gsModalSolver<T>::compute()
 };
 
 template <class T>
-void gsBucklingSolver<T>::computeSparse(index_t number)
+void gsModalSolver<T>::computeSparse(index_t number)
 {
     if (m_verbose) { gsInfo<<"Solving eigenvalue problem" ; }
     gsSpectraGenSymSolver<gsSparseMatrix<T>,Spectra::SMALLEST_ALGE> solver(m_stiffness,m_mass,number,2*number);

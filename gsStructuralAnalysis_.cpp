@@ -14,10 +14,14 @@
 #include <gsStructuralAnalysis/gsModalSolver.h>
 #include <gsStructuralAnalysis/gsModalSolver.hpp>
 
+#include <gsStructuralAnalysis/gsStaticSolver.h>
+#include <gsStructuralAnalysis/gsStaticSolver.hpp>
+
 namespace gismo
 {
 		CLASS_TEMPLATE_INST gsArcLengthIterator<real_t>;
 		CLASS_TEMPLATE_INST gsTimeIntegrator<real_t>;
 		CLASS_TEMPLATE_INST gsBucklingSolver<real_t>;
 		CLASS_TEMPLATE_INST gsModalSolver<real_t>;
+		CLASS_TEMPLATE_INST gsStaticSolver<real_t>;
 }
