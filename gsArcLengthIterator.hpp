@@ -1164,9 +1164,11 @@ void gsArcLengthIterator<T>::computeStability(gsVector<T> x, bool jacobian)
 	}
 	else if (m_bifurcationMethod == bifmethod::Eigenvalue)
 	{
+    index_t number = 10;
+    // gsSpectraSymSolver<gsSparseMatrix<T>,Spectra::SMALLEST_ALGE> es(m_jacMat,number,2*number);
 		Eigen::SelfAdjointEigenSolver< gsMatrix<T> > es(m_jacMat);
 		// gsInfo<<es.eigenvalues();
-		m_stabilityVec = es.eigenvalues();
+		m_stabilityVec = es.eigenvalues().reverse();
 	}
 	else
 		gsInfo<<"bifurcation method unknown!";
