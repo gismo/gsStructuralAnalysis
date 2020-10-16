@@ -1156,7 +1156,6 @@ void gsArcLengthIterator<T>::computeStability(gsVector<T> x, bool jacobian)
 	if (jacobian) { this->computeJacobian(x);} // otherwise the jacobian is already computed (on m_U+m_DeltaU)
 
   // gsInfo<<"x = \n"<<x.transpose()<<"\n";
-
 	if (m_bifurcationMethod == bifmethod::Determinant)
 	{
 		factorizeMatrix(m_jacMat);
@@ -1165,10 +1164,12 @@ void gsArcLengthIterator<T>::computeStability(gsVector<T> x, bool jacobian)
 	else if (m_bifurcationMethod == bifmethod::Eigenvalue)
 	{
     index_t number = 10;
-    // gsSpectraSymSolver<gsSparseMatrix<T>,Spectra::SMALLEST_ALGE> es(m_jacMat,number,2*number);
-		Eigen::SelfAdjointEigenSolver< gsMatrix<T> > es(m_jacMat);
-		// gsInfo<<es.eigenvalues();
+    gsSpectraSymSolver<gsSparseMatrix<T>,Spectra::SMALLEST_ALGE> es(m_jacMat,number,2*number);
+    es.init();
+    es.compute();
+		// Eigen::SelfAdjointEigenSolver< gsMatrix<T> > es(m_jacMat);
 		m_stabilityVec = es.eigenvalues().reverse();
+    gsDebugVar(m_stabilityVec);
 	}
 	else
 		gsInfo<<"bifurcation method unknown!";
