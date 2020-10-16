@@ -36,30 +36,7 @@ public:
     : m_jacobian(Jacobian),
       m_residualFun(Residual),
       m_forcing(Force)
-      // m_numIterations(0),
-      // m_maxIterations(100),
-      // m_arcLength(1e-2),
-      // m_arcLength_prev(1e-2),
-      // m_tolerance(1e-6),
-      // m_toleranceF(1e-3),
-      // m_toleranceU(1e-6),
-      // m_verbose(false),
-      // m_converged(false),
-      // m_tau(1e3)
     {
-      // gsInfo<<".";
-      // m_bifurcationMethod = "Eigenvalue";
-      // m_angleDetermine = 0; // Angle determination method: 0: determine based on previous load step. 1: determine based on previous iteration ONLY FOR CRISFIELD'S METHOD
-
-      // m_adaptiveLength = false;
-      // m_quasiNewton = false;
-      // m_phi_user = false;
-      // m_quasiNewtonInterval = -1;
-
-      // m_relax = 1.0;
-
-      // m_method = "Crisfield";
-
       this->defaultOptions();
       this->getOptions();
 
