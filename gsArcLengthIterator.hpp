@@ -1169,7 +1169,6 @@ void gsArcLengthIterator<T>::computeStability(gsVector<T> x, bool jacobian)
     es.compute();
 		// Eigen::SelfAdjointEigenSolver< gsMatrix<T> > es(m_jacMat);
 		m_stabilityVec = es.eigenvalues().reverse();
-    gsDebugVar(m_stabilityVec);
 	}
 	else
 		gsInfo<<"bifurcation method unknown!";
