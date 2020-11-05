@@ -25,27 +25,6 @@
 
 using namespace gismo;
 
-template <class T>
-gsMultiPatch<T> RectangularDomain(int n, int m, int p, int q, T L, T B);
-template <class T>
-gsMultiPatch<T> RectangularDomain(int n, int p, T L, T B);
-
-template <class T>
-gsMultiPatch<T> Rectangle(T L, T B);
-
-template <class T>
-gsMultiPatch<T> RectangularDomainVert(int n, int m, int p, int q, T L, T B);
-template <class T>
-gsMultiPatch<T> RectangularDomainVert(int n, int p, T L, T B);
-
-template <class T>
-gsMultiPatch<T> RectangularDomain90(int n, int m, int p, int q, T L, T B);
-template <class T>
-gsMultiPatch<T> RectangularDomain90(int n, int p, T L, T B);
-
-template <class T>
-gsMultiPatch<T> FrustrumDomain(int n, int p, T R1, T R2, T h);
-
 // Choose among various shell examples, default = Thin Plate
 int main(int argc, char *argv[])
 {
@@ -236,519 +215,87 @@ int main(int argc, char *argv[])
 
     // Solve linear problem
     gsVector<> solVector;
-    if (!nonlinear)
-    {
-        solVector = staticSolver.solveLinear();
-
-        mp_def = assembler.constructSolution(solVector);
-        deformation = mp_def;
-        for (size_t k = 0; k != mp_def.nPatches(); ++k)
-            deformation.patch(k).coefs() -= mp.patch(k).coefs();
-
-        if (plot)
-        {
-            gsInfo <<"Maximum deformation coef: "
-                   << deformation.patch(0).coefs().colwise().maxCoeff() <<".\n";
-            gsInfo <<"Minimum deformation coef: "
-                   << deformation.patch(0).coefs().colwise().minCoeff() <<".\n";
-
-
-            gsField<> solField(mp_def, deformation);
-            gsInfo<<"Plotting in Paraview...\n";
-            gsWriteParaview<>( solField, "solution", 1000, true);
-
-            gsWriteParaview<>( mp_def, "mp_def", 1000, true);
-
-         }
-        if (stress)
-        {
-            gsPiecewiseFunction<> membraneStresses;
-            assembler.constructStress(mp_def,membraneStresses,stress_type::membrane);
-            gsField<> membraneStress(mp_def,membraneStresses, true);
-
-            gsPiecewiseFunction<> flexuralStresses;
-            assembler.constructStress(mp_def,flexuralStresses,stress_type::flexural);
-            gsField<> flexuralStress(mp_def,flexuralStresses, true);
-
-            gsPiecewiseFunction<> stretches;
-            assembler.constructStress(mp_def,stretches,stress_type::principal_stretch);
-            gsField<> Stretches(mp_def,stretches, true);
-
-            // gsPiecewiseFunction<> membraneStresses_p;
-            // assembler.constructStress(mp_def,membraneStresses_p,stress_type::principal_stress_membrane);
-            // gsField<> membraneStress_p(mp_def,membraneStresses_p, true);
-
-            // gsPiecewiseFunction<> flexuralStresses_p;
-            // assembler.constructStress(mp_def,flexuralStresses_p,stress_type::principal_stress_flexural);
-            // gsField<> flexuralStress_p(mp_def,flexuralStresses_p, true);
-
-            gsPiecewiseFunction<> stretch1;
-            assembler.constructStress(mp_def,stretch1,stress_type::principal_stretch_dir1);
-            gsField<> stretchDir1(mp_def,stretch1, true);
-
-            gsPiecewiseFunction<> stretch2;
-            assembler.constructStress(mp_def,stretch2,stress_type::principal_stretch_dir2);
-            gsField<> stretchDir2(mp_def,stretch2, true);
-
-            gsPiecewiseFunction<> stretch3;
-            assembler.constructStress(mp_def,stretch3,stress_type::principal_stretch_dir3);
-            gsField<> stretchDir3(mp_def,stretch3, true);
-
-
-            gsField<> solutionField(mp,deformation, true);
-
-
-            // gsField<> stressField = assembler.constructStress(mp_def,stress_type::membrane_strain);
-
-            std::map<std::string,const gsField<> *> fields;
-            fields["Deformation"] = &solutionField;
-            fields["Membrane Stress"] = &membraneStress;
-            fields["Flexural Stress"] = &flexuralStress;
-            fields["Principal Stretch"] = &Stretches;
-            // fields["Principal Membrane Stress"] = &membraneStress_p;
-            // fields["Principal Flexural Stress"] = &flexuralStress_p;
-            fields["Principal Direction 1"] = &stretchDir1;
-            fields["Principal Direction 2"] = &stretchDir2;
-            fields["Principal Direction 3"] = &stretchDir3;
-
-            gsWriteParaviewMultiPhysics(fields,"stress",500,true);
-
-        }
-    }
-    else
-    {
+    solVector = staticSolver.solveLinear();
+    if (nonlinear)
         solVector = staticSolver.solveNonlinear();
-        mp_def = assembler.constructSolution(solVector);
 
-        deformation = mp_def;
-        for (size_t k = 0; k != mp_def.nPatches(); ++k)
-            deformation.patch(k).coefs() -= mp.patch(k).coefs();
+    mp_def = assembler.constructSolution(solVector);
 
-        // ! [Export visualization in ParaView]
-        if ( (plot) && (nonlinear) )
-        {
-            gsField<> solField(mp_def, deformation);
-            gsInfo<<"Plotting in Paraview...\n";
-            gsWriteParaview<>( solField, "solution", 1000, true);
-            // ev.options().setSwitch("plot.elements", true);
-            // ev.writeParaview( u_sol   , G, "solution");
+    deformation = mp_def;
+    for (size_t k = 0; k != mp_def.nPatches(); ++k)
+        deformation.patch(k).coefs() -= mp.patch(k).coefs();
 
-            // gsFileManager::open("solution.pvd");
+    // ! [Export visualization in ParaView]
+    if (plot)
+    {
+        gsField<> solField(mp_def, deformation);
+        gsInfo<<"Plotting in Paraview...\n";
+        gsWriteParaview<>( solField, "solution", 1000, true);
+        // ev.options().setSwitch("plot.elements", true);
+        // ev.writeParaview( u_sol   , G, "solution");
 
-            gsInfo <<"Maximum deformation coef: "
-                   << deformation.patch(0).coefs().colwise().maxCoeff() <<".\n";
-            gsInfo <<"Minimum deformation coef: "
-                   << deformation.patch(0).coefs().colwise().minCoeff() <<".\n";
-        }
-        if ((stress) && (nonlinear))
-        {
+        // gsFileManager::open("solution.pvd");
 
-            gsPiecewiseFunction<> membraneStresses;
-            assembler.constructStress(mp_def,membraneStresses,stress_type::membrane);
-            gsField<> membraneStress(mp_def,membraneStresses, true);
+        gsInfo <<"Maximum deformation coef: "
+               << deformation.patch(0).coefs().colwise().maxCoeff() <<".\n";
+        gsInfo <<"Minimum deformation coef: "
+               << deformation.patch(0).coefs().colwise().minCoeff() <<".\n";
+    }
+    if (stress)
+    {
 
-            gsPiecewiseFunction<> flexuralStresses;
-            assembler.constructStress(mp_def,flexuralStresses,stress_type::flexural);
-            gsField<> flexuralStress(mp_def,flexuralStresses, true);
+        gsPiecewiseFunction<> membraneStresses;
+        assembler.constructStress(mp_def,membraneStresses,stress_type::membrane);
+        gsField<> membraneStress(mp_def,membraneStresses, true);
 
-            gsPiecewiseFunction<> stretches;
-            assembler.constructStress(mp_def,stretches,stress_type::principal_stretch);
-            gsField<> Stretches(mp_def,stretches, true);
+        gsPiecewiseFunction<> flexuralStresses;
+        assembler.constructStress(mp_def,flexuralStresses,stress_type::flexural);
+        gsField<> flexuralStress(mp_def,flexuralStresses, true);
 
-            // gsPiecewiseFunction<> membraneStresses_p;
-            // assembler.constructStress(mp_def,membraneStresses_p,stress_type::principal_stress_membrane);
-            // gsField<> membraneStress_p(mp_def,membraneStresses_p, true);
+        gsPiecewiseFunction<> stretches;
+        assembler.constructStress(mp_def,stretches,stress_type::principal_stretch);
+        gsField<> Stretches(mp_def,stretches, true);
 
-            // gsPiecewiseFunction<> flexuralStresses_p;
-            // assembler.constructStress(mp_def,flexuralStresses_p,stress_type::principal_stress_flexural);
-            // gsField<> flexuralStress_p(mp_def,flexuralStresses_p, true);
+        // gsPiecewiseFunction<> membraneStresses_p;
+        // assembler.constructStress(mp_def,membraneStresses_p,stress_type::principal_stress_membrane);
+        // gsField<> membraneStress_p(mp_def,membraneStresses_p, true);
 
-            gsPiecewiseFunction<> stretch1;
-            assembler.constructStress(mp_def,stretch1,stress_type::principal_stretch_dir1);
-            gsField<> stretchDir1(mp_def,stretch1, true);
+        // gsPiecewiseFunction<> flexuralStresses_p;
+        // assembler.constructStress(mp_def,flexuralStresses_p,stress_type::principal_stress_flexural);
+        // gsField<> flexuralStress_p(mp_def,flexuralStresses_p, true);
 
-            gsPiecewiseFunction<> stretch2;
-            assembler.constructStress(mp_def,stretch2,stress_type::principal_stretch_dir2);
-            gsField<> stretchDir2(mp_def,stretch2, true);
+        gsPiecewiseFunction<> stretch1;
+        assembler.constructStress(mp_def,stretch1,stress_type::principal_stretch_dir1);
+        gsField<> stretchDir1(mp_def,stretch1, true);
 
-            gsPiecewiseFunction<> stretch3;
-            assembler.constructStress(mp_def,stretch3,stress_type::principal_stretch_dir3);
-            gsField<> stretchDir3(mp_def,stretch3, true);
+        gsPiecewiseFunction<> stretch2;
+        assembler.constructStress(mp_def,stretch2,stress_type::principal_stretch_dir2);
+        gsField<> stretchDir2(mp_def,stretch2, true);
 
-
-            gsField<> solutionField(mp,deformation, true);
+        gsPiecewiseFunction<> stretch3;
+        assembler.constructStress(mp_def,stretch3,stress_type::principal_stretch_dir3);
+        gsField<> stretchDir3(mp_def,stretch3, true);
 
 
-            // gsField<> stressField = assembler.constructStress(mp_def,stress_type::membrane_strain);
+        gsField<> solutionField(mp,deformation, true);
 
-            std::map<std::string,const gsField<> *> fields;
-            fields["Deformation"] = &solutionField;
-            fields["Membrane Stress"] = &membraneStress;
-            fields["Flexural Stress"] = &flexuralStress;
-            fields["Principal Stretch"] = &Stretches;
-            // fields["Principal Membrane Stress"] = &membraneStress_p;
-            // fields["Principal Flexural Stress"] = &flexuralStress_p;
-            fields["Principal Direction 1"] = &stretchDir1;
-            fields["Principal Direction 2"] = &stretchDir2;
-            fields["Principal Direction 3"] = &stretchDir3;
 
-            gsWriteParaviewMultiPhysics(fields,"stress",5000,true);
-        }
+        // gsField<> stressField = assembler.constructStress(mp_def,stress_type::membrane_strain);
+
+        std::map<std::string,const gsField<> *> fields;
+        fields["Deformation"] = &solutionField;
+        fields["Membrane Stress"] = &membraneStress;
+        fields["Flexural Stress"] = &flexuralStress;
+        fields["Principal Stretch"] = &Stretches;
+        // fields["Principal Membrane Stress"] = &membraneStress_p;
+        // fields["Principal Flexural Stress"] = &flexuralStress_p;
+        fields["Principal Direction 1"] = &stretchDir1;
+        fields["Principal Direction 2"] = &stretchDir2;
+        fields["Principal Direction 3"] = &stretchDir3;
+
+        gsWriteParaviewMultiPhysics(fields,"stress",5000,true);
     }
 
     return EXIT_SUCCESS;
 
 }// end main
-
-template <class T>
-void evaluateFunction(gsExprEvaluator<T> ev, auto expression, gsVector<T> pt)
-{
-    gsMatrix<T> evresult = ev.eval( expression,pt );
-    gsInfo << "Eval on point ("<<pt.at(0)<<" , "<<pt.at(1)<<") :\n"<< evresult;
-    gsInfo << "\nEnd ("<< evresult.rows()<< " x "<<evresult.cols()<<")\n";
-};
-
-template <class T>
-gsMultiPatch<T> RectangularDomain(int n, int p, T L, T B)
-{
-  gsMultiPatch<T> mp = RectangularDomain(n, n, p, p, L, B);
-  return mp;
-}
-
-template <class T>
-gsMultiPatch<T> RectangularDomain(int n, int m, int p, int q, T L, T B)
-{
-  // -------------------------------------------------------------------------
-  // --------------------------Make beam geometry-----------------------------
-  // -------------------------------------------------------------------------
-  int dim = 3; //physical dimension
-  gsKnotVector<> kv0;
-  kv0.initUniform(0,1,0,p+1,1);
-  gsKnotVector<> kv1;
-  kv1.initUniform(0,1,0,q+1,1);
-
-  for(index_t i = 0; i< n; ++i)
-      kv0.uniformRefine();
-  for(index_t i = 0; i< m; ++i)
-      kv1.uniformRefine();
-
-  // Make basis
-  gsTensorBSplineBasis<2,T> basis(kv0,kv1);
-
-  // Initiate coefficient matrix
-  gsMatrix<> coefs(basis.size(),dim);
-  // Number of control points needed per component
-  size_t len0 = basis.component(0).size();
-  size_t len1 = basis.component(1).size();
-  gsVector<> coefvec0(len0);
-  // Uniformly distribute control points per component
-  coefvec0.setLinSpaced(len0,0.0,L);
-  gsVector<> coefvec1(basis.component(1).size());
-  coefvec1.setLinSpaced(len1,0.0,B);
-
-  // Z coordinate is zero
-  coefs.col(2).setZero();
-
-  // Define a matrix with ones
-  gsVector<> temp(len0);
-  temp.setOnes();
-  for (size_t k = 0; k < len1; k++)
-  {
-    // First column contains x-coordinates (length)
-    coefs.col(0).segment(k*len0,len0) = coefvec0;
-    // Second column contains y-coordinates (width)
-    coefs.col(1).segment(k*len0,len0) = temp*coefvec1.at(k);
-  }
-  // Create gsGeometry-derived object for the patch
-  gsTensorBSpline<2,real_t> shape(basis,coefs);
-
-  gsMultiPatch<T> mp;
-  mp.addPatch(shape);
-  mp.addAutoBoundaries();
-
-  return mp;
-}
-
-template <class T>
-gsMultiPatch<T> Rectangle(T L, T B)
-{
-  // -------------------------------------------------------------------------
-  // --------------------------Make beam geometry-----------------------------
-  // -------------------------------------------------------------------------
-  int dim = 3; //physical dimension
-  gsKnotVector<> kv0;
-  kv0.initUniform(0,1,0,2,1);
-  gsKnotVector<> kv1;
-  kv1.initUniform(0,1,0,2,1);
-
-  // Make basis
-  gsTensorBSplineBasis<2,T> basis(kv0,kv1);
-
-  // Initiate coefficient matrix
-  gsMatrix<> coefs(basis.size(),dim);
-  // Number of control points needed per component
-  size_t len0 = basis.component(0).size();
-  size_t len1 = basis.component(1).size();
-  gsVector<> coefvec0(len0);
-  // Uniformly distribute control points per component
-  coefvec0.setLinSpaced(len0,0.0,L);
-  gsVector<> coefvec1(basis.component(1).size());
-  coefvec1.setLinSpaced(len1,0.0,B);
-
-  // Z coordinate is zero
-  coefs.col(2).setZero();
-
-  // Define a matrix with ones
-  gsVector<> temp(len0);
-  temp.setOnes();
-  for (size_t k = 0; k < len1; k++)
-  {
-    // First column contains x-coordinates (length)
-    coefs.col(0).segment(k*len0,len0) = coefvec0;
-    // Second column contains y-coordinates (width)
-    coefs.col(1).segment(k*len0,len0) = temp*coefvec1.at(k);
-  }
-  // Create gsGeometry-derived object for the patch
-  gsTensorBSpline<2,real_t> shape(basis,coefs);
-
-  gsMultiPatch<T> mp;
-  mp.addPatch(shape);
-  mp.addAutoBoundaries();
-
-  return mp;
-}
-
-
-template <class T>
-gsMultiPatch<T> RectangularDomainVert(int n, int p, T L, T B)
-{
-  gsMultiPatch<T> mp = RectangularDomainVert(n, n, p, p, L, B);
-  return mp;
-}
-
-template <class T>
-gsMultiPatch<T> RectangularDomainVert(int n, int m, int p, int q, T L, T B)
-{
-  // -------------------------------------------------------------------------
-  // --------------------------Make beam geometry-----------------------------
-  // -------------------------------------------------------------------------
-  int dim = 3; //physical dimension
-  gsKnotVector<> kv0;
-  kv0.initUniform(0,1,0,p+1,1);
-  gsKnotVector<> kv1;
-  kv1.initUniform(0,1,0,q+1,1);
-
-  for(index_t i = 0; i< n; ++i)
-      kv0.uniformRefine();
-  for(index_t i = 0; i< m; ++i)
-      kv1.uniformRefine();
-
-  // Make basis
-  gsTensorBSplineBasis<2,T> basis(kv0,kv1);
-
-  // Initiate coefficient matrix
-  gsMatrix<> coefs(basis.size(),dim);
-  // Number of control points needed per component
-  size_t len0 = basis.component(0).size();
-  size_t len1 = basis.component(1).size();
-  gsVector<> coefvec0(len0);
-  // Uniformly distribute control points per component
-  coefvec0.setLinSpaced(len0,0.0,L);
-  gsVector<> coefvec1(basis.component(1).size());
-  coefvec1.setLinSpaced(len1,0.0,B);
-
-  // Z coordinate is zero
-  coefs.col(2).setZero();
-
-  // Define a matrix with ones
-  gsVector<> temp(len0);
-  temp.setOnes();
-  for (index_t k = 0; k < len1; k++)
-  {
-    // First column contains x-coordinates (length)
-    coefs.col(0).segment(k*len0,len0) = coefvec0;
-    // Second column contains z-coordinates (height)
-    coefs.col(2).segment(k*len0,len0) = temp*coefvec1.at(k);
-  }
-  // Create gsGeometry-derived object for the patch
-  gsTensorBSpline<2,real_t> shape(basis,coefs);
-
-  gsMultiPatch<T> mp;
-  mp.addPatch(shape);
-  mp.addAutoBoundaries();
-
-  return mp;
-}
-
-template <class T>
-gsMultiPatch<T> RectangularDomain90(int n, int p, T L, T B)
-{
-  gsMultiPatch<T> mp = RectangularDomain90(n, n, p, p, L, B);
-  return mp;
-}
-
-template <class T>
-gsMultiPatch<T> RectangularDomain90(int n, int m, int p, int q, T L, T B)
-{
-  // -------------------------------------------------------------------------
-  // --------------------------Make beam geometry-----------------------------
-  // -------------------------------------------------------------------------
-  int dim = 3; //physical dimension
-  gsKnotVector<> kv0;
-  kv0.initUniform(0,1,0,p+1,1);
-  gsKnotVector<> kv1;
-  kv1.initUniform(0,1,0,q+1,1);
-
-  for(index_t i = 0; i< n; ++i)
-      kv0.uniformRefine();
-  for(index_t i = 0; i< m; ++i)
-      kv1.uniformRefine();
-
-  // Make basis
-  gsTensorBSplineBasis<2,T> basis(kv0,kv1);
-
-  // Initiate coefficient matrix
-  gsMatrix<> coefs(basis.size(),dim);
-  // Number of control points needed per component
-  size_t len0 = basis.component(0).size();
-  size_t len1 = basis.component(1).size();
-  gsVector<> coefvec0(len0);
-  // Uniformly distribute control points per component
-  coefvec0.setLinSpaced(len0,0.0,L);
-  gsVector<> coefvec1(basis.component(1).size());
-  coefvec1.setLinSpaced(len1,0.0,B);
-
-  // Z coordinate is zero
-  coefs.col(2).setZero();
-
-  // Define a matrix with ones
-  gsVector<> temp(len0);
-  temp.setOnes();
-  for (index_t k = 0; k < len1; k++)
-  {
-    // First column contains x-coordinates (length)
-    coefs.col(1).segment(k*len0,len0) = coefvec0;
-    // Second column contains z-coordinates (height)
-    coefs.col(0).segment(k*len0,len0) = temp*coefvec1.at(k);
-  }
-  // Create gsGeometry-derived object for the patch
-  gsTensorBSpline<2,real_t> shape(basis,coefs);
-
-  gsMultiPatch<T> mp;
-  mp.addPatch(shape);
-  mp.addAutoBoundaries();
-
-  return mp;
-}
-
-template <class T>
-gsMultiPatch<T> FrustrumDomain(int n, int p, T R1, T R2, T h)
-{
-  // -------------------------------------------------------------------------
-  // --------------------------Make beam geometry-----------------------------
-  // -------------------------------------------------------------------------
-  // n = number of uniform refinements over the height; n = 0, only top and bottom part
-
-  int dim = 3; //physical dimension
-  gsKnotVector<> kv0;
-  kv0.initUniform(0,1,0,3,1);
-  gsKnotVector<> kv1;
-  kv1.initUniform(0,1,0,3,1);
-
-  // Refine n times
-  for(index_t i = 0; i< n; ++i)
-      kv1.uniformRefine();
-
-  gsDebug<<kv1;
-
-  // Make basis
-  // gsTensorNurbsBasis<2,T> basis(kv0,kv1);
-
-  // Initiate coefficient matrix
-  index_t N = math::pow(2,n)+2;
-  gsMatrix<> coefs(3*N,dim);
-  gsMatrix<> tmp(3,3);
-  T R,H;
-
-  gsMatrix<> weights(3*N,1);
-  for (index_t k=0; k!= N; k++)
-  {
-    R = k*(R2-R1)/(N-1) + R1;
-    H = k*h/(N-1);
-    tmp<< R,0,H,
-          R,R,H,
-          0,R,H;
-
-    coefs.block(3*k,0,3,3) = tmp;
-
-    weights.block(3*k,0,3,1) << 1,0.70711,1;
-  }
-
-  // Create gsGeometry-derived object for the patch
-  gsTensorNurbs<2,real_t> shape(kv0,kv1,coefs,weights);
-
-  gsMultiPatch<T> mp;
-  mp.addPatch(shape);
-  mp.addAutoBoundaries();
-
-  // Elevate up to order p
-  if (p>2)
-  {
-    for(index_t i = 2; i< p; ++i)
-        mp.patch(0).degreeElevate();    // Elevate the degree
-  }
-
-  // // Refine n times
-  // for(index_t i = 0; i< n; ++i)
-  //     mp.patch(0).uniformRefine();
-
-  return mp;
-}
-
-
-/*
-    to do:
-    =  make function for construction of the solution given the space and the mp
-*/
-
-
-
-/*
-template<class T>
-void gsShellAssembler<T>::applyLoads()
-{
-    gsMatrix<T>        bVals;
-    gsMatrix<unsigned> acts,globalActs;
-
-    for (size_t i = 0; i< m_pLoads.numLoads(); ++i )
-    {
-        if ( m_pLoads[i].parametric )
-        {
-            m_bases.front().basis(m_pLoads[i].patch).active_into( m_pLoads[i].point, acts );
-            m_bases.front().basis(m_pLoads[i].patch).eval_into  ( m_pLoads[i].point, bVals);
-        }
-        else
-        {
-            gsMatrix<> forcePoint;
-            m_patches.patch(m_pLoads[i].patch).invertPoints(m_pLoads[i].point,forcePoint);
-            u.source().piece(m_pLoads[i].patch).active_into( forcePoint, acts );
-            u.source().piece(m_pLoads[i].patch).active_into( forcePoint, bVals);
-        }
-
-        // translate patch-local indices to global dof indices
-        for (size_t j = 0; j< 3; ++j)
-        {
-            if (m_pLoads[i].value[j] != 0.0)
-            {
-                u.dofMappers[j].localToGlobal(acts, m_pLoads[i].patch, globalActs);
-
-                for (index_t k=0; k < globalActs.rows(); ++k)
-                {
-                    if (int(globalActs(k,0)) < m_dofs)
-                        m_rhs(globalActs(k,0), 0) += bVals(k,0) * m_pLoads[i].value[j];
-                }
-            }
-        }
-    }
-}
-*/

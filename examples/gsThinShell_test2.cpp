@@ -19,6 +19,8 @@
 
 #include <gsElasticity/gsWriteParaviewMultiPhysics.h>
 
+#include <gsStructuralAnalysis/gsStaticSolver.h>
+
 //#include <gsThinShell/gsNewtonIterator.h>
 
 using namespace gismo;
@@ -778,306 +780,50 @@ int main(int argc, char *argv[])
     if (pressure!= 0.0)
         assembler.setPressure(pressFun);
 
-    gsSparseSolver<>::CGDiagonal solver;
-
-    // assembler.assembleMass();
-
-    gsVector<> pt(2); pt.setConstant(0.25);
-    // evaluateFunction(ev, u * ff * meas(G), pt); // evaluates an expression on a point
-
-    // ! [Solve linear problem]
-
-    // assemble system
+    // Define Matrices
     assembler.assemble();
-    // solve system
-    solver.compute( assembler.matrix() );
-
-    if (verbose)
+    gsSparseMatrix<> matrix = assembler.matrix();
+    gsVector<> vector = assembler.rhs();
+    // Function for the Jacobian
+    std::function<gsSparseMatrix<real_t> (gsVector<real_t> const &)> Jacobian;
+    Jacobian = [&assembler,&mp_def](gsVector<real_t> const &x)
     {
-        gsInfo<<"Matrix: \n"<<assembler.matrix().toDense()<<"\n";
-        gsInfo<<"Vector: \n"<<assembler.rhs().transpose()<<"\n";
-    }
+      assembler.constructSolution(x,mp_def);
+      assembler.assembleMatrix(mp_def);
+      gsSparseMatrix<real_t> m = assembler.matrix();
+      return m;
+    };
+    // Function for the Residual
+    std::function<gsVector<real_t> (gsVector<real_t> const &) > Residual;
+    Residual = [&assembler,&mp_def](gsVector<real_t> const &x)
+    {
+      assembler.constructSolution(x,mp_def);
+      assembler.assembleVector(mp_def);
+      return assembler.rhs();
+    };
 
-    gsVector<> Force = assembler.rhs();
+    // Configure Structural Analsysis module
+    gsStaticSolver<real_t> staticSolver(matrix,vector,Jacobian,Residual);
+    gsOptionList solverOptions = staticSolver.options();
+    solverOptions.setInt("Verbose",1);
+    solverOptions.setInt("MaxIterations",10);
+    solverOptions.setReal("Tolerance",1e-6);
+    staticSolver.setOptions(solverOptions);
 
-/*
-    // // TEST MATRIX INTEGRATION
-    gsMaterialMatrix materialMatrixNonlinear2(mp,mp_def,t,parameters,rho);
-    if (material==14)
-        materialMatrixNonlinear2.setParameters(parameters2);
-    materialMatrixNonlinear2.options().setInt("MaterialLaw",material);
-    materialMatrixNonlinear2.options().setInt("Compressibility",Compressibility);
-
-    materialMatrixNonlinear2.info();
-
-    gsMaterialMatrix materialMatrixTest(mp,mp_def,t,parameters,rho);
-    materialMatrixTest.options().setInt("MaterialLaw",13);
-    materialMatrixTest.options().setInt("Compressibility",Compressibility);
-
-    gsVector<> testPt(2);
-    testPt<<0.351135,0.85235;
-    // testPt.setConstant(0.25);
-    gsMatrix<> testResult1, testResult2;
-    // materialMatrixTest.makeVector(0);
-    materialMatrixTest.makeMatrix(0);
-    materialMatrixTest.eval_into(testPt,testResult1);
-    gsDebugVar(testResult1);
-
-    // materialMatrixNonlinear2.makeVector(0);
-    materialMatrixNonlinear2.makeMatrix(0);
-    materialMatrixNonlinear2.eval_into(testPt,testResult2);
-    gsDebugVar(testResult2);
-    gsDebugVar(testResult1-testResult2);
-
-    materialMatrixTest.makeVector(0);
-    materialMatrixTest.eval_into(testPt,testResult1);
-    gsDebugVar(testResult1);
-
-    materialMatrixNonlinear2.makeVector(0);
-    materialMatrixNonlinear2.eval_into(testPt,testResult2);
-    gsDebugVar(testResult2);
-    gsDebugVar(testResult1-testResult2);
-    // // ! TEST MATRIX INTEGRATION
-*/
-
-    gsVector<> solVector = solver.solve(assembler.rhs());
-
-    gsDebugVar(solVector);
+    // Solve linear problem
+    gsVector<> solVector;
+    solVector = staticSolver.solveLinear();
+    if (nonlinear)
+        solVector = staticSolver.solveNonlinear();
 
     mp_def = assembler.constructSolution(solVector);
+
     gsMultiPatch<> deformation = mp_def;
     for (size_t k = 0; k != mp_def.nPatches(); ++k)
         deformation.patch(k).coefs() -= mp.patch(k).coefs();
 
-    // mp_def = RectangularDomain(0,2,2.0,1.0);
-    //     // p-refine
-    // if (numElevate!=0)
-    //     mp_def.degreeElevate(numElevate);
-
-    // // h-refine
-    // for (int r =0; r < numRefine; ++r)
-    //     mp_def.uniformRefine();
-
-
-
-    if ((plot) && (!nonlinear))
-    {
-        deformation = mp_def;
-        for (size_t k = 0; k != mp_def.nPatches(); ++k)
-            deformation.patch(k).coefs() -= mp.patch(k).coefs();
-
-        gsField<> solField(mp_def, deformation);
-        gsInfo<<"Plotting in Paraview...\n";
-        gsWriteParaview<>( solField, "solution", 1000, true);
-
-        gsWriteParaview<>( mp_def, "mp_def", 1000, true);
-
-        gsMatrix<> coords(2,1);
-        if (testCase==0)
-         coords<<0.5,0.5;
-        else if (testCase==1)
-         coords<<0.5,0;
-        else if (testCase==2)
-         coords<<0,0;
-        else if (testCase==3)
-         coords<<1,1;
-        else
-         coords<<0,0;
-
-        gsMatrix<> res(3,1);
-        mp.patch(0).eval_into(coords,res);
-        real_t x=res.at(0);
-        real_t y=res.at(1);
-        real_t z=res.at(2);
-
-        deformation.patch(0).eval_into(coords,res);
-        real_t u=res.at(0);
-        real_t v=res.at(1);
-        real_t w=res.at(2);
-
-        gsInfo<<"Deformation on point ("<<x<<","<<y<<","<<z<<"):\n";
-        gsInfo<<std::setprecision(20)<<"("<<v<<","<<u<<","<<w<<")"<<"\n";
-    }
-    if ((stress) && (!nonlinear))
-    {
-        gsPiecewiseFunction<> membraneStresses;
-        assembler.constructStress(mp_def,membraneStresses,stress_type::membrane);
-        gsField<> membraneStress(mp_def,membraneStresses, true);
-
-        gsPiecewiseFunction<> flexuralStresses;
-        assembler.constructStress(mp_def,flexuralStresses,stress_type::flexural);
-        gsField<> flexuralStress(mp_def,flexuralStresses, true);
-
-        gsPiecewiseFunction<> stretches;
-        assembler.constructStress(mp_def,stretches,stress_type::principal_stretch);
-        gsField<> Stretches(mp_def,stretches, true);
-
-        // gsPiecewiseFunction<> membraneStresses_p;
-        // assembler.constructStress(mp_def,membraneStresses_p,stress_type::principal_stress_membrane);
-        // gsField<> membraneStress_p(mp_def,membraneStresses_p, true);
-
-        // gsPiecewiseFunction<> flexuralStresses_p;
-        // assembler.constructStress(mp_def,flexuralStresses_p,stress_type::principal_stress_flexural);
-        // gsField<> flexuralStress_p(mp_def,flexuralStresses_p, true);
-
-        gsPiecewiseFunction<> stretch1;
-        assembler.constructStress(mp_def,stretch1,stress_type::principal_stretch_dir1);
-        gsField<> stretchDir1(mp_def,stretch1, true);
-
-        gsPiecewiseFunction<> stretch2;
-        assembler.constructStress(mp_def,stretch2,stress_type::principal_stretch_dir2);
-        gsField<> stretchDir2(mp_def,stretch2, true);
-
-        gsPiecewiseFunction<> stretch3;
-        assembler.constructStress(mp_def,stretch3,stress_type::principal_stretch_dir3);
-        gsField<> stretchDir3(mp_def,stretch3, true);
-
-
-        gsField<> solutionField(mp,deformation, true);
-
-
-        // gsField<> stressField = assembler.constructStress(mp_def,stress_type::membrane_strain);
-
-        std::map<std::string,const gsField<> *> fields;
-        fields["Deformation"] = &solutionField;
-        fields["Membrane Stress"] = &membraneStress;
-        fields["Flexural Stress"] = &flexuralStress;
-        fields["Principal Stretch"] = &Stretches;
-        // fields["Principal Membrane Stress"] = &membraneStress_p;
-        // fields["Principal Flexural Stress"] = &flexuralStress_p;
-        fields["Principal Direction 1"] = &stretchDir1;
-        fields["Principal Direction 2"] = &stretchDir2;
-        fields["Principal Direction 3"] = &stretchDir3;
-
-        gsWriteParaviewMultiPhysics(fields,"stress",500,true);
-
-        // gsWriteParaview( stressField, "stress", 5000);
-
-
-
-
-        // gsMatrix<> stretch;
-        // stretch=assembler.computePrincipalStretches(pt,mp_def,0.0);
-        // gsDebugVar(stretch);
-    }
-
-    /*Something with Dirichlet homogenization*/
-
-    // ! [Solve linear problem]
-
-    // ! [Solve nonlinear problem]
-
-    // assembler.assemble();
-    // assembler.assemble(mp_def);
-
-    real_t residual = assembler.rhs().norm();
-    real_t residual0 = residual;
-    real_t residualOld = residual;
-    gsVector<> updateVector = solVector;
-    if (nonlinear)
-    {
-        index_t itMax = 100;
-        real_t tol = 1e-8;
-        for (index_t it = 0; it != itMax; ++it)
-        {
-            assembler.assemble(mp_def);
-            // solve system
-            solver.compute( assembler.matrix() );
-
-            if (verbose)
-            {
-                gsInfo<<"Matrix: \n"<<assembler.matrix().toDense()<<"\n";
-                gsInfo<<"Vector: \n"<<assembler.rhs().transpose()<<"\n";
-            }
-
-
-            updateVector = solver.solve(assembler.rhs()); // this is the UPDATE
-            residual = assembler.rhs().norm();
-
-            solVector += updateVector;
-            mp_def = assembler.constructSolution(solVector);
-
-
-            gsInfo<<"Iteration: "<< it
-                   <<", residue: "<< residual
-                   <<", update norm: "<<updateVector.norm()
-                   <<", log(Ri/R0): "<< math::log10(residualOld/residual0)
-                   <<", log(Ri+1/R0): "<< math::log10(residual/residual0)
-                   <<"\n";
-
-            residualOld = residual;
-
-            if (updateVector.norm() < tol)
-                break;
-
-            // ADD DIRICHLET HOMOGENIZE
-        }
-    }
-
-/*  // TEST MATRIX INTEGRATION
-    materialMatrixNonlinear2.options().setInt("MaterialLaw",material);
-    materialMatrixNonlinear2.options().setInt("Compressibility",Compressibility);
-
-    materialMatrixTest.options().setInt("MaterialLaw",13);
-    materialMatrixTest.options().setInt("Compressibility",Compressibility);
-
-    // materialMatrixTest.makeVector(0);
-    materialMatrixTest.makeMatrix(0);
-    materialMatrixTest.eval_into(testPt,testResult1);
-    gsDebugVar(testResult1);
-
-    // materialMatrixNonlinear2.makeVector(0);
-    materialMatrixNonlinear2.makeMatrix(0);
-    materialMatrixNonlinear2.eval_into(testPt,testResult2);
-    gsDebugVar(testResult2);
-    gsDebugVar(testResult1-testResult2);
-
-    materialMatrixTest.makeVector(0);
-    materialMatrixTest.eval_into(testPt,testResult1);
-    gsDebugVar(testResult1);
-
-    materialMatrixNonlinear2.makeVector(0);
-    materialMatrixNonlinear2.eval_into(testPt,testResult2);
-    gsDebugVar(testResult2);
-    gsDebugVar(testResult1-testResult2);
-*/
-    // // ! TEST MATRIX INTEGRATION
-
-    // gsDebugVar(assembler.computePrincipalStretches(pts,mp_def));
-
-
-    // ! [Solve nonlinear problem]
-
-    // // For Neumann (same for Dirichlet/Nitche) conditions
-    // variable g_N = assembler.getBdrFunction();
-    // assembler.assembleRhsBc(u * g_N.val() * nv(G).norm(), bc.neumannSides() );
-
-    // // Penalize the matrix? (we need values for the DoFs to be enforced..
-    // // function/call:  penalize_matrix(DoF_indices, DoF_values)
-    // // otherwise: should we tag the DoFs inside "u" ?
-
-    // gsInfo<<"RHS rows = "<<assembler.rhs().rows()<<"\n";
-    // gsInfo<<"RHS cols = "<<assembler.rhs().cols()<<"\n";
-    // gsInfo<<"MAT rows = "<<assembler.matrix().rows()<<"\n";
-    // gsInfo<<"MAT cols = "<<assembler.matrix().cols()<<"\n";
-
-    // gsInfo<< assembler.rhs().transpose() <<"\n";
-    // gsInfo<< assembler.matrix().toDense()<<"\n";
-
-    // // ADD BOUNDARY CONDITIONS! (clamped will be tricky..............)
-
-    deformation = mp_def;
-    for (size_t k = 0; k != mp_def.nPatches(); ++k)
-        deformation.patch(k).coefs() -= mp.patch(k).coefs();
-
-    gsInfo <<"Maximum deformation coef: "
-           << deformation.patch(0).coefs().colwise().maxCoeff() <<".\n";
-    gsInfo <<"Minimum deformation coef: "
-           << deformation.patch(0).coefs().colwise().minCoeff() <<".\n";
-
-
     // ! [Export visualization in ParaView]
-    if ( (plot) && (nonlinear) )
+    if (plot)
     {
         gsField<> solField(mp_def, deformation);
         gsInfo<<"Plotting in Paraview...\n";
@@ -1092,7 +838,7 @@ int main(int argc, char *argv[])
         gsInfo <<"Minimum deformation coef: "
                << deformation.patch(0).coefs().colwise().minCoeff() <<".\n";
     }
-    if ((stress) && (nonlinear))
+    if (stress)
     {
 
         gsPiecewiseFunction<> membraneStresses;
@@ -1146,17 +892,6 @@ int main(int argc, char *argv[])
 
         gsWriteParaviewMultiPhysics(fields,"stress",5000,true);
     }
-
-
-    // gsInfo <<"Area (undeformed) = "<<assembler.getArea(mp)<<"\tArea (deformed) = "<<assembler.getArea(mp_def)<<"\n";
-
-    // assembler.constructSolution(solVector,mp_def);
-    // assembler.assembleVector(mp_def);
-    // // gsDebugVar(assembler.rhs());
-    // patchSide ps(0,boundary::north);
-    // gsVector<real_t> Fint = assembler.boundaryForceVector(mp_def,ps,2);
-    // gsDebugVar(Fint);
-    // gsDebugVar(Fint.sum());
 
     return EXIT_SUCCESS;
 
