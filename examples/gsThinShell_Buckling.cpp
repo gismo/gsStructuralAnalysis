@@ -498,7 +498,6 @@ int main (int argc, char** argv)
     gsSparseMatrix<> K_L =  assembler.matrix();
     gsVector<> rhs = assembler.rhs();
 
-//Method 1
 
     std::function<gsSparseMatrix<real_t> (gsVector<real_t> const &)> K_NL;
     K_NL = [&assembler,&mp_def](gsVector<real_t> const &x)
@@ -524,55 +523,6 @@ int main (int argc, char** argv)
       gsMatrix<> vectors = buckling.vectors();
 
       gsDebugVar(buckling.vectors().cols());
-
-//Method 2
-/*
-      // Alternatively,
-      solver.compute(K_L);
-      gsMatrix<> solVector = solver.solve( assembler.rhs() );
-      assembler.constructSolution(solVector, solution);
-
-      assembler.assemble(solution);
-      gsSparseMatrix<> K_NL =  assembler.matrix()+Kspring;
-
-      gsBucklingSolver<real_t> buckling(K_L,K_T);
-      buckling.compute();
-      gsMatrix<> values = buckling.values();
-      gsMatrix<> vectors = buckling.vectors();
-*/
-
-
-
-
-
-    // solver.compute(K_L);
-    // gsMatrix<> solVector = solver.solve( assembler.rhs() );
-    // assembler.constructSolution(solVector, solution);
-
-    // gsMultiPatch<> deformation = solution;
-    // deformation.patch(0).coefs() -= mp.patch(0).coefs();// assuming 1 patch here
-    // gsInfo<<deformation;
-    // gsField<> solField(mp,deformation);
-    // gsWriteParaview<>(solField, "linearProblem", 1000);
-
-    // // Now assemble the tangential stiffness matrix K_T
-    // // This matrix consists of a linear part (the matrix from the linear problem) K_L
-    // // And a nonlinear part due to the deformation, K_NL
-    // // Since K_T = K_L + K_NL, K_NL = K_T-K_L
-    // assembler.assemble(solution);
-    // gsSparseMatrix<> K_T =  assembler.matrix()+Kspring;
-    // gsSparseMatrix<> K_NL = K_T-K_L;
-    // // gsInfo<<K_T<<"\n";
-    // // gsInfo<<K_L<<"\n";
-    // // gsInfo<<K_NL<<"\n";
-
-    // // Now solve the generalised eigenvalue problem
-
-    // // Compute eigenvalues and eigenvectors
-    // Eigen::GeneralizedSelfAdjointEigenSolver< gsMatrix<real_t>::Base > eig;
-    // eig.compute(K_L,K_NL);
-    // gsMatrix<> values = eig.eigenvalues();
-    // gsMatrix<> vectors = eig.eigenvectors();
 
     gsInfo<< "First 10 eigenvalues:\n";
     for (index_t k = 0; k<2; k++)
