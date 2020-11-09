@@ -73,7 +73,9 @@ int main (int argc, char** argv)
     real_t Ratio = 7.0;
     real_t fac = 1;
 
-    int testCase = -1;
+    real_t shift = 0.0;
+
+    int testCase = 0;
 
     int result = 0;
 
@@ -100,6 +102,7 @@ int main (int argc, char** argv)
 
     cmd.addReal("f","fac", "factor linear problem", fac);
 
+    cmd.addReal("s","shift", "eigenvalue shift", shift);
 
     cmd.addSwitch("nl", "Nonlinear elasticity (otherwise linear)", nonlinear);
     cmd.addSwitch("plot", "Plot result in ParaView format", plot);
@@ -515,7 +518,7 @@ int main (int argc, char** argv)
       if (!sparse)
         buckling.compute();
       else
-        buckling.computeSparse(10);
+        buckling.computeSparse(shift,10);
 
       gsMatrix<> values = buckling.values();
       gsMatrix<> vectors = buckling.vectors();
