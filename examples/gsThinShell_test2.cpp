@@ -780,6 +780,11 @@ int main(int argc, char *argv[])
     if (pressure!= 0.0)
         assembler.setPressure(pressFun);
 
+    // gsVector<> found_vec(3);
+    // found_vec<<0,0,2;
+    // gsConstantFunction<> found(found_vec,3);
+    // assembler.setFoundation(found);
+
     // Define Matrices
     assembler.assemble();
     gsSparseMatrix<> matrix = assembler.matrix();
