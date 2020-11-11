@@ -297,7 +297,7 @@ int main (int argc, char** argv)
         else
           PoissonRatio = 0.45;
         E_modulus = 2*mu*(1+PoissonRatio);
-        gsReadFile<>("quarter_sphere.xml", mpBspline);
+        gsReadFile<>("eighth_sphere.xml", mpBspline);
 
         for(index_t i = 0; i< numElevate; ++i)
           mpBspline.patch(0).degreeElevate();    // Elevate the degree
@@ -815,7 +815,11 @@ int main (int argc, char** argv)
     }
     else if (testCase == 7)
     {
-        BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z
+        BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 0 ); // unknown 2 - z
+        BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 2 - z
+
+        BCs.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z
+
 
         // Symmetry in x-direction:
         BCs.addCondition(boundary::east, condition_type::dirichlet, 0, 0, false, 0 );
@@ -1324,7 +1328,7 @@ int main (int argc, char** argv)
         pts.col(2)<<1.0,1.0;
       }
       gsMatrix<> lambdas = assembler.computePrincipalStretches(pts,mp_def,0);
-      gsInfo<<"kambdas = \n"<<lambdas.transpose()<<"\n";
+      gsInfo<<"lambdas = \n"<<lambdas<<"\n";
       if (testCase==4)
       {
         real_t S = Lold / 1e-3 / lambdas(0) / lambdas(2);
@@ -1340,9 +1344,13 @@ int main (int argc, char** argv)
       // gsDebugVar(mp_def.patch(0).coefs());
 
       if (testCase==7)
-      gsInfo<<std::setprecision(20)
-            <<"Pressures:\n"<<pressure*arcLength.solutionL()<<"\n"
-                            <<pressure*arcLength.solutionL() * assembler.getArea(mp) / assembler.getArea(mp_def)<<"\n";
+      {
+        std::streamsize ss = std::cout.precision();
+        std::cout<<std::setprecision(20)
+              <<"Pressures:\n"<<pressure*arcLength.solutionL()<<"\n"
+                              <<pressure*arcLength.solutionL() * assembler.getArea(mp) / assembler.getArea(mp_def)<<"\n";
+        std::cout<<std::setprecision(ss);
+      }
 
       gsInfo<<"Total ellapsed assembly time: "<<time<<" s\n";
 
