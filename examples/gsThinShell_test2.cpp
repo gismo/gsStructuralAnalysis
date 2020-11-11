@@ -112,6 +112,22 @@ int main(int argc, char *argv[])
         PoissonRatio = 0.3;
         gsReadFile<>("pinched_cylinder.xml", mp);
     }
+    else if (testCase == 4)
+    {
+        real_t L = 1.0;
+        real_t B = 1.0;
+        real_t mu = 1.5e6;
+        thickness = 0.001;
+        if (!Compressibility)
+          PoissonRatio = 0.5;
+        else
+          PoissonRatio = 0.45;
+        E_modulus = 2*mu*(1+PoissonRatio);
+        // PoissonRatio = 0;
+        mp = Rectangle(L, B);
+
+        gsInfo<<"mu = "<<E_modulus / (2 * (1 + PoissonRatio))<<"\n";
+    }
     else if (testCase == 5)
     {
         thickness = 1;
@@ -368,16 +384,28 @@ int main(int argc, char *argv[])
         gsVector<> load (3); load << 0.0, 0.0, -0.25 ;
         pLoads.addLoad(point, load, 0 );
     }
-    else if (testCase == 4)
+    else if (testCase == 4) // Uniaxial tension; use with hyperelastic material model!
     {
-        for (index_t i = 0; i!=3; i++)
-        {
-            bc.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, i );
-            bc.addCondition(boundary::east, condition_type::dirichlet, 0, 0, false, i );
-            bc.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, i );
-            bc.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, i );
-        }
-        pressure = -1.0;
+        neu << 2625, 0, 0;
+        neuData.setValue(neu,3);
+
+        bc.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 0 ); // unknown 0 - x
+        bc.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z
+
+        // bc.addCondition(boundary::east, condition_type::collapsed, 0, 0, false, 0 ); // unknown 1 - y
+        bc.addCondition(boundary::east, condition_type::neumann, &neuData ); // unknown 1 - y
+        bc.addCondition(boundary::east, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z.
+
+
+        bc.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 1 - y
+        bc.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 1 - y
+        bc.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 1 - y
+
+        gsVector<> point(2);
+        gsVector<> load (3);
+        point<< 1.0, 0.5 ;
+        load << 1.0,0.0, 0.0;
+        pLoads.addLoad(point, load, 0 );
     }
     else if (testCase == 5)
     {
@@ -785,27 +813,40 @@ int main(int argc, char *argv[])
     // gsConstantFunction<> found(found_vec,3);
     // assembler.setFoundation(found);
 
-    // Define Matrices
-    assembler.assemble();
-    gsSparseMatrix<> matrix = assembler.matrix();
-    gsVector<> vector = assembler.rhs();
+    gsStopwatch stopwatch,stopwatch2;
+    real_t time = 0.0;
+    real_t totaltime = 0.0;
+
     // Function for the Jacobian
     std::function<gsSparseMatrix<real_t> (gsVector<real_t> const &)> Jacobian;
-    Jacobian = [&assembler,&mp_def](gsVector<real_t> const &x)
+    Jacobian = [&time,&stopwatch,&assembler,&mp_def](gsVector<real_t> const &x)
     {
+      stopwatch.restart();
       assembler.constructSolution(x,mp_def);
       assembler.assembleMatrix(mp_def);
+      time += stopwatch.stop();
       gsSparseMatrix<real_t> m = assembler.matrix();
       return m;
     };
     // Function for the Residual
     std::function<gsVector<real_t> (gsVector<real_t> const &) > Residual;
-    Residual = [&assembler,&mp_def](gsVector<real_t> const &x)
+    Residual = [&time,&stopwatch,&assembler,&mp_def](gsVector<real_t> const &x)
     {
+      stopwatch.restart();
       assembler.constructSolution(x,mp_def);
       assembler.assembleVector(mp_def);
+      time += stopwatch.stop();
       return assembler.rhs();
     };
+
+    // Define Matrices
+    stopwatch.restart();
+    stopwatch2.restart();
+    assembler.assemble();
+    time += stopwatch.stop();
+
+    gsSparseMatrix<> matrix = assembler.matrix();
+    gsVector<> vector = assembler.rhs();
 
     // Configure Structural Analsysis module
     gsStaticSolver<real_t> staticSolver(matrix,vector,Jacobian,Residual);
@@ -821,11 +862,25 @@ int main(int argc, char *argv[])
     if (nonlinear)
         solVector = staticSolver.solveNonlinear();
 
+    totaltime += stopwatch2.stop();
+
     mp_def = assembler.constructSolution(solVector);
 
     gsMultiPatch<> deformation = mp_def;
     for (size_t k = 0; k != mp_def.nPatches(); ++k)
         deformation.patch(k).coefs() -= mp.patch(k).coefs();
+
+    if (testCase==4)
+    {
+        gsVector<> pt(2);
+        pt<<1,0;
+      gsMatrix<> lambdas = assembler.computePrincipalStretches(pt,mp_def,0);
+      real_t S = 2625 / 1e-3 / lambdas(0) / lambdas(2);
+      real_t San = mu * (math::pow(lambdas(1),2)-1/lambdas(1));
+      gsInfo<<"S = \t"<<S<<"\t San = \t"<<San<<"\t |S-San| = \t"<<abs(S-San)<<"\n";
+      gsInfo<<"lambda = \t"<<lambdas(1)<<"\t 1/lambda = \t"<<1/lambdas(1)<<"\t lambda_0 = \t"<<lambdas(0)<<"\t lambda_2 = \t"<<lambdas(2)<<"\n";
+    }
+
 
     // ! [Export visualization in ParaView]
     if (plot)
@@ -897,6 +952,8 @@ int main(int argc, char *argv[])
 
         gsWriteParaviewMultiPhysics(fields,"stress",5000,true);
     }
+    gsInfo<<"Total ellapsed assembly time: \t\t"<<time<<" s\n";
+    gsInfo<<"Total ellapsed solution time (incl. assembly): \t"<<totaltime<<" s\n";
 
     return EXIT_SUCCESS;
 
