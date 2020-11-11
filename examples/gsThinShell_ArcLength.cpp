@@ -82,7 +82,7 @@ int main (int argc, char** argv)
     int quasiNewtonInt = -1;
     bool adaptive = false;
     int step = 10;
-    int method = 1; // (0: Riks' method; 1: Crisfield's method; 2: consistent crisfield method; 3: extended iterations)
+    int method = 2; // (0: Load control; 1: Riks' method; 2: Crisfield's method; 3: consistent crisfield method; 4: extended iterations)
     bool symmetry = false;
     bool deformed = false;
     real_t perturbation = 0;
@@ -517,6 +517,7 @@ int main (int argc, char** argv)
       }
     // ! make neat functions ...
 
+/*
     // Cast all patches of the mp object to THB splines
     gsTHBSpline<2,real_t> thb;
     for (index_t k=0; k!=mpBspline.nPatches(); ++k)
@@ -535,6 +536,8 @@ int main (int argc, char** argv)
       std::vector<index_t> elements = mp.patch(0).basis().asElements(refBoxes, refExtension);
       mp.patch(0).refineElements( elements );
     }
+*/
+      mp = mpBspline;
 
     gsMultiBasis<> dbasis(mp);
 
@@ -609,7 +612,7 @@ int main (int argc, char** argv)
         cross_val = 1.0;
     }
 
-    if (testCase == 0)
+    else if (testCase == 0)
     {
         // Pinned-Pinned
         tmp << 1e-4, 0, 0;
@@ -634,7 +637,7 @@ int main (int argc, char** argv)
         wn = output + "data.txt";
         SingularPoint = true;
     }
-    if (testCase == 1)
+    else if (testCase == 1)
     {
         Load = EA/width*1e-1;
         tmp << Load, 0, 0;
@@ -666,7 +669,7 @@ int main (int argc, char** argv)
         wn = output + "data.txt";
         SingularPoint = true;
     }
-    if (testCase == 2)
+    else if (testCase == 2)
     {
       BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 0 ); // unknown 0 - x
       BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 1 - y
@@ -689,7 +692,7 @@ int main (int argc, char** argv)
       wn = output + "data.txt";
       SingularPoint = false;
     }
-    if (testCase == 3)
+    else if (testCase == 3)
     {
       // Clamped-Clamped
       BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 0 ); // unknown 0 - x
@@ -718,7 +721,7 @@ int main (int argc, char** argv)
       wn = output + "data.txt";
       SingularPoint = true;
     }
-    if (testCase == 4) // Uniaxial tension; use with hyperelastic material model!
+    else if (testCase == 4) // Uniaxial tension; use with hyperelastic material model!
     {
       BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 0 ); // unknown 0 - x
       BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z
@@ -748,7 +751,7 @@ int main (int argc, char** argv)
       wn = output + "data.txt";
       SingularPoint = true;
     }
-    if (testCase == 5) // Bi-axial tension; use with hyperelastic material model!
+    else if (testCase == 5) // Bi-axial tension; use with hyperelastic material model!
     {
       BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 0 ); // unknown 0 - x
       BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z
@@ -1167,38 +1170,31 @@ int main (int argc, char** argv)
     if (pressure!= 0.0)
         assembler.setPressure(pressFun);
 
-
+    gsStopwatch stopwatch;
+    real_t time = 0.0;
     // Function for the Jacobian
     std::function<gsSparseMatrix<real_t> (gsVector<real_t> const &)> Jacobian;
-    Jacobian = [&assembler,&mp_def](gsVector<real_t> const &x)
+    Jacobian = [&time,&stopwatch,&assembler,&mp_def](gsVector<real_t> const &x)
     {
-      // assembler.constructSolution(x); // DOES NOT WORK!!
+      stopwatch.restart();
       assembler.constructSolution(x,mp_def);
       assembler.assembleMatrix(mp_def);
+      time += stopwatch.stop();
+
       gsSparseMatrix<real_t> m = assembler.matrix();
       // gsInfo<<"matrix = \n"<<m.toDense()<<"\n";
       return m;
     };
     // Function for the Residual
-
     std::function<gsVector<real_t> (gsVector<real_t> const &, real_t, gsVector<real_t> const &) > Residual;
-    Residual = [&assembler,&mp_def](gsVector<real_t> const &x, real_t lam, gsVector<real_t> const &force)
+    Residual = [&time,&stopwatch,&assembler,&mp_def](gsVector<real_t> const &x, real_t lam, gsVector<real_t> const &force)
     {
-      // assembler.assembleVector(x); // DOES NOT WORK!!
+      stopwatch.restart();
       assembler.constructSolution(x,mp_def);
       assembler.assembleVector(mp_def);
       gsVector<real_t> Fint = -(assembler.rhs() - force);
       gsVector<real_t> result = Fint - lam * force;
-
-      // gsDebugVar(Fint);
-      // gsDebugVar(result);
-      // The residual is now defined as the internal forces minus lam*force
-      // gsVector<real_t> r =
-      // gsVector<> result = Fint - lam * force;
-      // gsDebugVar((lam * force).transpose());
-      // gsDebugVar(assembler.rhs());
-      // gsDebugVar(Fint);
-      // gsDebugVar((lam*force).sum());
+      time += stopwatch.stop();
       return result; // - lam * force;
     };
     // Assemble linear system to obtain the force vector
@@ -1211,11 +1207,11 @@ int main (int argc, char** argv)
     if (!membrane)
     {
       arcLength.options().setInt("Solver",0); // LDLT solver
-      arcLength.options().setInt("BifurcationMethod",0); // 0: determinant, 1: eigenvalue
+      arcLength.options().setInt("BifurcationMethod",1); // 0: determinant, 1: eigenvalue
     }
     else
     {
-      arcLength.options().setInt("Solver",1); // LU solver
+      arcLength.options().setInt("Solver",1); // CG solver
       arcLength.options().setInt("BifurcationMethod",1); // 0: determinant, 1: eigenvalue
     }
 
@@ -1240,8 +1236,9 @@ int main (int argc, char** argv)
     arcLength.options().setSwitch("Quasi",quasiNewton);
 
 
-
+    gsDebug<<arcLength.options();
     arcLength.applyOptions();
+    arcLength.initialize();
 
 
     gsParaviewCollection collection(dirname + "/" + output);
@@ -1323,16 +1320,27 @@ int main (int argc, char** argv)
         pts.col(1)<<0.5,1.0;
         pts.col(2)<<1.0,1.0;
       }
-      gsDebugVar(assembler.computePrincipalStretches(pts,mp_def,0));
+      gsMatrix<> lambdas = assembler.computePrincipalStretches(pts,mp_def,0);
+      gsDebugVar(lambdas);
+      if (testCase==4)
+      {
+        real_t S = Lold / 1e-3 / lambdas(0) / lambdas(2);
+        real_t San = mu * (math::pow(lambdas(1),2)-1/lambdas(1));
+        gsDebugVar(S);
+        gsDebugVar(San);
+        gsDebugVar(abs(S-San));
+      }
 
       deformation = mp_def;
       deformation.patch(0).coefs() -= mp.patch(0).coefs();// assuming 1 patch here
 
       // gsDebugVar(mp_def.patch(0).coefs());
 
-      gsInfo<<"pressures:\n"<<pressure*arcLength.solutionL()<<"\n"
+      if (testCase==7)
+      gsInfo<<"Pressures:\n"<<pressure*arcLength.solutionL()<<"\n"
                             <<pressure*arcLength.solutionL() * assembler.getArea(mp) / assembler.getArea(mp_def)<<"\n";
 
+      gsInfo<<"Total ellapsed assembly time: "<<time<<" s\n";
 
       if (plot)
       {
