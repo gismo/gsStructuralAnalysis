@@ -73,6 +73,9 @@ gsVector<T> gsStaticSolver<T>::solveNonlinear()
 
         if (updateVector.norm() < m_tolerance)
             break;
+        else if (m_iterations+1 == m_maxIterations)
+            gsWarn<<"Maximum iterations reached!\n";
+
 
             // ADD DIRICHLET HOMOGENIZE
     }
