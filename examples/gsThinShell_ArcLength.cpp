@@ -1328,7 +1328,11 @@ int main (int argc, char** argv)
         pts.col(2)<<1.0,1.0;
       }
       gsMatrix<> lambdas = assembler.computePrincipalStretches(pts,mp_def,0);
-      gsInfo<<"lambdas = \n"<<lambdas<<"\n";
+      std::streamsize ss = std::cout.precision();
+      std::cout<<std::setprecision(20)
+      std::cout<<"lambdas = \n"<<lambdas<<"\n";
+      std::cout<<std::setprecision(ss);
+
       if (testCase==4)
       {
         real_t S = Lold / 1e-3 / lambdas(0) / lambdas(2);
