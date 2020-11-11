@@ -1324,7 +1324,7 @@ int main (int argc, char** argv)
         pts.col(2)<<1.0,1.0;
       }
       gsMatrix<> lambdas = assembler.computePrincipalStretches(pts,mp_def,0);
-      gsDebugVar(lambdas);
+      gsInfo<<"kambdas = \n"<<lambdas.transpose()<<"\n";
       if (testCase==4)
       {
         real_t S = Lold / 1e-3 / lambdas(0) / lambdas(2);
