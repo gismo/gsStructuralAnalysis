@@ -116,18 +116,18 @@ void gsArcLengthIterator<T>::getOptions()
 
     m_arcLength = m_arcLength_prev = m_options.getReal("Length");
 
-    this->initializeMethods();
+    this->initMethods();
 }
 
 template <class T>
-void gsArcLengthIterator<T>::initialize()
+void gsArcLengthIterator<T>::init()
 {
   this->computeStability(m_U,true);
   m_stability = this->stability(); // requires Jabobian!!
 }
 
 template <class T>
-void gsArcLengthIterator<T>::initializeMethods()
+void gsArcLengthIterator<T>::initMethods()
 {
   m_numDof = m_forcing.size();
   m_U = gsVector<T>::Zero(m_numDof);
@@ -266,6 +266,8 @@ void gsArcLengthIterator<T>::iteration()
     iterationExplicitIterations();
   else if (m_method == method::Crisfield)
     iterationCrisfield();
+  else if (m_method == method::LoadControl)
+    iterationLC();
   else
   {
     gsInfo<<"Error: Method unknown...\n Terminating process...\n";
@@ -289,6 +291,8 @@ void gsArcLengthIterator<T>::initiateStep()
     initiateStepExplicitIterations();
   else if (m_method == method::Crisfield)
     initiateStepCrisfield();
+  else if (m_method == method::LoadControl)
+    initiateStepLC();
   else
   {
     gsInfo<<"Error: Method unknown...\n Terminating process...\n";
@@ -307,6 +311,8 @@ void gsArcLengthIterator<T>::predictor()
     predictorExplicitIterations();
   else if (m_method == method::Crisfield)
     predictorCrisfield();
+  else if (m_method == method::LoadControl)
+    predictorLC();
   else
   {
     gsInfo<<"Error: Method unknown...\n Terminating process...\n";
@@ -325,6 +331,8 @@ void gsArcLengthIterator<T>::iterationFinish()
     iterationFinishExplicitIterations();
   else if (m_method == method::Crisfield)
     iterationFinishCrisfield();
+  else if (m_method == method::LoadControl)
+    iterationFinishLC();
   else
   {
     gsInfo<<"Error: Method unknown...\n Terminating process...\n";
@@ -335,6 +343,7 @@ void gsArcLengthIterator<T>::iterationFinish()
 template <class T>
 void gsArcLengthIterator<T>::step()
 {
+  GISMO_ASSERT(m_initialized,"Arc-Length Method is not initialized! Call initialize()");
   initiateStep();
   computeJacobian();
   predictor();
@@ -347,7 +356,8 @@ void gsArcLengthIterator<T>::step()
   if (m_quasiNewton)
   {
     computeJacobian();
-    computeUt(); // rhs does not depend on solution
+    if (!m_method==method::LoadControl)
+      computeUt(); // rhs does not depend on solution
     computeUbar(); // rhs contains residual and should be computed every time
   }
 
@@ -356,7 +366,8 @@ void gsArcLengthIterator<T>::step()
     if ( (!m_quasiNewton) || ( ( m_quasiNewtonInterval>0 ) && ( mod(m_numIterations,m_quasiNewtonInterval) < 1e-10 ) ) )
     {
       computeJacobian();
-      computeUt(); // rhs does not depend on solution
+      if (!m_method==method::LoadControl)
+        computeUt(); // rhs does not depend on solution
     }
 
     computeUbar(); // rhs contains residual and should be computed every time
@@ -388,6 +399,48 @@ void gsArcLengthIterator<T>::step()
 
       // GISMO_ERROR("maximum iterations reached. Solution did not converge");
   }
+}
+
+// ------------------------------------------------------------------------------------------------------------
+// ---------------------------------------Load Control method--------------------------------------------------------
+// ------------------------------------------------------------------------------------------------------------
+
+template <class T>
+void gsArcLengthIterator<T>::iterationLC()
+{
+  m_deltaU = m_deltaUbar;
+  m_DeltaU += m_deltaU;
+}
+
+template <class T>
+void gsArcLengthIterator<T>::initiateStepLC()
+{
+  // (m_U,m_L) is the present solution (iteratively updated)
+  // (m_Uprev,m_Lprev) is the previously converged solution before (m_Lprev,m_Uprev)
+
+  // Reset step
+  m_DeltaU = m_deltaU = gsVector<T>::Zero(m_numDof);
+  m_DeltaL = m_deltaL = m_arcLength;
+
+  // Initiate verbose
+  if (m_verbose)
+    initOutputLC();
+}
+
+template <class T>
+void gsArcLengthIterator<T>::predictorLC()
+{
+  m_DeltaU = m_deltaU = this->solveSystem(m_forcing);
+}
+
+template <class T>
+void gsArcLengthIterator<T>::iterationFinishLC()
+{
+  m_converged = true;
+  m_Uprev = m_U;
+  m_Lprev = m_L;
+  m_U += m_DeltaU;
+  m_L += m_DeltaL;
 }
 
 // ------------------------------------------------------------------------------------------------------------
@@ -1158,17 +1211,19 @@ void gsArcLengthIterator<T>::computeStability(gsVector<T> x, bool jacobian)
   // gsInfo<<"x = \n"<<x.transpose()<<"\n";
 	if (m_bifurcationMethod == bifmethod::Determinant)
 	{
-		factorizeMatrix(m_jacMat);
+    factorizeMatrix(m_jacMat);
     m_stabilityVec = m_LDLTsolver.vectorD();
 	}
 	else if (m_bifurcationMethod == bifmethod::Eigenvalue)
 	{
     index_t number = 10;
-    gsSpectraSymSolver<gsSparseMatrix<T>,Spectra::SMALLEST_ALGE> es(m_jacMat,number,2*number);
+    gsSpectraSymSolver<gsSparseMatrix<T>> es(m_jacMat,number,3*number);
     es.init();
-    es.compute();
+    es.compute(1000,1e-6);
+    GISMO_ASSERT(es.info()==0,"Spectra did not converge! Error flag: "<<es.info()); // Reason for not converging can be due to the value of ncv (last input in the class member), which is too low.
 		// Eigen::SelfAdjointEigenSolver< gsMatrix<T> > es(m_jacMat);
-		m_stabilityVec = es.eigenvalues().reverse();
+		m_stabilityVec = es.eigenvalues();
+    m_stabilityVec = m_stabilityVec.reverse();
 	}
 	else
 		gsInfo<<"bifurcation method unknown!";
@@ -1434,10 +1489,29 @@ void gsArcLengthIterator<T>::initOutput()
     initOutputRiks();
   else if (m_method == method::Crisfield)
     initOutputCrisfield();
+  else if (m_method == method::LoadControl)
+    initOutputLC();
   else
     gsInfo<<"Init output: Method unknown \n";
 }
 
+template <class T>
+void gsArcLengthIterator<T>::initOutputLC()
+{
+  gsInfo<<"\t";
+  gsInfo<<std::setw(12)<<std::left<<"Iteration";
+  gsInfo<<std::setw(17)<<std::left<<"ResidualF";
+  gsInfo<<std::setw(17)<<std::left<<"ResidualU";
+  gsInfo<<std::setw(17)<<std::left<<"U.norm";
+  gsInfo<<std::setw(17)<<std::left<<"L";
+  gsInfo<<std::setw(17)<<std::left<<"DU.norm";
+  gsInfo<<std::setw(17)<<std::left<<"DL";
+  gsInfo<<std::setw(17)<<std::left<<"Dmin";
+  gsInfo<<std::setw(17)<<std::left<<"note";
+  gsInfo<<"\n";
+
+  note = "";
+}
 
 template <class T>
 void gsArcLengthIterator<T>::initOutputRiks()
@@ -1516,8 +1590,30 @@ void gsArcLengthIterator<T>::stepOutput()
     stepOutputRiks();
   else if (m_method == method::Crisfield)
     stepOutputCrisfield();
+  else if (m_method == method::LoadControl)
+    stepOutputLC();
   else
     gsInfo<<"Step output: Method unknown \n";
+}
+
+template <class T>
+void gsArcLengthIterator<T>::stepOutputLC()
+{
+  computeStability(m_U,false);
+
+  gsInfo<<"\t";
+  gsInfo<<std::setw(12)<<std::left<<m_numIterations;
+  gsInfo<<std::setw(17)<<std::left<<m_residueF;
+  gsInfo<<std::setw(17)<<std::left<<m_residueU;
+  gsInfo<<std::setw(17)<<std::left<<(m_U+m_DeltaU).norm();
+  gsInfo<<std::setw(17)<<std::left<<(m_L + m_DeltaL);
+  gsInfo<<std::setw(17)<<std::left<<m_DeltaU.norm();
+  gsInfo<<std::setw(17)<<std::left<<m_DeltaL;
+  gsInfo<<std::setw(17)<<std::left<<m_indicator;
+  gsInfo<<std::setw(17)<<std::left<<note;
+  gsInfo<<"\n";
+
+  note = "";
 }
 
 template <class T>
