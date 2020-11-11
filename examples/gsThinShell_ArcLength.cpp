@@ -1207,7 +1207,7 @@ int main (int argc, char** argv)
     if (!membrane)
     {
       arcLength.options().setInt("Solver",0); // LDLT solver
-      arcLength.options().setInt("BifurcationMethod",1); // 0: determinant, 1: eigenvalue
+      arcLength.options().setInt("BifurcationMethod",0); // 0: determinant, 1: eigenvalue
     }
     else
     {
