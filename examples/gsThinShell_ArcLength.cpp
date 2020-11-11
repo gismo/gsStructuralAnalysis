@@ -117,6 +117,8 @@ int main (int argc, char** argv)
 
     bool THB = false;
 
+    index_t maxit = 20;
+
     // Arc length method options
     real_t dL = 0; // General arc length
     real_t dLb = 0.5; // Ard length to find bifurcation
@@ -827,6 +829,7 @@ int main (int argc, char** argv)
 
         // Pressure
         pressure = 1e3;
+        maxit = 50;
 
         dirname = dirname + "/" + "Balloon";
         output =  "solution";
@@ -1225,7 +1228,7 @@ int main (int argc, char** argv)
     arcLength.options().setReal("Tol",tol);
     arcLength.options().setReal("TolU",tolU);
     arcLength.options().setReal("TolF",tolF);
-    arcLength.options().setInt("MaxIter",20);
+    arcLength.options().setInt("MaxIter",maxit);
     arcLength.options().setSwitch("Verbose",true);
     arcLength.options().setReal("Relaxation",relax);
     if (quasiNewtonInt>0)
@@ -1337,7 +1340,8 @@ int main (int argc, char** argv)
       // gsDebugVar(mp_def.patch(0).coefs());
 
       if (testCase==7)
-      gsInfo<<"Pressures:\n"<<pressure*arcLength.solutionL()<<"\n"
+      gsInfo<<std::setprecision(20)
+            <<"Pressures:\n"<<pressure*arcLength.solutionL()<<"\n"
                             <<pressure*arcLength.solutionL() * assembler.getArea(mp) / assembler.getArea(mp_def)<<"\n";
 
       gsInfo<<"Total ellapsed assembly time: "<<time<<" s\n";
