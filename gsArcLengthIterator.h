@@ -50,16 +50,15 @@ public:
       m_basisResidualF = 0.0;
       m_basisResidualU = 0.0;
 
-      this -> initializeMethods();
-      this -> initialize();
+      m_initialized = false;
+
       // m_deltaLs = gsMatrix<T>::Zero(2,1);
     }
 
 
 public:
 
-    void initialize();
-    void initializeMethods();
+    void initialize() {m_initialized = true; this -> initMethods(); this -> init();}
 
     void step();
 
@@ -145,8 +144,10 @@ public:
           m_method = method::ConsistentCrisfield;
         else if (method=="ExplicitIterations")
           m_method = method::ExplicitIterations;
+        else if (method=="LoadControl")
+          m_method = method::LoadControl;
 
-        this -> initializeMethods();
+        this -> initMethods();
       }
 
 
@@ -213,6 +214,9 @@ public:
 
 protected:
 
+    void init();
+    void initMethods();
+
     void defaultOptions();
     void getOptions();
 
@@ -260,35 +264,41 @@ protected:
     void initOutputRiks();
     void initOutputCrisfield();
     void initOutputExtended();
+    void initOutputLC();
 
     void stepOutput();
     void stepOutputRiks();
     void stepOutputCrisfield();
     void stepOutputExtended();
+    void stepOutputLC();
 
     void iteration();
     void iterationRiks();
     void iterationConsistentCrisfield();
     void iterationExplicitIterations();
     void iterationCrisfield();
+    void iterationLC();
 
     void initiateStep();
     void initiateStepRiks();
     void initiateStepConsistentCrisfield();
     void initiateStepExplicitIterations();
     void initiateStepCrisfield();
+    void initiateStepLC();
 
     void predictor();
     void predictorRiks();
     void predictorConsistentCrisfield();
     void predictorExplicitIterations();
     void predictorCrisfield();
+    void predictorLC();
 
     void iterationFinish();
     void iterationFinishRiks();
     void iterationFinishConsistentCrisfield();
     void iterationFinishExplicitIterations();
     void iterationFinishCrisfield();
+    void iterationFinishLC();
 
 protected:
 
@@ -313,10 +323,11 @@ protected:
     {
         enum type
         {
-            Riks  = 0,
-            Crisfield = 1,
-            ConsistentCrisfield = 2,
-            ExplicitIterations = 3,
+            LoadControl  = 0,
+            Riks  = 1,
+            Crisfield = 2,
+            ConsistentCrisfield = 3,
+            ExplicitIterations = 4,
         };
     };
 
@@ -379,6 +390,7 @@ protected:
     T m_toleranceU;
 
     bool m_verbose;
+    bool m_initialized;
 
     bool m_quasiNewton;
     int m_quasiNewtonInterval;
