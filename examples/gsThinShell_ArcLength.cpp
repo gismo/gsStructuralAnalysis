@@ -88,15 +88,10 @@ int main (int argc, char** argv)
     real_t perturbation = 0;
 
     real_t thickness = 1e-3;
-    real_t width = 0.1; // Width of the strip is equal to 0.1.
-    real_t length = 1; // Length of the strip is equal to 1.
-    real_t Area = thickness*width;
-
     real_t E_modulus     = 1;
     real_t PoissonRatio = 0;
     real_t Density = 1e0;
     gsMultiPatch<> mp, mpBspline;
-    real_t eta = 0;
     real_t tau = 1e4;
 
     index_t Compressibility = 0;
@@ -105,6 +100,8 @@ int main (int argc, char** argv)
 
     real_t aDim = 2.5;
     real_t bDim = 1.0;
+    real_t eta = 0;
+    real_t Spring = 0;
 
     real_t relax = 1.0;
 
@@ -143,6 +140,8 @@ int main (int argc, char** argv)
     cmd.addReal("T","hdim", "thickness of the plate", thickness);
     cmd.addReal("a","adim", "dimension a", aDim);
     cmd.addReal("b","bdim", "dimension b", bDim);
+
+    cmd.addReal("S","spring", "Nondimensional Spring Stiffness (case 2 and 3 only!)", eta);
 
     cmd.addInt("m","Method", "Arc length method; 1: Crisfield's method; 2: RIks' method.", method);
     cmd.addReal("L","dLb", "arc length", dLb);
@@ -228,29 +227,29 @@ int main (int argc, char** argv)
     }
     else if (testCase==0 || testCase==1)
     {
-      E_modulus = 2.886751346e12;
-      thickness = 0.3464101615e-3;
+      E_modulus = 1e8;
+      thickness = 0.005313292845913*2;
       PoissonRatio = 0.0;
-
-      real_t L = 1.0;
-      real_t B = 0.1;
-      Area = B*thickness;
-      mpBspline = RectangularDomain(numHref, 0, numElevate+2, 2, L, B);
+      aDim = 1.0;
+      bDim = 0.1;
+      real_t EI = 1.0/12.0*(bDim*math::pow(thickness,3))*E_modulus;
+      Spring = math::pow(eta/aDim,4)*EI/bDim;
+      mpBspline = RectangularDomain(numHref, 0, numElevate+2, 2, aDim, bDim);
+      gsInfo<<"S = "<<Spring<<"; eta = "<<eta<<"\n";
     }
     else if (testCase==2 || testCase==3)
     {
-      E_modulus = 1;
+      E_modulus = 75e6;
       thickness = 0.01;
       PoissonRatio = 0.0;
-      real_t L = 1.0;
-      real_t B = 0.01;
-      Area = B*thickness;
-      mpBspline = RectangularDomain(numHref, 0, numElevate+2, 2, L, B);
+      aDim = 1.0;
+      bDim = 0.01;
+      mpBspline = RectangularDomain(numHref, 0, numElevate+2, 2, aDim, bDim);
     }
     else if (testCase==4 || testCase==5)
     {
-      real_t L = 1.0;
-      real_t B = 1.0;
+      aDim = 1.0;
+      bDim = 1.0;
       real_t mu = 1.5e6;
       thickness = 0.001;
       if (!Compressibility)
@@ -259,8 +258,7 @@ int main (int argc, char** argv)
         PoissonRatio = 0.45;
       E_modulus = 2*mu*(1+PoissonRatio);
       // PoissonRatio = 0;
-      Area = B*thickness;
-      mpBspline = RectangularDomain(numHref, numElevate+2, L, B);
+      mpBspline = RectangularDomain(numHref, numElevate+2, aDim, bDim);
 
       gsInfo<<"mu = "<<E_modulus / (2 * (1 + PoissonRatio))<<"\n";
     }
@@ -542,14 +540,6 @@ int main (int argc, char** argv)
       mp = mpBspline;
 
     gsMultiBasis<> dbasis(mp);
-
-
-    real_t EA = E_modulus*Area;
-    real_t EI = 1.0/12.0*(width*math::pow(thickness,3))*E_modulus;
-
-    real_t r = math::sqrt(EI/EA);
-    gsInfo<<"EI = "<<EI<<"; EA = "<<EA<<"; r = "<<r<<"\n";
-
     gsInfo<<"Basis (patch 0): "<< mp.patch(0).basis() << "\n";
 
     // Boundary conditions
@@ -575,6 +565,8 @@ int main (int argc, char** argv)
     std::string output = "solution";
     std::string dirname = "ArcLengthResults";
     real_t pressure = 0.0;
+    gsVector<> foundation(3);
+    foundation<<0,0,Spring;
 
     gsMatrix<> writePoints(2,3);
     writePoints.col(0)<< 0.0,0.5;
@@ -617,7 +609,7 @@ int main (int argc, char** argv)
     else if (testCase == 0)
     {
         // Pinned-Pinned
-        tmp << 1e-4, 0, 0;
+        tmp << 1e-1, 0, 0;
         neuData.setValue(tmp,3);
         // // Clamped-Clamped
         BCs.addCondition(boundary::west, condition_type::neumann, &neuData ); // unknown 0 - x
@@ -641,8 +633,12 @@ int main (int argc, char** argv)
     }
     else if (testCase == 1)
     {
-        Load = EA/width*1e-1;
+        real_t Area = bDim*thickness;
+        real_t EA = E_modulus*Area;
+        Load = EA*1e-6;
         tmp << Load, 0, 0;
+
+        gsDebugVar(EA);
         // tmp << 0, 0, Load;
         neuData.setValue(tmp,3);
         // // Clamped-Clamped
@@ -1122,6 +1118,7 @@ int main (int argc, char** argv)
 
     gsFunctionExpr<> surfForce(tx,ty,tz,3);
     gsConstantFunction<> pressFun(pressure,3);
+    gsConstantFunction<> foundFun(foundation,3);
     // Initialise solution object
     gsMultiPatch<> mp_def = mp;
     gsSparseSolver<>::LU solver;
@@ -1176,6 +1173,8 @@ int main (int argc, char** argv)
     assembler.setPointLoads(pLoads);
     if (pressure!= 0.0)
         assembler.setPressure(pressFun);
+    if (Spring!= 0.0)
+        assembler.setFoundation(foundFun);
 
     gsStopwatch stopwatch;
     real_t time = 0.0;
@@ -1329,8 +1328,8 @@ int main (int argc, char** argv)
       }
       gsMatrix<> lambdas = assembler.computePrincipalStretches(pts,mp_def,0);
       std::streamsize ss = std::cout.precision();
-      std::cout<<std::setprecision(20)
-      std::cout<<"lambdas = \n"<<lambdas<<"\n";
+      std::cout <<std::setprecision(20)
+                <<"lambdas = \n"<<lambdas<<"\n";
       std::cout<<std::setprecision(ss);
 
       if (testCase==4)
