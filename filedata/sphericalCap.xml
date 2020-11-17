@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xml>
+ <Geometry type="TensorNurbs2" id="0">
+  <Basis type="TensorNurbsBasis2">
+   <Basis type="TensorBSplineBasis2">
+    <Basis type="BSplineBasis" index="0">
+     <KnotVector degree="2">0 0 0 1 1 1</KnotVector>
+    </Basis>
+    <Basis type="BSplineBasis" index="1">
+     <KnotVector degree="2">0 0 0 1 1 1</KnotVector>
+    </Basis>
+   </Basis>
+   <weights>1 0.995479460535586 1 1 0.703910277076639 0.707106781186548 1 0.995479460535586 1</weights>
+  </Basis>
+  <coefs geoDim="3">
+    0         0         0.085877
+    0.454144  0         0.085877
+    0.900094  0         0
+    0         0         0.085877
+    0.454144  0.454144  0.085877
+    0.900094  0.900094  0
+    0         0         0.085877
+    0         0.454144  0.085877
+    0         0.900094  0
+    
+  </coefs>
+ </Geometry>
+</xml>

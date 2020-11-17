@@ -40,7 +40,7 @@ int main(int argc, char *argv[])
     bool verbose = false;
     std::string fn1,fn2;
     fn1 = "planar/unitplate.xml";
-    fn2 = "pde/shells/kirchhoff_shell1.xml";
+    fn2 = "pde/kirchhoff_shell1.xml";
     bool membrane = false;
 
 
@@ -69,12 +69,12 @@ int main(int argc, char *argv[])
     if (testCase == 1)
     {
         fn1 = "planar/unitplate.xml";
-        fn2 = "pde/shells/kirchhoff_shell1.xml";
+        fn2 = "pde/kirchhoff_shell1.xml";
     }
     else if (testCase == 2)
     {
         fn1 = "scordelis_lo_roof.xml";
-        fn2 = "pde/shells/kirchhoff_shell_scordelis.xml";
+        fn2 = "pde/kirchhoff_shell_scordelis.xml";
     }
 
     gsReadFile<>(fn1, mp);
