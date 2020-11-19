@@ -47,12 +47,16 @@ void gsBucklingSolver<T>::compute()
 };
 
 template <class T>
-void gsBucklingSolver<T>::computeSparse(index_t number)
+void gsBucklingSolver<T>::computeSparse(T shift, index_t number)
 {
-    gsSpectraGenSymSolver<gsSparseMatrix<T>,Spectra::SMALLEST_ALGE> solver(m_linear,m_nonlinear - m_linear,number,2*number);
+    gsSparseMatrix<T> lhs = m_linear-shift*(m_nonlinear - m_linear);
+    gsSpectraGenSymSolver<gsSparseMatrix<T>,Spectra::SMALLEST_MAGN> solver(lhs,m_nonlinear - m_linear,number,2*number);
     solver.init();
     solver.compute();
     m_values  = solver.eigenvalues();
+    gsDebugVar(m_values);
+    m_values.array() += shift;
+    gsDebugVar(m_values);
     m_vectors = solver.eigenvectors();
 
     m_values = m_values.reverse();
