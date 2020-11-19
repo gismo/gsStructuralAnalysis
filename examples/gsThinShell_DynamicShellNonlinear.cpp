@@ -51,7 +51,7 @@ int main (int argc, char** argv)
     int method = 2; // 1: Explicit Euler, 2: Implicit Euler, 3: Newmark, 4: Bathe
 
     int result = 0;
-    std::string fn("sphericalCap.xml");
+    std::string fn("surface/sphericalCap.xml");
 
     bool write = false;
     std::string wn;

@@ -93,7 +93,7 @@ int main(int argc, char *argv[])
     {
         thickness = 0.25;
         E_modulus = 4.32E8;
-        fn = "../extensions/unsupported/filedata/scordelis_lo_roof.xml";
+        fn = "surface/scordelis_lo_roof.xml";
         gsReadFile<>(fn, mp);
         PoissonRatio = 0.0;
     }
@@ -102,14 +102,14 @@ int main(int argc, char *argv[])
         thickness = 0.04;
         E_modulus = 6.825E7;
         PoissonRatio = 0.3;
-        gsReadFile<>("quarter_hemisphere.xml", mp);
+        gsReadFile<>("surface/quarter_hemisphere.xml", mp);
     }
     else if (testCase == 3)
     {
         thickness = 3;
         E_modulus = 3E6;
         PoissonRatio = 0.3;
-        gsReadFile<>("pinched_cylinder.xml", mp);
+        gsReadFile<>("surface/pinched_cylinder.xml", mp);
     }
     else if (testCase == 4)
     {
@@ -140,7 +140,7 @@ int main(int argc, char *argv[])
         real_t mu = 4.225e5;
         PoissonRatio = 0.3;
         E_modulus = 2*mu*(1+PoissonRatio);
-        gsReadFile<>("quarter_sphere.xml", mp);
+        gsReadFile<>("surface/quarter_sphere.xml", mp);
     }
     else if (testCase == 7)
     {
@@ -148,7 +148,7 @@ int main(int argc, char *argv[])
         real_t mu = 4.225e5;
         PoissonRatio = 0.3;
         E_modulus = 2*mu*(1+PoissonRatio);
-        gsReadFile<>("quarter_frustrum.xml", mp);
+        gsReadFile<>("surface/quarter_frustrum.xml", mp);
     }
     // else if (testCase == 8)
     // {
@@ -218,7 +218,7 @@ int main(int argc, char *argv[])
     {
         // Unit square
         // gsReadFile<>("planar/annulus_4p.xml", mp);
-        gsReadFile<>("frustrum.xml", mp);
+        gsReadFile<>("surface/frustrum.xml", mp);
         mp.computeTopology();
 
         E_modulus = 1;

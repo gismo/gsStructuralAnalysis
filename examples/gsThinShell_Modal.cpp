@@ -35,6 +35,9 @@ void writeToCSVfile(std::string name, gsMatrix<> matrix)
     }
   }
 
+template <class T>
+gsMultiPatch<T> Rectangle(T L, T B);
+
 int main (int argc, char** argv)
 {
     // Input options
@@ -86,13 +89,12 @@ int main (int argc, char** argv)
 
     try { cmd.getValues(argc,argv); } catch (int rv) { return rv; }
 
-    std::string fn("planar/strip.xml");
-
+    std::string fn;
 
     real_t EA,EI,r,D;
     if (testCase==0 || testCase==1 || testCase==2)
     {
-        fn = "planar/strip.xml";
+        mp = Rectangle(length,width);
         EA = E_modulus*Area;
         EI = 1.0/12.0*(width*math::pow(thickness,3))*E_modulus;
         r = math::sqrt(EI/EA);
@@ -100,15 +102,18 @@ int main (int argc, char** argv)
     }
     else if (testCase==3 || testCase==4)
     {
-      fn = "planar/unitplate.xml";
+      mp.addPatch( gsNurbsCreator<>::BSplineSquare(1) ); // degree
+      mp.addAutoBoundaries();
+      mp.embed(3);
+      gsReadFile<>(fn, mp);
     }
 
     else if (testCase==5 || testCase==6)
     {
       fn = "planar/unitcircle.xml";
+      gsReadFile<>(fn, mp);
     }
 
-    gsReadFile<>(fn, mp);
 
     for(index_t i = 0; i< numElevate; ++i)
         mp.patch(0).degreeElevate();    // Elevate the degree
@@ -437,4 +442,53 @@ int main (int argc, char** argv)
     }
 
     return result;
+}
+
+template <class T>
+gsMultiPatch<T> Rectangle(T L, T B)
+{
+  // -------------------------------------------------------------------------
+  // --------------------------Make beam geometry-----------------------------
+  // -------------------------------------------------------------------------
+  int dim = 3; //physical dimension
+  gsKnotVector<> kv0;
+  kv0.initUniform(0,1,0,2,1);
+  gsKnotVector<> kv1;
+  kv1.initUniform(0,1,0,2,1);
+
+  // Make basis
+  gsTensorBSplineBasis<2,T> basis(kv0,kv1);
+
+  // Initiate coefficient matrix
+  gsMatrix<> coefs(basis.size(),dim);
+  // Number of control points needed per component
+  size_t len0 = basis.component(0).size();
+  size_t len1 = basis.component(1).size();
+  gsVector<> coefvec0(len0);
+  // Uniformly distribute control points per component
+  coefvec0.setLinSpaced(len0,0.0,L);
+  gsVector<> coefvec1(basis.component(1).size());
+  coefvec1.setLinSpaced(len1,0.0,B);
+
+  // Z coordinate is zero
+  coefs.col(2).setZero();
+
+  // Define a matrix with ones
+  gsVector<> temp(len0);
+  temp.setOnes();
+  for (size_t k = 0; k < len1; k++)
+  {
+    // First column contains x-coordinates (length)
+    coefs.col(0).segment(k*len0,len0) = coefvec0;
+    // Second column contains y-coordinates (width)
+    coefs.col(1).segment(k*len0,len0) = temp*coefvec1.at(k);
+  }
+  // Create gsGeometry-derived object for the patch
+  gsTensorBSpline<2,real_t> shape(basis,coefs);
+
+  gsMultiPatch<T> mp;
+  mp.addPatch(shape);
+  mp.addAutoBoundaries();
+
+  return mp;
 }

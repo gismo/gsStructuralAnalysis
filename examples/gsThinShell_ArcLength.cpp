@@ -293,7 +293,7 @@ int main (int argc, char** argv)
         else
           PoissonRatio = 0.45;
         E_modulus = 2*mu*(1+PoissonRatio);
-        gsReadFile<>("eighth_sphere.xml", mpBspline);
+        gsReadFile<>("surface/eighth_sphere.xml", mpBspline);
 
         for(index_t i = 0; i< numElevate; ++i)
           mpBspline.patch(0).degreeElevate();    // Elevate the degree
@@ -337,7 +337,7 @@ int main (int argc, char** argv)
         thickness = 2e-3;
         PoissonRatio = 0.4;
         E_modulus = 168e9; // GPa
-        gsReadFile<>("half_cylinder.xml", mpBspline);
+        gsReadFile<>("surface/half_cylinder.xml", mpBspline);
         Ratio = 4;
 
         for(index_t i = 0; i< numElevate; ++i)
