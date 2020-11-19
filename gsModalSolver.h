@@ -43,6 +43,7 @@ public:
   }
 
 public:
+    void verbose() {m_verbose=true; };
 
     void compute();
     void computeSparse(index_t number = 10);

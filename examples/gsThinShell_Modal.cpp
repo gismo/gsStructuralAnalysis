@@ -43,7 +43,6 @@ int main (int argc, char** argv)
     int numElevate  = 1;
     int numHref     = 1;
     bool plot       = false;
-    bool sparse     = false;
     bool nonlinear  = false;
     bool first  = false;
     int mode = 0;
@@ -57,8 +56,6 @@ int main (int argc, char** argv)
     real_t PoissonRatio = 0;
     real_t Density = 1e0;
     gsMultiPatch<> mp;
-
-    real_t shift = 0.0;
 
     int testCase = 0;
 
@@ -79,12 +76,10 @@ int main (int argc, char** argv)
     cmd.addInt("e","degreeElevation",
                "Number of degree elevation steps to perform on the Geometry's basis before solving",
                numElevate);
-    cmd.addReal("s","shift", "eigenvalue shift", shift);
     cmd.addSwitch("nl", "Nonlinear elasticity (otherwise linear)", nonlinear);
     cmd.addSwitch("plot", "Plot result in ParaView format", plot);
     cmd.addSwitch("first", "Plot only first", first);
     cmd.addSwitch("write", "Write convergence data to file", write);
-    cmd.addSwitch("sparse", "Use sparse solver", sparse);
 
     try { cmd.getValues(argc,argv); } catch (int rv) { return rv; }
 
@@ -374,12 +369,9 @@ int main (int argc, char** argv)
 
     gsModalSolver<real_t> modal(K,M);
     modal.verbose();
+    // buckling.computePower();
 
-    if (!sparse)
-      modal.compute();
-    else
-      modal.computeSparse(shift,10);
-
+    modal.compute();
 
     gsMatrix<> values = modal.values();
     gsMatrix<> vectors = modal.vectors();
@@ -433,8 +425,8 @@ int main (int argc, char** argv)
 
     if (write)
     {
-        system("mkdir -p ModalResults");
-        std::string wnM = "ModalResults/eigenvalues.txt";
+        system("mkdir -p BucklingResults");
+        std::string wnM = "BucklingResults/eigenvalues.txt";
         writeToCSVfile(wnM,values);
     }
 
