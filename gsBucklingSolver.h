@@ -61,7 +61,7 @@ public:
     void verbose() {m_verbose=true; };
 
     void compute();
-    void computeSparse(index_t number = 10);
+    void computeSparse(T shift = 0.0, index_t number = 10);
     void computePower();
 
     gsMatrix<T> values() const { return m_values; };
