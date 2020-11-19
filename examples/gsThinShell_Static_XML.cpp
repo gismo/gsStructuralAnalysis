@@ -12,10 +12,9 @@
 */
 
 #include <gismo.h>
-#include <gismo_dev.h>
 
-#include <gsThinShell2/gsThinShellAssembler.h>
-#include <gsThinShell2/gsMaterialMatrix.h>
+#include <gsKLShell/gsThinShellAssembler.h>
+#include <gsKLShell/gsMaterialMatrix.h>
 
 #include <gsElasticity/gsWriteParaviewMultiPhysics.h>
 
