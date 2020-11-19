@@ -147,10 +147,15 @@ public:
     T currentTime() const {return m_t; }
 
     /// set mass matrix
-    void setMassMatrix(gsMatrix<T> Mass) {m_mass = Mass; }
-    void setDampingMatrix(gsMatrix<T> Damp) {m_damp = Damp; }
-    void setStiffnessMatrix(gsMatrix<T> Stif) {m_stif = Stif; }
+    void setMassMatrix(gsMatrix<T>& Mass) {m_mass = Mass; }
+    void setDampingMatrix(gsMatrix<T>& Damp) {m_damp = Damp; }
+    void setStiffnessMatrix(gsMatrix<T>& Stif) {m_stif = Stif; }
     void setJacobian(std::function < gsSparseMatrix<T> ( gsMatrix<T> const & ) > &Jacobian) {m_jacobian = Jacobian; }
+
+    // set solutions
+    void setDisplacement(gsMatrix<T>& displ);
+    void setVelocity(gsMatrix<T>& velo);
+    void setAcceleration(gsMatrix<T>& accel);
 
     // set time integration method
     void setMethod(std::string method);
@@ -285,11 +290,7 @@ namespace gismo
     void gsTimeIntegrator<T>::initializeSolution()
     {
         // Defines homogenous solutions as initial solution. Can be overwritten with initialDisplacement() or initialVelocity() later
-        if (m_method=="ExplEuler")
-        {
-            m_sol = gsMatrix<T>::Zero(2*m_dofs,1);
-        }
-        else if (m_method=="ImplEuler")
+        if (m_method=="ExplEuler" || m_method=="ImplEuler")
         {
             m_sol = gsMatrix<T>::Zero(2*m_dofs,1);
         }
@@ -303,8 +304,33 @@ namespace gismo
         {
             gsInfo<<"Method unknown...";
         }
+    }
 
+    template <class T>
+    void gsTimeIntegrator<T>::setDisplacement(gsMatrix<T>& displ)
+    {
+        if (m_method=="ExplEuler" || m_method=="ImplEuler")
+            m_sol.block(0,0,m_dofs,1) = displ;
+        else if ((m_method=="Newmark") || (m_method=="Bathe"))
+            m_uNew = displ;
+    }
 
+    template <class T>
+    void gsTimeIntegrator<T>::setVelocity(gsMatrix<T>& velo)
+    {
+        if (m_method=="ExplEuler" || m_method=="ImplEuler")
+            m_sol.block(m_dofs,0,m_dofs,1) = velo;
+        else if ((m_method=="Newmark") || (m_method=="Bathe"))
+            m_vNew = velo;
+    }
+
+    template <class T>
+    void gsTimeIntegrator<T>::setAcceleration(gsMatrix<T>& accel)
+    {
+        if (m_method=="ExplEuler" || m_method=="ImplEuler")
+            gsWarn<<"Initial acceleration not implemented for method "<<m_method<<"\n";
+        else if ((m_method=="Newmark") || (m_method=="Bathe"))
+            m_aNew = accel;
     }
 
     template <class T>
@@ -567,7 +593,7 @@ namespace gismo
 
             if ( (!m_quasiNewton) || (m_numIterations==0) )
                 m_jacMat = m_jacobian(uNew);
-            
+
             m_resVec = m_residualFun(uNew,m_t);
 
             m_sysvec.topRows(m_dofs) = uNew - uOld - m_dt*vNew;
@@ -749,7 +775,7 @@ namespace gismo
         {
             if ( (!m_quasiNewton) || (m_numIterations==0) )
                 m_jacMat = m_jacobian(m_uNew);
-            
+
             m_resVec = m_residualFun(m_uNew,m_t);
 
             gsSparseMatrix<> lhs = m_jacMat + 4/(math::pow(gamma*m_dt,2))*m_mass + 2/(gamma*m_dt)*m_damp;
@@ -848,7 +874,7 @@ namespace gismo
         {
             if ( (!m_quasiNewton) || (m_numIterations==0) )
                 m_jacMat = m_jacobian(m_uNew);
-            
+
             m_resVec = m_residualFun(m_uNew,m_t);
 
             gsSparseMatrix<> lhs = m_jacMat + 4/(math::pow(gamma*m_dt,2))*m_mass + 2/(gamma*m_dt)*m_damp;
@@ -891,7 +917,7 @@ namespace gismo
         {
             if ( (!m_quasiNewton) || (m_numIterations==0) )
                 m_jacMat = m_jacobian(m_uNew);
-            
+
             m_resVec = m_residualFun(m_uNew,m_t);
 
             gsSparseMatrix<T> lhs = m_jacMat + c3*c3*m_mass + c3*m_damp;

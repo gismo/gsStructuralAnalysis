@@ -60,7 +60,7 @@ public:
 
     void verbose() {m_verbose=true; };
 
-    void compute(index_t number = 10);
+    void compute();
     void computeSparse(index_t number = 10);
     void computePower();
 

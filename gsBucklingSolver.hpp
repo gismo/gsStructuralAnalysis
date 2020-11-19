@@ -34,7 +34,7 @@ void gsBucklingSolver<T>::initializeMatrix()
 };
 
 template <class T>
-void gsBucklingSolver<T>::compute(index_t number)
+void gsBucklingSolver<T>::compute()
 {
     if (m_verbose) { gsInfo<<"Solving eigenvalue problem" ; }
     m_eigSolver.compute(m_linear,m_nonlinear - m_linear);
