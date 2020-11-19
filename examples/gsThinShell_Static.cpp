@@ -12,10 +12,9 @@
 */
 
 #include <gismo.h>
-#include <gismo_dev.h>
 
-#include <gsThinShell2/gsThinShellAssembler.h>
-#include <gsThinShell2/gsMaterialMatrix.h>
+#include <gsKLShell/gsThinShellAssembler.h>
+#include <gsKLShell/gsMaterialMatrix.h>
 
 #include <gsElasticity/gsWriteParaviewMultiPhysics.h>
 
@@ -938,6 +937,8 @@ int main(int argc, char *argv[])
 
 
         // gsField<> stressField = assembler.constructStress(mp_def,stress_type::membrane_strain);
+
+        gsWriteParaview(solutionField,"Deformation");
 
         std::map<std::string,const gsField<> *> fields;
         fields["Deformation"] = &solutionField;

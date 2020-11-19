@@ -13,10 +13,8 @@
 */
 
 #include <gismo.h>
-#include <gismo_dev.h>
 
-#include <gsIO/gsMatrixToFile.h>
-#include <gsThinShell2/gsThinShellAssembler.h>
+#include <gsKLShell/gsThinShellAssembler.h>
 
 // #include <gsThinShell/gsArcLengthIterator.h>
 #include <gsStructuralAnalysis/gsArcLengthIterator.h>

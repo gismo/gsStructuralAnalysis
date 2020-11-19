@@ -13,9 +13,7 @@
 
 #include <gismo.h>
 
-#include <gismo_dev.h>
-#include <gsIO/gsMatrixToFile.h>
-#include <gsThinShell2/gsThinShellAssembler.h>
+#include <gsKLShell/gsThinShellAssembler.h>
 
 #include <gsStructuralAnalysis/gsTimeIntegrator.h>
 
