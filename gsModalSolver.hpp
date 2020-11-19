@@ -32,16 +32,20 @@ void gsModalSolver<T>::compute()
 };
 
 template <class T>
-void gsModalSolver<T>::computeSparse(index_t number)
+void gsModalSolver<T>::computeSparse(T shift, index_t number)
 {
     if (m_verbose) { gsInfo<<"Solving eigenvalue problem" ; }
-    gsSpectraGenSymSolver<gsSparseMatrix<T>,Spectra::SMALLEST_ALGE> solver(m_stiffness,m_mass,number,2*number);
+    gsSparseMatrix<T> lhs = m_stiffness-shift*m_mass;
+    gsSpectraGenSymSolver<gsSparseMatrix<T>,Spectra::SMALLEST_MAGN> solver(lhs,m_mass,number,2*number);
     if (m_verbose) { gsInfo<<"." ; }
     solver.init();
     if (m_verbose) { gsInfo<<"." ; }
     solver.compute();
     if (m_verbose) { gsInfo<<"." ; }
     m_values  = solver.eigenvalues();
+    gsDebugVar(m_values);
+    m_values.array() += shift;
+    gsDebugVar(m_values);
     if (m_verbose) { gsInfo<<"." ; }
     m_vectors = solver.eigenvectors();
     if (m_verbose) { gsInfo<<"." ; }
