@@ -208,27 +208,26 @@ int main (int argc, char** argv)
 //------------------------------------------------------------------------------
 gsParaviewCollection collection(dirname + "/solution");
 
-
+typedef std::function<gsSparseMatrix<real_t> (gsVector<real_t> const &)>    Jacobian_t;
+typedef std::function<gsVector<real_t> (gsVector<real_t> const &) >         Residual_t;
 // Function for the Jacobian
-    std::function<gsSparseMatrix<real_t> (gsMatrix<real_t> const &)> Jacobian;
-    Jacobian = [&assembler,&solution](gsMatrix<real_t> const &x)
-    {
-      // to do: add time dependency of forcing
-      assembler.constructSolution(x,solution);
-      assembler.assemble(solution);
-      gsSparseMatrix<real_t> m = assembler.matrix();
-      return m;
-    };
+Jacobian_t Jacobian = [&assembler,&solution](gsMatrix<real_t> const &x)
+{
+  // to do: add time dependency of forcing
+  assembler.constructSolution(x,solution);
+  assembler.assemble(solution);
+  gsSparseMatrix<real_t> m = assembler.matrix();
+  return m;
+};
 
 // Function for the Residual
-    std::function<gsMatrix<real_t> (gsMatrix<real_t> const &, real_t) > Residual;
-    Residual = [&assembler,&solution](gsMatrix<real_t> const &x, real_t time)
-    {
-      assembler.constructSolution(x,solution);
-      assembler.assemble(solution);
-      gsMatrix<real_t> r = assembler.rhs();
-      return r;
-    };
+Residual Residual = [&assembler,&solution](gsMatrix<real_t> const &x, real_t time)
+{
+  assembler.constructSolution(x,solution);
+  assembler.assemble(solution);
+  gsMatrix<real_t> r = assembler.rhs();
+  return r;
+};
 
 // Compute mass matrix (since it is constant over time)
 assembler.assembleMass();

@@ -497,8 +497,8 @@ int main (int argc, char** argv)
     gsVector<> rhs = assembler.rhs();
 
 
-    std::function<gsSparseMatrix<real_t> (gsVector<real_t> const &)> K_NL;
-    K_NL = [&assembler,&mp_def](gsVector<real_t> const &x)
+    typedef std::function<gsSparseMatrix<real_t> (gsVector<real_t> const &)>    Jacobian_t;
+    Jacobian_t K_NL = [&assembler,&mp_def](gsVector<real_t> const &x)
     {
       assembler.constructSolution(x,mp_def);
       assembler.assemble(mp_def);

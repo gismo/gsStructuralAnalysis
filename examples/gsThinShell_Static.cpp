@@ -817,8 +817,9 @@ int main(int argc, char *argv[])
     real_t totaltime = 0.0;
 
     // Function for the Jacobian
-    std::function<gsSparseMatrix<real_t> (gsVector<real_t> const &)> Jacobian;
-    Jacobian = [&time,&stopwatch,&assembler,&mp_def](gsVector<real_t> const &x)
+    typedef std::function<gsSparseMatrix<real_t> (gsVector<real_t> const &)>    Jacobian_t;
+    typedef std::function<gsVector<real_t> (gsVector<real_t> const &) >         Residual_t;
+    Jacobian_t Jacobian = [&time,&stopwatch,&assembler,&mp_def](gsVector<real_t> const &x)
     {
       stopwatch.restart();
       assembler.constructSolution(x,mp_def);
@@ -828,8 +829,7 @@ int main(int argc, char *argv[])
       return m;
     };
     // Function for the Residual
-    std::function<gsVector<real_t> (gsVector<real_t> const &) > Residual;
-    Residual = [&time,&stopwatch,&assembler,&mp_def](gsVector<real_t> const &x)
+    Residual_t Residual = [&time,&stopwatch,&assembler,&mp_def](gsVector<real_t> const &x)
     {
       stopwatch.restart();
       assembler.constructSolution(x,mp_def);

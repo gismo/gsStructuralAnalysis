@@ -1176,9 +1176,11 @@ int main (int argc, char** argv)
 
     gsStopwatch stopwatch;
     real_t time = 0.0;
+
+    typedef std::function<gsSparseMatrix<real_t> (gsVector<real_t> const &)>                                Jacobian_t;
+    typedef std::function<gsVector<real_t> (gsVector<real_t> const &, real_t, gsVector<real_t> const &) >   ALResidual_t;
     // Function for the Jacobian
-    std::function<gsSparseMatrix<real_t> (gsVector<real_t> const &)> Jacobian;
-    Jacobian = [&time,&stopwatch,&assembler,&mp_def](gsVector<real_t> const &x)
+    Jacobian_t Jacobian = [&time,&stopwatch,&assembler,&mp_def](gsVector<real_t> const &x)
     {
       stopwatch.restart();
       assembler.constructSolution(x,mp_def);
@@ -1190,8 +1192,7 @@ int main (int argc, char** argv)
       return m;
     };
     // Function for the Residual
-    std::function<gsVector<real_t> (gsVector<real_t> const &, real_t, gsVector<real_t> const &) > Residual;
-    Residual = [&time,&stopwatch,&assembler,&mp_def](gsVector<real_t> const &x, real_t lam, gsVector<real_t> const &force)
+    ALResidual_t ALResidual = [&time,&stopwatch,&assembler,&mp_def](gsVector<real_t> const &x, real_t lam, gsVector<real_t> const &force)
     {
       stopwatch.restart();
       assembler.constructSolution(x,mp_def);
@@ -1206,7 +1207,7 @@ int main (int argc, char** argv)
     gsVector<> Force = assembler.rhs();
 
 
-    gsArcLengthIterator<real_t> arcLength(Jacobian, Residual, Force);
+    gsArcLengthIterator<real_t> arcLength(Jacobian, ALResidual, Force);
 
     if (!membrane)
     {
