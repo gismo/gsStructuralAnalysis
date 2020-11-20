@@ -188,9 +188,10 @@ int main(int argc, char *argv[])
     assembler.assemble();
     gsSparseMatrix<> matrix = assembler.matrix();
     gsVector<> vector = assembler.rhs();
+    typedef std::function<gsSparseMatrix<real_t> (gsVector<real_t> const &)>    Jacobian_t;
+    typedef std::function<gsVector<real_t> (gsVector<real_t> const &) >         Residual_t;
     // Function for the Jacobian
-    std::function<gsSparseMatrix<real_t> (gsVector<real_t> const &)> Jacobian;
-    Jacobian = [&assembler,&mp_def](gsVector<real_t> const &x)
+    Jacobian_t Jacobian = [&assembler,&mp_def](gsVector<real_t> const &x)
     {
       assembler.constructSolution(x,mp_def);
       assembler.assembleMatrix(mp_def);
@@ -198,8 +199,7 @@ int main(int argc, char *argv[])
       return m;
     };
     // Function for the Residual
-    std::function<gsVector<real_t> (gsVector<real_t> const &) > Residual;
-    Residual = [&assembler,&mp_def](gsVector<real_t> const &x)
+    Residual_t Residual = [&assembler,&mp_def](gsVector<real_t> const &x)
     {
       assembler.constructSolution(x,mp_def);
       assembler.assembleVector(mp_def);
