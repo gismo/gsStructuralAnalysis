@@ -465,9 +465,10 @@ protected:
     // eigenvector
     gsVector<T> m_V;
     // step eigenvector
+    gsVector<T> m_deltaV;
+    gsVector<T> m_deltaVbar;
+    gsVector<T> m_deltaVt;
     gsVector<T> m_DeltaV;
-    gsVector<T> m_DeltaVbar;
-    gsVector<T> m_DeltaVt;
 
     // Stability indicator
     gsVector<T> m_stabilityVec;

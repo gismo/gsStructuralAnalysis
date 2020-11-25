@@ -878,18 +878,18 @@ void gsArcLengthIterator<T>::computeLambdasEta()
 template <class T>
 void gsArcLengthIterator<T>::computeLambdasModified()
 {
-  m_alpha1 = m_b1*m_b1 - 4*m_a0*m_c2;
-  m_alpha2 = 2*m_b0*m_b1 - 4*m_a0*m_c1;
-  m_alpha3 = m_b0*m_b0 - 4*m_a0*m_c0;
+  m_alpha1 = m_b1*m_b1 - 4.0*m_a0*m_c2;
+  m_alpha2 = 2.0*m_b0*m_b1 - 4.0*m_a0*m_c1;
+  m_alpha3 = m_b0*m_b0 - 4.0*m_a0*m_c0;
 
-  m_discriminant = math::pow(m_alpha2 ,2) - 4 * m_alpha1 * m_alpha3;
+  m_discriminant = math::pow(m_alpha2 ,2.0) - 4.0 * m_alpha1 * m_alpha3;
 
   gsVector<T> etas(2);
   etas.setZero();
   if (m_discriminant >= 0)
     {
-      etas[0] = (-m_alpha2 + math::pow(m_discriminant,0.5))/(2*m_alpha1);
-      etas[1] = (-m_alpha2 - math::pow(m_discriminant,0.5))/(2*m_alpha1);
+      etas[0] = (-m_alpha2 + math::pow(m_discriminant,0.5))/(2.0*m_alpha1);
+      etas[1] = (-m_alpha2 - math::pow(m_discriminant,0.5))/(2.0*m_alpha1);
 
       T eta1 = std::min(etas[0],etas[1]);
       T eta2 = std::max(etas[0],etas[1]);
@@ -969,7 +969,7 @@ void gsArcLengthIterator<T>::computeLambdas()
     note += "\tC";
     // Compute eta
     computeLambdasModified();
-    if ((m_discriminant >= 0) && m_eta > 0.002)
+    if ((m_discriminant >= 0) && m_eta > 0.5)
     {
       // recompute lambdas with new eta
       computeLambdasEta();
@@ -1278,27 +1278,31 @@ void gsArcLengthIterator<T>::extendedSystemSolve(gsVector<T> U, T L, T tol)
 	m_DeltaV = gsVector<T>::Zero(m_numDof);
 	m_DeltaU.setZero();
 	m_DeltaL = 0.0;
+
+  m_deltaV = gsVector<T>::Zero(m_numDof);
+  m_deltaU.setZero();
+  m_deltaL = 0.0;
 	m_converged = false;
 	if (m_verbose)
 	  	initOutputExtended();
 	for (m_numIterations = 1; m_numIterations < m_maxIterations; ++m_numIterations)
 	{
 		extendedSystemIteration();
-		m_U = m_U + m_DeltaU;
-		m_L = m_L + m_DeltaL;
-		m_V = m_V + m_DeltaV;
+		m_DeltaU += m_deltaU;
+		m_DeltaL += m_deltaL;
+		m_DeltaV += m_deltaV;
 		// m_V.normalize();
 
 		// m_resVec = m_residualFun(m_U, m_L, m_forcing);
 		// m_residue = m_resVec.norm() / ( m_L * m_forcing.norm() );
 		// m_residue = (m_jacobian(m_U).toDense()*m_V).norm() / refError;
-    this->computeJacobian(m_U);
-		m_residueKTPhi = (m_jacMat*m_V).norm(); // /m_basisResidualKTPhi;
-		m_resVec = m_residualFun(m_U,m_L,m_forcing);
+    this->computeJacobian(m_U+m_DeltaU);
+		m_residueKTPhi = (m_jacMat*(m_V+m_DeltaV)).norm(); // /m_basisResidualKTPhi;
+		m_resVec = m_residualFun(m_U+m_DeltaU,m_L+m_DeltaL,m_forcing);
 		m_residueF = m_resVec.norm();
     // gsInfo<<"residualF extended:"<<m_residueF<<"\n";
-		m_residueU = m_DeltaU.norm();
-		m_residueL = m_DeltaL;
+		m_residueU = m_deltaU.norm();
+		m_residueL = m_deltaL;
 	  if (m_verbose)
 		  stepOutputExtended();
 
@@ -1306,14 +1310,19 @@ void gsArcLengthIterator<T>::extendedSystemSolve(gsVector<T> U, T L, T tol)
 	  // if ( m_residueF < m_toleranceF && m_residueU < m_toleranceU &&  m_residueKTPhi< tol )
 	  if ( m_residueKTPhi< tol )
 	  {
-		m_converged = true;
-		gsInfo<<"Iterations finished. U.norm() = "<<m_U.norm()<<"\t L = "<<m_L<<"\n";
-		break;
+  		m_converged = true;
+  		m_U += m_DeltaU;
+      m_L += m_DeltaL;
+      gsInfo<<"Iterations finished. U.norm() = "<<m_U.norm()<<"\t L = "<<m_L<<"\n";
+
+  		break;
 	  }
 	  if ( (m_numIterations == m_maxIterations-1) && (!m_converged) )
 	  {
-		gsInfo<<"Warning: Extended iterations did not converge! \n";
-		gsInfo<<"Iterations finished. U.norm() = "<<m_U.norm()<<"\t L = "<<m_L<<"\n";
+      m_U += m_DeltaU;
+      m_L += m_DeltaL;
+  		gsInfo<<"Warning: Extended iterations did not converge! \n";
+  		gsInfo<<"Iterations finished. U.norm() = "<<m_U.norm()<<"\t L = "<<m_L<<"\n";
 	  }
 
 	}
@@ -1323,44 +1332,30 @@ void gsArcLengthIterator<T>::extendedSystemSolve(gsVector<T> U, T L, T tol)
 template <class T>
 void gsArcLengthIterator<T>::extendedSystemIteration()
 {
-	m_resVec = m_residualFun(m_U, m_L, m_forcing);
-  this->computeJacobian(m_U);
+	m_resVec = m_residualFun(m_U+m_DeltaU, m_L+m_DeltaL, m_forcing);
+  this->computeJacobian(m_U+m_DeltaU);
   // m_jacMat = m_jacobian(m_U);
 
 	m_deltaUt = this->solveSystem(m_forcing); // DeltaV1
 	m_deltaUbar = this->solveSystem(-m_resVec); // DeltaV2
 
 	real_t eps = 1e-8;
-	gsSparseMatrix<T> jacMatEps = m_jacobian(m_U + eps*m_V);
+	gsSparseMatrix<T> jacMatEps = m_jacobian((m_U+m_DeltaU) + eps*(m_V+m_DeltaV));
   note += "J"; // mark jacobian computation
 	gsVector<T> h1 = 1/eps * ( jacMatEps * m_deltaUt ) - 1/eps * m_forcing;
-	gsVector<T> h2 = m_jacMat * m_V + 1/eps * ( jacMatEps * m_deltaUbar + m_resVec );
-
-  // gsInfo<<"h1 = \n"<<h1<<"\n";
-  // gsInfo<<"h2 = \n"<<h2<<"\n";
+	gsVector<T> h2 = m_jacMat * (m_V+m_DeltaV) + 1/eps * ( jacMatEps * m_deltaUbar + m_resVec );
 
 	factorizeMatrix(m_jacMat);
 
-  m_DeltaVt = this->solveSystem(-h1); // DeltaV1
-	m_DeltaVbar = this->solveSystem(-h2); // DeltaV2
+  m_deltaVt = this->solveSystem(-h1); // DeltaV1
+	m_deltaVbar = this->solveSystem(-h2); // DeltaV2
 
-  // gsInfo<<"m_DeltaVt = "<<m_DeltaVt.norm()<<"\n";
-  // gsInfo<<"m_DeltaVbar = "<<m_DeltaVbar.norm()<<"\n";
-  // gsInfo<<"m_V = "<<m_V.norm()<<"\n";
+	m_deltaL = -( ( (m_V+m_DeltaV)/(m_V+m_DeltaV).norm() ).dot(m_deltaVbar)  + (m_V+m_DeltaV).norm() - 1) / ( (m_V+m_DeltaV)/(m_V+m_DeltaV).norm() ).dot( m_deltaVt );
 
-	m_DeltaL = -( ( m_V/m_V.norm() ).dot(m_DeltaVbar)  + m_V.norm() - 1) / ( m_V/m_V.norm() ).dot( m_DeltaVt );
-
-  // gsInfo<<"( m_V/m_V.norm() ).dot(m_DeltaVbar) = " << ( m_V/m_V.norm() ).dot(m_DeltaVbar) << "\n";
-  // gsInfo<<"m_V.norm() - 1 = " <<m_V.norm() - 1 << "\n";
-  // gsInfo<<"( m_V/m_V.norm() ).dot( m_DeltaVt ) = " <<( m_V/m_V.norm() ).dot( m_DeltaVt ) << "\n";
-
-  // gsInfo<<"m_DeltaL = "<<m_DeltaL<<"\n";
-
-
-	m_DeltaU = m_DeltaL * m_deltaUt + m_deltaUbar;
+	m_deltaU = m_deltaL * m_deltaUt + m_deltaUbar;
   // gsInfo<<"m_DeltaU = \n"<<m_DeltaU<<"\n";
 
-	m_DeltaV = m_DeltaL * m_DeltaVt + m_DeltaVbar;
+	m_deltaV = m_deltaL * m_deltaVt + m_deltaVbar;
   // gsInfo<<"m_DeltaV = \n"<<m_DeltaV<<"\n";
 }
 
@@ -1414,8 +1409,6 @@ void gsArcLengthIterator<T>::bisectionSolve(gsVector<T> U, T L, T tol)
 
 		// Objective function on new point
 		fb = bisectionObjectiveFunction(m_U, true); // m_u is the new solution
-
-    gsInfo<<"fa = "<<fa<<"; fb = "<<fb<<"\n";
 
 		if (fa==fb)
 		{
@@ -1475,6 +1468,7 @@ void gsArcLengthIterator<T>::switchBranch()
 
   m_DeltaLold = 0.0;
   m_DeltaUold.setZero();
+  // m_DeltaLold = m_DeltaL;
   // m_DeltaUold = m_DeltaU;
 }
 
@@ -1576,6 +1570,9 @@ void gsArcLengthIterator<T>::initOutputExtended()
   gsInfo<<std::setw(17)<<std::left<<"DU.norm";
   gsInfo<<std::setw(17)<<std::left<<"Dphi.norm";
   gsInfo<<std::setw(17)<<std::left<<"DL";
+  gsInfo<<std::setw(17)<<std::left<<"dU.norm";
+  gsInfo<<std::setw(17)<<std::left<<"dphi.norm";
+  gsInfo<<std::setw(17)<<std::left<<"dL";
   gsInfo<<std::setw(17)<<std::left<<"Dmin";
   gsInfo<<std::setw(17)<<std::left<<"note";
   gsInfo<<"\n";
@@ -1690,6 +1687,9 @@ void gsArcLengthIterator<T>::stepOutputExtended()
   gsInfo<<std::setw(17)<<std::left<<m_DeltaU.norm();
   gsInfo<<std::setw(17)<<std::left<<m_DeltaV.norm();
   gsInfo<<std::setw(17)<<std::left<<m_DeltaL;
+  gsInfo<<std::setw(17)<<std::left<<m_deltaU.norm();
+  gsInfo<<std::setw(17)<<std::left<<m_deltaV.norm();
+  gsInfo<<std::setw(17)<<std::left<<m_deltaL;
   gsInfo<<std::setw(17)<<std::left<<bisectionTerminationFunction(m_U,false);
   gsInfo<<std::setw(17)<<std::left<<note;
   gsInfo<<"\n";
