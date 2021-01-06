@@ -221,7 +221,7 @@ Jacobian_t Jacobian = [&assembler,&solution](gsMatrix<real_t> const &x)
 };
 
 // Function for the Residual
-Residual Residual = [&assembler,&solution](gsMatrix<real_t> const &x, real_t time)
+Residual_t Residual = [&assembler,&solution](gsMatrix<real_t> const &x, real_t time)
 {
   assembler.constructSolution(x,solution);
   assembler.assemble(solution);
