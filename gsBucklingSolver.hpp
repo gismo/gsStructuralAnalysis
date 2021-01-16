@@ -51,11 +51,11 @@ void gsBucklingSolver<T>::computeSparse(T shift, index_t number)
 {
     if (m_verbose) { gsInfo<<"Solving eigenvalue problem" ; }
     gsSparseMatrix<T> lhs = m_linear-shift*(m_nonlinear - m_linear);
-    gsSpectraGenSymSolver<gsSparseMatrix<T>,Spectra::SMALLEST_MAGN> solver(lhs,m_nonlinear - m_linear,number,2*number);
+    gsSpectraGenSymSolver<gsSparseMatrix<T>,Spectra::GEigsMode::Cholesky> solver(lhs,m_nonlinear - m_linear,number,2*number);
     if (m_verbose) { gsInfo<<"." ; }
     solver.init();
     if (m_verbose) { gsInfo<<"." ; }
-    solver.compute();
+    solver.compute(Spectra::SortRule::SmallestMagn);
     if (m_verbose) { gsInfo<<"." ; }
     m_values  = solver.eigenvalues();
     m_values.array() += shift;

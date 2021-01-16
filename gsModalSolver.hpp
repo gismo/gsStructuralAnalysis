@@ -36,11 +36,11 @@ void gsModalSolver<T>::computeSparse(T shift, index_t number)
 {
     if (m_verbose) { gsInfo<<"Solving eigenvalue problem" ; }
     gsSparseMatrix<T> lhs = m_stiffness-shift*m_mass;
-    gsSpectraGenSymSolver<gsSparseMatrix<T>,Spectra::SMALLEST_MAGN> solver(lhs,m_mass,number,2*number);
+    gsSpectraGenSymSolver<gsSparseMatrix<T>,Spectra::GEigsMode::Cholesky> solver(lhs,m_mass,number,2*number);
     if (m_verbose) { gsInfo<<"." ; }
     solver.init();
     if (m_verbose) { gsInfo<<"." ; }
-    solver.compute();
+    solver.compute(Spectra::SortRule::SmallestMagn);
     if (m_verbose) { gsInfo<<"." ; }
     m_values  = solver.eigenvalues();
     gsDebugVar(m_values);
