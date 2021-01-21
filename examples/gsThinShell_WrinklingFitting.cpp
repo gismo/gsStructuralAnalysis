@@ -477,7 +477,7 @@ int main (int argc, char** argv)
       BCs.addCondition(boundary::east, condition_type::dirichlet, 0, 0 ,false,2);
 
       if (weak)
-
+      {
         BCs.addCondition(boundary::east, condition_type::weak_clamped, 0, 0, false, 2);
         BCs.addCondition(boundary::west, condition_type::weak_clamped, 0, 0, false, 2);
       }
