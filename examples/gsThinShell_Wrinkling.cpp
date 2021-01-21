@@ -114,6 +114,8 @@ int main (int argc, char** argv)
 
     bool THB = false;
 
+    bool weak = false;
+
     index_t maxit = 20;
 
     // Arc length method options
@@ -166,6 +168,7 @@ int main (int argc, char** argv)
     cmd.addSwitch("membrane", "Use membrane model (no bending)", membrane);
     cmd.addSwitch("symmetry", "Use symmetry boundary condition (different per problem)", symmetry);
     cmd.addSwitch("deformed", "plot on deformed shape", deformed);
+    cmd.addSwitch("weak", "Use weak clamping", weak);
 
     cmd.addSwitch("THB", "Use refinement", THB);
 
@@ -422,8 +425,6 @@ int main (int argc, char** argv)
         pLoads.addLoad(point, load, 0 );
 
         dirname = dirname + "/MaterialTest_-r" + std::to_string(numHref) + "-R" + std::to_string(numHrefL) + "-e" + std::to_string(numElevate) + "-E" + std::to_string(numElevateL) + "-M" + std::to_string(material) + "-c" + std::to_string(Compressibility) + "-alpha" + std::to_string(alpha) + "-beta" + std::to_string(beta);
-        if (THB)
-          dirname = dirname + "_THB";
 
         output =  "solution";
         wn = output + "data.txt";
@@ -437,12 +438,21 @@ int main (int argc, char** argv)
       BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0 ,false,0);
       BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0 ,false,1);
       BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0 ,false,2);
-      BCs.addCondition(boundary::west, condition_type::clamped  , 0, 0, false,2);
 
       BCs.addCondition(boundary::east, condition_type::dirichlet, 0, 0 ,false,1);
       BCs.addCondition(boundary::east, condition_type::dirichlet, 0, 0 ,false,2);
       BCs.addCondition(boundary::east, condition_type::collapsed, 0, 0 ,false,0);
-      BCs.addCondition(boundary::east, condition_type::clamped  , 0, 0, false,2);
+
+      if (weak)
+      {
+        BCs.addCondition(boundary::east, condition_type::weak_clamped, 0, 0, false, 2);
+        BCs.addCondition(boundary::west, condition_type::weak_clamped, 0, 0, false, 2);
+      }
+      else
+      {
+        BCs.addCondition(boundary::east, condition_type::clamped  , 0, 0, false,2);
+        BCs.addCondition(boundary::west, condition_type::clamped  , 0, 0, false,2);
+      }
 
       Load = 1e0;
       gsVector<> point(2); point<< 1.0, 0.5 ;
@@ -450,10 +460,6 @@ int main (int argc, char** argv)
       pLoads.addLoad(point, load, 0 );
 
       dirname = dirname + "/FullSheet_-r" + std::to_string(numHref) + "-R" + std::to_string(numHrefL) + "-e" + std::to_string(numElevate) + "-E" + std::to_string(numElevateL) + "-M" + std::to_string(material) + "-c" + std::to_string(Compressibility) + "-alpha" + std::to_string(alpha) + "-beta" + std::to_string(beta);
-      if (THB)
-        dirname = dirname + "_THB";
-      if (symmetry)
-        dirname = dirname + "_symmetryBC";
 
       output =  "solution";
       wn = output + "data.txt";
@@ -467,16 +473,28 @@ int main (int argc, char** argv)
       BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0 ,false,0);
       BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0 ,false,1);
       BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0 ,false,2);
-      BCs.addCondition(boundary::west, condition_type::clamped  , 0, 0, false,2);
 
       BCs.addCondition(boundary::east, condition_type::collapsed, 0, 0 ,false,0);
       BCs.addCondition(boundary::east, condition_type::dirichlet, 0, 0 ,false,1);
       BCs.addCondition(boundary::east, condition_type::dirichlet, 0, 0 ,false,2);
-      BCs.addCondition(boundary::east, condition_type::clamped  , 0, 0, false,2);
+
+      if (weak)
+      {
+        BCs.addCondition(boundary::east, condition_type::weak_clamped, 0, 0, false, 2);
+        BCs.addCondition(boundary::west, condition_type::weak_clamped, 0, 0, false, 2);
+      }
+      else
+      {
+        BCs.addCondition(boundary::east, condition_type::clamped  , 0, 0, false,2);
+        BCs.addCondition(boundary::west, condition_type::clamped  , 0, 0, false,2);
+      }
 
       BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 2 - z.
       if (symmetry)
-        BCs.addCondition(boundary::south, condition_type::clamped, 0, 0, false, 2 ); // unknown 2 - z.
+        if (weak)
+          BCs.addCondition(boundary::south, condition_type::weak_clamped, 0, 0, false, 2 ); // unknown 2 - z.
+        else
+          BCs.addCondition(boundary::south, condition_type::clamped, 0, 0, false, 2 ); // unknown 2 - z.
       else
         BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z.
 
@@ -486,10 +504,6 @@ int main (int argc, char** argv)
       pLoads.addLoad(point, load, 0 );
 
       dirname = dirname + "/HalfSheet_-r" + std::to_string(numHref) + "-R" + std::to_string(numHrefL) + "-e" + std::to_string(numElevate) + "-E" + std::to_string(numElevateL) + "-M" + std::to_string(material) + "-c" + std::to_string(Compressibility) + "-alpha" + std::to_string(alpha) + "-beta" + std::to_string(beta);
-      if (THB)
-        dirname = dirname + "_THB";
-      if (symmetry)
-        dirname = dirname + "_symmetryBC";
 
       output =  "solution";
       wn = output + "data.txt";
@@ -501,16 +515,28 @@ int main (int argc, char** argv)
     else if (testCase == 6 || testCase == 7)
     {
       BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0 ,false,0);
-      BCs.addCondition(boundary::west, condition_type::clamped  , 0, 0, false,2);
 
       BCs.addCondition(boundary::east, condition_type::collapsed, 0, 0 ,false,0);
       BCs.addCondition(boundary::east, condition_type::dirichlet, 0, 0 ,false,1);
       BCs.addCondition(boundary::east, condition_type::dirichlet, 0, 0 ,false,2);
-      BCs.addCondition(boundary::east, condition_type::clamped  , 0, 0, false,2);
+
+      if (weak)
+      {
+        BCs.addCondition(boundary::east, condition_type::weak_clamped, 0, 0, false, 2);
+        BCs.addCondition(boundary::west, condition_type::weak_clamped, 0, 0, false, 2);
+      }
+      else
+      {
+        BCs.addCondition(boundary::east, condition_type::clamped  , 0, 0, false,2);
+        BCs.addCondition(boundary::west, condition_type::clamped  , 0, 0, false,2);
+      }
 
       BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 2 - z.
       if (symmetry)
-        BCs.addCondition(boundary::south, condition_type::clamped, 0, 0, false, 2 ); // unknown 2 - z.
+        if (weak)
+          BCs.addCondition(boundary::south, condition_type::weak_clamped, 0, 0, false, 2 ); // unknown 2 - z.
+        else
+          BCs.addCondition(boundary::south, condition_type::clamped, 0, 0, false, 2 ); // unknown 2 - z.
       else
         BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z.
 
@@ -520,10 +546,6 @@ int main (int argc, char** argv)
       pLoads.addLoad(point, load, 0 );
 
       dirname = dirname + "/QuarterSheet_-r" + std::to_string(numHref) + "-R" + std::to_string(numHrefL) + "-e" + std::to_string(numElevate) + "-E" + std::to_string(numElevateL) + "-M" + std::to_string(material) + "-c" + std::to_string(Compressibility) + "-alpha" + std::to_string(alpha) + "-beta" + std::to_string(beta);
-      if (THB)
-        dirname = dirname + "_THB";
-      if (symmetry)
-        dirname = dirname + "_symmetryBC";
 
       output =  "solution";
       wn = output + "data.txt";
@@ -556,6 +578,13 @@ int main (int argc, char** argv)
       cross_coordinate = 1;
       cross_val = 0.5;
     }
+
+    if (THB)
+      dirname = dirname + "_THB";
+    if (symmetry)
+      dirname = dirname + "_symmetryBC";
+    if (weak)
+      dirname = dirname + "_weak";
 
     std::string commands = "mkdir -p " + dirname;
     const char *command = commands.c_str();

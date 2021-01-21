@@ -75,7 +75,6 @@ int main (int argc, char** argv)
     bool stress       = false;
     bool membrane       = false;
     bool first  = false;
-    bool SingularPoint = false;
     bool quasiNewton = false;
     int quasiNewtonInt = -1;
     bool adaptive = false;
@@ -112,6 +111,8 @@ int main (int argc, char** argv)
     bool crosssection = false;
 
     bool THB = false;
+
+    bool weak = false;
 
     index_t maxit = 20;
 
@@ -155,7 +156,6 @@ int main (int argc, char** argv)
     cmd.addInt("N", "maxsteps", "Maximum number of steps", step);
 
     cmd.addSwitch("adaptive", "Adaptive length ", adaptive);
-    cmd.addSwitch("bifurcation", "Compute singular points and bifurcation paths", SingularPoint);
     cmd.addSwitch("quasi", "Use the Quasi Newton method", quasiNewton);
     cmd.addSwitch("plot", "Plot result in ParaView format", plot);
     cmd.addSwitch("stress", "Plot stress in ParaView format", stress);
@@ -166,6 +166,7 @@ int main (int argc, char** argv)
     cmd.addSwitch("membrane", "Use membrane model (no bending)", membrane);
     cmd.addSwitch("symmetry", "Use symmetry boundary condition (different per problem)", symmetry);
     cmd.addSwitch("deformed", "plot on deformed shape", deformed);
+    cmd.addSwitch("weak", "Use weak clamping", weak);
 
     cmd.addSwitch("THB", "Use refinement", THB);
 
@@ -249,7 +250,7 @@ int main (int argc, char** argv)
     // ![Material data]
 
     // ![Read Geometry files]
-    if (!fn.empty())
+    if (fn.empty())
     {
       if (testCase==2)
         fn = "deformations/wrinklingFu_full.xml";
@@ -362,28 +363,33 @@ int main (int argc, char** argv)
       BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0 ,false,0);
       BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0 ,false,1);
       BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0 ,false,2);
-      BCs.addCondition(boundary::west, condition_type::clamped  , 0, 0, false,2);
 
       BCs.addCondition(boundary::east, condition_type::dirichlet, 0, 0 ,false,1);
       BCs.addCondition(boundary::east, condition_type::dirichlet, 0, 0 ,false,2);
       BCs.addCondition(boundary::east, condition_type::collapsed, 0, 0 ,false,0);
-      BCs.addCondition(boundary::east, condition_type::clamped  , 0, 0, false,2);
+
+      if (weak)
+      {
+        BCs.addCondition(boundary::east, condition_type::weak_clamped, 0, 0, false, 2);
+        BCs.addCondition(boundary::west, condition_type::weak_clamped, 0, 0, false, 2);
+      }
+      else
+      {
+        BCs.addCondition(boundary::east, condition_type::clamped  , 0, 0, false,2);
+        BCs.addCondition(boundary::west, condition_type::clamped  , 0, 0, false,2);
+      }
 
       Load = 1e0;
       gsVector<> point(2); point<< 1.0, 0.5 ;
       gsVector<> load (3); load << Load,0.0, 0.0;
       pLoads.addLoad(point, load, 0 );
 
-      dirname = dirname + "/FullSheet_Perturbed";
-      if (THB)
-        dirname = dirname + "_THB";
-      if (symmetry)
-        dirname = dirname + "_symmetryBC";
+      std::stringstream ss;
+      ss<<perturbation;
+      dirname = dirname + "/FullSheet_Perturbed=" + ss.str();
 
       output =  "solution";
       wn = output + "data.txt";
-      SingularPoint = true;
-
       cross_coordinate = 0;
       cross_val = 0.5;
     }
@@ -392,12 +398,21 @@ int main (int argc, char** argv)
       BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0 ,false,0);
       BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0 ,false,1);
       BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0 ,false,2);
-      BCs.addCondition(boundary::west, condition_type::clamped  , 0, 0, false,2);
 
       BCs.addCondition(boundary::east, condition_type::collapsed, 0, 0 ,false,0);
       BCs.addCondition(boundary::east, condition_type::dirichlet, 0, 0 ,false,1);
       BCs.addCondition(boundary::east, condition_type::dirichlet, 0, 0 ,false,2);
-      BCs.addCondition(boundary::east, condition_type::clamped  , 0, 0, false,2);
+
+      if (weak)
+      {
+        BCs.addCondition(boundary::east, condition_type::weak_clamped, 0, 0, false, 2);
+        BCs.addCondition(boundary::west, condition_type::weak_clamped, 0, 0, false, 2);
+      }
+      else
+      {
+        BCs.addCondition(boundary::east, condition_type::clamped  , 0, 0, false,2);
+        BCs.addCondition(boundary::west, condition_type::clamped  , 0, 0, false,2);
+      }
 
       BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 2 - z.
       if (symmetry)
@@ -410,28 +425,33 @@ int main (int argc, char** argv)
       gsVector<> load (3); load << Load,0.0, 0.0;
       pLoads.addLoad(point, load, 0 );
 
-      dirname = dirname + "/HalfSheet_Perturbed";
-      if (THB)
-        dirname = dirname + "_THB";
-      if (symmetry)
-        dirname = dirname + "_symmetryBC";
+      std::stringstream ss;
+      ss<<perturbation;
+      dirname = dirname + "/HalfSheet_Perturbed=" + ss.str();
 
       output =  "solution";
       wn = output + "data.txt";
-      SingularPoint = true;
-
       cross_coordinate = 0;
       cross_val = 0.5;
     }
     else if (testCase == 6 || testCase == 7)
     {
       BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0 ,false,0);
-      BCs.addCondition(boundary::west, condition_type::clamped  , 0, 0, false,2);
 
       BCs.addCondition(boundary::east, condition_type::collapsed, 0, 0 ,false,0);
       BCs.addCondition(boundary::east, condition_type::dirichlet, 0, 0 ,false,1);
       BCs.addCondition(boundary::east, condition_type::dirichlet, 0, 0 ,false,2);
-      BCs.addCondition(boundary::east, condition_type::clamped  , 0, 0, false,2);
+
+      if (weak)
+      {
+        BCs.addCondition(boundary::east, condition_type::weak_clamped, 0, 0, false, 2);
+        BCs.addCondition(boundary::west, condition_type::weak_clamped, 0, 0, false, 2);
+      }
+      else
+      {
+        BCs.addCondition(boundary::east, condition_type::clamped  , 0, 0, false,2);
+        BCs.addCondition(boundary::west, condition_type::clamped  , 0, 0, false,2);
+      }
 
       BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 2 - z.
       if (symmetry)
@@ -444,16 +464,12 @@ int main (int argc, char** argv)
       gsVector<> load (3); load << Load,0.0, 0.0;
       pLoads.addLoad(point, load, 0 );
 
-      dirname = dirname + "/QuarterSheet_Perturbed";
-      if (THB)
-        dirname = dirname + "_THB";
-      if (symmetry)
-        dirname = dirname + "_symmetryBC";
+      std::stringstream ss;
+      ss<<perturbation;
+      dirname = dirname + "/QuarterSheet_Perturbed=" + ss.str();
 
       output =  "solution";
       wn = output + "data.txt";
-      SingularPoint = true;
-
       cross_coordinate = 0;
       cross_val = 0.0;
     }
@@ -472,14 +488,21 @@ int main (int argc, char** argv)
       gsVector<> load (3); load << Load,0.0, 0.0;
       pLoads.addLoad(point, load, 0 );
 
-      dirname = dirname + "/Shear_Perturbed";
+      std::stringstream ss;
+      ss<<perturbation;
+      dirname = dirname + "/ShearSheet_Perturbed=" + ss.str();
       output =  "solution";
       wn = output + "data.txt";
-      SingularPoint = true;
-
       cross_coordinate = 0;
       cross_val = 0.0;
     }
+
+    if (THB)
+      dirname = dirname + "_THB";
+    if (symmetry)
+      dirname = dirname + "_symmetryBC";
+    if (weak)
+      dirname = dirname + "_weak";
 
     std::string commands = "mkdir -p " + dirname;
     const char *command = commands.c_str();
@@ -693,17 +716,10 @@ int main (int argc, char** argv)
         // break;
       }
 
-      if (SingularPoint)
+      arcLength.computeStability(arcLength.solutionU(),quasiNewton);
+      if (arcLength.stabilityChange())
       {
-        arcLength.computeStability(arcLength.solutionU(),quasiNewton);
-        if (arcLength.stabilityChange())
-        {
-          gsInfo<<"Bifurcation spotted!"<<"\n";
-          arcLength.computeSingularPoint(1e-4, 5, Uold, Lold, 1e-10, 0, false);
-          arcLength.switchBranch();
-          dLb0 = dLb = dL;
-          arcLength.setLength(dLb);
-        }
+        gsInfo<<"Bifurcation spotted!"<<"\n";
       }
       indicator = arcLength.indicator();
 
