@@ -32,7 +32,7 @@ void gsModalSolver<T>::compute()
 };
 
 template <class T>
-void gsModalSolver<T>::computeSparse(T shift, index_t number)
+void gsModalSolver<T>::computeSparse(T shift, index_t number, Spectra::SortRule selectionRule, Spectra::SortRule sortRule)
 {
     if (m_verbose) { gsInfo<<"Solving eigenvalue problem" ; }
     gsSparseMatrix<T> lhs = m_stiffness-shift*m_mass;
@@ -40,18 +40,19 @@ void gsModalSolver<T>::computeSparse(T shift, index_t number)
     if (m_verbose) { gsInfo<<"." ; }
     solver.init();
     if (m_verbose) { gsInfo<<"." ; }
-    solver.compute(Spectra::SortRule::SmallestMagn);
+    /*
+        Compute with Spectra
+        first argument:     sorting rule for SELECTION of the eigenvalues
+        second argument:    max iterations
+        third argument:     tolerance
+        fourth argument:    rule for SORTING the output
+    */
+    solver.compute(selectionRule,1000,1e-10,sortRule);
     if (m_verbose) { gsInfo<<"." ; }
     m_values  = solver.eigenvalues();
-    gsDebugVar(m_values);
     m_values.array() += shift;
-    gsDebugVar(m_values);
     if (m_verbose) { gsInfo<<"." ; }
     m_vectors = solver.eigenvectors();
-    if (m_verbose) { gsInfo<<"." ; }
-    m_values = m_values.reverse();
-    if (m_verbose) { gsInfo<<"." ; }
-    m_vectors = m_vectors.rowwise().reverse();
     if (m_verbose) { gsInfo<<"Finished\n" ; }
 };
 
