@@ -46,7 +46,7 @@ public:
     void verbose() {m_verbose=true; };
 
     void compute();
-    void computeSparse(T shift = 0.0, index_t number = 10);
+    void computeSparse(T shift = 0.0, index_t number = 10, Spectra::SortRule selectionRule = Spectra::SortRule::SmallestMagn, Spectra::SortRule sortRule = Spectra::SortRule::SmallestAlge);
 
     gsMatrix<T> values() const { return m_values; };
     T value(int k) const { return m_values.at(k); };

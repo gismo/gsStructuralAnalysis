@@ -55,16 +55,12 @@ void gsBucklingSolver<T>::computeSparse(T shift, index_t number)
     if (m_verbose) { gsInfo<<"." ; }
     solver.init();
     if (m_verbose) { gsInfo<<"." ; }
-    solver.compute(Spectra::SortRule::SmallestMagn);
+    solver.compute(Spectra::SortRule::SmallestMagn,1000,1e-10,Spectra::SortRule::SmallestAlge);
     if (m_verbose) { gsInfo<<"." ; }
     m_values  = solver.eigenvalues();
     m_values.array() += shift;
     if (m_verbose) { gsInfo<<"." ; }
     m_vectors = solver.eigenvectors();
-    if (m_verbose) { gsInfo<<"." ; }
-    m_values = m_values.reverse();
-    if (m_verbose) { gsInfo<<"." ; }
-    m_vectors = m_vectors.rowwise().reverse();
     if (m_verbose) { gsInfo<<"Finished\n" ; }
 };
 
