@@ -1219,9 +1219,12 @@ void gsArcLengthIterator<T>::computeStability(gsVector<T> x, bool jacobian)
     index_t number = 10;
     gsSpectraSymSolver<gsSparseMatrix<T>> es(m_jacMat,number,3*number);
     es.init();
-    es.compute(1000,1e-6);
-    GISMO_ASSERT(es.info()==0,"Spectra did not converge! Error flag: "<<es.info()); // Reason for not converging can be due to the value of ncv (last input in the class member), which is too low.
-		// Eigen::SelfAdjointEigenSolver< gsMatrix<T> > es(m_jacMat);
+    es.compute(Spectra::SortRule::LargestMagn,1000,1e-6);
+    GISMO_ASSERT(es.info()==Spectra::CompInfo::Successful,"Spectra did not converge!"); // Reason for not converging can be due to the value of ncv (last input in the class member), which is too low.
+    // if (es.info()==Spectra::CompInfo::NotComputed)
+    // if (es.info()==Spectra::CompInfo::NotConverging)
+		// if (es.info()==Spectra::CompInfo::NumericalIssue)
+    // Eigen::SelfAdjointEigenSolver< gsMatrix<T> > es(m_jacMat);
 		m_stabilityVec = es.eigenvalues();
     m_stabilityVec = m_stabilityVec.reverse();
 	}

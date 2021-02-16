@@ -57,9 +57,10 @@ int main(int argc, char *argv[])
     index_t Compressibility = 0;
     index_t material = 0;
     bool nonlinear = false;
-    bool verbose = false;
+    int verbose = 0;
     std::string fn;
     bool membrane = false;
+    bool weak = false;
 
 
     real_t E_modulus = 1.0;
@@ -78,10 +79,12 @@ int main(int argc, char *argv[])
     cmd.addInt( "c", "Compressibility", "1: compressible, 0: incompressible",  Compressibility );
     cmd.addString( "f", "file", "Input XML file", fn );
     cmd.addSwitch("nl", "Solve nonlinear problem", nonlinear);
-    cmd.addSwitch("verbose", "Full matrix and vector output", verbose);
+    cmd.addInt("v","verbose", "0: no; 1: iteration output; 2: Full matrix and vector output", verbose);
     cmd.addSwitch("plot", "Create a ParaView visualization file with the solution", plot);
     cmd.addSwitch("stress", "Create a ParaView visualization file with the stresses", stress);
     cmd.addSwitch("membrane", "Use membrane model (no bending)", membrane);
+    cmd.addSwitch("weak", "Impose boundary conditions weakly", weak);
+
 
     try { cmd.getValues(argc,argv); } catch (int rv) { return rv; }
     //! [Parse command line]
@@ -288,60 +291,100 @@ int main(int argc, char *argv[])
 
     gsFunctionExpr<> neuDataFun1;
     gsConstantFunction<> neuData(neu,3);
+    gsVector<> weak_D(3);
+    gsVector<> weak_C(3);
+    weak_D.setZero();
+    weak_C.setZero();
+    gsConstantFunction<> weak_drch(weak_D,3);
+    gsConstantFunction<> weak_clmp(weak_C,3);
     real_t pressure = 0.0;
     if (testCase == 0)
     {
-        for (index_t i=0; i!=3; ++i)
+        if (weak)
         {
-            bc.addCondition(boundary::north, condition_type::dirichlet, 0, 0 ,false,i);
-            bc.addCondition(boundary::east, condition_type::dirichlet, 0, 0 ,false,i);
-            bc.addCondition(boundary::south, condition_type::dirichlet, 0, 0 ,false,i);
-            bc.addCondition(boundary::west, condition_type::dirichlet, 0, 0 ,false,i);
+            bc.addCondition(boundary::north, condition_type::weak_dirichlet, &weak_drch ); // unknown 2 - z
+            bc.addCondition(boundary::east, condition_type::weak_dirichlet, &weak_drch ); // unknown 2 - z
+            bc.addCondition(boundary::south, condition_type::weak_dirichlet, &weak_drch ); // unknown 2 - z
+            bc.addCondition(boundary::west, condition_type::weak_dirichlet, &weak_drch ); // unknown 2 - z
+        }
+        else
+        {
+            for (index_t i=0; i!=3; ++i)
+            {
+                bc.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, i ); // unknown 0 - x
+                bc.addCondition(boundary::east, condition_type::dirichlet, 0, 0, false, i ); // unknown 1 - y
+                bc.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, i ); // unknown 2 - z
+                bc.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, i ); // unknown 2 - z
+            }
         }
 
-        // bc.addCondition(boundary::north, condition_type::clamped, 0, 0 ,false,2);
-        // bc.addCondition(boundary::east, condition_type::clamped, 0, 0 ,false,2);
-        // bc.addCondition(boundary::south, condition_type::clamped, 0, 0 ,false,2);
-        // bc.addCondition(boundary::west, condition_type::clamped, 0, 0 ,false,2);
-
-        // tmp << 0,0,0;
         tmp << 0,0,-1;
-
-        // Point loads
-        // gsVector<> point(2);
-        // gsVector<> load (3);
-        // point<< 0.5, 0.5 ; load << 0.0, 1.0, 0.0 ;
-        // pLoads.addLoad(point, load, 0 );
     }
     else if (testCase == 1)
     {
-        // Diaphragm conditions
-        bc.addCondition(boundary::west, condition_type::dirichlet, 0, 0 ,false, 1 ); // unknown 1 - y
-        bc.addCondition(boundary::west, condition_type::dirichlet, 0, 0 ,false, 2 ); // unknown 2 - z
+        if (weak)
+        {
+            GISMO_ERROR("Not implemented. Component-wise weak BCs need to be implemented first");
+
+            // Diaphragm conditions
+            bc.addCondition(boundary::west, condition_type::weak_dirichlet, 0, 0 ,false, 1 ); // unknown 1 - y
+            bc.addCondition(boundary::west, condition_type::weak_dirichlet, 0, 0 ,false, 2 ); // unknown 2 - z
+
+            bc.addCondition(boundary::east, condition_type::weak_dirichlet, 0, 0 ,false, 1 ); // unknown 1 - y
+            bc.addCondition(boundary::east, condition_type::weak_dirichlet, 0, 0 ,false, 2 ); // unknown 2 - z
+        }
+        else
+        {
+            // Diaphragm conditions
+            bc.addCondition(boundary::west, condition_type::dirichlet, 0, 0 ,false, 1 ); // unknown 1 - y
+            bc.addCondition(boundary::west, condition_type::dirichlet, 0, 0 ,false, 2 ); // unknown 2 - z
+
+            bc.addCondition(boundary::east, condition_type::dirichlet, 0, 0 ,false, 1 ); // unknown 1 - y
+            bc.addCondition(boundary::east, condition_type::dirichlet, 0, 0 ,false, 2 ); // unknown 2 - z
+        }
 
         bc.addCornerValue(boundary::southwest, 0.0, 0, 0); // (corner,value, patch, unknown)
-
-        bc.addCondition(boundary::east, condition_type::dirichlet, 0, 0 ,false, 1 ); // unknown 1 - y
-        bc.addCondition(boundary::east, condition_type::dirichlet, 0, 0 ,false, 2 ); // unknown 2 - z
 
         // Surface forces
         tmp << 0, 0, -90;
     }
     else if (testCase == 2)
     {
-        bc.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 0 ); // unknown 0 - x
-        bc.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 1 - y
-        bc.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z
+        if (weak)
+        {
+            GISMO_ERROR("Not implemented. Component-wise weak BCs need to be implemented first");
 
-        // Symmetry in x-direction:
-        bc.addCondition(boundary::east, condition_type::dirichlet, 0, 0, false, 0 );
-        bc.addCondition(boundary::east, condition_type::clamped, 0, 0, false, 1 );
-        bc.addCondition(boundary::east, condition_type::clamped, 0, 0, false, 2 );
+            bc.addCondition(boundary::north, condition_type::weak_dirichlet, 0, 0, false, 0 ); // unknown 0 - x
+            bc.addCondition(boundary::north, condition_type::weak_dirichlet, 0, 0, false, 1 ); // unknown 1 - y
+            bc.addCondition(boundary::north, condition_type::weak_dirichlet, 0, 0, false, 2 ); // unknown 2 - z
 
-        // Symmetry in y-direction:
-        bc.addCondition(boundary::west, condition_type::clamped, 0, 0, false, 0 );
-        bc.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 1 );
-        bc.addCondition(boundary::west, condition_type::clamped, 0, 0, false, 2 );
+            // Symmetry in x-direction:
+            bc.addCondition(boundary::east, condition_type::weak_dirichlet, 0, 0, false, 0 );
+            bc.addCondition(boundary::east, condition_type::weak_clamped, 0, 0, false, 1 );
+            bc.addCondition(boundary::east, condition_type::weak_clamped, 0, 0, false, 2 );
+
+            // Symmetry in y-direction:
+            bc.addCondition(boundary::west, condition_type::weak_clamped, 0, 0, false, 0 );
+            bc.addCondition(boundary::west, condition_type::weak_dirichlet, 0, 0, false, 1 );
+            bc.addCondition(boundary::west, condition_type::weak_clamped, 0, 0, false, 2 );
+
+        }
+        else
+        {
+            bc.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 0 ); // unknown 0 - x
+            bc.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 1 - y
+            bc.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z
+
+            // Symmetry in x-direction:
+            bc.addCondition(boundary::east, condition_type::dirichlet, 0, 0, false, 0 );
+            bc.addCondition(boundary::east, condition_type::clamped, 0, 0, false, 1 );
+            bc.addCondition(boundary::east, condition_type::clamped, 0, 0, false, 2 );
+
+            // Symmetry in y-direction:
+            bc.addCondition(boundary::west, condition_type::clamped, 0, 0, false, 0 );
+            bc.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 1 );
+            bc.addCondition(boundary::west, condition_type::clamped, 0, 0, false, 2 );
+        }
 
         // Surface forces
         tmp.setZero();
@@ -356,24 +399,50 @@ int main(int argc, char *argv[])
     }
     else if (testCase == 3)
     {
-        // Symmetry in y-direction for back side
-        bc.addCondition(boundary::north, condition_type::clamped, 0, 0, false, 0 );
-        bc.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 1 );
-        bc.addCondition(boundary::north, condition_type::clamped, 0, 0, false, 2 );
+        if (weak)
+        {
+            GISMO_ERROR("Not implemented. Component-wise weak BCs need to be implemented first");
 
-        // Diaphragm conditions for left side
-        bc.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 1 - y
-        bc.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z
+            // Symmetry in y-direction for back side
+            bc.addCondition(boundary::north, condition_type::weak_clamped, 0, 0, false, 0 );
+            bc.addCondition(boundary::north, condition_type::weak_dirichlet, 0, 0, false, 1 );
+            bc.addCondition(boundary::north, condition_type::weak_clamped, 0, 0, false, 2 );
 
-        // Symmetry in x-direction: for right side
-        bc.addCondition(boundary::east, condition_type::dirichlet, 0, 0, false, 0 );
-        bc.addCondition(boundary::east, condition_type::clamped, 0, 0, false, 1 );
-        bc.addCondition(boundary::east, condition_type::clamped, 0, 0, false, 2 );
+            // Diaphragm conditions for left side
+            bc.addCondition(boundary::west, condition_type::weak_dirichlet, 0, 0, false, 1 ); // unknown 1 - y
+            bc.addCondition(boundary::west, condition_type::weak_dirichlet, 0, 0, false, 2 ); // unknown 2 - z
 
-        // Symmetry in z-direction:for the front side
-        bc.addCondition(boundary::south, condition_type::clamped, 0, 0, false, 0 );
-        bc.addCondition(boundary::south, condition_type::clamped, 0, 0, false, 1 );
-        bc.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 2 );
+            // Symmetry in x-direction: for right side
+            bc.addCondition(boundary::east, condition_type::weak_dirichlet, 0, 0, false, 0 );
+            bc.addCondition(boundary::east, condition_type::weak_clamped, 0, 0, false, 1 );
+            bc.addCondition(boundary::east, condition_type::weak_clamped, 0, 0, false, 2 );
+
+            // Symmetry in z-direction:for the front side
+            bc.addCondition(boundary::south, condition_type::weak_clamped, 0, 0, false, 0 );
+            bc.addCondition(boundary::south, condition_type::weak_clamped, 0, 0, false, 1 );
+            bc.addCondition(boundary::south, condition_type::weak_dirichlet, 0, 0, false, 2 );
+        }
+        else
+        {
+            // Symmetry in y-direction for back side
+            bc.addCondition(boundary::north, condition_type::clamped, 0, 0, false, 0 );
+            bc.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 1 );
+            bc.addCondition(boundary::north, condition_type::clamped, 0, 0, false, 2 );
+
+            // Diaphragm conditions for left side
+            bc.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 1 - y
+            bc.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z
+
+            // Symmetry in x-direction: for right side
+            bc.addCondition(boundary::east, condition_type::dirichlet, 0, 0, false, 0 );
+            bc.addCondition(boundary::east, condition_type::clamped, 0, 0, false, 1 );
+            bc.addCondition(boundary::east, condition_type::clamped, 0, 0, false, 2 );
+
+            // Symmetry in z-direction:for the front side
+            bc.addCondition(boundary::south, condition_type::clamped, 0, 0, false, 0 );
+            bc.addCondition(boundary::south, condition_type::clamped, 0, 0, false, 1 );
+            bc.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 2 );
+        }
 
         // Surface forces
         tmp.setZero();
@@ -388,17 +457,36 @@ int main(int argc, char *argv[])
         neu << 2625, 0, 0;
         neuData.setValue(neu,3);
 
-        bc.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 0 ); // unknown 0 - x
-        bc.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z
+        if (weak)
+        {
+            GISMO_ERROR("Not implemented. Component-wise weak BCs need to be implemented first");
 
-        // bc.addCondition(boundary::east, condition_type::collapsed, 0, 0, false, 0 ); // unknown 1 - y
+            bc.addCondition(boundary::west, condition_type::weak_dirichlet, 0, 0, false, 0 ); // unknown 0 - x
+            bc.addCondition(boundary::west, condition_type::weak_dirichlet, 0, 0, false, 2 ); // unknown 2 - z
+
+            // bc.addCondition(boundary::east, condition_type::collapsed, 0, 0, false, 0 ); // unknown 1 - y
+            bc.addCondition(boundary::east, condition_type::weak_dirichlet, 0, 0, false, 2 ); // unknown 2 - z.
+
+            bc.addCondition(boundary::south, condition_type::weak_dirichlet, 0, 0, false, 1 ); // unknown 1 - y
+            bc.addCondition(boundary::south, condition_type::weak_dirichlet, 0, 0, false, 2 ); // unknown 1 - y
+            bc.addCondition(boundary::north, condition_type::weak_dirichlet, 0, 0, false, 2 ); // unknown 1 - y
+
+        }
+        else
+        {
+            bc.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 0 ); // unknown 0 - x
+            bc.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z
+
+            // bc.addCondition(boundary::east, condition_type::collapsed, 0, 0, false, 0 ); // unknown 1 - y
+            bc.addCondition(boundary::east, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z.
+
+            bc.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 1 - y
+            bc.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 1 - y
+            bc.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 1 - y
+
+        }
+
         bc.addCondition(boundary::east, condition_type::neumann, &neuData ); // unknown 1 - y
-        bc.addCondition(boundary::east, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z.
-
-
-        bc.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 1 - y
-        bc.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 1 - y
-        bc.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 1 - y
 
         gsVector<> point(2);
         gsVector<> load (3);
@@ -408,12 +496,22 @@ int main(int argc, char *argv[])
     }
     else if (testCase == 5)
     {
-        for (index_t i = 0; i!=3; i++)
+        if (weak)
         {
-            bc.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, i );
-            bc.addCondition(boundary::east, condition_type::dirichlet, 0, 0, false, i );
-            bc.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, i );
-            bc.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, i );
+            bc.addCondition(boundary::north, condition_type::weak_dirichlet, &weak_drch );
+            bc.addCondition(boundary::east, condition_type::weak_dirichlet, &weak_drch );
+            bc.addCondition(boundary::south, condition_type::weak_dirichlet, &weak_drch );
+            bc.addCondition(boundary::west, condition_type::weak_dirichlet, &weak_drch );
+        }
+        else
+        {
+            for (index_t i = 0; i!=3; i++)
+            {
+                bc.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, i );
+                bc.addCondition(boundary::east, condition_type::dirichlet, 0, 0, false, i );
+                bc.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, i );
+                bc.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, i );
+            }
         }
 
         // Point loads
@@ -423,23 +521,36 @@ int main(int argc, char *argv[])
     }
     else if (testCase == 6) // balloon
     {
-        // bc.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 0 ); // unknown 0 - x
-        // bc.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 1 - y
-        // bc.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z
+        if (weak)
+        {
+            GISMO_ERROR("Not implemented. Component-wise weak BCs need to be implemented first");
 
-        // bc.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 0 ); // unknown 0 - x
-        // bc.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 1 - y
-        bc.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z
+            bc.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z
 
-        // Symmetry in x-direction:
-        bc.addCondition(boundary::east, condition_type::dirichlet, 0, 0, false, 0 );
-        bc.addCondition(boundary::east, condition_type::clamped, 0, 0, false, 1 );
-        bc.addCondition(boundary::east, condition_type::clamped, 0, 0, false, 2 );
+            // Symmetry in x-direction:
+            bc.addCondition(boundary::east, condition_type::weak_dirichlet, 0, 0, false, 0 );
+            bc.addCondition(boundary::east, condition_type::weak_clamped, 0, 0, false, 1 );
+            bc.addCondition(boundary::east, condition_type::weak_clamped, 0, 0, false, 2 );
 
-        // Symmetry in y-direction:
-        bc.addCondition(boundary::west, condition_type::clamped, 0, 0, false, 0 );
-        bc.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 1 );
-        bc.addCondition(boundary::west, condition_type::clamped, 0, 0, false, 2 );
+            // Symmetry in y-direction:
+            bc.addCondition(boundary::west, condition_type::weak_clamped, 0, 0, false, 0 );
+            bc.addCondition(boundary::west, condition_type::weak_dirichlet, 0, 0, false, 1 );
+            bc.addCondition(boundary::west, condition_type::weak_clamped, 0, 0, false, 2 );
+        }
+        else
+        {
+            bc.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z
+
+            // Symmetry in x-direction:
+            bc.addCondition(boundary::east, condition_type::dirichlet, 0, 0, false, 0 );
+            bc.addCondition(boundary::east, condition_type::clamped, 0, 0, false, 1 );
+            bc.addCondition(boundary::east, condition_type::clamped, 0, 0, false, 2 );
+
+            // Symmetry in y-direction:
+            bc.addCondition(boundary::west, condition_type::clamped, 0, 0, false, 0 );
+            bc.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 1 );
+            bc.addCondition(boundary::west, condition_type::clamped, 0, 0, false, 2 );
+        }
 
         // Pressure
         pressure = 5e3;
@@ -450,22 +561,42 @@ int main(int argc, char *argv[])
         neuData.setValue(neu,3);
 
         bc.addCondition(boundary::north, condition_type::neumann, &neuData );
-        // bc.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 0 ); // unknown 2 - z
-        // bc.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 2 - z
 
-        bc.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 0 ); // unknown 0 - x
-        bc.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 1 - y
-        bc.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z
+        if (weak)
+        {
+            GISMO_ERROR("Not implemented. Component-wise weak BCs need to be implemented first");
 
-        // Symmetry in x-direction:
-        bc.addCondition(boundary::east, condition_type::dirichlet, 0, 0, false, 0 );
-        bc.addCondition(boundary::east, condition_type::clamped, 0, 0, false, 1 );
-        bc.addCondition(boundary::east, condition_type::clamped, 0, 0, false, 2 );
+            bc.addCondition(boundary::south, condition_type::weak_dirichlet, 0, 0, false, 0 ); // unknown 0 - x
+            bc.addCondition(boundary::south, condition_type::weak_dirichlet, 0, 0, false, 1 ); // unknown 1 - y
+            bc.addCondition(boundary::south, condition_type::weak_dirichlet, 0, 0, false, 2 ); // unknown 2 - z
 
-        // Symmetry in y-direction:
-        bc.addCondition(boundary::west, condition_type::clamped, 0, 0, false, 0 );
-        bc.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 1 );
-        bc.addCondition(boundary::west, condition_type::clamped, 0, 0, false, 2 );
+            // Symmetry in x-direction:
+            bc.addCondition(boundary::east, condition_type::weak_dirichlet, 0, 0, false, 0 );
+            bc.addCondition(boundary::east, condition_type::weak_clamped, 0, 0, false, 1 );
+            bc.addCondition(boundary::east, condition_type::weak_clamped, 0, 0, false, 2 );
+
+            // Symmetry in y-direction:
+            bc.addCondition(boundary::west, condition_type::weak_clamped, 0, 0, false, 0 );
+            bc.addCondition(boundary::west, condition_type::weak_dirichlet, 0, 0, false, 1 );
+            bc.addCondition(boundary::west, condition_type::weak_clamped, 0, 0, false, 2 );
+        }
+        else
+        {
+            bc.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 0 ); // unknown 0 - x
+            bc.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 1 - y
+            bc.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z
+
+            // Symmetry in x-direction:
+            bc.addCondition(boundary::east, condition_type::dirichlet, 0, 0, false, 0 );
+            bc.addCondition(boundary::east, condition_type::clamped, 0, 0, false, 1 );
+            bc.addCondition(boundary::east, condition_type::clamped, 0, 0, false, 2 );
+
+            // Symmetry in y-direction:
+            bc.addCondition(boundary::west, condition_type::clamped, 0, 0, false, 0 );
+            bc.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 1 );
+            bc.addCondition(boundary::west, condition_type::clamped, 0, 0, false, 2 );
+        }
+
     }
     // else if (testCase == 8)
     // {
@@ -494,24 +625,48 @@ int main(int argc, char *argv[])
     //     bc.addCondition(boundary::north, condition_type::collapsed, 0, 0, false, 2 ); // unknown 1 - y
 
         displx.setValue(-0.027815,3);
-        bc.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 0 ); // unknown 2 - z
-        bc.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 2 - z
-        bc.addCondition(boundary::north, condition_type::dirichlet, &displx, 0, false, 2 ); // unknown 1 - y
+        if (weak)
+        {
+            GISMO_ERROR("Not implemented. Component-wise weak BCs need to be implemented first");
 
-        bc.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 0 ); // unknown 0 - x
-        bc.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 1 - y
-        bc.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z
+            bc.addCondition(boundary::north, condition_type::weak_dirichlet, 0, 0, false, 0 ); // unknown 2 - z
+            bc.addCondition(boundary::north, condition_type::weak_dirichlet, 0, 0, false, 1 ); // unknown 2 - z
+            bc.addCondition(boundary::north, condition_type::weak_dirichlet, &displx, 0, false, 2 ); // unknown 1 - y
 
-        // Symmetry in x-direction:
-        bc.addCondition(boundary::east, condition_type::dirichlet, 0, 0, false, 0 );
-        bc.addCondition(boundary::east, condition_type::clamped, 0, 0, false, 1 );
-        bc.addCondition(boundary::east, condition_type::clamped, 0, 0, false, 2 );
+            bc.addCondition(boundary::south, condition_type::weak_dirichlet, 0, 0, false, 0 ); // unknown 0 - x
+            bc.addCondition(boundary::south, condition_type::weak_dirichlet, 0, 0, false, 1 ); // unknown 1 - y
+            bc.addCondition(boundary::south, condition_type::weak_dirichlet, 0, 0, false, 2 ); // unknown 2 - z
 
-        // Symmetry in y-direction:
-        bc.addCondition(boundary::west, condition_type::clamped, 0, 0, false, 0 );
-        bc.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 1 );
-        bc.addCondition(boundary::west, condition_type::clamped, 0, 0, false, 2 );
+            // Symmetry in x-direction:
+            bc.addCondition(boundary::east, condition_type::weak_dirichlet, 0, 0, false, 0 );
+            bc.addCondition(boundary::east, condition_type::weak_clamped, 0, 0, false, 1 );
+            bc.addCondition(boundary::east, condition_type::weak_clamped, 0, 0, false, 2 );
 
+            // Symmetry in y-direction:
+            bc.addCondition(boundary::west, condition_type::weak_clamped, 0, 0, false, 0 );
+            bc.addCondition(boundary::west, condition_type::weak_dirichlet, 0, 0, false, 1 );
+            bc.addCondition(boundary::west, condition_type::weak_clamped, 0, 0, false, 2 );
+        }
+        else
+        {
+            bc.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 0 ); // unknown 2 - z
+            bc.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 2 - z
+            bc.addCondition(boundary::north, condition_type::dirichlet, &displx, 0, false, 2 ); // unknown 1 - y
+
+            bc.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 0 ); // unknown 0 - x
+            bc.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 1 - y
+            bc.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z
+
+            // Symmetry in x-direction:
+            bc.addCondition(boundary::east, condition_type::dirichlet, 0, 0, false, 0 );
+            bc.addCondition(boundary::east, condition_type::clamped, 0, 0, false, 1 );
+            bc.addCondition(boundary::east, condition_type::clamped, 0, 0, false, 2 );
+
+            // Symmetry in y-direction:
+            bc.addCondition(boundary::west, condition_type::clamped, 0, 0, false, 0 );
+            bc.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 1 );
+            bc.addCondition(boundary::west, condition_type::clamped, 0, 0, false, 2 );
+        }
     }
     else if (testCase == 9)
     {
@@ -520,38 +675,72 @@ int main(int argc, char *argv[])
         neuData.setValue(neu,3);
 
         bc.addCondition(boundary::north, condition_type::neumann, &neuData );
-        // bc.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 0 ); // unknown 2 - z
-        // bc.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 2 - z
         bc.addCondition(boundary::north, condition_type::collapsed, 0, 0, false, 2 ); // unknown 1 - y
 
-        bc.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 0 ); // unknown 0 - x
-        bc.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 1 - y
-        bc.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z
+        if (weak)
+        {
+            GISMO_ERROR("Not implemented. Component-wise weak BCs need to be implemented first");
 
-        // Symmetry in x-direction:
-        bc.addCondition(boundary::east, condition_type::dirichlet, 0, 0, false, 0 );
-        bc.addCondition(boundary::east, condition_type::clamped, 0, 0, false, 1 );
-        bc.addCondition(boundary::east, condition_type::clamped, 0, 0, false, 2 );
+            bc.addCondition(boundary::south, condition_type::weak_dirichlet, 0, 0, false, 0 ); // unknown 0 - x
+            bc.addCondition(boundary::south, condition_type::weak_dirichlet, 0, 0, false, 1 ); // unknown 1 - y
+            bc.addCondition(boundary::south, condition_type::weak_dirichlet, 0, 0, false, 2 ); // unknown 2 - z
 
-        // Symmetry in y-direction:
-        bc.addCondition(boundary::west, condition_type::clamped, 0, 0, false, 0 );
-        bc.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 1 );
-        bc.addCondition(boundary::west, condition_type::clamped, 0, 0, false, 2 );
+            // Symmetry in x-direction:
+            bc.addCondition(boundary::east, condition_type::weak_dirichlet, 0, 0, false, 0 );
+            bc.addCondition(boundary::east, condition_type::weak_clamped, 0, 0, false, 1 );
+            bc.addCondition(boundary::east, condition_type::weak_clamped, 0, 0, false, 2 );
 
+            // Symmetry in y-direction:
+            bc.addCondition(boundary::west, condition_type::weak_clamped, 0, 0, false, 0 );
+            bc.addCondition(boundary::west, condition_type::weak_dirichlet, 0, 0, false, 1 );
+            bc.addCondition(boundary::west, condition_type::weak_clamped, 0, 0, false, 2 );
+        }
+        else
+        {
+            bc.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 0 ); // unknown 0 - x
+            bc.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 1 - y
+            bc.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z
+
+            // Symmetry in x-direction:
+            bc.addCondition(boundary::east, condition_type::dirichlet, 0, 0, false, 0 );
+            bc.addCondition(boundary::east, condition_type::clamped, 0, 0, false, 1 );
+            bc.addCondition(boundary::east, condition_type::clamped, 0, 0, false, 2 );
+
+            // Symmetry in y-direction:
+            bc.addCondition(boundary::west, condition_type::clamped, 0, 0, false, 0 );
+            bc.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 1 );
+            bc.addCondition(boundary::west, condition_type::clamped, 0, 0, false, 2 );
+        }
     }
     else if (testCase == 10)
     {
-        for (index_t i=0; i!=3; ++i)
+        if (weak)
         {
-            bc.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, i ); // unknown 2 - z
-        }
-        bc.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z
-        bc.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z
+            GISMO_ERROR("Not implemented. Component-wise weak BCs need to be implemented first");
 
-        bc.addCondition(boundary::east, condition_type::dirichlet, 0, 0 ,false,1);
-        bc.addCondition(boundary::east, condition_type::dirichlet, 0, 0 ,false,2);
+            for (index_t i=0; i!=3; ++i)
+            {
+                bc.addCondition(boundary::west, condition_type::weak_dirichlet, 0, 0, false, i ); // unknown 2 - z
+            }
+            bc.addCondition(boundary::north, condition_type::weak_dirichlet, 0, 0, false, 2 ); // unknown 2 - z
+            bc.addCondition(boundary::south, condition_type::weak_dirichlet, 0, 0, false, 2 ); // unknown 2 - z
+
+            bc.addCondition(boundary::east, condition_type::weak_dirichlet, 0, 0 ,false,1);
+            bc.addCondition(boundary::east, condition_type::weak_dirichlet, 0, 0 ,false,2);
+        }
+        else
+        {
+            for (index_t i=0; i!=3; ++i)
+            {
+                bc.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, i ); // unknown 2 - z
+            }
+            bc.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z
+            bc.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z
+
+            bc.addCondition(boundary::east, condition_type::dirichlet, 0, 0 ,false,1);
+            bc.addCondition(boundary::east, condition_type::dirichlet, 0, 0 ,false,2);
+        }
         bc.addCondition(boundary::east, condition_type::collapsed, 0, 0 ,false,0);
-        // bc.addCondition(boundary::east, condition_type::dirichlet, &displx, 0 ,false,0);
 
         gsVector<> point(2); point<< 1.0, 0.5 ;
         gsVector<> load (3); load << 0.25, 0.0, 0.0 ;
@@ -559,25 +748,56 @@ int main(int argc, char *argv[])
     }
     else if (testCase == 11)
     {
-        for (index_t i=0; i!=3; ++i)
+        if (weak)
         {
-            bc.addCondition(boundary::east, condition_type::dirichlet, 0, 0, false, i ); // unknown 1 - y
-            bc.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, i ); // unknown 2 - z
-        }
+            GISMO_ERROR("Not implemented. Component-wise weak BCs need to be implemented first");
 
-        bc.addCondition(boundary::east, condition_type::clamped, 0, 0 ,false,2);
-        bc.addCondition(boundary::west, condition_type::clamped, 0, 0 ,false,2);
+            for (index_t i=0; i!=3; ++i)
+            {
+                bc.addCondition(boundary::east, condition_type::weak_dirichlet, 0, 0, false, i ); // unknown 1 - y
+                bc.addCondition(boundary::west, condition_type::weak_dirichlet, 0, 0, false, i ); // unknown 2 - z
+            }
+
+            bc.addCondition(boundary::east, condition_type::weak_clamped, 0, 0 ,false,2);
+            bc.addCondition(boundary::west, condition_type::weak_clamped, 0, 0 ,false,2);
+        }
+        else
+        {
+            for (index_t i=0; i!=3; ++i)
+            {
+                bc.addCondition(boundary::east, condition_type::dirichlet, 0, 0, false, i ); // unknown 1 - y
+                bc.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, i ); // unknown 2 - z
+            }
+
+            bc.addCondition(boundary::east, condition_type::clamped, 0, 0 ,false,2);
+            bc.addCondition(boundary::west, condition_type::clamped, 0, 0 ,false,2);
+        }
 
         tmp<<0,0,-1;
     }
     else if (testCase == 12)
     {
-        for (index_t i=0; i!=3; ++i)
+        if (weak)
         {
-            bc.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, i ); // unknown 2 - z
+            GISMO_ERROR("Not implemented. Component-wise weak BCs need to be implemented first");
+
+            for (index_t i=0; i!=3; ++i)
+            {
+                bc.addCondition(boundary::west, condition_type::weak_dirichlet, 0, 0, false, i ); // unknown 2 - z
+            }
+
+            bc.addCondition(boundary::west, condition_type::weak_clamped, 0, 0 ,false,2);
+        }
+        else
+        {
+            for (index_t i=0; i!=3; ++i)
+            {
+                bc.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, i ); // unknown 2 - z
+            }
+
+            bc.addCondition(boundary::west, condition_type::clamped, 0, 0 ,false,2);
         }
 
-        bc.addCondition(boundary::west, condition_type::clamped, 0, 0 ,false,2);
 
         neu << 0, 0, -0.1;
         neuData.setValue(neu,3);
@@ -586,30 +806,63 @@ int main(int argc, char *argv[])
     }
     else if (testCase == 13)
     {
-        for (index_t i=0; i!=3; ++i)
+        if (weak)
         {
-            bc.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, i ); // unknown 0 - x
-            bc.addCondition(boundary::east, condition_type::dirichlet, 0, 0, false, i ); // unknown 1 - y
-            bc.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, i ); // unknown 2 - z
-            bc.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, i ); // unknown 2 - z
-        }
+            GISMO_ERROR("Not implemented. Component-wise weak BCs need to be implemented first");
 
-        bc.addCondition(boundary::north, condition_type::clamped, 0, 0 ,false,2);
-        bc.addCondition(boundary::east, condition_type::clamped, 0, 0 ,false,2);
-        bc.addCondition(boundary::south, condition_type::clamped, 0, 0 ,false,2);
-        bc.addCondition(boundary::west, condition_type::clamped, 0, 0 ,false,2);
+            for (index_t i=0; i!=3; ++i)
+            {
+                bc.addCondition(boundary::north, condition_type::weak_dirichlet, 0, 0, false, i ); // unknown 0 - x
+                bc.addCondition(boundary::east, condition_type::weak_dirichlet, 0, 0, false, i ); // unknown 1 - y
+                bc.addCondition(boundary::south, condition_type::weak_dirichlet, 0, 0, false, i ); // unknown 2 - z
+                bc.addCondition(boundary::west, condition_type::weak_dirichlet, 0, 0, false, i ); // unknown 2 - z
+            }
+
+            bc.addCondition(boundary::north, condition_type::weak_clamped, 0, 0 ,false,2);
+            bc.addCondition(boundary::east, condition_type::weak_clamped, 0, 0 ,false,2);
+            bc.addCondition(boundary::south, condition_type::weak_clamped, 0, 0 ,false,2);
+            bc.addCondition(boundary::west, condition_type::weak_clamped, 0, 0 ,false,2);
+        }
+        else
+        {
+            for (index_t i=0; i!=3; ++i)
+            {
+                bc.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, i ); // unknown 0 - x
+                bc.addCondition(boundary::east, condition_type::dirichlet, 0, 0, false, i ); // unknown 1 - y
+                bc.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, i ); // unknown 2 - z
+                bc.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, i ); // unknown 2 - z
+            }
+
+            bc.addCondition(boundary::north, condition_type::clamped, 0, 0 ,false,2);
+            bc.addCondition(boundary::east, condition_type::clamped, 0, 0 ,false,2);
+            bc.addCondition(boundary::south, condition_type::clamped, 0, 0 ,false,2);
+            bc.addCondition(boundary::west, condition_type::clamped, 0, 0 ,false,2);
+        }
 
         tmp << 0,0,-1;
     }
     else if (testCase == 14)
     {
-        for (index_t i=0; i!=3; ++i)
+        if (weak)
         {
-            bc.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, i ); // unknown 2 - z
-        }
-        bc.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z
-        bc.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z
+            GISMO_ERROR("Not implemented. Component-wise weak BCs need to be implemented first");
 
+            for (index_t i=0; i!=3; ++i)
+            {
+                bc.addCondition(boundary::west, condition_type::weak_dirichlet, 0, 0, false, i ); // unknown 2 - z
+            }
+            bc.addCondition(boundary::north, condition_type::weak_dirichlet, 0, 0, false, 2 ); // unknown 2 - z
+            bc.addCondition(boundary::south, condition_type::weak_dirichlet, 0, 0, false, 2 ); // unknown 2 - z
+        }
+        else
+        {
+            for (index_t i=0; i!=3; ++i)
+            {
+                bc.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, i ); // unknown 2 - z
+            }
+            bc.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z
+            bc.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z
+        }
         tmp << 0,0,-1;
 
         bc.addCondition(boundary::east, condition_type::collapsed, 0, 0 ,false,0);
@@ -617,12 +870,26 @@ int main(int argc, char *argv[])
     }
     else if (testCase == 14)
     {
-        for (index_t i=0; i!=3; ++i)
+        if (weak)
         {
-            bc.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, i ); // unknown 2 - z
+            GISMO_ERROR("Not implemented. Component-wise weak BCs need to be implemented first");
+
+            for (index_t i=0; i!=3; ++i)
+            {
+                bc.addCondition(boundary::west, condition_type::weak_dirichlet, 0, 0, false, i ); // unknown 2 - z
+            }
+            bc.addCondition(boundary::north, condition_type::weak_dirichlet, 0, 0, false, 2 ); // unknown 2 - z
+            bc.addCondition(boundary::south, condition_type::weak_dirichlet, 0, 0, false, 2 ); // unknown 2 - z
         }
-        bc.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z
-        bc.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z
+        else
+        {
+            for (index_t i=0; i!=3; ++i)
+            {
+                bc.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, i ); // unknown 2 - z
+            }
+            bc.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z
+            bc.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z
+        }
 
         tmp << 0,0,-1;
 
@@ -631,16 +898,34 @@ int main(int argc, char *argv[])
     }
     else if (testCase == 15)
     {
-        for (index_t i=0; i!=3; ++i)
+        if (weak)
         {
-            bc.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, i ); // unknown 2 - z
+            GISMO_ERROR("Not implemented. Component-wise weak BCs need to be implemented first");
+
+            for (index_t i=0; i!=3; ++i)
+            {
+                bc.addCondition(boundary::west, condition_type::weak_dirichlet, 0, 0, false, i ); // unknown 2 - z
+            }
+            bc.addCondition(boundary::north, condition_type::weak_dirichlet, 0, 0, false, 2 ); // unknown 2 - z
+            bc.addCondition(boundary::south, condition_type::weak_dirichlet, 0, 0, false, 2 ); // unknown 2 - z
+
+
+            bc.addCondition(boundary::east, condition_type::weak_dirichlet, 0, 0 ,false,1);
+            bc.addCondition(boundary::east, condition_type::weak_dirichlet, 0, 0 ,false,2);
         }
-        bc.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z
-        bc.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z
+        else
+        {
+            for (index_t i=0; i!=3; ++i)
+            {
+                bc.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, i ); // unknown 2 - z
+            }
+            bc.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z
+            bc.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z
 
 
-        bc.addCondition(boundary::east, condition_type::dirichlet, 0, 0 ,false,1);
-        bc.addCondition(boundary::east, condition_type::dirichlet, 0, 0 ,false,2);
+            bc.addCondition(boundary::east, condition_type::dirichlet, 0, 0 ,false,1);
+            bc.addCondition(boundary::east, condition_type::dirichlet, 0, 0 ,false,2);
+        }
         bc.addCondition(boundary::east, condition_type::collapsed, 0, 0 ,false,0);
 
         gsVector<> point(2); point<< 1.0, 0.5 ;
@@ -649,11 +934,24 @@ int main(int argc, char *argv[])
     }
     else if (testCase == 16)
     {
-      bc.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 0 ); // unknown 0 - x
-      bc.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 1 - y
-      bc.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z
+        if (weak)
+        {
+            GISMO_ERROR("Not implemented. Component-wise weak BCs need to be implemented first");
 
-      bc.addCondition(boundary::west, condition_type::clamped, 0, 0, false, 2 );
+            bc.addCondition(boundary::west, condition_type::weak_dirichlet, 0, 0, false, 0 ); // unknown 0 - x
+            bc.addCondition(boundary::west, condition_type::weak_dirichlet, 0, 0, false, 1 ); // unknown 1 - y
+            bc.addCondition(boundary::west, condition_type::weak_dirichlet, 0, 0, false, 2 ); // unknown 2 - z
+
+            bc.addCondition(boundary::west, condition_type::weak_clamped, 0, 0, false, 2 );
+        }
+        else
+        {
+            bc.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 0 ); // unknown 0 - x
+            bc.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 1 - y
+            bc.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z
+
+            bc.addCondition(boundary::west, condition_type::clamped, 0, 0, false, 2 );
+        }
 
         real_t Load = 1e-2;
         gsVector<> point(2);
@@ -664,16 +962,28 @@ int main(int argc, char *argv[])
     }
     else if (testCase == 17)
     {
+        if (weak)
+        {
+            GISMO_ERROR("Not implemented. Component-wise weak BCs need to be implemented first");
+
+            bc.addCondition(boundary::west, condition_type::weak_dirichlet, 0, 0, false, 1 ); // unknown 1 - y
+            bc.addCondition(boundary::west, condition_type::weak_dirichlet, 0, 0, false, 2 ); // unknown 2 - z
+
+            bc.addCondition(boundary::east, condition_type::weak_dirichlet, 0, 0, false, 0 ); // unknown 0 - x
+        }
+        else
+        {
+            bc.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 1 - y
+            bc.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z
+
+            bc.addCondition(boundary::east, condition_type::dirichlet, 0, 0, false, 0 ); // unknown 0 - x
+        }
         real_t Load = 1e-1;
         neu << -Load, 0, 0;
         neuData.setValue(neu,3);
 
         bc.addCondition(boundary::west, condition_type::neumann, &neuData ); // unknown 0 - x
         bc.addCondition(boundary::west, condition_type::collapsed, 0, 0, false, 0 ); // unknown 0 - x
-        bc.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 1 - y
-        bc.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z
-
-        bc.addCondition(boundary::east, condition_type::dirichlet, 0, 0, false, 0 ); // unknown 0 - x
     }
     else if (testCase == 20)
     {
@@ -850,7 +1160,7 @@ int main(int argc, char *argv[])
     // Configure Structural Analsysis module
     gsStaticSolver<real_t> staticSolver(matrix,vector,Jacobian,Residual);
     gsOptionList solverOptions = staticSolver.options();
-    solverOptions.setInt("Verbose",1);
+    solverOptions.setInt("Verbose",verbose);
     solverOptions.setInt("MaxIterations",10);
     solverOptions.setReal("Tolerance",1e-6);
     staticSolver.setOptions(solverOptions);
