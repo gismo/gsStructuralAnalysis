@@ -43,11 +43,14 @@ int main (int argc, char** argv)
     // Input options
     int numElevate  = 1;
     int numHref     = 1;
+    int numKref     = 1;
     bool plot       = false;
     bool sparse     = false;
     bool nonlinear  = false;
     bool first  = false;
     int mode = 0;
+
+    std::string assemberOptionsFile("options/solver_options.xml");
 
     real_t thickness     = 1;
     real_t width = 1; // Width of the strip is equal to 1.
@@ -67,7 +70,8 @@ int main (int argc, char** argv)
 
     bool write = false;
 
-    gsCmdLine cmd("Thin shell plate example.");
+    gsCmdLine cmd("Modal analysis for thin shells.");
+    cmd.addString( "f", "file", "Input XML file for assembler options", assemberOptionsFile );
     cmd.addInt("r","hRefine",
                "Number of dyadic h-refinement (bisection) steps to perform before solving",
                numHref);
@@ -80,6 +84,9 @@ int main (int argc, char** argv)
     cmd.addInt("e","degreeElevation",
                "Number of degree elevation steps to perform on the Geometry's basis before solving",
                numElevate);
+    cmd.addInt("k","continuityDecrease",
+               "++",
+               numKref);
     cmd.addReal("s","shift", "eigenvalue shift", shift);
     cmd.addSwitch("nl", "Nonlinear elasticity (otherwise linear)", nonlinear);
     cmd.addSwitch("plot", "Plot result in ParaView format", plot);
@@ -88,6 +95,11 @@ int main (int argc, char** argv)
     cmd.addSwitch("sparse", "Use sparse solver", sparse);
 
     try { cmd.getValues(argc,argv); } catch (int rv) { return rv; }
+
+
+    gsFileData<> fd(assemberOptionsFile);
+    gsOptionList opts;
+    fd.getFirst<gsOptionList>(opts);
 
     std::string fn;
 
@@ -100,20 +112,26 @@ int main (int argc, char** argv)
         r = math::sqrt(EI/EA);
         gsInfo<<"EI = "<<EI<<"; EA = "<<EA<<"; r = "<<r<<"\n";
     }
-    else if (testCase==3 || testCase==4)
+    else if (testCase==3)
+    {
+        mp = Rectangle(4.0,4.0);
+        E_modulus = 1e5;
+        PoissonRatio = 0.3;
+        Density = 1e0;
+        thickness = 1e-3;
+    }
+    else if (testCase==4 || testCase==5)
     {
       mp.addPatch( gsNurbsCreator<>::BSplineSquare(1) ); // degree
       mp.addAutoBoundaries();
       mp.embed(3);
-      gsReadFile<>(fn, mp);
     }
 
-    else if (testCase==5 || testCase==6)
+    else if (testCase==6 || testCase==7)
     {
       fn = "planar/unitcircle.xml";
       gsReadFile<>(fn, mp);
     }
-
 
     for(index_t i = 0; i< numElevate; ++i)
         mp.patch(0).degreeElevate();    // Elevate the degree
@@ -121,6 +139,9 @@ int main (int argc, char** argv)
     // h-refine
     for(index_t i = 0; i< numHref; ++i)
         mp.patch(0).uniformRefine();
+
+    for(index_t i = 0; i< numKref; ++i)
+        mp.patch(0).degreeElevate();    // Elevate the degree
 
     gsMultiBasis<> dbasis(mp);
 
@@ -208,7 +229,26 @@ int main (int argc, char** argv)
     }
     else if (testCase == 3)
     {
+        // Plate
+        // Free-Free-Free-Free
+        BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 0 ); // unknown 0 - x
+        BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 1 - y
+            // Right
+        BCs.addCondition(boundary::east, condition_type::dirichlet, 0, 0, false, 0 ); // unknown 0 - x
+        BCs.addCondition(boundary::east, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 1 - y
+            // Top
+        BCs.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 0 ); // unknown 0 - x
+        BCs.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 1 - y
+            // Bottom
+        BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 0 ); // unknown 0 - x
+        BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 1 - y
+        omegas.push_back(0.0);
+    }
+    else if (testCase == 4)
+    {
         thickness = 0.01;
+        E_modulus = 1e5;
+        Density = 1e0;
         PoissonRatio = 0.3;
         // Plate
         // Pinned-Pinned-Pinned-Pinned
@@ -238,7 +278,7 @@ int main (int argc, char** argv)
 
         std::sort(omegas.begin(),omegas.end());
     }
-    else if (testCase == 4)
+    else if (testCase == 5)
     {
         thickness = 0.01;
         PoissonRatio = 0.3;
@@ -279,7 +319,7 @@ int main (int argc, char** argv)
 
         omegas.push_back(0);
     }
-    else if (testCase == 5)
+    else if (testCase == 6)
     {
         thickness = 0.01;
         PoissonRatio = 0.3;
@@ -308,7 +348,7 @@ int main (int argc, char** argv)
 
         omegas.push_back(0);
     }
-    else if (testCase == 6)
+    else if (testCase == 7)
     {
         thickness = 0.01;
         PoissonRatio = 0.3;
@@ -364,9 +404,10 @@ int main (int argc, char** argv)
     parameters[1] = &nu;
     gsMaterialMatrix materialMat(mp,mp_def,t,parameters,rho);
 
+
     gsThinShellAssembler assembler(mp,dbasis,BCs,surfForce,materialMat);
     assembler.setPointLoads(pLoads);
-
+    assembler.setOptions(opts);
     // Initialise solution object
     gsMultiPatch<> solution = mp;
 
@@ -430,7 +471,14 @@ int main (int argc, char** argv)
           gsWriteParaview<>(solField, fileName, 5000);
           fileName = "modes" + util::to_string(m) + "0";
           collection.addTimestep(fileName,m,".vts");
+
         }
+
+        gsFunctionExpr<> analytical("0","0","sin(3.1415926535*x)*sin(3.1415926535*y)",3);
+        gsPiecewiseFunction<> func(analytical);
+        gsField<> an(mp,func);
+        gsWriteParaview(an,"analytical");
+
         collection.save();
     }
 
