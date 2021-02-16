@@ -125,9 +125,12 @@ int main (int argc, char** argv)
 
     std::string wn("data.csv");
 
+    std::string assemberOptionsFile("options/solver_options.xml");
+
     std::string fn;
 
-    gsCmdLine cmd("Thin shell plate example.");
+    gsCmdLine cmd("Wrinkling analysis with thin shells using XML perturbation.");
+    cmd.addString( "f", "file", "Input XML file for assembler options", assemberOptionsFile );
 
     cmd.addInt("t", "testcase", "Test case: 0: clamped-clamped, 1: pinned-pinned, 2: clamped-free", testCase);
 
@@ -174,6 +177,9 @@ int main (int argc, char** argv)
 
     try { cmd.getValues(argc,argv); } catch (int rv) { return rv; }
 
+    gsFileData<> fd(assemberOptionsFile);
+    gsOptionList opts;
+    fd.getFirst<gsOptionList>(opts);
 
     if (dL==0)
     {
@@ -585,6 +591,7 @@ int main (int argc, char** argv)
 
     // Construct assembler object
     gsThinShellAssembler assembler(mp,dbasis,BCs,surfForce,materialMatrixNonlinear);
+    assembler.setOptions(opts);
     if (membrane)
         assembler.setMembrane();
     assembler.setPointLoads(pLoads);
