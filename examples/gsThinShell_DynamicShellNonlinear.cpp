@@ -59,7 +59,10 @@ int main (int argc, char** argv)
     int steps = 100;
     real_t tend = 1e-5;
 
-    gsCmdLine cmd("Thin shell plate example.");
+    std::string assemberOptionsFile("options/solver_options.xml");
+
+    gsCmdLine cmd("Dynamic analysis (nonlinear) for thin shells.");
+    cmd.addString( "f", "file", "Input XML file for assembler options", assemberOptionsFile );
     cmd.addInt("r","hRefine",
                "Number of dyadic h-refinement (bisection) steps to perform before solving",
                numHref);
@@ -85,6 +88,9 @@ int main (int argc, char** argv)
 
     try { cmd.getValues(argc,argv); } catch (int rv) { return rv; }
 
+    gsFileData<> fd(assemberOptionsFile);
+    gsOptionList opts;
+    fd.getFirst<gsOptionList>(opts);
 
     gsInfo<<"Simulation time:\t"<<tend<<"\n";
     real_t dt = tend/((double)steps);
@@ -182,6 +188,7 @@ int main (int argc, char** argv)
 
     // Construct assembler object for dynamic computations
     gsThinShellAssembler assembler(mp,dbasis,BCs,force,materialMat);
+    assembler.setOptions(opts);
     assembler.setPointLoads(pLoads);
 
     assembler.assemble();
@@ -208,8 +215,8 @@ int main (int argc, char** argv)
 //------------------------------------------------------------------------------
 gsParaviewCollection collection(dirname + "/solution");
 
-typedef std::function<gsSparseMatrix<real_t> (gsVector<real_t> const &)>    Jacobian_t;
-typedef std::function<gsVector<real_t> (gsVector<real_t> const &) >         Residual_t;
+typedef std::function<gsSparseMatrix<real_t> (gsVector<real_t> const &)>        Jacobian_t;
+typedef std::function<gsVector<real_t> (gsVector<real_t> const &, real_t time) >Residual_t;
 // Function for the Jacobian
 Jacobian_t Jacobian = [&assembler,&solution](gsMatrix<real_t> const &x)
 {

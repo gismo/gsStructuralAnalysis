@@ -37,13 +37,14 @@ int main(int argc, char *argv[])
     index_t testCase = -1;
     bool nonlinear = false;
     bool verbose = false;
-    std::string fn1,fn2;
+    std::string fn1,fn2,fn3;
     fn1 = "planar/unitplate.xml";
     fn2 = "pde/kirchhoff_shell1.xml";
+    fn3 = "options/solver_options.xml";
     bool membrane = false;
 
-
-    gsCmdLine cmd("Tutorial on solving a Poisson problem.");
+    gsCmdLine cmd("Static analysis for thin shells.");
+    cmd.addString( "f", "file", "Input XML file for assembler options", fn3 );
     cmd.addInt( "e", "degreeElevation",
                 "Number of degree elevation steps to perform before solving (0: equalize degree in all directions)", numElevate );
     cmd.addInt( "r", "uniformRefine", "Number of Uniform h-refinement steps to perform before solving",  numRefine );
@@ -92,6 +93,10 @@ int main(int argc, char *argv[])
     gsInfo<<"Force function "<< force << "\n";
     // fd.getId(22, pressure); // id=1: source function ------- TO DO!
     // gsInfo<<"Pressure function "<< force << "\n";
+
+    fd.read(fn3);
+    gsOptionList opts;
+    fd.getFirst<gsOptionList>(opts);
 
     // Loads
     gsPointLoads<real_t> pLoads = gsPointLoads<real_t>();
@@ -178,6 +183,7 @@ int main(int argc, char *argv[])
 
     // Set Shell Assembler
     gsThinShellAssembler assembler(mp,dbasis,bc,force,materialMatrix);
+    assembler.setOptions(opts);
     assembler.setPointLoads(pLoads);
     if (membrane)
         assembler.setMembrane();
