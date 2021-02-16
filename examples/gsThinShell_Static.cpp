@@ -62,6 +62,7 @@ int main(int argc, char *argv[])
     bool membrane = false;
     bool weak = false;
 
+    std::string assemberOptionsFile("options/solver_options.xml");
 
     real_t E_modulus = 1.0;
     real_t PoissonRatio = 0.0;
@@ -69,7 +70,8 @@ int main(int argc, char *argv[])
     real_t thickness = 1.0;
     real_t Ratio = 7.0;
 
-    gsCmdLine cmd("Tutorial on solving a Poisson problem.");
+    gsCmdLine cmd("Static analysis for thin shells.");
+    cmd.addString( "f", "file", "Input XML file for assembler options", assemberOptionsFile );
     cmd.addInt( "e", "degreeElevation",
                 "Number of degree elevation steps to perform before solving (0: equalize degree in all directions)", numElevate );
     cmd.addInt( "r", "uniformRefine", "Number of Uniform h-refinement steps to perform before solving",  numRefine );
@@ -90,6 +92,10 @@ int main(int argc, char *argv[])
     //! [Parse command line]
 
     //! [Read input file]
+    gsFileData<> fd(assemberOptionsFile);
+    gsOptionList opts;
+    fd.getFirst<gsOptionList>(opts);
+
     gsMultiPatch<> mp;
     gsMultiPatch<> mp_def;
     if (testCase == 1 )
@@ -1111,6 +1117,7 @@ int main(int argc, char *argv[])
     gsMaterialMatrix materialMatrixComposite(mp,mp_def,tvec,Evec,Gvec,nuvec,phivec);
 
     gsThinShellAssembler assembler(mp,dbasis,bc,force,materialMatrixNonlinear);
+    assembler.setOptions(opts);
     assembler.setPointLoads(pLoads);
     if (membrane)
         assembler.setMembrane();
@@ -1269,14 +1276,6 @@ int main(int argc, char *argv[])
     return EXIT_SUCCESS;
 
 }// end main
-
-template <class T>
-void evaluateFunction(gsExprEvaluator<T> ev, auto expression, gsVector<T> pt)
-{
-    gsMatrix<T> evresult = ev.eval( expression,pt );
-    gsInfo << "Eval on point ("<<pt.at(0)<<" , "<<pt.at(1)<<") :\n"<< evresult;
-    gsInfo << "\nEnd ("<< evresult.rows()<< " x "<<evresult.cols()<<")\n";
-};
 
 template <class T>
 gsMultiPatch<T> RectangularDomain(int n, int p, T L, T B)

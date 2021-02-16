@@ -79,7 +79,10 @@ int main (int argc, char** argv)
 
     bool write = false;
 
-    gsCmdLine cmd("Thin shell plate example.");
+    std::string assemberOptionsFile("options/solver_options.xml");
+
+    gsCmdLine cmd("Buckling analysis for thin shells.");
+    cmd.addString( "f", "file", "Input XML file for assembler options", assemberOptionsFile );
 
     cmd.addInt("t", "testcase", "Test case: 0: clamped-clamped, 1: pinned-pinned, 2: clamped-free", testCase);
 
@@ -109,6 +112,10 @@ int main (int argc, char** argv)
     cmd.addSwitch("sparse", "Use sparse solver", sparse);
 
     try { cmd.getValues(argc,argv); } catch (int rv) { return rv; }
+
+    gsFileData<> fd(assemberOptionsFile);
+    gsOptionList opts;
+    fd.getFirst<gsOptionList>(opts);
 
     gsMultiPatch<> mp;
 
@@ -487,6 +494,7 @@ int main (int argc, char** argv)
     materialMatrixNonlinear.options().setInt("Compressibility",Compressibility);
 
     gsThinShellAssembler assembler(mp,dbasis,BCs,surfForce,materialMatrixNonlinear);
+    assembler.setOptions(opts);
     assembler.setPointLoads(pLoads);
 
     // Initialise solution object

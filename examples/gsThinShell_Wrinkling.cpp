@@ -127,8 +127,10 @@ int main (int argc, char** argv)
 
     std::string wn("data.csv");
 
-    gsCmdLine cmd("Thin shell plate example.");
+    std::string assemberOptionsFile("options/solver_options.xml");
 
+    gsCmdLine cmd("Wrinkling analysis with thin shells.");
+    cmd.addString( "f", "file", "Input XML file for assembler options", assemberOptionsFile );
     cmd.addInt("t", "testcase", "Test case: 0: clamped-clamped, 1: pinned-pinned, 2: clamped-free", testCase);
 
     cmd.addInt("r","hRefine", "Number of dyadic h-refinement (bisection) steps to perform before solving", numHref);
@@ -173,6 +175,10 @@ int main (int argc, char** argv)
     cmd.addSwitch("THB", "Use refinement", THB);
 
     try { cmd.getValues(argc,argv); } catch (int rv) { return rv; }
+
+    gsFileData<> fd(assemberOptionsFile);
+    gsOptionList opts;
+    fd.getFirst<gsOptionList>(opts);
 
     if (dL==0)
     {
@@ -667,6 +673,7 @@ int main (int argc, char** argv)
 
     // Construct assembler object
     gsThinShellAssembler assembler(mp,dbasis,BCs,surfForce,materialMatrixNonlinear);
+    assembler.setOptions(opts);
     if (membrane)
         assembler.setMembrane();
     assembler.setPointLoads(pLoads);
