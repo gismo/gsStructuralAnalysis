@@ -101,7 +101,7 @@ int main (int argc, char** argv)
     cmd.addReal("a","adim", "dimension a", aDim);
     cmd.addReal("b","bdim", "dimension b", bDim);
 
-    cmd.addReal("f","fac", "factor linear problem", fac);
+    cmd.addReal("F","fac", "factor linear problem", fac);
 
     cmd.addReal("s","shift", "eigenvalue shift", shift);
 

@@ -44,7 +44,7 @@ int main(int argc, char *argv[])
     bool membrane = false;
 
     gsCmdLine cmd("Static analysis for thin shells.");
-    cmd.addString( "f", "file", "Input XML file for assembler options", fn3 );
+    cmd.addString( "s", "file", "Input XML file for assembler options", fn3 );
     cmd.addInt( "e", "degreeElevation",
                 "Number of degree elevation steps to perform before solving (0: equalize degree in all directions)", numElevate );
     cmd.addInt( "r", "uniformRefine", "Number of Uniform h-refinement steps to perform before solving",  numRefine );

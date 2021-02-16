@@ -136,7 +136,7 @@ int main (int argc, char** argv)
     cmd.addReal("l","dL", "arc length after bifurcation", dL);
     cmd.addReal("A","relaxation", "Relaxation factor for arc length method", relax);
 
-    cmd.addReal("f","factor", "factor for bifurcation perturbation", tau);
+    cmd.addReal("F","factor", "factor for bifurcation perturbation", tau);
     cmd.addInt("q","QuasiNewtonInt","Use the Quasi Newton method every INT iterations",quasiNewtonInt);
     cmd.addInt("N", "maxsteps", "Maximum number of steps", step);
 
@@ -149,6 +149,7 @@ int main (int argc, char** argv)
     cmd.addSwitch("membrane", "Use membrane model (no bending)", membrane);
     cmd.addSwitch("symmetry", "Use symmetry boundary condition (different per problem)", symmetry);
     cmd.addSwitch("deformed", "plot on deformed shape", deformed);
+    cmd.addSwitch("write", "write to file", write);
 
     try { cmd.getValues(argc,argv); } catch (int rv) { return rv; }
 
@@ -182,8 +183,10 @@ int main (int argc, char** argv)
       gsInfo<<"S = "<<Spring<<"; eta = "<<eta<<"\n";
     }
     /*
-      Case 2: Clamped beam (left) under vertical end load                   --- Validation settings: -L 1eX -l 1eX -M 14 -N 500 -r X -e X
-      Case 3: Clamped beam (left) under horizontal compressive end load     --- Validation settings: -L 1eX -l 1eX -M 14 -N 500 -r X -e X
+      Case 2: Clamped beam (left) under vertical end load                   --- Validation settings: -L 5e-1 -M 0 -N 10 -r 2 -e 1 (--plot --write -q 5)
+                                                                                Fig 3b from: Pagani, A., & Carrera, E. (2018). Unified formulation of geometrically nonlinear refined beam theories. Mechanics of Advanced Materials and Structures, 25(1), 15–31. https://doi.org/10.1080/15376494.2016.1232458
+      Case 3: Clamped beam (left) under horizontal compressive end load     --- Validation settings: -L 5e-5 -l 1e1 -M 0 -N 100 -r 3 -e 1
+                                                                                Fig 5  from: Pagani, A., & Carrera, E. (2018). Unified formulation of geometrically nonlinear refined beam theories. Mechanics of Advanced Materials and Structures, 25(1), 15–31. https://doi.org/10.1080/15376494.2016.1232458
     */
     else if (testCase==2 || testCase==3)
     {
