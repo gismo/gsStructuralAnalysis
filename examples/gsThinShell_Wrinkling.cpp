@@ -308,15 +308,31 @@ int main (int argc, char** argv)
     /*
       Case: Shear
     */
-    else if (testCase==8)
+    else if (testCase==8 || testCase==9)
     {
-      E_modulus = 3500e6;
-      PoissonRatio = 0.31;
-      gsDebug<<"E = "<<E_modulus<<"; nu = "<<PoissonRatio<<"\n";
+      if (testCase == 8)
+      {
+        E_modulus = 3500e6;
+        PoissonRatio = 0.31;
+        aDim = 380e-3;
+        bDim = 128e-3;
+        thickness = 25e-6;
+      }
+      else if (testCase == 9)
+      {
+        C10 = 6.21485502e4; // c1/2
+        C01 = 15.8114570e4; // c2/2
+        Ratio = C10/C01;
+        mu = 2*(C01+C10);
 
-      aDim = 380e-3;
-      bDim = 128e-3;
-      thickness = 25e-6;
+        E_modulus = 2*mu*(1+PoissonRatio);
+
+        aDim = 0.28;
+        bDim = 0.14;
+        thickness = 0.14e-3;
+      }
+
+      gsDebug<<"E = "<<E_modulus<<"; nu = "<<PoissonRatio<<"\n";
 
       mpBspline = Rectangle(aDim,bDim);
 
@@ -560,7 +576,7 @@ int main (int argc, char** argv)
       cross_coordinate = 0;
       cross_val = 0.0;
     }
-    else if (testCase == 8)
+    else if (testCase == 8 || testCase == 9)
     {
       BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0 ,false,0);
       BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0 ,false,1);
