@@ -79,7 +79,6 @@ int main(int argc, char *argv[])
     cmd.addInt( "t", "testCase", "Test case to run: 1 = unit square; 2 = Scordelis Lo Roof",  testCase );
     cmd.addInt( "m", "Material", "Material law",  material );
     cmd.addInt( "c", "Compressibility", "1: compressible, 0: incompressible",  Compressibility );
-    cmd.addString( "f", "file", "Input XML file", fn );
     cmd.addSwitch("nl", "Solve nonlinear problem", nonlinear);
     cmd.addInt("v","verbose", "0: no; 1: iteration output; 2: Full matrix and vector output", verbose);
     cmd.addSwitch("plot", "Create a ParaView visualization file with the solution", plot);
