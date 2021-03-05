@@ -183,9 +183,9 @@ int main (int argc, char** argv)
       gsInfo<<"S = "<<Spring<<"; eta = "<<eta<<"\n";
     }
     /*
-      Case 2: Clamped beam (left) under vertical end load                   --- Validation settings: -L 5e-1 -M 0 -N 10 -r 2 -e 1 (--plot --write -q 5)
+      Case 2: Clamped beam (left) under vertical end load                   --- Validation settings: -t 2 -L 5e-1 -M 0 -N 10 -r 2 -e 1 (--plot --write -q 5)
                                                                                 Fig 3b from: Pagani, A., & Carrera, E. (2018). Unified formulation of geometrically nonlinear refined beam theories. Mechanics of Advanced Materials and Structures, 25(1), 15–31. https://doi.org/10.1080/15376494.2016.1232458
-      Case 3: Clamped beam (left) under horizontal compressive end load     --- Validation settings: -L 5e-5 -l 1e1 -M 0 -N 100 -r 3 -e 1
+      Case 3: Clamped beam (left) under horizontal compressive end load     --- Validation settings: -t 3 -L 5e-5 -l 1e1 -M 0 -N 100 -r 3 -e 1
                                                                                 Fig 5  from: Pagani, A., & Carrera, E. (2018). Unified formulation of geometrically nonlinear refined beam theories. Mechanics of Advanced Materials and Structures, 25(1), 15–31. https://doi.org/10.1080/15376494.2016.1232458
     */
     else if (testCase==2 || testCase==3)
@@ -198,9 +198,9 @@ int main (int argc, char** argv)
       mp = RectangularDomain(numHref, 0, numElevate+2, 2, aDim, bDim);
     }
     /*
-      Case 4: Uniaxial tension of a square plate                            --- Validation settings: -L 1eX -l 1eX -M 14 -N 500 -r X -e X
+      Case 4: Uniaxial tension of a square plate                            --- Validation settings: -t 4 -L 2e0 -M XX -N 10 -r 1 -e 0 -N 10 -c 1
               (bottom boundary fixed in Y, left boundary fixed in X, right boundary normal load)
-      Case 5: Biaxial tension of a square plate                             --- Validation settings: -L 1eX -l 1eX -M 14 -N 500 -r X -e X
+      Case 5: Biaxial tension of a square plate                             --- Validation settings: -t 5 -L 1eX -l 1eX -M 14 -N 500 -r X -e X
               (bottom boundary fixed in Y, left boundary fixed in X, right and top boundaries normal load)
     */
     else if (testCase==4 || testCase==5)
@@ -221,13 +221,18 @@ int main (int argc, char** argv)
     }
     /*
       Case 6: Constrained tension (see Roohbakhshan2017)
+      ./bin/gsThinShell_ArcLength -t 6 --plot -L 5e-3 -r 3 --write -M 12 -N 50
+
+      After 10 steps at P/EA = 1:
+        ./bin/gsThinShell_ArcLength -t 6 -r 3  -L 11.8421052632 -m 0 -M 2 -N 10 --write
+
     */
     else if (testCase==6)
     {
-      aDim = 10.0e-3;
-      bDim = 10.0e-3;
+      aDim = 9.0e-3;
+      bDim = 3.0e-3;
       real_t mu = 10e3;
-      thickness = 0.25e-3;
+      thickness = 0.3e-3;
       if ((!Compressibility) && (material!=0))
         PoissonRatio = 0.5;
       else
@@ -237,16 +242,27 @@ int main (int argc, char** argv)
         mu = 10e3;
       else if (material==3 || material==13)
         mu = 30e3;
+      else if (material==14)
+        mu = 30e3;
 
       E_modulus = 2*mu*(1+PoissonRatio);
 
       Ratio = 0.5;
 
-      mp = RectangularDomain(numHref, numElevate+2, aDim/2., bDim/2.);
+      mp = Rectangle(aDim, bDim);
+
+      for(index_t i = 0; i< numElevate; ++i)
+        mp.patch(0).degreeElevate();    // Elevate the degree
+
+      // h-refine
+      for(index_t i = 0; i< numHref; ++i)
+        mp.patch(0).uniformRefine();
     }
     /*
       Case 7: Constrained tension (Chopin2019)
       Chopin, J., Panaitescu, A., & Kudrolli, A. (2018). Corner singularities and shape of stretched elastic sheets. Physical Review E, 98(4), 043003. https://doi.org/10.1103/PhysRevE.98.043003Chopin, J., Panaitescu, A., & Kudrolli, A. (2018). Corner singularities and shape of stretched elastic sheets. Physical Review E, 98(4), 043003. https://doi.org/10.1103/PhysRevE.98.043003
+      ./bin/gsThinShell_ArcLength -t 7 --plot -L 5e1 -r 5 -e 2 -c 1 --write -M 12 -N 25 --cross
+
     */
     else if (testCase == 7)
     {
@@ -265,7 +281,14 @@ int main (int argc, char** argv)
       // Ratio = 2.5442834138486314;
       Ratio = 0.5;
 
-      mp = RectangularDomain(numHref, numHref, numElevate+2, numElevate + 2, aDim, bDim);
+      mp = Rectangle(aDim, bDim);
+
+      for(index_t i = 0; i< numElevate; ++i)
+        mp.patch(0).degreeElevate();    // Elevate the degree
+
+      // h-refine
+      for(index_t i = 0; i< numHref; ++i)
+        mp.patch(0).uniformRefine();
     }
     /*
       Case 8: Balloon subject to increasing internal pressure               --- Validation settings: -L 1eX -l 1eX -M 14 -N 500 -r X -e X
@@ -531,7 +554,7 @@ int main (int argc, char** argv)
       dirname = dirname + "/UniaxialTension";
       output =  "solution";
       wn = output + "data.txt";
-      SingularPoint = true;
+      SingularPoint = false;
     }
     else if (testCase == 5) // Bi-axial tension; use with hyperelastic material model!
     {
@@ -562,38 +585,38 @@ int main (int argc, char** argv)
       dirname = dirname + "/BiaxialTension";
       output =  "solution";
       wn = output + "data.txt";
-      SingularPoint = true;
-    }
-    else if (testCase == 6) //???
-    {
-
-      BCs.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 0 ); // unknown 1 - x
-      BCs.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 1 - x
-      BCs.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 1 - x
-
-      BCs.addCondition(boundary::east,  condition_type::dirichlet, 0, 0, false, 0 ); // unknown 1 - x
-      BCs.addCondition(boundary::east,  condition_type::dirichlet, 0, 0, false, 1 ); // unknown 1 - x
-      BCs.addCondition(boundary::east,  condition_type::dirichlet, 0, 0, false, 2 ); // unknown 1 - x
-
-      BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 1 - x
-      BCs.addCondition(boundary::south, condition_type::clamped,   0, 0, false, 2 ); // unknown 1 - x
-
-      BCs.addCondition(boundary::west,  condition_type::dirichlet, 0, 0, false, 0 ); // unknown 1 - x
-      BCs.addCondition(boundary::west,  condition_type::clamped,   0, 0, false, 2 ); // unknown 1 - x
-
-      pressure = 1.0;
-
-      dirname = dirname + "/" + "Case" + std::to_string(testCase);
-      output =  "solution";
-      wn = output + "data.txt";
       SingularPoint = false;
-
-      writePoints.resize(2,3);
-      writePoints.col(0)<< 0.0,0.5;
-      writePoints.col(1)<< 0.5,0.5;
-      writePoints.col(2)<< 1.0,0.5;
     }
-    else if (testCase == 7) // Uniaxial tension with fixed ends
+    // else if (testCase == 6) //???
+    // {
+
+    //   BCs.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 0 ); // unknown 1 - x
+    //   BCs.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 1 - x
+    //   BCs.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 1 - x
+
+    //   BCs.addCondition(boundary::east,  condition_type::dirichlet, 0, 0, false, 0 ); // unknown 1 - x
+    //   BCs.addCondition(boundary::east,  condition_type::dirichlet, 0, 0, false, 1 ); // unknown 1 - x
+    //   BCs.addCondition(boundary::east,  condition_type::dirichlet, 0, 0, false, 2 ); // unknown 1 - x
+
+    //   BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 1 - x
+    //   BCs.addCondition(boundary::south, condition_type::clamped,   0, 0, false, 2 ); // unknown 1 - x
+
+    //   BCs.addCondition(boundary::west,  condition_type::dirichlet, 0, 0, false, 0 ); // unknown 1 - x
+    //   BCs.addCondition(boundary::west,  condition_type::clamped,   0, 0, false, 2 ); // unknown 1 - x
+
+    //   pressure = 1.0;
+
+    //   dirname = dirname + "/" + "Case" + std::to_string(testCase);
+    //   output =  "solution";
+    //   wn = output + "data.txt";
+    //   SingularPoint = false;
+
+    //   writePoints.resize(2,3);
+    //   writePoints.col(0)<< 0.0,0.5;
+    //   writePoints.col(1)<< 0.5,0.5;
+    //   writePoints.col(2)<< 1.0,0.5;
+    // }
+    else if (testCase == 6 || testCase == 7) // Uniaxial tension with fixed ends
     {
        for (index_t i=0; i!=3; ++i)
        {
@@ -939,7 +962,7 @@ int main (int argc, char** argv)
     arcLength.options().setSwitch("Quasi",quasiNewton);
 
 
-    gsDebug<<arcLength.options();
+    gsInfo<<arcLength.options();
     arcLength.applyOptions();
     arcLength.initialize();
 
