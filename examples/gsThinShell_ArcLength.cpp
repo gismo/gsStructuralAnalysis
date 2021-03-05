@@ -183,9 +183,9 @@ int main (int argc, char** argv)
       gsInfo<<"S = "<<Spring<<"; eta = "<<eta<<"\n";
     }
     /*
-      Case 2: Clamped beam (left) under vertical end load                   --- Validation settings: -L 5e-1 -M 0 -N 10 -r 2 -e 1 (--plot --write -q 5)
+      Case 2: Clamped beam (left) under vertical end load                   --- Validation settings: -t 2 -L 5e-1 -M 0 -N 10 -r 2 -e 1 (--plot --write -q 5)
                                                                                 Fig 3b from: Pagani, A., & Carrera, E. (2018). Unified formulation of geometrically nonlinear refined beam theories. Mechanics of Advanced Materials and Structures, 25(1), 15–31. https://doi.org/10.1080/15376494.2016.1232458
-      Case 3: Clamped beam (left) under horizontal compressive end load     --- Validation settings: -L 5e-5 -l 1e1 -M 0 -N 100 -r 3 -e 1
+      Case 3: Clamped beam (left) under horizontal compressive end load     --- Validation settings: -t 3 -L 5e-5 -l 1e1 -M 0 -N 100 -r 3 -e 1
                                                                                 Fig 5  from: Pagani, A., & Carrera, E. (2018). Unified formulation of geometrically nonlinear refined beam theories. Mechanics of Advanced Materials and Structures, 25(1), 15–31. https://doi.org/10.1080/15376494.2016.1232458
     */
     else if (testCase==2 || testCase==3)
@@ -198,9 +198,9 @@ int main (int argc, char** argv)
       mp = RectangularDomain(numHref, 0, numElevate+2, 2, aDim, bDim);
     }
     /*
-      Case 4: Uniaxial tension of a square plate                            --- Validation settings: -L 1eX -l 1eX -M 14 -N 500 -r X -e X
+      Case 4: Uniaxial tension of a square plate                            --- Validation settings: -t 4 -L 2e0 -M XX -N 10 -r 1 -e 0 -N 10 -c 1
               (bottom boundary fixed in Y, left boundary fixed in X, right boundary normal load)
-      Case 5: Biaxial tension of a square plate                             --- Validation settings: -L 1eX -l 1eX -M 14 -N 500 -r X -e X
+      Case 5: Biaxial tension of a square plate                             --- Validation settings: -t 5 -L 1eX -l 1eX -M 14 -N 500 -r X -e X
               (bottom boundary fixed in Y, left boundary fixed in X, right and top boundaries normal load)
     */
     else if (testCase==4 || testCase==5)
