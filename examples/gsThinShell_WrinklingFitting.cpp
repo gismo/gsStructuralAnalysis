@@ -156,7 +156,7 @@ int main (int argc, char** argv)
 
     cmd.addReal("P","perturbation", "perturbation factor", perturbation);
 
-    cmd.addReal("f","factor", "factor for bifurcation perturbation", tau);
+    cmd.addReal("F","factor", "factor for bifurcation perturbation", tau);
     cmd.addInt("q","QuasiNewtonInt","Use the Quasi Newton method every INT iterations",quasiNewtonInt);
     cmd.addInt("N", "maxsteps", "Maximum number of steps", step);
 

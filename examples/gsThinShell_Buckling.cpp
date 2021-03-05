@@ -101,7 +101,7 @@ int main (int argc, char** argv)
     cmd.addReal("a","adim", "dimension a", aDim);
     cmd.addReal("b","bdim", "dimension b", bDim);
 
-    cmd.addReal("f","fac", "factor linear problem", fac);
+    cmd.addReal("F","fac", "factor linear problem", fac);
 
     cmd.addReal("s","shift", "eigenvalue shift", shift);
 
@@ -160,6 +160,26 @@ int main (int argc, char** argv)
       // PoissonRatio = 0.3;
 
       mp = RectangularDomain(numHrefL,numHref,numElevateL,numElevate,length,width);
+    }
+    else if (testCase==8)
+    {
+      E_modulus = 1e6;
+      PoissonRatio = 0.3;
+      gsDebug<<"E = "<<E_modulus<<"; nu = "<<PoissonRatio<<"\n";
+
+      aDim = 2;
+      bDim = 1;
+      thickness = 1e-3;
+
+      mp = Rectangle(aDim,bDim);
+
+      for(index_t i = 0; i< numElevate; ++i)
+        mp.patch(0).degreeElevate();    // Elevate the degree
+
+      // h-refine
+      for(index_t i = 0; i< numHref; ++i)
+        mp.patch(0).uniformRefine();
+
     }
     else if (testCase==10)
     {
@@ -417,6 +437,21 @@ int main (int argc, char** argv)
 
         BCs.addCondition(boundary::west, condition_type::neumann, &neuData2 ); // unknown 0 - x
         BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0,false,2 ); // unknown 2 - z
+    }
+    else if (testCase == 8)
+    {
+      BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0 ,false,0);
+      BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0 ,false,1);
+      BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0 ,false,2);
+
+      BCs.addCondition(boundary::north, condition_type::collapsed, 0, 0 ,false,0);
+      BCs.addCondition(boundary::north, condition_type::dirichlet, 0, 0 ,false,1);
+      BCs.addCondition(boundary::north, condition_type::dirichlet, 0, 0 ,false,2);
+
+      Load = 1e0;
+      gsVector<> point(2); point<< 1.0, 1.0 ;
+      gsVector<> load (3); load << Load,0.0, 0.0;
+      pLoads.addLoad(point, load, 0 );
     }
     else if (testCase == 16)
     {
