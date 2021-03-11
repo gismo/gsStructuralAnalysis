@@ -1105,38 +1105,38 @@ void gsArcLengthIterator<T>::computeLambdaDOT()
 template <class T>
 void gsArcLengthIterator<T>::computeSingularPoint(T singTol, index_t kmax, gsVector<T> U, T L, T tolE, T tolB, bool switchBranch)
 {
-	// Controls the singular point test with the first two arguments
-	bool test = this->testSingularPoint(singTol, kmax);
-	// if (m_verbose)
-	// {
-	// 	T value = this->bisectionTerminationFunction(m_U,false);
-	// 	gsInfo<<"\t Singular point details:";
-	// 	gsInfo<<"\tvalue: "<<value<<"\n";
-	// }
+  // Controls the singular point test with the first two arguments
+  bool test = this->testSingularPoint(singTol, kmax);
+  // if (m_verbose)
+  // {
+  //  T value = this->bisectionTerminationFunction(m_U,false);
+  //  gsInfo<<"\t Singular point details:";
+  //  gsInfo<<"\tvalue: "<<value<<"\n";
+  // }
 
-	if (test)
-	{
-		if (m_verbose) {gsInfo<<"\t Bifurcation point\n";}
+  if (test)
+  {
+    if (m_verbose) {gsInfo<<"\t Bifurcation point\n";}
 
-		// First stage: bisection method
-		if (tolB != 0)
-		{
-			this->bisectionSolve(U,L,tolB);
-			this->extendedSystemSolve(m_U, m_L, tolE);
-		}
-		else
-			this->extendedSystemSolve(U, L, tolE);
+    // First stage: bisection method
+    if (tolB != 0)
+    {
+      this->bisectionSolve(U,L,tolB);
+      this->extendedSystemSolve(m_U, m_L, tolE);
+    }
+    else
+      this->extendedSystemSolve(U, L, tolE);
 
-		if (switchBranch)
-			this->switchBranch();
+    if (switchBranch)
+      this->switchBranch();
 
-		// here we assume that the stability of the singular point is
-		// equal to the one of the previous point...
-		// to avoid the algorithm to find a singular point again
-		m_stability = m_stabilityPrev;
-	}
-	else
-		gsInfo<<"\t Limit point\n";
+    // here we assume that the stability of the singular point is
+    // equal to the one of the previous point...
+    // to avoid the algorithm to find a singular point again
+    m_stability = m_stabilityPrev;
+  }
+  else
+    gsInfo<<"\t Limit point\n";
 }
 
 // tolB and switchBranch will be defaulted
@@ -1172,31 +1172,31 @@ void gsArcLengthIterator<T>::computeSingularPoint(T singTol, index_t kmax, T tol
 template <class T>
 bool gsArcLengthIterator<T>::testSingularPoint(T tol, index_t kmax, bool jacobian)
 {
-	// First, approximate the eigenvector of the Jacobian by a few arc length iterations
-	// Initiate m_V and m_DeltaVDET
+  // First, approximate the eigenvector of the Jacobian by a few arc length iterations
+  // Initiate m_V and m_DeltaVDET
 
   if (jacobian)
     this->computeJacobian(m_U);
 
-	m_V = gsVector<T>::Ones(m_numDof);
-	m_V.normalize();
+  m_V = gsVector<T>::Ones(m_numDof);
+  m_V.normalize();
   factorizeMatrix(m_jacMat);
 
   for (index_t k = 0; k<kmax; k++)
-	{
-		m_V = this->solveSystem(m_V);
-		m_V.normalize();
-	}
+  {
+    m_V = this->solveSystem(m_V);
+    m_V.normalize();
+  }
 
-	T dot = (abs(m_V.dot(m_forcing)));
-	if ( (abs(dot) / tol > 1e-1) && (abs(dot) / tol < 10) )
-	{
-		gsInfo<<"Warning: the singular point test is close to its tolerance. dot/tol = "<<abs(dot)/tol;
-	}
-	if (dot < tol)		// Bifurcation point
-		return true;
-	else 				// Limit point
-		return false;
+  T dot = (abs(m_V.dot(m_forcing)));
+  if ( (abs(dot) / tol > 1e-1) && (abs(dot) / tol < 10) )
+  {
+    gsInfo<<"Warning: the singular point test is close to its tolerance. dot/tol = "<<abs(dot)/tol;
+  }
+  if (dot < tol)    // Bifurcation point
+    return true;
+  else        // Limit point
+    return false;
 
   if (m_verbose)
     gsInfo<<"Singular point details -- dot = "<<dot<<"\t tolerance = "<<tol<<"\n";
@@ -1206,37 +1206,33 @@ bool gsArcLengthIterator<T>::testSingularPoint(T tol, index_t kmax, bool jacobia
 template <class T>
 void gsArcLengthIterator<T>::computeStability(gsVector<T> x, bool jacobian)
 {
-	if (jacobian) { this->computeJacobian(x);} // otherwise the jacobian is already computed (on m_U+m_DeltaU)
+  if (jacobian) { this->computeJacobian(x);} // otherwise the jacobian is already computed (on m_U+m_DeltaU)
 
   // gsInfo<<"x = \n"<<x.transpose()<<"\n";
-	if (m_bifurcationMethod == bifmethod::Determinant)
-	{
+  if (m_bifurcationMethod == bifmethod::Determinant)
+  {
     factorizeMatrix(m_jacMat);
     m_stabilityVec = m_LDLTsolver.vectorD();
-	}
-	else if (m_bifurcationMethod == bifmethod::Eigenvalue)
-	{
-    index_t number = 10;
+  }
+  else if (m_bifurcationMethod == bifmethod::Eigenvalue)
+  {
+    index_t number = std::min(static_cast<index_t>(std::floor(m_jacMat.cols()/3.)),10);
     gsSpectraSymSolver<gsSparseMatrix<T>> es(m_jacMat,number,3*number);
     es.init();
     es.compute(Spectra::SortRule::LargestMagn,1000,1e-6);
     GISMO_ASSERT(es.info()==Spectra::CompInfo::Successful,"Spectra did not converge!"); // Reason for not converging can be due to the value of ncv (last input in the class member), which is too low.
     // if (es.info()==Spectra::CompInfo::NotComputed)
     // if (es.info()==Spectra::CompInfo::NotConverging)
-		// if (es.info()==Spectra::CompInfo::NumericalIssue)
+    // if (es.info()==Spectra::CompInfo::NumericalIssue)
     // Eigen::SelfAdjointEigenSolver< gsMatrix<T> > es(m_jacMat);
-		m_stabilityVec = es.eigenvalues();
+    m_stabilityVec = es.eigenvalues();
     m_stabilityVec = m_stabilityVec.reverse();
-	}
-	else
-		gsInfo<<"bifurcation method unknown!";
-
-  // gsInfo<<"jacobian ="<<jacobian<<"\n";
-  // gsInfo<<"m_stabilityVec = \n"<<m_stabilityVec.transpose()<<"\n";
-  // gsInfo<<"m_indicator = \n"<<m_stabilityVec.colwise().minCoeff()[0]<<"\n";
+  }
+  else
+    gsInfo<<"bifurcation method unknown!";
 
   m_negatives = countNegatives(m_stabilityVec);
-	m_indicator = m_stabilityVec.colwise().minCoeff()[0]; // This is required since D does not necessarily have one column.
+  m_indicator = m_stabilityVec.colwise().minCoeff()[0]; // This is required since D does not necessarily have one column.
 }
 
 template <class T>
@@ -1259,204 +1255,204 @@ int gsArcLengthIterator<T>::stability(gsVector<T> x, bool jacobian)
 template <class T>
 bool gsArcLengthIterator<T>::stabilityChange()
 {
-	m_stabilityPrev = m_stability;
-	m_stability = this->stability();
-	if (m_stability*m_stabilityPrev < 0) // then singular point passed
-		return true;
-	else
-		return false;
+  m_stabilityPrev = m_stability;
+  m_stability = this->stability();
+  if (m_stability*m_stabilityPrev < 0) // then singular point passed
+    return true;
+  else
+    return false;
 }
 
 
 template <class T>
 void gsArcLengthIterator<T>::extendedSystemSolve(gsVector<T> U, T L, T tol)
 {
-	m_U = U;
-	m_L = L;
-	gsInfo<<"Extended iterations --- Starting with U.norm = "<<m_U.norm()<<" and L = "<<m_L<<"\n";
+  m_U = U;
+  m_L = L;
+  gsInfo<<"Extended iterations --- Starting with U.norm = "<<m_U.norm()<<" and L = "<<m_L<<"\n";
 
-	this->computeJacobian(m_U); // Jacobian evaluated on m_U
-	m_basisResidualKTPhi = (m_jacMat.toDense()*m_V).norm();
+  this->computeJacobian(m_U); // Jacobian evaluated on m_U
+  m_basisResidualKTPhi = (m_jacMat.toDense()*m_V).norm();
 
-	m_DeltaV = gsVector<T>::Zero(m_numDof);
-	m_DeltaU.setZero();
-	m_DeltaL = 0.0;
+  m_DeltaV = gsVector<T>::Zero(m_numDof);
+  m_DeltaU.setZero();
+  m_DeltaL = 0.0;
 
   m_deltaV = gsVector<T>::Zero(m_numDof);
   m_deltaU.setZero();
   m_deltaL = 0.0;
-	m_converged = false;
-	if (m_verbose)
-	  	initOutputExtended();
-	for (m_numIterations = 1; m_numIterations < m_maxIterations; ++m_numIterations)
-	{
-		extendedSystemIteration();
-		m_DeltaU += m_deltaU;
-		m_DeltaL += m_deltaL;
-		m_DeltaV += m_deltaV;
-		// m_V.normalize();
+  m_converged = false;
+  if (m_verbose)
+      initOutputExtended();
+  for (m_numIterations = 1; m_numIterations < m_maxIterations; ++m_numIterations)
+  {
+    extendedSystemIteration();
+    m_DeltaU += m_deltaU;
+    m_DeltaL += m_deltaL;
+    m_DeltaV += m_deltaV;
+    // m_V.normalize();
 
-		// m_resVec = m_residualFun(m_U, m_L, m_forcing);
-		// m_residue = m_resVec.norm() / ( m_L * m_forcing.norm() );
-		// m_residue = (m_jacobian(m_U).toDense()*m_V).norm() / refError;
+    // m_resVec = m_residualFun(m_U, m_L, m_forcing);
+    // m_residue = m_resVec.norm() / ( m_L * m_forcing.norm() );
+    // m_residue = (m_jacobian(m_U).toDense()*m_V).norm() / refError;
     this->computeJacobian(m_U+m_DeltaU);
-		m_residueKTPhi = (m_jacMat*(m_V+m_DeltaV)).norm(); // /m_basisResidualKTPhi;
-		m_resVec = m_residualFun(m_U+m_DeltaU,m_L+m_DeltaL,m_forcing);
-		m_residueF = m_resVec.norm();
+    m_residueKTPhi = (m_jacMat*(m_V+m_DeltaV)).norm(); // /m_basisResidualKTPhi;
+    m_resVec = m_residualFun(m_U+m_DeltaU,m_L+m_DeltaL,m_forcing);
+    m_residueF = m_resVec.norm();
     // gsInfo<<"residualF extended:"<<m_residueF<<"\n";
-		m_residueU = m_deltaU.norm();
-		m_residueL = m_deltaL;
-	  if (m_verbose)
-		  stepOutputExtended();
+    m_residueU = m_deltaU.norm();
+    m_residueL = m_deltaL;
+    if (m_verbose)
+      stepOutputExtended();
 
-	  // termination criteria
-	  // if ( m_residueF < m_toleranceF && m_residueU < m_toleranceU &&  m_residueKTPhi< tol )
-	  if ( m_residueKTPhi< tol )
-	  {
-  		m_converged = true;
-  		m_U += m_DeltaU;
+    // termination criteria
+    // if ( m_residueF < m_toleranceF && m_residueU < m_toleranceU &&  m_residueKTPhi< tol )
+    if ( m_residueKTPhi< tol )
+    {
+      m_converged = true;
+      m_U += m_DeltaU;
       m_L += m_DeltaL;
       gsInfo<<"Iterations finished. U.norm() = "<<m_U.norm()<<"\t L = "<<m_L<<"\n";
 
-  		break;
-	  }
-	  if ( (m_numIterations == m_maxIterations-1) && (!m_converged) )
-	  {
+      break;
+    }
+    if ( (m_numIterations == m_maxIterations-1) && (!m_converged) )
+    {
       m_U += m_DeltaU;
       m_L += m_DeltaL;
-  		gsInfo<<"Warning: Extended iterations did not converge! \n";
-  		gsInfo<<"Iterations finished. U.norm() = "<<m_U.norm()<<"\t L = "<<m_L<<"\n";
-	  }
+      gsInfo<<"Warning: Extended iterations did not converge! \n";
+      gsInfo<<"Iterations finished. U.norm() = "<<m_U.norm()<<"\t L = "<<m_L<<"\n";
+    }
 
-	}
+  }
 }
 
 // TODO: Optimize memory
 template <class T>
 void gsArcLengthIterator<T>::extendedSystemIteration()
 {
-	m_resVec = m_residualFun(m_U+m_DeltaU, m_L+m_DeltaL, m_forcing);
+  m_resVec = m_residualFun(m_U+m_DeltaU, m_L+m_DeltaL, m_forcing);
   this->computeJacobian(m_U+m_DeltaU);
   // m_jacMat = m_jacobian(m_U);
 
-	m_deltaUt = this->solveSystem(m_forcing); // DeltaV1
-	m_deltaUbar = this->solveSystem(-m_resVec); // DeltaV2
+  m_deltaUt = this->solveSystem(m_forcing); // DeltaV1
+  m_deltaUbar = this->solveSystem(-m_resVec); // DeltaV2
 
-	real_t eps = 1e-8;
-	gsSparseMatrix<T> jacMatEps = m_jacobian((m_U+m_DeltaU) + eps*(m_V+m_DeltaV));
+  real_t eps = 1e-8;
+  gsSparseMatrix<T> jacMatEps = m_jacobian((m_U+m_DeltaU) + eps*(m_V+m_DeltaV));
   note += "J"; // mark jacobian computation
-	gsVector<T> h1 = 1/eps * ( jacMatEps * m_deltaUt ) - 1/eps * m_forcing;
-	gsVector<T> h2 = m_jacMat * (m_V+m_DeltaV) + 1/eps * ( jacMatEps * m_deltaUbar + m_resVec );
+  gsVector<T> h1 = 1/eps * ( jacMatEps * m_deltaUt ) - 1/eps * m_forcing;
+  gsVector<T> h2 = m_jacMat * (m_V+m_DeltaV) + 1/eps * ( jacMatEps * m_deltaUbar + m_resVec );
 
-	factorizeMatrix(m_jacMat);
+  factorizeMatrix(m_jacMat);
 
   m_deltaVt = this->solveSystem(-h1); // DeltaV1
-	m_deltaVbar = this->solveSystem(-h2); // DeltaV2
+  m_deltaVbar = this->solveSystem(-h2); // DeltaV2
 
-	m_deltaL = -( ( (m_V+m_DeltaV)/(m_V+m_DeltaV).norm() ).dot(m_deltaVbar)  + (m_V+m_DeltaV).norm() - 1) / ( (m_V+m_DeltaV)/(m_V+m_DeltaV).norm() ).dot( m_deltaVt );
+  m_deltaL = -( ( (m_V+m_DeltaV)/(m_V+m_DeltaV).norm() ).dot(m_deltaVbar)  + (m_V+m_DeltaV).norm() - 1) / ( (m_V+m_DeltaV)/(m_V+m_DeltaV).norm() ).dot( m_deltaVt );
 
-	m_deltaU = m_deltaL * m_deltaUt + m_deltaUbar;
+  m_deltaU = m_deltaL * m_deltaUt + m_deltaUbar;
   // gsInfo<<"m_DeltaU = \n"<<m_DeltaU<<"\n";
 
-	m_deltaV = m_deltaL * m_deltaVt + m_deltaVbar;
+  m_deltaV = m_deltaL * m_deltaVt + m_deltaVbar;
   // gsInfo<<"m_DeltaV = \n"<<m_DeltaV<<"\n";
 }
 
 template <class T>
 int gsArcLengthIterator<T>::bisectionObjectiveFunction(const gsVector<T> & x, bool jacobian)
 {
-	this->computeStability(x,jacobian);
-	return countNegatives(m_stabilityVec);
+  this->computeStability(x,jacobian);
+  return countNegatives(m_stabilityVec);
 }
 
 template <class T>
 T gsArcLengthIterator<T>::bisectionTerminationFunction(const gsVector<T> & x, bool jacobian)
 {
-	this->computeStability(x,jacobian);
-	// return m_stabilityVec.colwise().minCoeff()[0]; // This is required since D does not necessarily have one column.
-	return m_indicator;
+  this->computeStability(x,jacobian);
+  // return m_stabilityVec.colwise().minCoeff()[0]; // This is required since D does not necessarily have one column.
+  return m_indicator;
 }
 
 template <class T>
 void gsArcLengthIterator<T>::bisectionSolve(gsVector<T> U, T L, T tol)
 {
-	m_U = U;
-	m_L = L;
+  m_U = U;
+  m_L = L;
 
-	gsVector<T> U_old  = U;
-	T L_old = L;
-	// Store original arc length
-	real_t dL = m_arcLength;
-	bool adaptiveBool = m_adaptiveLength;
-	m_adaptiveLength = false;
+  gsVector<T> U_old  = U;
+  T L_old = L;
+  // Store original arc length
+  real_t dL = m_arcLength;
+  bool adaptiveBool = m_adaptiveLength;
+  m_adaptiveLength = false;
 
-	T referenceError = bisectionTerminationFunction(U, true);
+  T referenceError = bisectionTerminationFunction(U, true);
 
   gsInfo<<"Bisection iterations --- Starting with U.norm = "<<m_U.norm()<<" and L = "<<m_L<<"; Reference error = "<<referenceError<<"\n";
 
 
-	int fa, fb;
-	fa = bisectionObjectiveFunction(m_U, false); // jacobian is already computed in the termination function
+  int fa, fb;
+  fa = bisectionObjectiveFunction(m_U, false); // jacobian is already computed in the termination function
 
-	// Store termination function value of initial solution U
-	// T termU =  bisectionTerminationFunction(m_U);
-	for (int k = 1; k < m_maxIterations; ++k)
-	{
-		// Reset start point
-		m_U = U_old;
-		m_L = L_old;
-		m_arcLength = m_arcLength/2.0; // ONLY IF fa==fb??
+  // Store termination function value of initial solution U
+  // T termU =  bisectionTerminationFunction(m_U);
+  for (int k = 1; k < m_maxIterations; ++k)
+  {
+    // Reset start point
+    m_U = U_old;
+    m_L = L_old;
+    m_arcLength = m_arcLength/2.0; // ONLY IF fa==fb??
 
-		// Make an arc length step; m_U and U_old and m_L and L_old are different
-		step();
+    // Make an arc length step; m_U and U_old and m_L and L_old are different
+    step();
 
-		// Objective function on new point
-		fb = bisectionObjectiveFunction(m_U, true); // m_u is the new solution
+    // Objective function on new point
+    fb = bisectionObjectiveFunction(m_U, true); // m_u is the new solution
 
-		if (fa==fb)
-		{
-			U_old = m_U;
-			L_old = m_L;
-			// Objective function on previous point
-			fa = fb;
-		}
+    if (fa==fb)
+    {
+      U_old = m_U;
+      L_old = m_L;
+      // Objective function on previous point
+      fa = fb;
+    }
 
-		// termination criteria
-		// relative error
-		T term = bisectionTerminationFunction(m_U, false); // jacobian on the new point already computed
-		if (m_verbose)
-		{
-			gsInfo<<"\t bisection iteration "<<k<<"\t arc length = "<<m_arcLength<<"\t relative error = "<< abs(term/referenceError)<<"\t"<<"obj.value = "<<term<<"\n";
-		}
-		// if (  m_arcLength < tol && abs(term) < tol )
-		if (  abs(term/referenceError) < tol )
-		{
-		    m_converged = true;
-		    break;
-		}
+    // termination criteria
+    // relative error
+    T term = bisectionTerminationFunction(m_U, false); // jacobian on the new point already computed
+    if (m_verbose)
+    {
+      gsInfo<<"\t bisection iteration "<<k<<"\t arc length = "<<m_arcLength<<"\t relative error = "<< abs(term/referenceError)<<"\t"<<"obj.value = "<<term<<"\n";
+    }
+    // if (  m_arcLength < tol && abs(term) < tol )
+    if (  abs(term/referenceError) < tol )
+    {
+        m_converged = true;
+        break;
+    }
 
-	}
-	// Reset arc length
-	m_arcLength = dL;
-	m_adaptiveLength = adaptiveBool;
+  }
+  // Reset arc length
+  m_arcLength = dL;
+  m_adaptiveLength = adaptiveBool;
 
-	// Compute eigenvector
-	m_V = gsVector<T>::Ones(m_numDof);
-	m_V.normalize();
-	gsVector<T> Vold = gsVector<T>::Zero(m_numDof);
-	for (index_t k = 0; k<5; k++)
-	{
-		factorizeMatrix(m_jacMat);
+  // Compute eigenvector
+  m_V = gsVector<T>::Ones(m_numDof);
+  m_V.normalize();
+  gsVector<T> Vold = gsVector<T>::Zero(m_numDof);
+  for (index_t k = 0; k<5; k++)
+  {
+    factorizeMatrix(m_jacMat);
 
     m_V = this->solveSystem(m_V);
-		m_V.normalize();
-		if (  (m_V-Vold).norm() < m_tolerance )
-		{
-		    m_converged = true;
-		    break;
-		}
-		Vold = m_V;
-	}
+    m_V.normalize();
+    if (  (m_V-Vold).norm() < m_tolerance )
+    {
+        m_converged = true;
+        break;
+    }
+    Vold = m_V;
+  }
 }
 
 template <class T>
