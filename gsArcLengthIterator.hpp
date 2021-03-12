@@ -1,4 +1,4 @@
-/** @file .h
+/** @file gsArcLengthIterator.hpp
 
     @brief Performs the arc length method to solve a nonlinear equation system.
 
@@ -8,8 +8,7 @@
     License, v. 2.0. If a copy of the MPL was not distributed with this
     file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-    Author(s):
-        H.M. Verhelst (2019, TU Delft)
+    Author(s): H.M. Verhelst (2019-..., TU Delft)
 */
 
 #pragma once
@@ -78,7 +77,7 @@ void gsArcLengthIterator<T>::defaultOptions()
 
     m_options.addSwitch ("Verbose","Verbose output",false);
 
-    m_options.addReal("Relaxation","Set Relaxation factor Phi",1.0);
+    m_options.addReal("Relaxation","Set Relaxation factor alpha",1.0);
 
 }
 
