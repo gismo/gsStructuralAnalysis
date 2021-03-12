@@ -8,7 +8,7 @@
     License, v. 2.0. If a copy of the MPL was not distributed with this
     file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-    Author(s): H.M. Verhelst
+    Author(s): H.M. Verhelst (2019-..., TU Delft)
 */
 
 #include <typeinfo>
@@ -33,8 +33,8 @@ protected:
 public:
 
   /// Constructor giving access to the gsShellAssembler object to create a linear system per iteration
-  gsStaticSolver(   gsSparseMatrix<T> &linear,
-                        gsVector<T> &force
+  gsStaticSolver(   const gsSparseMatrix<T> &linear,
+                    const gsVector<T> &force
                     ) :
     m_linear(linear),
     m_force(force)
@@ -43,10 +43,10 @@ public:
    defaultOptions();
   }
 
-  gsStaticSolver(   gsSparseMatrix<T> &linear,
-                        gsVector<T> &force,
-                        std::function < gsSparseMatrix<T> ( gsVector<T> const & ) > &nonlinear,
-                        std::function < gsVector<T> ( gsVector<T> const & ) > &residual
+  gsStaticSolver(   const gsSparseMatrix<T> &linear,
+                    const gsVector<T> &force,
+                    const std::function < gsSparseMatrix<T> ( gsVector<T> const & ) > &nonlinear,
+                    const std::function < gsVector<T> ( gsVector<T> const & ) > &residual
                     ) :
     m_linear(linear),
     m_force(force),
@@ -54,6 +54,7 @@ public:
     m_residual(residual)
   {
     m_NL = true;
+    m_converged = false;
     defaultOptions();
   }
 
@@ -71,10 +72,21 @@ public:
 
     gsVector<T> solution() {return m_solVec ;}
 
+    bool converged() { return m_converged; }
+
+    T indicator() const
+    {
+        _computeStability(m_solVec);
+        return m_indicator;
+    }
+
+protected:
+    void _computeStability(const gsVector<T> x) const;
+
 protected:
 
-    const gsSparseMatrix<T> m_linear;
-    const gsVector<T> m_force;
+    const gsSparseMatrix<T> & m_linear;
+    const gsVector<T> & m_force;
     const std::function < gsSparseMatrix<T> ( gsVector<T> const & ) > m_nonlinear;
     const std::function < gsVector<T> ( gsVector<T> const & ) > m_residual;
 
@@ -89,8 +101,14 @@ protected:
     mutable index_t m_maxIterations;
     index_t m_iterations;
 
+    bool m_converged;
+
+    /// Linear solver employed
     gsSparseSolver<>::CGDiagonal m_solver;
-    // TO DO: Add solver options!
+
+    /// Indicator for bifurcation
+    mutable T m_indicator;
+
 
     /// @brief Specifies (in)compressibility
     struct verbose
