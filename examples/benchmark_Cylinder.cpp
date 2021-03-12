@@ -1,11 +1,10 @@
-/** @file benchmark_Balloon.cpp
+/** @file benchmark_Cylinder.cpp
 
-    @brief Benchmark for the inflated balloon using the Arc-Length Method
+    @brief Benchmark of a cylinder that is squeezed
 
-    Figure 4 from Kiendl et al 2015
+    Figure 6 from Kiendl et al 2015
 
     Kiendl, J., Hsu, M.-C., Wu, M. C. H., & Reali, A. (2015). Isogeometric Kirchhoff–Love shell formulations for general hyperelastic materials. Computer Methods in Applied Mechanics and Engineering, 291, 280–303. https://doi.org/10.1016/J.CMA.2015.03.010
-
 
     This file is part of the G+Smo library.
 
@@ -25,12 +24,20 @@
 
 using namespace gismo;
 
+template <class T>
+void initStepOutput( const std::string name, const gsMatrix<T> & points);
+
+template <class T>
+void writeStepOutput(const gsArcLengthIterator<T> & arcLength, const gsMultiPatch<T> & deformation, const std::string name, const gsMatrix<T> & points, const index_t extreme=-1, const index_t kmax=100);
+
+
 int main (int argc, char** argv)
 {
     // Input options
     int numElevate    = 0;
     int numRefine     = 1;
     bool plot         = false;
+    bool write         = false;
     bool stress       = false;
     bool quasiNewton  = false;
     int quasiNewtonInt= -1;
@@ -75,6 +82,7 @@ int main (int argc, char** argv)
     cmd.addSwitch("quasi", "Use the Quasi Newton method", quasiNewton);
     cmd.addSwitch("plot", "Plot result in ParaView format", plot);
     cmd.addSwitch("stress", "Plot stress in ParaView format", stress);
+    cmd.addSwitch("write", "write to file", write);
 
     try { cmd.getValues(argc,argv); } catch (int rv) { return rv; }
 
@@ -82,24 +90,15 @@ int main (int argc, char** argv)
       Uniaxial tension of a square plate                            --- Validation settings: -L 1eX -l 1eX -M 14 -N 500 -r X -e X
       (bottom boundary fixed in Y, left boundary fixed in X, right boundary normal load)
     */
-    real_t mu = 4.225e5;
-    real_t thickness = 0.1;
-    real_t PoissonRatio;
-    if (!Compressibility)
-    {
-      if (material==0)
-        PoissonRatio = 0.499;
-      else
-        PoissonRatio = 0.5;
-    }
-    else
-      PoissonRatio = 0.45;
-    real_t E_modulus = 2*mu*(1+PoissonRatio);
+    real_t thickness = 2e-3;
+    real_t PoissonRatio = 0.4;
+    real_t E_modulus = 168e9; // GPa
     real_t Density    = 1e0;
-    real_t Ratio      = 7.0;
+    real_t Ratio      = 4.0;
+    real_t mu = E_modulus / (2 * (1 + PoissonRatio));
 
     gsMultiPatch<> mp,mp_def;
-    gsReadFile<>("surface/eighth_sphere.xml", mp);
+    gsReadFile<>("surface/half_cylinder.xml", mp);
 
     // p-refine
     for(index_t i = 0; i< numElevate; ++i)
@@ -109,37 +108,39 @@ int main (int argc, char** argv)
     for(index_t i = 0; i< numRefine; ++i)
       mp.patch(0).uniformRefine();
 
-    gsInfo<<"mu = "<<E_modulus / (2 * (1 + PoissonRatio))<<"\n";
-
     gsMultiBasis<> dbasis(mp);
     gsInfo<<"Basis (patch 0): "<< mp.patch(0).basis() << "\n";
     mp_def = mp;
 
+    real_t Load = -1.0;
+    gsVector<> neu(3);
+    neu << 0, 0, Load;
+    gsConstantFunction<> neuData(neu,3);
+
     // Boundary conditions
     gsBoundaryConditions<> BCs;
 
-    BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 0 ); // unknown 2 - z
-    BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 2 - z
+    BCs.addCondition(boundary::north, condition_type::neumann, &neuData );
+    BCs.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 1 );
+    BCs.addCondition(boundary::north, condition_type::clamped, 0, 0, false, 2 );
 
-    BCs.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z
-
-
-    // Symmetry in x-direction:
     BCs.addCondition(boundary::east, condition_type::dirichlet, 0, 0, false, 0 );
-    BCs.addCondition(boundary::east, condition_type::clamped, 0, 0, false, 1 );
     BCs.addCondition(boundary::east, condition_type::clamped, 0, 0, false, 2 );
 
-    // Symmetry in y-direction:
-    BCs.addCondition(boundary::west, condition_type::clamped, 0, 0, false, 0 );
-    BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 1 );
-    BCs.addCondition(boundary::west, condition_type::clamped, 0, 0, false, 2 );
+    BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 0 );
+    BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 1 );
+    BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 2 );
+    BCs.addCondition(boundary::south, condition_type::clamped, 0, 0, false, 2 );
 
-    // Pressure
-    real_t pressure = 1e3;
+    gsMatrix<> writePoints(2,3);
+    writePoints.col(0)<<0.0,1.0;
+    writePoints.col(1)<<0.5,1.0;
+    writePoints.col(2)<<1.0,1.0;
 
     std::string dirname = "ArcLengthResults";
-    dirname = dirname + "/Balloon";
+    dirname = dirname + "/" + "Cylinder-r=" + std::to_string(numRefine) + "-e" + std::to_string(numElevate) + "-M" + std::to_string(material) + "_solution";
     std::string output =  "solution";
+    wn = output + "data.txt";
 
     std::string commands = "mkdir -p " + dirname;
     const char *command = commands.c_str();
@@ -148,11 +149,11 @@ int main (int argc, char** argv)
     // plot geometry
     if (plot)
       gsWriteParaview(mp,dirname + "/" + "mp",1000,true);
-
+    if (write)
+      initStepOutput(dirname + "/" + wn, writePoints);
 
     // Linear isotropic material model
     gsFunctionExpr<> force("0","0","0",3);
-    gsConstantFunction<> pressFun(pressure,3);
     gsConstantFunction<> t(thickness,3);
     gsConstantFunction<> E(E_modulus,3);
     gsConstantFunction<> nu(PoissonRatio,3);
@@ -259,11 +260,9 @@ int main (int argc, char** argv)
         materialMatrix = getMaterialMatrix<3,real_t>(mp,mp_def,t,parameters,rho,options);
     }
 
+    // Construct assembler object
     gsThinShellAssemblerBase<real_t>* assembler;
     assembler = new gsThinShellAssembler<3, real_t, true >(mp,dbasis,BCs,force,materialMatrix);
-
-    // Construct assembler object
-    assembler->setPressure(pressFun);
 
     gsStopwatch stopwatch;
     real_t time = 0.0;
@@ -298,8 +297,8 @@ int main (int argc, char** argv)
 
     gsArcLengthIterator<real_t> arcLength(Jacobian, ALResidual, Force);
 
-    arcLength.options().setInt("Solver",1); // CG solver
-    arcLength.options().setInt("BifurcationMethod",1); // 0: determinant, 1: eigenvalue
+    arcLength.options().setInt("Solver",0); // CG solver
+    arcLength.options().setInt("BifurcationMethod",0); // 0: determinant, 1: eigenvalue
     arcLength.options().setInt("Method",method);
     arcLength.options().setReal("Length",dL);
     arcLength.options().setInt("AngleMethod",0); // 0: step, 1: iteration
@@ -340,8 +339,6 @@ int main (int argc, char** argv)
     real_t indicator = 0.0;
     arcLength.setIndicator(indicator); // RESET INDICATOR
 
-    gsMatrix<> lambdas(3,step);
-    gsMatrix<> pressures(2,step);
     for (index_t k=0; k<step; k++)
     {
       gsInfo<<"Load step "<< k<<"\n";
@@ -358,9 +355,6 @@ int main (int argc, char** argv)
 
       gsMatrix<> pts(2,1);
       pts<<0.0,1.0;
-
-      lambdas.col(k) = assembler->computePrincipalStretches(pts,mp_def,0);
-      pressures.col(k) << pressure*arcLength.solutionL(), pressure*arcLength.solutionL() * assembler->getArea(mp) / assembler->getArea(mp_def);
 
       deformation = mp_def;
       deformation.patch(0).coefs() -= mp.patch(0).coefs();// assuming 1 patch here
@@ -415,10 +409,10 @@ int main (int argc, char** argv)
         }
 
       }
-    }
 
-    gsInfo<<"Lambdas:\n"<<lambdas<<"\n";
-    gsInfo<<"Pressures:\n"<<pressures<<"\n";
+      if (write)
+        writeStepOutput(arcLength,deformation, dirname + "/" + wn, writePoints,1, 201);
+    }
 
     if (plot)
     {
@@ -429,4 +423,91 @@ int main (int argc, char** argv)
     }
 
   return result;
+}
+
+
+template <class T>
+void initStepOutput(const std::string name, const gsMatrix<T> & points)
+{
+  std::ofstream file;
+  file.open(name,std::ofstream::out);
+  file  << std::setprecision(20)
+        << "Deformation norm" << ",";
+        for (index_t k=0; k!=points.cols(); k++)
+        {
+          file<< "point "<<k<<" - x" << ","
+              << "point "<<k<<" - y" << ","
+              << "point "<<k<<" - z" << ",";
+        }
+
+  file  << "Lambda" << ","
+        << "Indicator"
+        << "\n";
+  file.close();
+
+  gsInfo<<"Step results will be written in file: "<<name<<"\n";
+}
+
+template <class T>
+void writeStepOutput(const gsArcLengthIterator<T> & arcLength, const gsMultiPatch<T> & deformation, const std::string name, const gsMatrix<T> & points, const index_t extreme, const index_t kmax) // extreme: the column of point indices to compute the extreme over (default -1)
+{
+  gsMatrix<T> P(2,1), Q(2,1);
+  gsMatrix<T> out(3,points.cols());
+  gsMatrix<T> tmp;
+
+  for (index_t p=0; p!=points.cols(); p++)
+  {
+    P<<points.col(p);
+    deformation.patch(0).eval_into(P,tmp);
+    out.col(p) = tmp;
+  }
+
+  std::ofstream file;
+  file.open(name,std::ofstream::out | std::ofstream::app);
+  if (extreme==-1)
+  {
+    file  << std::setprecision(6)
+          << arcLength.solutionU().norm() << ",";
+          for (index_t p=0; p!=points.cols(); p++)
+          {
+            file<< out(0,p) << ","
+                << out(1,p) << ","
+                << out(2,p) << ",";
+          }
+
+    file  << arcLength.solutionL() << ","
+          << arcLength.indicator() << ","
+          << "\n";
+  }
+  else if (extreme==0 || extreme==1)
+  {
+    gsMatrix<T> out2(kmax,points.cols()); // evaluation points in the rows, output (per coordinate) in columns
+    for (int p = 0; p != points.cols(); p ++)
+    {
+      Q.at(1-extreme) = points(1-extreme,p);
+      for (int k = 0; k != kmax; k ++)
+      {
+        Q.at(extreme) = 1.0*k/(kmax-1);
+        deformation.patch(0).eval_into(Q,tmp);
+        out2(k,p) = tmp.at(2); // z coordinate
+      }
+    }
+
+    file  << std::setprecision(6)
+          << arcLength.solutionU().norm() << ",";
+          for (index_t p=0; p!=points.cols(); p++)
+          {
+            file<< out(0,p) << ","
+                << out(1,p) << ","
+                << std::max(abs(out2.col(p).maxCoeff()),abs(out2.col(p).minCoeff())) << ",";
+          }
+
+    file  << arcLength.solutionL() << ","
+          << arcLength.indicator() << ","
+          << "\n";
+  }
+  else
+    GISMO_ERROR("Extremes setting unknown");
+
+  file.close();
 }

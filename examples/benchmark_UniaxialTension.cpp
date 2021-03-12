@@ -1,7 +1,9 @@
+/** @file benchmark_UniaxialTension.cpp
 
-/** @file gsThinShell_BucklingArcLength.cpp
+    @brief Uniaxial Tension Test benchmark
 
-    @brief Code for the arc-length method of a shell based on loads
+    e.g. Section 8.1. from Kiendl et al 2015
+    Kiendl, J., Hsu, M.-C., Wu, M. C. H., & Reali, A. (2015). Isogeometric Kirchhoff–Love shell formulations for general hyperelastic materials. Computer Methods in Applied Mechanics and Engineering, 291, 280–303. https://doi.org/10.1016/J.CMA.2015.03.010
 
     This file is part of the G+Smo library.
 
@@ -9,7 +11,7 @@
     License, v. 2.0. If a copy of the MPL was not distributed with this
     file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-    Author(s): H.M. Verhelst
+    Author(s): H.M. Verhelst (2019-..., TU Delft)
 */
 
 #include <gismo.h>
@@ -82,7 +84,12 @@ int main (int argc, char** argv)
     real_t thickness = 0.001;
     real_t PoissonRatio;
     if (!Compressibility)
-      PoissonRatio = 0.5;
+    {
+      if (material==0)
+        PoissonRatio = 0.499;
+      else
+        PoissonRatio = 0.5;
+    }
     else
       PoissonRatio = 0.45;
     real_t E_modulus = 2*mu*(1+PoissonRatio);
@@ -136,10 +143,10 @@ int main (int argc, char** argv)
 
     // Linear isotropic material model
     gsFunctionExpr<> force("0","0",2);
-    gsFunctionExpr<> t(std::to_string(thickness),2);
-    gsFunctionExpr<> E(std::to_string(E_modulus),2);
-    gsFunctionExpr<> nu(std::to_string(PoissonRatio),2);
-    gsFunctionExpr<> rho(std::to_string(Density),2);
+    gsConstantFunction<> t(thickness,2);
+    gsConstantFunction<> E(E_modulus,2);
+    gsConstantFunction<> nu(PoissonRatio,2);
+    gsConstantFunction<> rho(Density,2);
     gsConstantFunction<> ratio(Ratio,2);
 
     gsConstantFunction<> alpha1(1.3,2);

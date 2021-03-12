@@ -1,7 +1,6 @@
+/** @file benchmark_FrustrumALM.cpp
 
-/** @file gsThinShell_BucklingArcLength.cpp
-
-    @brief Code for the arc-length method of a shell based on loads
+    @brief Benchmark for the collapsing frustrum with the Arc-Length Method
 
     This file is part of the G+Smo library.
 
@@ -9,7 +8,7 @@
     License, v. 2.0. If a copy of the MPL was not distributed with this
     file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-    Author(s): H.M. Verhelst
+    Author(s): H.M. Verhelst (2019-..., TU Delft)
 */
 
 #include <gismo.h>
@@ -53,7 +52,7 @@ int main (int argc, char** argv)
     int result        = 0;
     index_t maxit     = 50;
     // Arc length method options
-    real_t dL         = 5e-2; // General arc length
+    real_t dL         = -1; // General arc length
     real_t tol        = 1e-6;
     real_t tolU       = 1e-6;
     real_t tolF       = 1e-3;
@@ -62,7 +61,7 @@ int main (int argc, char** argv)
 
     gsCmdLine cmd("Arc-length analysis for thin shells.");
 
-    cmd.addInt("t", "testcase", "Test case: 0: constrained; 1: free", testCase);
+    cmd.addInt("t", "testcase", "Test case: 0: free; 1: restrained", testCase);
     cmd.addInt("r","hRefine", "Number of dyadic h-refinement (bisection) steps to perform before solving", numRefine);
     cmd.addInt("e","degreeElevation", "Number of degree elevation steps to perform on the Geometry's basis before solving", numElevate);
     cmd.addInt( "M", "Material", "Material law",  material );
@@ -86,7 +85,11 @@ int main (int argc, char** argv)
 
     real_t mu = 4.225;
     real_t thickness = 0.1;
-    real_t PoissonRatio = 0.5;
+    real_t PoissonRatio;
+    if (material==0)
+      PoissonRatio = 0.499;
+    else
+      PoissonRatio = 0.5;
     real_t E_modulus = 2*mu*(1+PoissonRatio);
     real_t Density    = 1e0;
     real_t Ratio      = 7.0;
@@ -116,8 +119,8 @@ int main (int argc, char** argv)
     writePoints.col(2)<<1.0,1.0;
 
     /*
-      Case 0: Frustrum with constrained top boundary                          --- Validation settings: -L 1eX -l 1eX -M 14 -N 500 -r X -e X
-      Case 1: Frustrum with unconstrained top boundary                        --- Validation settings: -L 1eX -l 1eX -M 14 -N 500 -r X -e X
+      Case 0: Frustrum with constrained top boundary        (Complete cycle with -N 1200)
+      Case 1: Frustrum with unconstrained top boundary      (Complete cycle with -N 850)
     */
     if (testCase == 0)
     {
@@ -141,7 +144,7 @@ int main (int argc, char** argv)
       BCs.addCondition(boundary::west, condition_type::clamped, 0, 0, false, 2 );
 
       dirname = dirname + "/" + "Frustrum_-r=" + std::to_string(numRefine) + "-e" + std::to_string(numElevate) + "-M" + std::to_string(material) + "_solution";
-      wn = output + "data.txt";
+      if (dL == -1) { dL = 5e-2; }
     }
     else if (testCase == 1)
     {
@@ -163,6 +166,7 @@ int main (int argc, char** argv)
       BCs.addCondition(boundary::west, condition_type::clamped, 0, 0, false, 2 );
 
       dirname = dirname + "/" + "Frustrum2_-r=" + std::to_string(numRefine) + "-e" + std::to_string(numElevate) + "-M" + std::to_string(material) + "_solution";
+      if (dL == -1) { dL = 4e-2; }
     }
     else
       GISMO_ERROR("Test case" << testCase << " does not exist!");
@@ -182,10 +186,10 @@ int main (int argc, char** argv)
 
     // Linear isotropic material model
     gsFunctionExpr<> force("0","0","0",3);
-    gsFunctionExpr<> t(std::to_string(thickness),3);
-    gsFunctionExpr<> E(std::to_string(E_modulus),3);
-    gsFunctionExpr<> nu(std::to_string(PoissonRatio),3);
-    gsFunctionExpr<> rho(std::to_string(Density),3);
+    gsConstantFunction<> t(thickness,3);
+    gsConstantFunction<> E(E_modulus,3);
+    gsConstantFunction<> nu(PoissonRatio,3);
+    gsConstantFunction<> rho(Density,3);
     gsConstantFunction<> ratio(Ratio,3);
 
     gsConstantFunction<> alpha1(1.3,3);
@@ -332,6 +336,7 @@ int main (int argc, char** argv)
     arcLength.options().setInt("AngleMethod",0); // 0: step, 1: iteration
     arcLength.options().setSwitch("AdaptiveLength",adaptive);
     arcLength.options().setInt("AdaptiveIterations",5);
+    arcLength.options().setReal("Scaling",0.0);
     arcLength.options().setReal("Tol",tol);
     arcLength.options().setReal("TolU",tolU);
     arcLength.options().setReal("TolF",tolF);
@@ -357,11 +362,6 @@ int main (int argc, char** argv)
     gsParaviewCollection Smembrane_p(dirname + "/" + "membrane_p");
     gsMultiPatch<> deformation = mp;
 
-    // Make objects for previous solutions
-    real_t Lold = 0;
-    gsMatrix<> Uold = Force;
-    Uold.setZero();
-
     gsMatrix<> solVector;
     real_t indicator = 0.0;
     arcLength.setIndicator(indicator); // RESET INDICATOR
@@ -375,10 +375,7 @@ int main (int argc, char** argv)
         GISMO_ERROR("Loop terminated, arc length method did not converge.\n");
 
       indicator = arcLength.indicator();
-
       solVector = arcLength.solutionU();
-      Uold = solVector;
-      Lold = arcLength.solutionL();
 
       assembler->constructSolution(solVector,mp_def);
 
