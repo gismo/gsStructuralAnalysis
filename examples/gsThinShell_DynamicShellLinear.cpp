@@ -8,12 +8,13 @@
     License, v. 2.0. If a copy of the MPL was not distributed with this
     file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-    Author(s): H.M. Verhelst
+    Author(s): H.M. Verhelst (2019-..., TU Delft)
 */
 
 #include <gismo.h>
 
 #include <gsKLShell/gsThinShellAssembler.h>
+#include <gsKLShell/getMaterialMatrix.h>
 
 #include <gsStructuralAnalysis/gsTimeIntegrator.h>
 
@@ -180,15 +181,24 @@ int main (int argc, char** argv)
     std::vector<gsFunction<>*> parameters(2);
     parameters[0] = &E;
     parameters[1] = &nu;
-    gsMaterialMatrix materialMat(mp,mp_def,thick,parameters,rho);
+
+    gsMaterialMatrixBase<real_t>* materialMatrix;
+
+    gsOptionList options;
+    options.addInt("Material","Material model: (0): SvK | (1): NH | (2): NH_ext | (3): MR | (4): Ogden",0);
+    options.addInt("Implementation","Implementation: (0): Composites | (1): Analytical | (2): Generalized | (3): Spectral",0);
+    materialMatrix = getMaterialMatrix<3,real_t>(mp,mp_def,t,parameters,rho,options);
+
+    gsThinShellAssemblerBase<real_t>* assembler;
+    assembler = new gsThinShellAssembler<3, real_t, true >(mp,dbasis,BCs,force,materialMatrix);
 
     // Construct assembler object for dynamic computations
     gsThinShellAssembler assembler(mp,dbasis,BCs,force,materialMat);
-    assembler.setOptions(opts);
-    assembler.setPointLoads(pLoads);
+    assembler->setOptions(opts);
+    assembler->setPointLoads(pLoads);
 
-    assembler.assemble();
-    size_t N = assembler.numDofs();
+    assembler->assemble();
+    size_t N = assembler->numDofs();
     gsMatrix<> uOld(N,1);
     gsMatrix<> vOld(N,1);
     gsMatrix<> aOld(N,1);
@@ -215,17 +225,17 @@ gsParaviewCollection collection(dirname + "/solution");
 std::function<gsMatrix<real_t> (real_t) > Forcing;
 Forcing = [&assembler](real_t time)
 {
-  assembler.assemble();
-  gsMatrix<real_t> r = assembler.rhs();
+  assembler->assemble();
+  gsMatrix<real_t> r = assembler->rhs();
   return r;
 };
 
 // Compute mass matrix (since it is constant over time)
-assembler.assembleMass();
-M = assembler.matrix();
+assembler->assembleMass();
+M = assembler->matrix();
 // pre-assemble system
-assembler.assemble();
-K = assembler.matrix();
+assembler->assemble();
+K = assembler->matrix();
 
 // // set damping Matrix (same dimensions as M)
 // C.setZero(M.rows(),M.cols());
@@ -257,7 +267,7 @@ for (index_t i=0; i<steps; i++)
   timeIntegrator.constructSolution();
   gsMatrix<> displacements = timeIntegrator.displacements();
 
-  assembler.constructSolution(displacements,solution);
+  assembler->constructSolution(displacements,solution);
 
   solution.patch(0).coefs() -= mp.patch(0).coefs();// assuming 1 patch here
   gsField<> solField(mp,solution);
