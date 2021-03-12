@@ -1,6 +1,8 @@
 /** @file gsTimeIntegrator.h
 
-    @brief
+    @brief Provides temporal solvers for structural analysis problems
+
+
     TO DO:
     * [V] Fix Implicit Euler Nonlinear
     * [ ] Fix Implicit Euler BlockOp
@@ -14,7 +16,7 @@
     License, v. 2.0. If a copy of the MPL was not distributed with this
     file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-    Author(s): A. Goyal, A. Mantzaflaris
+    Author(s): H.M. Verhelst (2019-..., TU Delft)
 */
 
 
@@ -26,6 +28,15 @@
 
 namespace gismo
 {
+
+// enum class TMethod : short_t
+// {
+//     ExplEuler = 0;
+//     ImplEuler = 1,
+//     Newmark = 2,
+//     Bathe = 3
+// }
+
 
 /**
     @brief Performs Newton iterations to solve a nonlinear equation system.
