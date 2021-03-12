@@ -8,13 +8,13 @@
     License, v. 2.0. If a copy of the MPL was not distributed with this
     file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-    Author(s): H.M. Verhelst
+    Author(s): H.M. Verhelst (2019-..., TU Delft)
 */
 
 #include <gismo.h>
 
 #include <gsKLShell/gsThinShellAssembler.h>
-
+#include <gsKLShell/getMaterialMatrix.h>
 #include <gsStructuralAnalysis/gsBucklingSolver.h>
 
 using namespace gismo;
@@ -69,6 +69,9 @@ int main (int argc, char** argv)
     index_t Compressibility = 0;
     index_t material = 0;
     real_t Ratio = 7.0;
+    bool composite = false;
+    index_t impl = 1; // 1= analytical, 2= generalized, 3= spectral
+
     real_t fac = 1;
 
     real_t shift = 0.0;
@@ -90,8 +93,11 @@ int main (int argc, char** argv)
     cmd.addInt("e","degreeElevation", "Number of degree elevation steps to perform on the Geometry's basis before solving", numElevate);
     cmd.addInt("R","hRefine2", "Number of dyadic h-refinement (bisection) steps to perform before solving (secondary direction)", numHrefL);
     cmd.addInt("E","degreeElevation2", "Number of degree elevation steps to perform on the Geometry's basis before solving (secondary direction)", numElevateL);
+
     cmd.addInt( "M", "Material", "Material law",  material );
     cmd.addInt( "c", "Compressibility", "1: compressible, 0: incompressible",  Compressibility );
+    cmd.addInt( "I", "Implementation", "Implementation: 1= analytical, 2= generalized, 3= spectral",  impl );
+    cmd.addSwitch("composite", "Composite material", composite);
 
     cmd.addInt("m", "nmode",
                "Mode shape number, starting from 0",
@@ -502,50 +508,122 @@ int main (int argc, char** argv)
     gsConstantFunction<> alpha3(-2.0,3);
     gsConstantFunction<> mu3(-0.1e5/4.225e5*mu,3);
 
-    // gsMaterialMatrix materialMatrixNonlinear(mp,mp_def,t,E,nu,rho);
-    std::vector<gsFunction<>*> parameters(3);
-    parameters[0] = &E;
-    parameters[1] = &nu;
-    parameters[2] = &ratio;
-    gsMaterialMatrix materialMatrixNonlinear(mp,mp_def,t,parameters,rho);
-
-    std::vector<gsFunction<>*> parameters2(8);
-    if (material==14)
+    real_t pi = math::atan(1)*4;
+    index_t kmax = 1;
+    gsVector<> E11(kmax), E22(kmax), G12(kmax), nu12(kmax), nu21(kmax), thick(kmax), phi(kmax);
+    E11.setZero(); E22.setZero(); G12.setZero(); nu12.setZero(); nu21.setZero(); thick.setZero(); phi.setZero();
+    for (index_t k=0; k != kmax; ++k)
     {
-        parameters2[0] = &E;
-        parameters2[1] = &nu;
-        parameters2[2] = &mu1;
-        parameters2[3] = &alpha1;
-
-        parameters2[4] = &mu2;
-        parameters2[5] = &alpha2;
-
-        parameters2[6] = &mu3;
-        parameters2[7] = &alpha3;
-        materialMatrixNonlinear.setParameters(parameters2);
+        E11.at(k) = E22.at(k) = E_modulus;
+        nu12.at(k) = nu21.at(k) = PoissonRatio;
+        G12.at(k) = 0.5 * E_modulus / (1+PoissonRatio);
+        thick.at(k) = thickness/kmax;
+        phi.at(kmax) = k / kmax * pi/2.0;
     }
 
-    materialMatrixNonlinear.options().setInt("MaterialLaw",material);
-    materialMatrixNonlinear.options().setInt("Compressibility",Compressibility);
+    gsConstantFunction<> E11fun(E11,3);
+    gsConstantFunction<> E22fun(E22,3);
+    gsConstantFunction<> G12fun(G12,3);
+    gsConstantFunction<> nu12fun(nu12,3);
+    gsConstantFunction<> nu21fun(nu21,3);
+    gsConstantFunction<> thickfun(thick,3);
+    gsConstantFunction<> phifun(phi,3);
 
-    gsThinShellAssembler assembler(mp,dbasis,BCs,surfForce,materialMatrixNonlinear);
-    assembler.setOptions(opts);
-    assembler.setPointLoads(pLoads);
+    std::vector<gsFunction<>*> parameters;
+    if (material==0) // SvK & Composites
+    {
+      if (composite)
+      {
+        parameters.resize(6);
+        parameters[0] = &E11fun;
+        parameters[1] = &E22fun;
+        parameters[2] = &G12fun;
+        parameters[3] = &nu12fun;
+        parameters[4] = &nu21fun;
+        parameters[5] = &phifun;
+      }
+      else
+      {
+        parameters.resize(2);
+        parameters[0] = &E;
+        parameters[1] = &nu;
+      }
+    }
+    else if (material==1 || material==2) // NH & NH_ext
+    {
+      parameters.resize(2);
+      parameters[0] = &E;
+      parameters[1] = &nu;
+    }
+    else if (material==3) // MR
+    {
+      parameters.resize(3);
+      parameters[0] = &E;
+      parameters[1] = &nu;
+      parameters[2] = &ratio;
+    }
+    else if (material==4) // OG
+    {
+      parameters.resize(8);
+      parameters[0] = &E;
+      parameters[1] = &nu;
+      parameters[2] = &mu1;
+      parameters[3] = &alpha1;
+      parameters[4] = &mu2;
+      parameters[5] = &alpha2;
+      parameters[6] = &mu3;
+      parameters[7] = &alpha3;
+    }
+
+    gsMaterialMatrixBase<real_t>* materialMatrix;
+
+    gsOptionList options;
+    if      (material==0 && impl==1)
+    {
+        if (composite)
+        {
+            options.addInt("Material","Material model: (0): SvK | (1): NH | (2): NH_ext | (3): MR | (4): Ogden",0);
+            options.addInt("Implementation","Implementation: (0): Composites | (1): Analytical | (2): Generalized | (3): Spectral",0);
+            materialMatrix = getMaterialMatrix<3,real_t>(mp,mp_def,t,parameters,rho,options);
+        }
+        else
+        {
+            parameters.resize(2);
+            options.addInt("Material","Material model: (0): SvK | (1): NH | (2): NH_ext | (3): MR | (4): Ogden",0);
+            options.addInt("Implementation","Implementation: (0): Composites | (1): Analytical | (2): Generalized | (3): Spectral",1);
+            materialMatrix = getMaterialMatrix<3,real_t>(mp,mp_def,t,parameters,rho,options);
+        }
+    }
+    else
+    {
+        options.addInt("Material","Material model: (0): SvK | (1): NH | (2): NH_ext | (3): MR | (4): Ogden",material);
+        options.addSwitch("Compressibility","Compressibility: (false): Imcompressible | (true): Compressible",Compressibility);
+        options.addInt("Implementation","Implementation: (0): Composites | (1): Analytical | (2): Generalized | (3): Spectral",impl);
+        materialMatrix = getMaterialMatrix<3,real_t>(mp,mp_def,t,parameters,rho,options);
+    }
+
+    gsThinShellAssemblerBase<real_t>* assembler;
+    assembler = new gsThinShellAssembler<3, real_t, true >(mp,dbasis,BCs,force,materialMatrix);
+
+
+    // Construct assembler object
+    assembler->setOptions(opts);
+    assembler->setPointLoads(pLoads);
 
     // Initialise solution object
     gsMultiPatch<> solution = mp;
 
-    assembler.assemble();
-    gsSparseMatrix<> K_L =  assembler.matrix();
-    gsVector<> rhs = assembler.rhs();
+    assembler->assemble();
+    gsSparseMatrix<> K_L =  assembler->matrix();
+    gsVector<> rhs = assembler->rhs();
 
 
     typedef std::function<gsSparseMatrix<real_t> (gsVector<real_t> const &)>    Jacobian_t;
     Jacobian_t K_NL = [&assembler,&mp_def](gsVector<real_t> const &x)
     {
-      assembler.constructSolution(x,mp_def);
-      assembler.assemble(mp_def);
-      gsSparseMatrix<real_t> m = assembler.matrix();
+      assembler->constructSolution(x,mp_def);
+      assembler->assemble(mp_def);
+      gsSparseMatrix<real_t> m = assembler->matrix();
       return m;
     };
 
@@ -590,8 +668,8 @@ int main (int argc, char** argv)
         {
 
           // Compute solution based on eigenmode with number 'mode'
-          modeShape = vectors.col(m);//solver.solve( assembler.rhs() );
-          assembler.constructSolution(modeShape, solution);
+          modeShape = vectors.col(m);//solver.solve( assembler->rhs() );
+          assembler->constructSolution(modeShape, solution);
 
           // compute the deformation spline
           deformation = solution;

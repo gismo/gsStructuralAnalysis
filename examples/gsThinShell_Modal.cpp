@@ -1,6 +1,6 @@
-/** @file gsThinShell_Buckling.cpp
+/** @file gsThinShell_Modal.cpp
 
-    @brief Example to compute eigenvalues and eigenmodes of a buckled shell
+    @brief Example to compute eigenvalues and eigenmodes of a vibrating shell
 
     This file is part of the G+Smo library.
 
@@ -8,12 +8,13 @@
     License, v. 2.0. If a copy of the MPL was not distributed with this
     file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-    Author(s): H.M. Verhelst
+    Author(s): H.M. Verhelst (2019-..., TU Delft)
 */
 
 #include <gismo.h>
 
 #include <gsKLShell/gsThinShellAssembler.h>
+#include <gsKLShell/getMaterialMatrix.h>
 
 #include <gsStructuralAnalysis/gsModalSolver.h>
 
@@ -402,19 +403,26 @@ int main (int argc, char** argv)
     std::vector<gsFunction<>*> parameters(2);
     parameters[0] = &E;
     parameters[1] = &nu;
-    gsMaterialMatrix materialMat(mp,mp_def,t,parameters,rho);
 
+    gsMaterialMatrixBase<real_t>* materialMatrix;
 
-    gsThinShellAssembler assembler(mp,dbasis,BCs,surfForce,materialMat);
-    assembler.setPointLoads(pLoads);
-    assembler.setOptions(opts);
+    gsOptionList options;
+    options.addInt("Material","Material model: (0): SvK | (1): NH | (2): NH_ext | (3): MR | (4): Ogden",0);
+    options.addInt("Implementation","Implementation: (0): Composites | (1): Analytical | (2): Generalized | (3): Spectral",1);
+    materialMatrix = getMaterialMatrix<3,real_t>(mp,mp_def,t,parameters,rho,options);
+
+    gsThinShellAssemblerBase<real_t>* assembler;
+    assembler = new gsThinShellAssembler<3, real_t, true >(mp,dbasis,BCs,force,materialMatrix);
+
+    assembler->setPointLoads(pLoads);
+    assembler->setOptions(opts);
     // Initialise solution object
     gsMultiPatch<> solution = mp;
 
-    assembler.assemble();
-    gsSparseMatrix<> K =  assembler.matrix();
-    assembler.assembleMass();
-    gsSparseMatrix<> M =  assembler.matrix();
+    assembler->assemble();
+    gsSparseMatrix<> K =  assembler->matrix();
+    assembler->assembleMass();
+    gsSparseMatrix<> M =  assembler->matrix();
 
     gsModalSolver<real_t> modal(K,M);
     modal.verbose();
@@ -452,8 +460,8 @@ int main (int argc, char** argv)
         {
 
           // Compute solution based on eigenmode with number 'mode'
-          modeShape = modal.vector(m);//solver.solve( assembler.rhs() );
-          assembler.constructSolution(modeShape, solution);
+          modeShape = modal.vector(m);//solver.solve( assembler->rhs() );
+          assembler->constructSolution(modeShape, solution);
 
           // compute the deformation spline
           deformation = solution;
