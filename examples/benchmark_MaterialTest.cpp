@@ -28,25 +28,6 @@ template <class T>
 gsMultiPatch<T> Rectangle(T L, T B);
 
 template <class T>
-void addClamping(gsMultiPatch<T> &mp, index_t patch, std::vector<boxSide> sides, T offset);
-
-void writeToCSVfile(std::string name, gsMatrix<> matrix)
-{
-    std::ofstream file(name.c_str());
-    for(int  i = 0; i < matrix.rows(); i++){
-        for(int j = 0; j < matrix.cols(); j++){
-           std::string str = std::to_string(matrix(i,j));
-           if(j+1 == matrix.cols()){
-               file<<str;
-           }else{
-               file<<str<<',';
-           }
-        }
-        file<<'\n';
-    }
-  }
-
-template <class T>
 void initStepOutput( const std::string name, const gsMatrix<T> & points);
 
 template <class T>
@@ -573,47 +554,6 @@ int main (int argc, char** argv)
   return result;
 }
 
-template <class T>
-void addClamping(gsMultiPatch<T>& mp, index_t patch, std::vector<boxSide> sides, T offset) //, std::vector<boxSide> sides, T offset)
-{
-
-    gsTensorBSpline<2,T> *geo = dynamic_cast< gsTensorBSpline<2,real_t> * > (&mp.patch(patch));
-
-    T dknot0 = geo->basis().component(0).knots().minIntervalLength();
-    T dknot1 = geo->basis().component(1).knots().minIntervalLength();
-
-    gsInfo<<"sides.size() = "<<sides.size()<<"\n";
-
-    index_t k =0;
-
-
-    for (std::vector<boxSide>::iterator it = sides.begin(); it != sides.end(); it++)
-    {
-        gsInfo<<"side = "<<(*it)<<"\n";
-
-      if (*it==boundary::west || *it==boundary::east) // west or east
-      {
-        if (*it==boundary::east) // east, val = 1
-          geo->insertKnot(1 - std::min(offset, dknot0 / 2),0);
-        else if (*it==boundary::west) // west
-          geo->insertKnot(std::min(offset, dknot0 / 2),0);
-      }
-      else if (*it==boundary::south || *it==boundary::north) // west or east
-      {
-       if (*it==boundary::north) // north
-         geo->insertKnot(1 - std::min(offset, dknot0 / 2),1);
-       else if (*it==boundary::south) // south
-         geo->insertKnot(std::min(offset, dknot0 / 2),1);
-      }
-      else if (*it==boundary::none)
-        gsWarn<<*it<<"\n";
-      else
-        GISMO_ERROR("Side unknown, side = " <<*it);
-
-        k++;
-gsInfo<<"k = "<<k<<"\n";
-    }
-}
 
 template <class T>
 gsMultiPatch<T> Rectangle(T L, T B) //, int n, int m, std::vector<boxSide> sides, T offset)

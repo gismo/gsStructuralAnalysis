@@ -58,7 +58,7 @@ int main (int argc, char** argv)
     std::string wn;
 
     int steps = 100;
-    real_t tend = 1e-5;
+    real_t tend = 3e-5;
 
     std::string assemberOptionsFile("options/solver_options.xml");
 
