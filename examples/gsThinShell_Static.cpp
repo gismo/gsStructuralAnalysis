@@ -1,6 +1,6 @@
-/** @file gsThinShell_test2.cpp
+/** @file gsThinShell_Static.cpp
 
-    @brief Example testing and debugging thin shell solver. Based on gsThinShell_test
+    @brief Static simulations of a shell
 
     This file is part of the G+Smo library.
 
@@ -8,13 +8,13 @@
     License, v. 2.0. If a copy of the MPL was not distributed with this
     file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-    Author(s): H.M.Verhelst
+    Author(s): H.M. Verhelst (2019-..., TU Delft)
 */
 
 #include <gismo.h>
 
 #include <gsKLShell/gsThinShellAssembler.h>
-#include <gsKLShell/gsMaterialMatrix.h>
+#include <gsKLShell/getMaterialMatrix.h>
 
 #include <gsElasticity/gsWriteParaviewMultiPhysics.h>
 
@@ -54,8 +54,12 @@ int main(int argc, char *argv[])
     index_t numRefine  = 1;
     index_t numElevate = 1;
     index_t testCase = 1;
+
     index_t Compressibility = 0;
     index_t material = 0;
+    bool composite = false;
+    index_t impl = 1; // 1= analytical, 2= generalized, 3= spectral
+
     bool nonlinear = false;
     int verbose = 0;
     std::string fn;
@@ -77,8 +81,12 @@ int main(int argc, char *argv[])
     cmd.addInt( "r", "uniformRefine", "Number of Uniform h-refinement steps to perform before solving",  numRefine );
     cmd.addReal( "R", "Ratio", "Mooney Rivlin Ratio",  Ratio );
     cmd.addInt( "t", "testCase", "Test case to run: 1 = unit square; 2 = Scordelis Lo Roof",  testCase );
+
     cmd.addInt( "m", "Material", "Material law",  material );
     cmd.addInt( "c", "Compressibility", "1: compressible, 0: incompressible",  Compressibility );
+    cmd.addInt( "I", "Implementation", "Implementation: 1= analytical, 2= generalized, 3= spectral",  impl );
+    cmd.addSwitch("composite", "Composite material", composite);
+
     cmd.addSwitch("nl", "Solve nonlinear problem", nonlinear);
     cmd.addInt("v","verbose", "0: no; 1: iteration output; 2: Full matrix and vector output", verbose);
     cmd.addSwitch("plot", "Create a ParaView visualization file with the solution", plot);
@@ -307,10 +315,11 @@ int main(int argc, char *argv[])
     {
         if (weak)
         {
-            bc.addCondition(boundary::north, condition_type::weak_dirichlet, &weak_drch ); // unknown 2 - z
-            bc.addCondition(boundary::east, condition_type::weak_dirichlet, &weak_drch ); // unknown 2 - z
-            bc.addCondition(boundary::south, condition_type::weak_dirichlet, &weak_drch ); // unknown 2 - z
-            bc.addCondition(boundary::west, condition_type::weak_dirichlet, &weak_drch ); // unknown 2 - z
+            weak_drch.setValue(weak_D,3);
+            bc.addCondition(boundary::north, condition_type::weak_dirichlet, &weak_drch, 0, false, -1 ); // unknown 2 - z
+            bc.addCondition(boundary::east, condition_type::weak_dirichlet, &weak_drch, 0, false, -1 ); // unknown 2 - z
+            bc.addCondition(boundary::south, condition_type::weak_dirichlet, &weak_drch, 0, false, -1); // unknown 2 - z
+            bc.addCondition(boundary::west, condition_type::weak_dirichlet, &weak_drch, 0, false, -1 ); // unknown 2 - z
         }
         else
         {
@@ -813,20 +822,17 @@ int main(int argc, char *argv[])
     {
         if (weak)
         {
-            GISMO_ERROR("Not implemented. Component-wise weak BCs need to be implemented first");
+            weak_drch.setValue(weak_D,3);
+            weak_clmp.setValue(weak_C,3);
+            bc.addCondition(boundary::north, condition_type::weak_dirichlet, &weak_drch );
+            bc.addCondition(boundary::east, condition_type::weak_dirichlet, &weak_drch );
+            bc.addCondition(boundary::south, condition_type::weak_dirichlet, &weak_drch );
+            bc.addCondition(boundary::west, condition_type::weak_dirichlet, &weak_drch );
 
-            for (index_t i=0; i!=3; ++i)
-            {
-                bc.addCondition(boundary::north, condition_type::weak_dirichlet, 0, 0, false, i ); // unknown 0 - x
-                bc.addCondition(boundary::east, condition_type::weak_dirichlet, 0, 0, false, i ); // unknown 1 - y
-                bc.addCondition(boundary::south, condition_type::weak_dirichlet, 0, 0, false, i ); // unknown 2 - z
-                bc.addCondition(boundary::west, condition_type::weak_dirichlet, 0, 0, false, i ); // unknown 2 - z
-            }
-
-            bc.addCondition(boundary::north, condition_type::weak_clamped, 0, 0 ,false,2);
-            bc.addCondition(boundary::east, condition_type::weak_clamped, 0, 0 ,false,2);
-            bc.addCondition(boundary::south, condition_type::weak_clamped, 0, 0 ,false,2);
-            bc.addCondition(boundary::west, condition_type::weak_clamped, 0, 0 ,false,2);
+            bc.addCondition(boundary::north, condition_type::weak_clamped, &weak_clmp);
+            bc.addCondition(boundary::east, condition_type::weak_clamped, &weak_clmp);
+            bc.addCondition(boundary::south, condition_type::weak_clamped, &weak_clmp);
+            bc.addCondition(boundary::west, condition_type::weak_clamped, &weak_clmp);
         }
         else
         {
@@ -1052,7 +1058,6 @@ int main(int argc, char *argv[])
 
     // Linear isotropic material model
     gsConstantFunction<> force(tmp,3);
-    gsConstantFunction<> pressFun(pressure,3);
     gsFunctionExpr<> t(std::to_string(thickness), 3);
     gsFunctionExpr<> E(std::to_string(E_modulus),3);
     gsFunctionExpr<> nu(std::to_string(PoissonRatio),3);
@@ -1060,73 +1065,123 @@ int main(int argc, char *argv[])
     gsConstantFunction<> ratio(Ratio,3);
 
     real_t mu = E_modulus / (2 * (1 + PoissonRatio));
+    gsConstantFunction<> alpha1(1.3,3);
+    gsConstantFunction<> mu1(6.3e5/4.225e5*mu,3);
+    gsConstantFunction<> alpha2(5.0,3);
+    gsConstantFunction<> mu2(0.012e5/4.225e5*mu,3);
+    gsConstantFunction<> alpha3(-2.0,3);
+    gsConstantFunction<> mu3(-0.1e5/4.225e5*mu,3);
 
-    gsConstantFunction<> alpha1(2.0,3);
-    gsConstantFunction<> mu1(7.0*mu/8.0,3);
-    gsConstantFunction<> alpha2(-2.0,3);
-    gsConstantFunction<> mu2(-mu/8.0,3);
-    // gsConstantFunction<> alpha3()
-    // gsConstantFunction<> mu3()
-
-    // gsMaterialMatrix materialMatrixNonlinear(mp,mp_def,t,E,nu,rho);
-    std::vector<gsFunction<>*> parameters(3);
-    parameters[0] = &E;
-    parameters[1] = &nu;
-    parameters[2] = &ratio;
-    gsMaterialMatrix materialMatrixNonlinear(mp,mp_def,t,parameters,rho);
-
-    std::vector<gsFunction<>*> parameters2(6);
-    if (material==14)
-    {
-        parameters2[0] = &E;
-        parameters2[1] = &nu;
-        parameters2[2] = &mu1;
-        parameters2[3] = &alpha1;
-
-        parameters2[4] = &mu2;
-        parameters2[5] = &alpha2;
-
-        // parameters[6] = ;
-        // parameters[7] = ;
-        materialMatrixNonlinear.setParameters(parameters2);
-    }
-
-
-    materialMatrixNonlinear.options().setInt("MaterialLaw",material);
-    materialMatrixNonlinear.options().setInt("Compressibility",Compressibility);
-
-
-    // Linear anisotropic material model
     real_t pi = math::atan(1)*4;
-    std::vector<std::pair<real_t,real_t>> Evec;
-    std::vector<std::pair<real_t,real_t>> nuvec;
-    std::vector<real_t> Gvec;
-    std::vector<real_t> tvec;
-    std::vector<real_t> phivec;
-
-    index_t kmax = 2;
+    index_t kmax = 1;
+    gsVector<> E11(kmax), E22(kmax), G12(kmax), nu12(kmax), nu21(kmax), thick(kmax), phi(kmax);
+    E11.setZero(); E22.setZero(); G12.setZero(); nu12.setZero(); nu21.setZero(); thick.setZero(); phi.setZero();
     for (index_t k=0; k != kmax; ++k)
     {
-        Evec.push_back( std::make_pair(E_modulus,E_modulus) );
-        nuvec.push_back( std::make_pair(PoissonRatio,PoissonRatio) );
-        Gvec.push_back( 0.5 * E_modulus / (1+PoissonRatio) );
-        tvec.push_back( thickness/kmax );
-        phivec.push_back( k / kmax * pi/2.0);
+        E11.at(k) = E22.at(k) = E_modulus;
+        nu12.at(k) = nu21.at(k) = PoissonRatio;
+        G12.at(k) = 0.5 * E_modulus / (1+PoissonRatio);
+        thick.at(k) = thickness/kmax;
+        phi.at(kmax) = k / kmax * pi/2.0;
     }
-    gsMaterialMatrix materialMatrixComposite(mp,mp_def,tvec,Evec,Gvec,nuvec,phivec);
 
-    gsThinShellAssembler assembler(mp,dbasis,bc,force,materialMatrixNonlinear);
-    assembler.setOptions(opts);
-    assembler.setPointLoads(pLoads);
-    if (membrane)
-        assembler.setMembrane();
-    if (pressure!= 0.0)
-        assembler.setPressure(pressFun);
+    gsConstantFunction<> E11fun(E11,3);
+    gsConstantFunction<> E22fun(E22,3);
+    gsConstantFunction<> G12fun(G12,3);
+    gsConstantFunction<> nu12fun(nu12,3);
+    gsConstantFunction<> nu21fun(nu21,3);
+    gsConstantFunction<> thickfun(thick,3);
+    gsConstantFunction<> phifun(phi,3);
+
+    std::vector<gsFunction<>*> parameters;
+    if (material==0) // SvK & Composites
+    {
+      if (composite)
+      {
+        parameters.resize(6);
+        parameters[0] = &E11fun;
+        parameters[1] = &E22fun;
+        parameters[2] = &G12fun;
+        parameters[3] = &nu12fun;
+        parameters[4] = &nu21fun;
+        parameters[5] = &phifun;
+      }
+      else
+      {
+        parameters.resize(2);
+        parameters[0] = &E;
+        parameters[1] = &nu;
+      }
+    }
+    else if (material==1 || material==2) // NH & NH_ext
+    {
+      parameters.resize(2);
+      parameters[0] = &E;
+      parameters[1] = &nu;
+    }
+    else if (material==3) // MR
+    {
+      parameters.resize(3);
+      parameters[0] = &E;
+      parameters[1] = &nu;
+      parameters[2] = &ratio;
+    }
+    else if (material==4) // OG
+    {
+      parameters.resize(8);
+      parameters[0] = &E;
+      parameters[1] = &nu;
+      parameters[2] = &mu1;
+      parameters[3] = &alpha1;
+      parameters[4] = &mu2;
+      parameters[5] = &alpha2;
+      parameters[6] = &mu3;
+      parameters[7] = &alpha3;
+    }
+
+    gsMaterialMatrixBase<real_t>* materialMatrix;
+
+    gsOptionList options;
+    if      (material==0 && impl==1)
+    {
+        if (composite)
+        {
+            options.addInt("Material","Material model: (0): SvK | (1): NH | (2): NH_ext | (3): MR | (4): Ogden",0);
+            options.addInt("Implementation","Implementation: (0): Composites | (1): Analytical | (2): Generalized | (3): Spectral",0);
+            materialMatrix = getMaterialMatrix<3,real_t>(mp,mp_def,t,parameters,rho,options);
+        }
+        else
+        {
+            parameters.resize(2);
+            options.addInt("Material","Material model: (0): SvK | (1): NH | (2): NH_ext | (3): MR | (4): Ogden",0);
+            options.addInt("Implementation","Implementation: (0): Composites | (1): Analytical | (2): Generalized | (3): Spectral",1);
+            materialMatrix = getMaterialMatrix<3,real_t>(mp,mp_def,t,parameters,rho,options);
+        }
+    }
+    else
+    {
+        options.addInt("Material","Material model: (0): SvK | (1): NH | (2): NH_ext | (3): MR | (4): Ogden",material);
+        options.addSwitch("Compressibility","Compressibility: (false): Imcompressible | (true): Compressible",Compressibility);
+        options.addInt("Implementation","Implementation: (0): Composites | (1): Analytical | (2): Generalized | (3): Spectral",impl);
+        materialMatrix = getMaterialMatrix<3,real_t>(mp,mp_def,t,parameters,rho,options);
+    }
+
+    gsThinShellAssemblerBase<real_t>* assembler;
+    if(membrane)
+        assembler = new gsThinShellAssembler<3, real_t, false>(mp,dbasis,bc,force,materialMatrix);
+    else
+        assembler = new gsThinShellAssembler<3, real_t, true >(mp,dbasis,bc,force,materialMatrix);
+
+    opts.addReal("WeakDirichlet","Penalty parameter weak dirichlet conditions",1e5);
+    opts.addReal("WeakClamped","Penalty parameter weak clamped conditions",1e5);
+    // Construct assembler object
+    assembler->setOptions(opts);
+    assembler->setPointLoads(pLoads);
 
     // gsVector<> found_vec(3);
     // found_vec<<0,0,2;
     // gsConstantFunction<> found(found_vec,3);
-    // assembler.setFoundation(found);
+    // assembler->setFoundation(found);
 
     gsStopwatch stopwatch,stopwatch2;
     real_t time = 0.0;
@@ -1138,30 +1193,30 @@ int main(int argc, char *argv[])
     Jacobian_t Jacobian = [&time,&stopwatch,&assembler,&mp_def](gsVector<real_t> const &x)
     {
       stopwatch.restart();
-      assembler.constructSolution(x,mp_def);
-      assembler.assembleMatrix(mp_def);
+      assembler->constructSolution(x,mp_def);
+      assembler->assembleMatrix(mp_def);
       time += stopwatch.stop();
-      gsSparseMatrix<real_t> m = assembler.matrix();
+      gsSparseMatrix<real_t> m = assembler->matrix();
       return m;
     };
     // Function for the Residual
     Residual_t Residual = [&time,&stopwatch,&assembler,&mp_def](gsVector<real_t> const &x)
     {
       stopwatch.restart();
-      assembler.constructSolution(x,mp_def);
-      assembler.assembleVector(mp_def);
+      assembler->constructSolution(x,mp_def);
+      assembler->assembleVector(mp_def);
       time += stopwatch.stop();
-      return assembler.rhs();
+      return assembler->rhs();
     };
 
     // Define Matrices
     stopwatch.restart();
     stopwatch2.restart();
-    assembler.assemble();
+    assembler->assemble();
     time += stopwatch.stop();
 
-    gsSparseMatrix<> matrix = assembler.matrix();
-    gsVector<> vector = assembler.rhs();
+    gsSparseMatrix<> matrix = assembler->matrix();
+    gsVector<> vector = assembler->rhs();
 
     // Configure Structural Analsysis module
     gsStaticSolver<real_t> staticSolver(matrix,vector,Jacobian,Residual);
@@ -1179,7 +1234,7 @@ int main(int argc, char *argv[])
 
     totaltime += stopwatch2.stop();
 
-    mp_def = assembler.constructSolution(solVector);
+    mp_def = assembler->constructSolution(solVector);
 
     gsMultiPatch<> deformation = mp_def;
     for (size_t k = 0; k != mp_def.nPatches(); ++k)
@@ -1189,7 +1244,7 @@ int main(int argc, char *argv[])
     {
         gsVector<> pt(2);
         pt<<1,0;
-      gsMatrix<> lambdas = assembler.computePrincipalStretches(pt,mp_def,0);
+      gsMatrix<> lambdas = assembler->computePrincipalStretches(pt,mp_def,0);
       real_t S = 2625 / 1e-3 / lambdas(0) / lambdas(2);
       real_t San = mu * (math::pow(lambdas(1),2)-1/lambdas(1));
       gsInfo<<"S = \t"<<S<<"\t San = \t"<<San<<"\t |S-San| = \t"<<abs(S-San)<<"\n";
@@ -1217,42 +1272,42 @@ int main(int argc, char *argv[])
     {
 
         gsPiecewiseFunction<> membraneStresses;
-        assembler.constructStress(mp_def,membraneStresses,stress_type::membrane);
+        assembler->constructStress(mp_def,membraneStresses,stress_type::membrane);
         gsField<> membraneStress(mp_def,membraneStresses, true);
 
         gsPiecewiseFunction<> flexuralStresses;
-        assembler.constructStress(mp_def,flexuralStresses,stress_type::flexural);
+        assembler->constructStress(mp_def,flexuralStresses,stress_type::flexural);
         gsField<> flexuralStress(mp_def,flexuralStresses, true);
 
         gsPiecewiseFunction<> stretches;
-        assembler.constructStress(mp_def,stretches,stress_type::principal_stretch);
+        assembler->constructStress(mp_def,stretches,stress_type::principal_stretch);
         gsField<> Stretches(mp_def,stretches, true);
 
         // gsPiecewiseFunction<> membraneStresses_p;
-        // assembler.constructStress(mp_def,membraneStresses_p,stress_type::principal_stress_membrane);
+        // assembler->constructStress(mp_def,membraneStresses_p,stress_type::principal_stress_membrane);
         // gsField<> membraneStress_p(mp_def,membraneStresses_p, true);
 
         // gsPiecewiseFunction<> flexuralStresses_p;
-        // assembler.constructStress(mp_def,flexuralStresses_p,stress_type::principal_stress_flexural);
+        // assembler->constructStress(mp_def,flexuralStresses_p,stress_type::principal_stress_flexural);
         // gsField<> flexuralStress_p(mp_def,flexuralStresses_p, true);
 
         gsPiecewiseFunction<> stretch1;
-        assembler.constructStress(mp_def,stretch1,stress_type::principal_stretch_dir1);
+        assembler->constructStress(mp_def,stretch1,stress_type::principal_stretch_dir1);
         gsField<> stretchDir1(mp_def,stretch1, true);
 
         gsPiecewiseFunction<> stretch2;
-        assembler.constructStress(mp_def,stretch2,stress_type::principal_stretch_dir2);
+        assembler->constructStress(mp_def,stretch2,stress_type::principal_stretch_dir2);
         gsField<> stretchDir2(mp_def,stretch2, true);
 
         gsPiecewiseFunction<> stretch3;
-        assembler.constructStress(mp_def,stretch3,stress_type::principal_stretch_dir3);
+        assembler->constructStress(mp_def,stretch3,stress_type::principal_stretch_dir3);
         gsField<> stretchDir3(mp_def,stretch3, true);
 
 
         gsField<> solutionField(mp,deformation, true);
 
 
-        // gsField<> stressField = assembler.constructStress(mp_def,stress_type::membrane_strain);
+        // gsField<> stressField = assembler->constructStress(mp_def,stress_type::membrane_strain);
 
         gsWriteParaview(solutionField,"Deformation");
 

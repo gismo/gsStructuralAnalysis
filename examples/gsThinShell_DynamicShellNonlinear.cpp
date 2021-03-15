@@ -8,7 +8,7 @@
     License, v. 2.0. If a copy of the MPL was not distributed with this
     file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-    Author(s): H.M. Verhelst
+    Author(s): H.M. Verhelst (2019-..., TU Delft)
 */
 
 /*
@@ -20,6 +20,7 @@
 #include <gismo.h>
 
 #include <gsKLShell/gsThinShellAssembler.h>
+#include <gsKLShell/getMaterialMatrix.h>
 
 #include <gsStructuralAnalysis/gsTimeIntegrator.h>
 
@@ -57,7 +58,7 @@ int main (int argc, char** argv)
     std::string wn;
 
     int steps = 100;
-    real_t tend = 1e-5;
+    real_t tend = 3e-5;
 
     std::string assemberOptionsFile("options/solver_options.xml");
 
@@ -160,6 +161,7 @@ int main (int argc, char** argv)
     BCs.addCondition(boundary::south, condition_type::clamped,0,0,false,2);
 
     BCs.addCondition(boundary::west, condition_type::clamped,0,0,false,2);
+    BCs.addCondition(boundary::west, condition_type::collapsed,0,0,false,2);
 
     gsVector<> point(2); point<< 0, 0 ; // Point where surface force is applied
     gsVector<> loadvec (3); loadvec << 0, 0, -25 ;
@@ -176,7 +178,7 @@ int main (int argc, char** argv)
     gsMultiBasis<> dbasis(mp);
     // Linear isotropic material model
     gsConstantFunction<> force(tmp,3);
-    gsFunctionExpr<> thick(std::to_string(thickness), 3);
+    gsFunctionExpr<> t(std::to_string(thickness), 3);
     gsFunctionExpr<> E(std::to_string(E_modulus),3);
     gsFunctionExpr<> nu(std::to_string(PoissonRatio),3);
     gsFunctionExpr<> rho(std::to_string(Density),3);
@@ -184,15 +186,22 @@ int main (int argc, char** argv)
     std::vector<gsFunction<>*> parameters(2);
     parameters[0] = &E;
     parameters[1] = &nu;
-    gsMaterialMatrix materialMat(mp,mp_def,thick,parameters,rho);
 
-    // Construct assembler object for dynamic computations
-    gsThinShellAssembler assembler(mp,dbasis,BCs,force,materialMat);
-    assembler.setOptions(opts);
-    assembler.setPointLoads(pLoads);
+    gsMaterialMatrixBase<real_t>* materialMatrix;
 
-    assembler.assemble();
-    size_t N = assembler.numDofs();
+    gsOptionList options;
+    options.addInt("Material","Material model: (0): SvK | (1): NH | (2): NH_ext | (3): MR | (4): Ogden",0);
+    options.addInt("Implementation","Implementation: (0): Composites | (1): Analytical | (2): Generalized | (3): Spectral",1);
+    materialMatrix = getMaterialMatrix<3,real_t>(mp,mp_def,t,parameters,rho,options);
+
+    gsThinShellAssemblerBase<real_t>* assembler;
+    assembler = new gsThinShellAssembler<3, real_t, true >(mp,dbasis,BCs,force,materialMatrix);
+
+    assembler->setOptions(opts);
+    assembler->setPointLoads(pLoads);
+
+    assembler->assemble();
+    size_t N = assembler->numDofs();
     gsMatrix<> uOld(N,1);
     gsMatrix<> vOld(N,1);
     gsMatrix<> aOld(N,1);
@@ -221,26 +230,26 @@ typedef std::function<gsVector<real_t> (gsVector<real_t> const &, real_t time) >
 Jacobian_t Jacobian = [&assembler,&solution](gsMatrix<real_t> const &x)
 {
   // to do: add time dependency of forcing
-  assembler.constructSolution(x,solution);
-  assembler.assemble(solution);
-  gsSparseMatrix<real_t> m = assembler.matrix();
+  assembler->constructSolution(x,solution);
+  assembler->assemble(solution);
+  gsSparseMatrix<real_t> m = assembler->matrix();
   return m;
 };
 
 // Function for the Residual
 Residual_t Residual = [&assembler,&solution](gsMatrix<real_t> const &x, real_t time)
 {
-  assembler.constructSolution(x,solution);
-  assembler.assemble(solution);
-  gsMatrix<real_t> r = assembler.rhs();
+  assembler->constructSolution(x,solution);
+  assembler->assemble(solution);
+  gsMatrix<real_t> r = assembler->rhs();
   return r;
 };
 
 // Compute mass matrix (since it is constant over time)
-assembler.assembleMass();
-M = assembler.matrix();
+assembler->assembleMass();
+M = assembler->matrix();
 // pre-assemble system
-assembler.assemble();
+assembler->assemble();
 
 // // set damping Matrix (same dimensions as M)
 // C.setZero(M.rows(),M.cols());
@@ -272,7 +281,7 @@ for (index_t i=0; i<steps; i++)
   timeIntegrator.constructSolution();
   gsMatrix<> displacements = timeIntegrator.displacements();
 
-  assembler.constructSolution(displacements,solution);
+  assembler->constructSolution(displacements,solution);
 
   solution.patch(0).coefs() -= mp.patch(0).coefs();// assuming 1 patch here
   gsField<> solField(mp,solution);
