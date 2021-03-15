@@ -1,5 +1,4 @@
-
-/** @file gsThinShell_BucklingArcLength.cpp
+/** @file gsThinShell_ArcLength.cpp
 
     @brief Code for the arc-length method of a shell based on loads
 
@@ -9,13 +8,13 @@
     License, v. 2.0. If a copy of the MPL was not distributed with this
     file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-    Author(s): H.M. Verhelst
+    Author(s): H.M. Verhelst (2019-..., TU Delft)
 */
 
 #include <gismo.h>
 
 #include <gsKLShell/gsThinShellAssembler.h>
-
+#include <gsKLShell/getMaterialMatrix.h>
 // #include <gsThinShell/gsArcLengthIterator.h>
 #include <gsStructuralAnalysis/gsArcLengthIterator.h>
 
@@ -90,6 +89,8 @@ int main (int argc, char** argv)
     index_t Compressibility = 0;
     index_t material  = 0;
     real_t Ratio      = 7.0;
+    bool composite = false;
+    index_t impl = 1; // 1= analytical, 2= generalized, 3= spectral
 
     real_t eta        = 0;
     real_t Spring     = 0;
@@ -126,6 +127,8 @@ int main (int argc, char** argv)
     cmd.addInt( "M", "Material", "Material law",  material );
     cmd.addReal("C", "MaterialRatio", "Material Ratio",  Ratio );
     cmd.addInt( "c", "Compressibility", "1: compressible, 0: incompressible",  Compressibility );
+    cmd.addInt( "I", "Implementation", "Implementation: 1= analytical, 2= generalized, 3= spectral",  impl );
+    cmd.addSwitch("composite", "Composite material", composite);
 
     cmd.addReal("T","hdim", "thickness of the plate", thickness);
 
@@ -183,9 +186,9 @@ int main (int argc, char** argv)
       gsInfo<<"S = "<<Spring<<"; eta = "<<eta<<"\n";
     }
     /*
-      Case 2: Clamped beam (left) under vertical end load                   --- Validation settings: -t 2 -L 5e-1 -M 0 -N 10 -r 2 -e 1 (--plot --write -q 5)
+      Case 2: Clamped beam (left) under vertical end load                   --- Validation settings: -L 5e-1 -M 0 -N 10 -r 2 -e 1 (--plot --write -q 5)
                                                                                 Fig 3b from: Pagani, A., & Carrera, E. (2018). Unified formulation of geometrically nonlinear refined beam theories. Mechanics of Advanced Materials and Structures, 25(1), 15–31. https://doi.org/10.1080/15376494.2016.1232458
-      Case 3: Clamped beam (left) under horizontal compressive end load     --- Validation settings: -t 3 -L 5e-5 -l 1e1 -M 0 -N 100 -r 3 -e 1
+      Case 3: Clamped beam (left) under horizontal compressive end load     --- Validation settings: -L 5e-5 -l 1e1 -M 0 -N 100 -r 3 -e 1
                                                                                 Fig 5  from: Pagani, A., & Carrera, E. (2018). Unified formulation of geometrically nonlinear refined beam theories. Mechanics of Advanced Materials and Structures, 25(1), 15–31. https://doi.org/10.1080/15376494.2016.1232458
     */
     else if (testCase==2 || testCase==3)
@@ -198,9 +201,9 @@ int main (int argc, char** argv)
       mp = RectangularDomain(numHref, 0, numElevate+2, 2, aDim, bDim);
     }
     /*
-      Case 4: Uniaxial tension of a square plate                            --- Validation settings: -t 4 -L 2e0 -M XX -N 10 -r 1 -e 0 -N 10 -c 1
+      Case 4: Uniaxial tension of a square plate                            --- Validation settings: -L 1eX -l 1eX -M 14 -N 500 -r X -e X
               (bottom boundary fixed in Y, left boundary fixed in X, right boundary normal load)
-      Case 5: Biaxial tension of a square plate                             --- Validation settings: -t 5 -L 1eX -l 1eX -M 14 -N 500 -r X -e X
+      Case 5: Biaxial tension of a square plate                             --- Validation settings: -L 1eX -l 1eX -M 14 -N 500 -r X -e X
               (bottom boundary fixed in Y, left boundary fixed in X, right and top boundaries normal load)
     */
     else if (testCase==4 || testCase==5)
@@ -221,18 +224,13 @@ int main (int argc, char** argv)
     }
     /*
       Case 6: Constrained tension (see Roohbakhshan2017)
-      ./bin/gsThinShell_ArcLength -t 6 --plot -L 5e-3 -r 3 --write -M 12 -N 50
-
-      After 10 steps at P/EA = 1:
-        ./bin/gsThinShell_ArcLength -t 6 -r 3  -L 11.8421052632 -m 0 -M 2 -N 10 --write
-
     */
     else if (testCase==6)
     {
-      aDim = 9.0e-3;
-      bDim = 3.0e-3;
+      aDim = 10.0e-3;
+      bDim = 10.0e-3;
       real_t mu = 10e3;
-      thickness = 0.3e-3;
+      thickness = 0.25e-3;
       if ((!Compressibility) && (material!=0))
         PoissonRatio = 0.5;
       else
@@ -242,27 +240,16 @@ int main (int argc, char** argv)
         mu = 10e3;
       else if (material==3 || material==13)
         mu = 30e3;
-      else if (material==14)
-        mu = 30e3;
 
       E_modulus = 2*mu*(1+PoissonRatio);
 
       Ratio = 0.5;
 
-      mp = Rectangle(aDim, bDim);
-
-      for(index_t i = 0; i< numElevate; ++i)
-        mp.patch(0).degreeElevate();    // Elevate the degree
-
-      // h-refine
-      for(index_t i = 0; i< numHref; ++i)
-        mp.patch(0).uniformRefine();
+      mp = RectangularDomain(numHref, numElevate+2, aDim/2., bDim/2.);
     }
     /*
       Case 7: Constrained tension (Chopin2019)
       Chopin, J., Panaitescu, A., & Kudrolli, A. (2018). Corner singularities and shape of stretched elastic sheets. Physical Review E, 98(4), 043003. https://doi.org/10.1103/PhysRevE.98.043003Chopin, J., Panaitescu, A., & Kudrolli, A. (2018). Corner singularities and shape of stretched elastic sheets. Physical Review E, 98(4), 043003. https://doi.org/10.1103/PhysRevE.98.043003
-      ./bin/gsThinShell_ArcLength -t 7 --plot -L 5e1 -r 5 -e 2 -c 1 --write -M 12 -N 25 --cross
-
     */
     else if (testCase == 7)
     {
@@ -353,11 +340,11 @@ int main (int argc, char** argv)
       // E_modulus = 3102.75e2;
       // PoissonRatio = 0.3;
 
-      if (testCase==10)
-        thickness = 6.35;
-      if (testCase==11)
-        thickness = 12.7;
       if (testCase==12)
+        thickness = 6.35;
+      if (testCase==13)
+        thickness = 12.7;
+      if (testCase==14)
         thickness = 16.75;
 
       E_modulus = 3102.75;
@@ -403,11 +390,11 @@ int main (int argc, char** argv)
     std::string ty("0");
     std::string tz("0");
 
-    gsVector<> tmp(3);
-    gsVector<> neu(3);
-    tmp << 0, 0, 0;
-    neu << 0, 0, 0;
-    gsConstantFunction<> neuData(neu,3);
+    gsVector<> tmp(mp.targetDim());
+    gsVector<> neu(mp.targetDim());
+    tmp.setZero();
+    neu.setZero();
+    gsConstantFunction<> neuData(neu,mp.targetDim());
 
     // Unscaled load
     real_t Load = 0;
@@ -427,6 +414,7 @@ int main (int argc, char** argv)
 
     if (testCase == 0)
     {
+        GISMO_ASSERT(mp.targetDim()==3,"Geometry must be surface (targetDim=3)!");
         // Pinned-Pinned
         tmp << 1e-1, 0, 0;
         neuData.setValue(tmp,3);
@@ -450,6 +438,7 @@ int main (int argc, char** argv)
     }
     else if (testCase == 1)
     {
+        GISMO_ASSERT(mp.targetDim()==3,"Geometry must be surface (targetDim=3)!");
         real_t Area = bDim*thickness;
         real_t EA = E_modulus*Area;
         Load = EA*1e-6;
@@ -482,6 +471,7 @@ int main (int argc, char** argv)
     }
     else if (testCase == 2)
     {
+        GISMO_ASSERT(mp.targetDim()==3,"Geometry must be surface (targetDim=3)!");
       BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 0 ); // unknown 0 - x
       BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 1 - y
       BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z
@@ -505,6 +495,7 @@ int main (int argc, char** argv)
     }
     else if (testCase == 3)
     {
+      GISMO_ASSERT(mp.targetDim()==3,"Geometry must be surface (targetDim=3)!");
       BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 0 ); // unknown 0 - x
       BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 1 - y
       BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z
@@ -533,6 +524,7 @@ int main (int argc, char** argv)
     }
     else if (testCase == 4) // Uniaxial tension; use with hyperelastic material model!
     {
+      GISMO_ASSERT(mp.targetDim()==3,"Geometry must be surface (targetDim=3)!");
       BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 0 ); // unknown 0 - x
       BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z
 
@@ -554,10 +546,11 @@ int main (int argc, char** argv)
       dirname = dirname + "/UniaxialTension";
       output =  "solution";
       wn = output + "data.txt";
-      SingularPoint = false;
+      SingularPoint = true;
     }
     else if (testCase == 5) // Bi-axial tension; use with hyperelastic material model!
     {
+      GISMO_ASSERT(mp.targetDim()==3,"Geometry must be surface (targetDim=3)!");
       BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 0 ); // unknown 0 - x
       BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z
 
@@ -585,11 +578,11 @@ int main (int argc, char** argv)
       dirname = dirname + "/BiaxialTension";
       output =  "solution";
       wn = output + "data.txt";
-      SingularPoint = false;
+      SingularPoint = true;
     }
     // else if (testCase == 6) //???
     // {
-
+    //   GISMO_ASSERT(mp.targetDim()==3,"Geometry must be surface (targetDim=3)!");
     //   BCs.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 0 ); // unknown 1 - x
     //   BCs.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 1 - x
     //   BCs.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 1 - x
@@ -618,128 +611,132 @@ int main (int argc, char** argv)
     // }
     else if (testCase == 6 || testCase == 7) // Uniaxial tension with fixed ends
     {
-       for (index_t i=0; i!=3; ++i)
-       {
-           BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, i ); // unknown 2 - z
-       }
-       BCs.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z
-       BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z
+      GISMO_ASSERT(mp.targetDim()==3,"Geometry must be surface (targetDim=3)!");
+      for (index_t i=0; i!=3; ++i)
+      {
+         BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, i ); // unknown 2 - z
+      }
+      BCs.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z
+      BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z
 
-       BCs.addCondition(boundary::east, condition_type::dirichlet, 0, 0 ,false,1);
-       BCs.addCondition(boundary::east, condition_type::dirichlet, 0, 0 ,false,2);
-       BCs.addCondition(boundary::east, condition_type::collapsed, 0, 0 ,false,0);
+      BCs.addCondition(boundary::east, condition_type::dirichlet, 0, 0 ,false,1);
+      BCs.addCondition(boundary::east, condition_type::dirichlet, 0, 0 ,false,2);
+      BCs.addCondition(boundary::east, condition_type::collapsed, 0, 0 ,false,0);
 
-       gsVector<> point(2); point<< 1.0, 0.5 ;
-       gsVector<> load (3); load << 0.1, 0.0, 0.0 ;
-       pLoads.addLoad(point, load, 0 );
+      gsVector<> point(2); point<< 1.0, 0.5 ;
+      gsVector<> load (3); load << 0.1, 0.0, 0.0 ;
+      pLoads.addLoad(point, load, 0 );
 
-       real_t alpha, beta;
-       alpha = bDim/thickness;
-       beta = aDim/bDim;
-       dirname = dirname + "/" + "Tension_-r" + std::to_string(numHref) + "-e" + std::to_string(numElevate) + "-M" + std::to_string(material) + "-c" + std::to_string(Compressibility) + "-alpha" + std::to_string(alpha) + "-beta" + std::to_string(beta);
-       output =  "solution";
-       wn = output + "data.txt";
+      real_t alpha, beta;
+      alpha = bDim/thickness;
+      beta = aDim/bDim;
+      dirname = dirname + "/" + "Tension_-r" + std::to_string(numHref) + "-e" + std::to_string(numElevate) + "-M" + std::to_string(material) + "-c" + std::to_string(Compressibility) + "-alpha" + std::to_string(alpha) + "-beta" + std::to_string(beta);
+      output =  "solution";
+      wn = output + "data.txt";
 
-       cross_coordinate = 1;
-       cross_val = 1.0;
+      cross_coordinate = 1;
+      cross_val = 1.0;
     }
     else if (testCase == 8)
     {
-        BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 0 ); // unknown 2 - z
-        BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 2 - z
+      GISMO_ASSERT(mp.targetDim()==3,"Geometry must be surface (targetDim=3)!");
+      BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 0 ); // unknown 2 - z
+      BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 2 - z
 
-        BCs.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z
+      BCs.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z
 
 
-        // Symmetry in x-direction:
-        BCs.addCondition(boundary::east, condition_type::dirichlet, 0, 0, false, 0 );
-        BCs.addCondition(boundary::east, condition_type::clamped, 0, 0, false, 1 );
-        BCs.addCondition(boundary::east, condition_type::clamped, 0, 0, false, 2 );
+      // Symmetry in x-direction:
+      BCs.addCondition(boundary::east, condition_type::dirichlet, 0, 0, false, 0 );
+      BCs.addCondition(boundary::east, condition_type::clamped, 0, 0, false, 1 );
+      BCs.addCondition(boundary::east, condition_type::clamped, 0, 0, false, 2 );
 
-        // Symmetry in y-direction:
-        BCs.addCondition(boundary::west, condition_type::clamped, 0, 0, false, 0 );
-        BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 1 );
-        BCs.addCondition(boundary::west, condition_type::clamped, 0, 0, false, 2 );
+      // Symmetry in y-direction:
+      BCs.addCondition(boundary::west, condition_type::clamped, 0, 0, false, 0 );
+      BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 1 );
+      BCs.addCondition(boundary::west, condition_type::clamped, 0, 0, false, 2 );
 
-        // Pressure
-        pressure = 1e3;
-        maxit = 50;
+      // Pressure
+      pressure = 1e3;
+      maxit = 50;
 
-        dirname = dirname + "/" + "Balloon";
-        output =  "solution";
-        wn = output + "data.txt";
-
+      dirname = dirname + "/" + "Balloon";
+      output =  "solution";
+      wn = output + "data.txt";
     }
     else if (testCase == 9)
     {
-        Load = -1;
-        neu << 0, 0, Load;
-        neuData.setValue(neu,3);
+      GISMO_ASSERT(mp.targetDim()==3,"Geometry must be surface (targetDim=3)!");
+      Load = -1;
+      neu << 0, 0, Load;
+      neuData.setValue(neu,3);
 
-        BCs.addCondition(boundary::north, condition_type::neumann, &neuData );
-        BCs.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 0 ); // unknown 2 - z
-        BCs.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 2 - z
-        BCs.addCondition(boundary::north, condition_type::collapsed, 0, 0, false, 2 ); // unknown 1 - y
+      BCs.addCondition(boundary::north, condition_type::neumann, &neuData );
+      BCs.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 0 ); // unknown 2 - z
+      BCs.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 2 - z
+      BCs.addCondition(boundary::north, condition_type::collapsed, 0, 0, false, 2 ); // unknown 1 - y
 
-        BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 0 ); // unknown 0 - x
-        BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 1 - y
-        BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z
+      BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 0 ); // unknown 0 - x
+      BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 1 - y
+      BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z
 
-        // Symmetry in x-direction:
-        BCs.addCondition(boundary::east, condition_type::dirichlet, 0, 0, false, 0 );
-        BCs.addCondition(boundary::east, condition_type::clamped, 0, 0, false, 1 );
-        BCs.addCondition(boundary::east, condition_type::clamped, 0, 0, false, 2 );
+      // Symmetry in x-direction:
+      BCs.addCondition(boundary::east, condition_type::dirichlet, 0, 0, false, 0 );
+      BCs.addCondition(boundary::east, condition_type::clamped, 0, 0, false, 1 );
+      BCs.addCondition(boundary::east, condition_type::clamped, 0, 0, false, 2 );
 
-        // Symmetry in y-direction:
-        BCs.addCondition(boundary::west, condition_type::clamped, 0, 0, false, 0 );
-        BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 1 );
-        BCs.addCondition(boundary::west, condition_type::clamped, 0, 0, false, 2 );
+      // Symmetry in y-direction:
+      BCs.addCondition(boundary::west, condition_type::clamped, 0, 0, false, 0 );
+      BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 1 );
+      BCs.addCondition(boundary::west, condition_type::clamped, 0, 0, false, 2 );
 
-        dirname = dirname + "/" + "Frustrum_-r=" + std::to_string(numHref) + "-e" + std::to_string(numElevate) + "-M" + std::to_string(material) + "_solution";
-        output =  "solution";
-        wn = output + "data.txt";
+      dirname = dirname + "/" + "Frustrum_-r=" + std::to_string(numHref) + "-e" + std::to_string(numElevate) + "-M" + std::to_string(material) + "_solution";
+      output =  "solution";
+      wn = output + "data.txt";
 
-        writePoints.resize(2,3);
-        writePoints.col(0)<<0.0,1.0;
-        writePoints.col(1)<<0.5,1.0;
-        writePoints.col(2)<<1.0,1.0;
+      writePoints.resize(2,3);
+      writePoints.col(0)<<0.0,1.0;
+      writePoints.col(1)<<0.5,1.0;
+      writePoints.col(2)<<1.0,1.0;
     }
     else if (testCase == 10)
     {
-        Load = -1;
-        neu << 0, 0, Load;
-        neuData.setValue(neu,3);
+      GISMO_ASSERT(mp.targetDim()==3,"Geometry must be surface (targetDim=3)!");
+      Load = -1;
+      neu << 0, 0, Load;
+      neuData.setValue(neu,3);
 
-        BCs.addCondition(boundary::north, condition_type::neumann, &neuData );
-        // BCs.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 0 ); // unknown 2 - z
-        // BCs.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 2 - z
-        BCs.addCondition(boundary::north, condition_type::collapsed, 0, 0, false, 2 ); // unknown 1 - y
+      BCs.addCondition(boundary::north, condition_type::neumann, &neuData );
+      // BCs.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 0 ); // unknown 2 - z
+      // BCs.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 2 - z
+      BCs.addCondition(boundary::north, condition_type::collapsed, 0, 0, false, 2 ); // unknown 1 - y
 
-        BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 0 ); // unknown 0 - x
-        BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 1 - y
-        BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z
+      BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 0 ); // unknown 0 - x
+      BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 1 - y
+      BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z
 
-        // Symmetry in x-direction:
-        BCs.addCondition(boundary::east, condition_type::dirichlet, 0, 0, false, 0 );
-        BCs.addCondition(boundary::east, condition_type::clamped, 0, 0, false, 1 );
-        BCs.addCondition(boundary::east, condition_type::clamped, 0, 0, false, 2 );
+      // Symmetry in x-direction:
+      BCs.addCondition(boundary::east, condition_type::dirichlet, 0, 0, false, 0 );
+      BCs.addCondition(boundary::east, condition_type::clamped, 0, 0, false, 1 );
+      BCs.addCondition(boundary::east, condition_type::clamped, 0, 0, false, 2 );
 
-        // Symmetry in y-direction:
-        BCs.addCondition(boundary::west, condition_type::clamped, 0, 0, false, 0 );
-        BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 1 );
-        BCs.addCondition(boundary::west, condition_type::clamped, 0, 0, false, 2 );
+      // Symmetry in y-direction:
+      BCs.addCondition(boundary::west, condition_type::clamped, 0, 0, false, 0 );
+      BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 1 );
+      BCs.addCondition(boundary::west, condition_type::clamped, 0, 0, false, 2 );
 
-        dirname = dirname + "/" + "Frustrum2_-r=" + std::to_string(numHref) + "-e" + std::to_string(numElevate) + "-M" + std::to_string(material) + "_solution";
-        output = "solution";
-        wn = output + "data.txt";
+      dirname = dirname + "/" + "Frustrum2_-r=" + std::to_string(numHref) + "-e" + std::to_string(numElevate) + "-M" + std::to_string(material) + "_solution";
+      output = "solution";
+      wn = output + "data.txt";
 
-        writePoints.resize(2,3);
-        writePoints.col(0)<<0.0,1.0;
-        writePoints.col(1)<<0.5,1.0;
-        writePoints.col(2)<<1.0,1.0;
+      writePoints.resize(2,3);
+      writePoints.col(0)<<0.0,1.0;
+      writePoints.col(1)<<0.5,1.0;
+      writePoints.col(2)<<1.0,1.0;
     }
     else if (testCase == 11)
     {
+      GISMO_ASSERT(mp.targetDim()==3,"Geometry must be surface (targetDim=3)!");
       Load = -1;
       neu << 0, 0, Load;
       neuData.setValue(neu,3);
@@ -771,6 +768,7 @@ int main (int argc, char** argv)
     }
     else if (testCase == 12 || testCase == 13 || testCase == 14)
     {
+      GISMO_ASSERT(mp.targetDim()==3,"Geometry must be surface (targetDim=3)!");
       // Diaphragm conditions
       BCs.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 0 ); // unknown 0 - x
       BCs.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 1 - y
@@ -835,12 +833,10 @@ int main (int argc, char** argv)
     }
 
 
-    gsFunctionExpr<> surfForce(tx,ty,tz,3);
     gsConstantFunction<> pressFun(pressure,3);
     gsConstantFunction<> foundFun(foundation,3);
     // Initialise solution object
     gsMultiPatch<> mp_def = mp;
-    gsSparseSolver<>::LU solver;
 
     // Linear isotropic material model
     gsConstantFunction<> force(tmp,3);
@@ -858,42 +854,113 @@ int main (int argc, char** argv)
     gsConstantFunction<> alpha3(-2.0,3);
     gsConstantFunction<> mu3(-0.1e5/4.225e5*mu,3);
 
-    // gsMaterialMatrix materialMatrixNonlinear(mp,mp_def,t,E,nu,rho);
-    std::vector<gsFunction<>*> parameters(3);
-    parameters[0] = &E;
-    parameters[1] = &nu;
-    parameters[2] = &ratio;
-    gsMaterialMatrix materialMatrixNonlinear(mp,mp_def,t,parameters,rho);
-
-    std::vector<gsFunction<>*> parameters2(8);
-    if (material==14)
+    real_t pi = math::atan(1)*4;
+    index_t kmax = 1;
+    gsVector<> E11(kmax), E22(kmax), G12(kmax), nu12(kmax), nu21(kmax), thick(kmax), phi(kmax);
+    E11.setZero(); E22.setZero(); G12.setZero(); nu12.setZero(); nu21.setZero(); thick.setZero(); phi.setZero();
+    for (index_t k=0; k != kmax; ++k)
     {
-        parameters2[0] = &E;
-        parameters2[1] = &nu;
-        parameters2[2] = &mu1;
-        parameters2[3] = &alpha1;
-
-        parameters2[4] = &mu2;
-        parameters2[5] = &alpha2;
-
-        parameters2[6] = &mu3;
-        parameters2[7] = &alpha3;
-        materialMatrixNonlinear.setParameters(parameters2);
+        E11.at(k) = E22.at(k) = E_modulus;
+        nu12.at(k) = nu21.at(k) = PoissonRatio;
+        G12.at(k) = 0.5 * E_modulus / (1+PoissonRatio);
+        thick.at(k) = thickness/kmax;
+        phi.at(k) = static_cast<real_t>(k) / kmax * pi/2.0;
     }
 
-    materialMatrixNonlinear.options().setInt("MaterialLaw",material);
-    materialMatrixNonlinear.options().setInt("Compressibility",Compressibility);
+    gsConstantFunction<> E11fun(E11,3);
+    gsConstantFunction<> E22fun(E22,3);
+    gsConstantFunction<> G12fun(G12,3);
+    gsConstantFunction<> nu12fun(nu12,3);
+    gsConstantFunction<> nu21fun(nu21,3);
+    gsConstantFunction<> thickfun(thick,3);
+    gsConstantFunction<> phifun(phi,3);
+
+    std::vector<gsFunction<>*> parameters;
+    if (material==0) // SvK & Composites
+    {
+      if (composite)
+      {
+        parameters.resize(6);
+        parameters[0] = &E11fun;
+        parameters[1] = &E22fun;
+        parameters[2] = &G12fun;
+        parameters[3] = &nu12fun;
+        parameters[4] = &nu21fun;
+        parameters[5] = &phifun;
+      }
+      else
+      {
+        parameters.resize(2);
+        parameters[0] = &E;
+        parameters[1] = &nu;
+      }
+    }
+    else if (material==1 || material==2) // NH & NH_ext
+    {
+      parameters.resize(2);
+      parameters[0] = &E;
+      parameters[1] = &nu;
+    }
+    else if (material==3) // MR
+    {
+      parameters.resize(3);
+      parameters[0] = &E;
+      parameters[1] = &nu;
+      parameters[2] = &ratio;
+    }
+    else if (material==4) // OG
+    {
+      parameters.resize(8);
+      parameters[0] = &E;
+      parameters[1] = &nu;
+      parameters[2] = &mu1;
+      parameters[3] = &alpha1;
+      parameters[4] = &mu2;
+      parameters[5] = &alpha2;
+      parameters[6] = &mu3;
+      parameters[7] = &alpha3;
+    }
+
+    gsMaterialMatrixBase<real_t>* materialMatrix;
+
+    gsOptionList options;
+    if      (material==0 && impl==1)
+    {
+        if (composite)
+        {
+            options.addInt("Material","Material model: (0): SvK | (1): NH | (2): NH_ext | (3): MR | (4): Ogden",0);
+            options.addInt("Implementation","Implementation: (0): Composites | (1): Analytical | (2): Generalized | (3): Spectral",0);
+            materialMatrix = getMaterialMatrix<3,real_t>(mp,mp_def,t,parameters,rho,options);
+        }
+        else
+        {
+            options.addInt("Material","Material model: (0): SvK | (1): NH | (2): NH_ext | (3): MR | (4): Ogden",0);
+            options.addInt("Implementation","Implementation: (0): Composites | (1): Analytical | (2): Generalized | (3): Spectral",1);
+            materialMatrix = getMaterialMatrix<3,real_t>(mp,mp_def,t,parameters,rho,options);
+        }
+    }
+    else
+    {
+        options.addInt("Material","Material model: (0): SvK | (1): NH | (2): NH_ext | (3): MR | (4): Ogden",material);
+        options.addSwitch("Compressibility","Compressibility: (false): Imcompressible | (true): Compressible",Compressibility);
+        options.addInt("Implementation","Implementation: (0): Composites | (1): Analytical | (2): Generalized | (3): Spectral",impl);
+        materialMatrix = getMaterialMatrix<3,real_t>(mp,mp_def,t,parameters,rho,options);
+    }
+
+    gsThinShellAssemblerBase<real_t>* assembler;
+    if(membrane)
+        assembler = new gsThinShellAssembler<3, real_t, false>(mp,dbasis,BCs,force,materialMatrix);
+    else
+        assembler = new gsThinShellAssembler<3, real_t, true >(mp,dbasis,BCs,force,materialMatrix);
+
 
     // Construct assembler object
-    gsThinShellAssembler assembler(mp,dbasis,BCs,surfForce,materialMatrixNonlinear);
-    assembler.setOptions(opts);
-    if (membrane)
-        assembler.setMembrane();
-    assembler.setPointLoads(pLoads);
+    assembler->setOptions(opts);
+    assembler->setPointLoads(pLoads);
     if (pressure!= 0.0)
-        assembler.setPressure(pressFun);
+        assembler->setPressure(pressFun);
     if (Spring!= 0.0)
-        assembler.setFoundation(foundFun);
+        assembler->setFoundation(foundFun);
 
     gsStopwatch stopwatch;
     real_t time = 0.0;
@@ -904,29 +971,27 @@ int main (int argc, char** argv)
     Jacobian_t Jacobian = [&time,&stopwatch,&assembler,&mp_def](gsVector<real_t> const &x)
     {
       stopwatch.restart();
-      assembler.constructSolution(x,mp_def);
-      assembler.assembleMatrix(mp_def);
+      assembler->constructSolution(x,mp_def);
+      assembler->assembleMatrix(mp_def);
       time += stopwatch.stop();
 
-      gsSparseMatrix<real_t> m = assembler.matrix();
-      // gsInfo<<"matrix = \n"<<m.toDense()<<"\n";
+      gsSparseMatrix<real_t> m = assembler->matrix();
       return m;
     };
     // Function for the Residual
     ALResidual_t ALResidual = [&time,&stopwatch,&assembler,&mp_def](gsVector<real_t> const &x, real_t lam, gsVector<real_t> const &force)
     {
       stopwatch.restart();
-      assembler.constructSolution(x,mp_def);
-      assembler.assembleVector(mp_def);
-      gsVector<real_t> Fint = -(assembler.rhs() - force);
+      assembler->constructSolution(x,mp_def);
+      assembler->assembleVector(mp_def);
+      gsVector<real_t> Fint = -(assembler->rhs() - force);
       gsVector<real_t> result = Fint - lam * force;
       time += stopwatch.stop();
       return result; // - lam * force;
     };
     // Assemble linear system to obtain the force vector
-    assembler.assemble();
-    gsVector<> Force = assembler.rhs();
-
+    assembler->assemble();
+    gsVector<> Force = assembler->rhs();
 
     gsArcLengthIterator<real_t> arcLength(Jacobian, ALResidual, Force);
 
@@ -986,7 +1051,7 @@ int main (int argc, char** argv)
     for (index_t k=0; k<step; k++)
     {
       gsInfo<<"Load step "<< k<<"\n";
-      // assembler.constructSolution(solVector,solution);
+      // assembler->constructSolution(solVector,solution);
       arcLength.step();
 
       // gsInfo<<"m_U = "<<arcLength.solutionU()<<"\n";
@@ -1004,7 +1069,7 @@ int main (int argc, char** argv)
         //   solVector = arcLength.solutionU();
         //   Uold = solVector;
         //   Lold = arcLength.solutionL();
-        //   assembler.constructSolution(solVector,mp_def);
+        //   assembler->constructSolution(solVector,mp_def);
 
         //   deformation = mp_def;
         //   deformation.patch(0).coefs() -= mp.patch(0).coefs();// assuming 1 patch here
@@ -1035,25 +1100,26 @@ int main (int argc, char** argv)
       solVector = arcLength.solutionU();
       Uold = solVector;
       Lold = arcLength.solutionL();
-      assembler.constructSolution(solVector,mp_def);
+      assembler->constructSolution(solVector,mp_def);
 
-      gsMatrix<> pts(2,1);
-      pts<<0.5,0.5;
-      if (testCase==8 || testCase==9)
+      if (testCase==4 || testCase==8 || testCase==9)
       {
-        pts.resize(2,3);
-        pts.col(0)<<0.0,1.0;
-        pts.col(1)<<0.5,1.0;
-        pts.col(2)<<1.0,1.0;
-      }
-      gsMatrix<> lambdas = assembler.computePrincipalStretches(pts,mp_def,0);
-      std::streamsize ss = std::cout.precision();
-      std::cout <<std::setprecision(20)
-                <<"lambdas = \n"<<lambdas<<"\n";
-      std::cout<<std::setprecision(ss);
+        gsMatrix<> pts(2,1);
+        pts<<0.5,0.5;
+        if (testCase==8 || testCase==9)
+        {
+          pts.resize(2,3);
+          pts.col(0)<<0.0,1.0;
+          pts.col(1)<<0.5,1.0;
+          pts.col(2)<<1.0,1.0;
+        }
 
-      if (testCase==4)
-      {
+        gsMatrix<> lambdas = assembler->computePrincipalStretches(pts,mp_def,0);
+        std::streamsize ss = std::cout.precision();
+        std::cout <<std::setprecision(20)
+                  <<"lambdas = \n"<<lambdas<<"\n";
+        std::cout<<std::setprecision(ss);
+
         real_t S = Lold / 1e-3 / lambdas(0) / lambdas(2);
         real_t San = mu * (math::pow(lambdas(1),2)-1/lambdas(1));
         gsDebugVar(S);
@@ -1071,7 +1137,7 @@ int main (int argc, char** argv)
         std::streamsize ss = std::cout.precision();
         std::cout<<std::setprecision(20)
               <<"Pressures:\n"<<pressure*arcLength.solutionL()<<"\n"
-                              <<pressure*arcLength.solutionL() * assembler.getArea(mp) / assembler.getArea(mp_def)<<"\n";
+                              <<pressure*arcLength.solutionL() * assembler->getArea(mp) / assembler->getArea(mp_def)<<"\n";
         std::cout<<std::setprecision(ss);
       }
 
@@ -1093,44 +1159,49 @@ int main (int argc, char** argv)
       }
       if (stress)
       {
+        std::string fileName;
+
         gsField<> membraneStress, flexuralStress, membraneStress_p;
 
         gsPiecewiseFunction<> membraneStresses;
-        assembler.constructStress(mp_def,membraneStresses,stress_type::membrane);
+        assembler->constructStress(mp_def,membraneStresses,stress_type::membrane);
         if (deformed)
           membraneStress = gsField<>(mp_def,membraneStresses,true);
         else
           membraneStress = gsField<>(mp,membraneStresses,true);
 
-        gsPiecewiseFunction<> flexuralStresses;
-        assembler.constructStress(mp_def,flexuralStresses,stress_type::flexural);
-        if (deformed)
-          flexuralStress = gsField<>(mp_def,flexuralStresses, true);
-        else
-          flexuralStress = gsField<>(mp,flexuralStresses, true);
-
-        gsPiecewiseFunction<> membraneStresses_p;
-        assembler.constructStress(mp_def,membraneStresses_p,stress_type::principal_stress_membrane);
-        if (deformed)
-          membraneStress_p = gsField<>(mp_def,membraneStresses_p, true);
-        else
-          membraneStress_p = gsField<>(mp,membraneStresses_p, true);
-
-        std::string fileName;
         fileName = dirname + "/" + "membrane" + util::to_string(k);
         gsWriteParaview( membraneStress, fileName, 1000);
         fileName = "membrane" + util::to_string(k) + "0";
         Smembrane.addTimestep(fileName,k,".vts");
+
+        gsPiecewiseFunction<> flexuralStresses;
+        assembler->constructStress(mp_def,flexuralStresses,stress_type::flexural);
+        if (deformed)
+          flexuralStress = gsField<>(mp_def,flexuralStresses, true);
+        else
+          flexuralStress = gsField<>(mp,flexuralStresses, true);
 
         fileName = dirname + "/" + "flexural" + util::to_string(k);
         gsWriteParaview( flexuralStress, fileName, 1000);
         fileName = "flexural" + util::to_string(k) + "0";
         Sflexural.addTimestep(fileName,k,".vts");
 
-        fileName = dirname + "/" + "membrane_p" + util::to_string(k);
-        gsWriteParaview( membraneStress_p, fileName, 1000);
-        fileName = "membrane_p" + util::to_string(k) + "0";
-        Smembrane_p.addTimestep(fileName,k,".vts");
+        if (impl==3)
+        {
+          gsPiecewiseFunction<> membraneStresses_p;
+          assembler->constructStress(mp_def,membraneStresses_p,stress_type::principal_stress_membrane);
+          if (deformed)
+            membraneStress_p = gsField<>(mp_def,membraneStresses_p, true);
+          else
+            membraneStress_p = gsField<>(mp,membraneStresses_p, true);
+
+          fileName = dirname + "/" + "membrane_p" + util::to_string(k);
+          gsWriteParaview( membraneStress_p, fileName, 1000);
+          fileName = "membrane_p" + util::to_string(k) + "0";
+          Smembrane_p.addTimestep(fileName,k,".vts");
+        }
+
       }
 
       if (write)
