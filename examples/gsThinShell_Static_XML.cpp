@@ -81,8 +81,18 @@ int main(int argc, char *argv[])
     }
     else if (testCase == 2)
     {
-        fn1 = "scordelis_lo_roof.xml";
+        fn1 = "surface/scordelis_lo_roof.xml";
         fn2 = "pde/kirchhoff_shell_scordelis.xml";
+    }
+    else if (testCase == 3)
+    {
+        fn1 = "surface/quarter_hemisphere.xml";
+        fn2 = "pde/kirchhoff_shell_hemisphere.xml";
+    }
+    else if (testCase == 4)
+    {
+        fn1 = "surface/pinched_cylinder.xml";
+        fn2 = "pde/kirchhoff_shell_pinchedCylinder.xml";
     }
 
     gsReadFile<>(fn1, mp);
@@ -101,10 +111,6 @@ int main(int argc, char *argv[])
     gsInfo<<"Force function "<< force << "\n";
     // fd.getId(22, pressure); // id=1: source function ------- TO DO!
     // gsInfo<<"Pressure function "<< force << "\n";
-
-    fd.read(fn3);
-    gsOptionList opts;
-    fd.getFirst<gsOptionList>(opts);
 
     // Loads
     gsPointLoads<real_t> pLoads = gsPointLoads<real_t>();
@@ -170,6 +176,9 @@ int main(int argc, char *argv[])
     for (int r =0; r < numRefine; ++r)
         mp.uniformRefine();
 
+    gsOptionList solverOptions;
+    fd.getId(90, solverOptions); // id=4: assembler options
+
     // set initial deformation to undeformed state
     mp_def = mp;
 
@@ -218,6 +227,11 @@ int main(int argc, char *argv[])
     else
         assembler = new gsThinShellAssembler<3, real_t, true >(mp,dbasis,bc,force,materialMatrix);
 
+    fd.read(fn3);
+    gsOptionList opts;
+    fd.getFirst<gsOptionList>(opts);
+
+
     // Construct assembler object
     assembler->setOptions(opts);
     assembler->setPointLoads(pLoads);
@@ -245,8 +259,6 @@ int main(int argc, char *argv[])
     };
 
     // Configure Structural Analsysis module
-    gsOptionList solverOptions;
-    fd.getId(90, solverOptions); // id=4: assembler options
     gsStaticSolver<real_t> staticSolver(matrix,vector,Jacobian,Residual);
     staticSolver.setOptions(solverOptions);
 
