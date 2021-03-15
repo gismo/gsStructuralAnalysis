@@ -138,7 +138,7 @@ int main (int argc, char** argv)
     writePoints.col(2)<<1.0,1.0;
 
     std::string dirname = "ArcLengthResults";
-    dirname = dirname + "/" + "Cylinder-r=" + std::to_string(numRefine) + "-e" + std::to_string(numElevate) + "-M" + std::to_string(material) + "_solution";
+    dirname = dirname + "/" + "Cylinder";
     std::string output =  "solution";
     wn = output + "data.txt";
 

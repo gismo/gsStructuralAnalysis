@@ -133,7 +133,7 @@ int main (int argc, char** argv)
         Ratio = C10/C01;
         mu = 2*(C01+C10);
       }
-      else if (material==1 || material==4)
+      else //if (material==1 || material==4)
       {
         C10 = 19.1010178e4;
         mu = 2*C10;
@@ -204,13 +204,13 @@ int main (int argc, char** argv)
       bDim = thickness / 1.9e-3;
       aDim = 2*bDim;
 
-      E_modulus = 1.0;
-      mu = E_modulus / (2 * (1 + PoissonRatio));
-
       if ((!Compressibility) && (material!=0))
         PoissonRatio = 0.5;
       else
         PoissonRatio = 0.45;
+
+      E_modulus = 1.0;
+      mu = E_modulus / (2 * (1 + PoissonRatio));
 
       A1 = 1.3;
       A2 = 5.0;

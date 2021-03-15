@@ -38,7 +38,7 @@ int main (int argc, char** argv)
 
 
     index_t Compressibility = 0;
-    index_t material  = 0;
+    index_t material  = 1;
     bool composite = false;
     index_t impl = 1; // 1= analytical, 2= generalized, 3= spectral
 
@@ -295,6 +295,7 @@ int main (int argc, char** argv)
     arcLength.options().setInt("AngleMethod",0); // 0: step, 1: iteration
     arcLength.options().setSwitch("AdaptiveLength",adaptive);
     arcLength.options().setInt("AdaptiveIterations",5);
+    arcLength.options().setReal("Scaling",0.0);
     arcLength.options().setReal("Tol",tol);
     arcLength.options().setReal("TolU",tolU);
     arcLength.options().setReal("TolF",tolF);
