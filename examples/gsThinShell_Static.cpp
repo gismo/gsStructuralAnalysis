@@ -315,10 +315,11 @@ int main(int argc, char *argv[])
     {
         if (weak)
         {
-            bc.addCondition(boundary::north, condition_type::weak_dirichlet, &weak_drch ); // unknown 2 - z
-            bc.addCondition(boundary::east, condition_type::weak_dirichlet, &weak_drch ); // unknown 2 - z
-            bc.addCondition(boundary::south, condition_type::weak_dirichlet, &weak_drch ); // unknown 2 - z
-            bc.addCondition(boundary::west, condition_type::weak_dirichlet, &weak_drch ); // unknown 2 - z
+            weak_drch.setValue(weak_D,3);
+            bc.addCondition(boundary::north, condition_type::weak_dirichlet, &weak_drch, 0, false, -1 ); // unknown 2 - z
+            bc.addCondition(boundary::east, condition_type::weak_dirichlet, &weak_drch, 0, false, -1 ); // unknown 2 - z
+            bc.addCondition(boundary::south, condition_type::weak_dirichlet, &weak_drch, 0, false, -1); // unknown 2 - z
+            bc.addCondition(boundary::west, condition_type::weak_dirichlet, &weak_drch, 0, false, -1 ); // unknown 2 - z
         }
         else
         {
@@ -821,20 +822,17 @@ int main(int argc, char *argv[])
     {
         if (weak)
         {
-            GISMO_ERROR("Not implemented. Component-wise weak BCs need to be implemented first");
+            weak_drch.setValue(weak_D,3);
+            weak_clmp.setValue(weak_C,3);
+            bc.addCondition(boundary::north, condition_type::weak_dirichlet, &weak_drch );
+            bc.addCondition(boundary::east, condition_type::weak_dirichlet, &weak_drch );
+            bc.addCondition(boundary::south, condition_type::weak_dirichlet, &weak_drch );
+            bc.addCondition(boundary::west, condition_type::weak_dirichlet, &weak_drch );
 
-            for (index_t i=0; i!=3; ++i)
-            {
-                bc.addCondition(boundary::north, condition_type::weak_dirichlet, 0, 0, false, i ); // unknown 0 - x
-                bc.addCondition(boundary::east, condition_type::weak_dirichlet, 0, 0, false, i ); // unknown 1 - y
-                bc.addCondition(boundary::south, condition_type::weak_dirichlet, 0, 0, false, i ); // unknown 2 - z
-                bc.addCondition(boundary::west, condition_type::weak_dirichlet, 0, 0, false, i ); // unknown 2 - z
-            }
-
-            bc.addCondition(boundary::north, condition_type::weak_clamped, 0, 0 ,false,2);
-            bc.addCondition(boundary::east, condition_type::weak_clamped, 0, 0 ,false,2);
-            bc.addCondition(boundary::south, condition_type::weak_clamped, 0, 0 ,false,2);
-            bc.addCondition(boundary::west, condition_type::weak_clamped, 0, 0 ,false,2);
+            bc.addCondition(boundary::north, condition_type::weak_clamped, &weak_clmp);
+            bc.addCondition(boundary::east, condition_type::weak_clamped, &weak_clmp);
+            bc.addCondition(boundary::south, condition_type::weak_clamped, &weak_clmp);
+            bc.addCondition(boundary::west, condition_type::weak_clamped, &weak_clmp);
         }
         else
         {
@@ -1174,7 +1172,8 @@ int main(int argc, char *argv[])
     else
         assembler = new gsThinShellAssembler<3, real_t, true >(mp,dbasis,bc,force,materialMatrix);
 
-
+    opts.addReal("WeakDirichlet","Penalty parameter weak dirichlet conditions",1e5);
+    opts.addReal("WeakClamped","Penalty parameter weak clamped conditions",1e5);
     // Construct assembler object
     assembler->setOptions(opts);
     assembler->setPointLoads(pLoads);
