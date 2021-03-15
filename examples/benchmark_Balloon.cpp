@@ -40,7 +40,7 @@ int main (int argc, char** argv)
 
 
     index_t Compressibility = 0;
-    index_t material  = 0;
+    index_t material  = 1;
     bool composite = false;
     index_t impl = 1; // 1= analytical, 2= generalized, 3= spectral
 
@@ -48,7 +48,7 @@ int main (int argc, char** argv)
     int result        = 0;
     index_t maxit     = 50;
     // Arc length method options
-    real_t dL         = 1e0; // General arc length
+    real_t dL         = 5e0; // General arc length
     real_t tol        = 1e-6;
     real_t tolU       = 1e-6;
     real_t tolF       = 1e-3;
