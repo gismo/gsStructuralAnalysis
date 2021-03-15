@@ -419,7 +419,7 @@ void gsArcLengthIterator<T>::initiateStepLC()
 
   // Reset step
   m_DeltaU = m_deltaU = gsVector<T>::Zero(m_numDof);
-  m_DeltaL = m_deltaL = m_arcLength;
+  m_DeltaL = m_deltaL = 0.0;
 
   // Initiate verbose
   if (m_verbose)
@@ -429,7 +429,12 @@ void gsArcLengthIterator<T>::initiateStepLC()
 template <class T>
 void gsArcLengthIterator<T>::predictorLC()
 {
-  m_DeltaU = m_deltaU = this->solveSystem(m_forcing);
+  m_DeltaL = m_deltaL = m_arcLength;
+  m_deltaUt = this->solveSystem(m_forcing);
+  m_DeltaU = m_deltaL*m_deltaUt;
+
+  // gsDebugVar(m_DeltaU.norm());
+  note+= "predictor\t";
 }
 
 template <class T>
