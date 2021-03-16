@@ -12,6 +12,7 @@
 */
 
 #include <typeinfo>
+#include <gsSpectra/gsSpectra.h>
 #pragma once
 
 
@@ -125,3 +126,8 @@ protected:
 
 
 } // namespace gismo
+
+
+#ifndef GISMO_BUILD_LIB
+#include GISMO_HPP_HEADER(gsStaticSolver.hpp)
+#endif
