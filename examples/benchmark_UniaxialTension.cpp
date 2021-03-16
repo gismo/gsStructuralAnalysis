@@ -36,7 +36,6 @@ int main (int argc, char** argv)
     int step          = 10;
     int method        = 2; // (0: Load control; 1: Riks' method; 2: Crisfield's method; 3: consistent crisfield method; 4: extended iterations)
 
-
     index_t Compressibility = 0;
     index_t material  = 1;
     bool composite = false;
