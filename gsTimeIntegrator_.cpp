@@ -3,6 +3,7 @@
 #include <gsCore/gsTemplateTools.h>
 
 #include <gsStructuralAnalysis/gsTimeIntegrator.h>
+#include <gsStructuralAnalysis/gsTimeIntegrator.hpp>
 
 namespace gismo
 {
