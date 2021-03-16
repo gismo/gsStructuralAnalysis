@@ -3,7 +3,7 @@
 #include <gsCore/gsTemplateTools.h>
 
 #include <gsStructuralAnalysis/gsArcLengthIterator.h>
-#include <gsStructuralAnalysis/gsArcLengthIterator.>
+#include <gsStructuralAnalysis/gsArcLengthIterator.hpp>
 
 namespace gismo
 {
