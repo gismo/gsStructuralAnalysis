@@ -1,4 +1,4 @@
-/** @file gsThinShell_DynamicShellNonlinear.cpp
+/** @file example_DynamicShellNL.cpp
 
     @brief Example for nonlinear time integration of a nonlinear shell
 
@@ -157,7 +157,7 @@ int main (int argc, char** argv)
     BCs.addCondition(boundary::south, condition_type::clamped,0,0,false,2);
 
     BCs.addCondition(boundary::west, condition_type::clamped,0,0,false,2);
-    // BCs.addCondition(boundary::west, condition_type::collapsed,0,0,false,2);
+    BCs.addCondition(boundary::west, condition_type::collapsed,0,0,false,2);
 
     gsVector<> point(2); point<< 0, 0 ; // Point where surface force is applied
     gsVector<> loadvec (3); loadvec << 0, 0, -25 ;

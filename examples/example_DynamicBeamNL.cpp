@@ -165,7 +165,7 @@ int main (int argc, char** argv)
 // Define Beam Assembler and Assembler for L2-projection
 //------------------------------------------------------------------------------
 
-    gsMultiPatch<> mp_def = mp, solution = mp;
+    gsMultiPatch<> mp_def = mp;
     gsMultiBasis<> dbasis(mp);
     // Linear isotropic material model
     gsFunctionExpr<> force("0","0","0",3);
@@ -243,17 +243,17 @@ gsParaviewCollection collection_an("DynamicBeamResults/analytical");
 typedef std::function<gsSparseMatrix<real_t> (gsVector<real_t> const &)>        Jacobian_t;
 typedef std::function<gsVector<real_t> (gsVector<real_t> const &, real_t time) >Residual_t;
 // Function for the Jacobian
-Jacobian_t Jacobian = [&assembler,&solution](gsMatrix<real_t> const &x)
+Jacobian_t Jacobian = [&assembler,&mp_def](gsMatrix<real_t> const &x)
 {
   // to do: add time dependency of forcing
-  assembler->constructSolution(x,solution);
-  assembler->assembleMatrix(solution);
+  assembler->constructSolution(x,mp_def);
+  assembler->assembleMatrix(mp_def);
   gsSparseMatrix<real_t> m = assembler->matrix();
   return m;
 };
 
 // Function for the Residual (TEST TO CHANGE FUNCTION!)
-Residual_t Residual = [&EA,&load,&omega,&length,&EI,&force,&Density,&Area,&assembler,&solution](gsMatrix<real_t> const &x, real_t time)
+Residual_t Residual = [&EA,&load,&omega,&length,&EI,&force,&Density,&Area,&assembler,&mp_def](gsMatrix<real_t> const &x, real_t time)
 {
   /// Make time dependent forcing
   char buffer_traction[200];
@@ -268,8 +268,8 @@ Residual_t Residual = [&EA,&load,&omega,&length,&EI,&force,&Density,&Area,&assem
 
   gsFunctionExpr<> surfForceTemp(traction,"0",pressure,3);
   force.swap(surfForceTemp);
-  assembler->constructSolution(x,solution);
-  assembler->assembleVector(solution);
+  assembler->constructSolution(x,mp_def);
+  assembler->assembleVector(mp_def);
   return assembler->rhs();
 };
 
@@ -307,7 +307,7 @@ for (index_t i=0; i<steps; i++)
   timeIntegrator.constructSolution();
   uNew = timeIntegrator.displacements();
 
-  assembler->constructSolution(uNew,solution);
+  assembler->constructSolution(uNew,mp_def);
 
   time = timeIntegrator.currentTime();
   // Define manufactured solution
@@ -317,9 +317,9 @@ for (index_t i=0; i<steps; i++)
   gsFunctionExpr<> analytical("0","0",w_an,3);
 
   // Update solution and export
-  assembler->constructSolution(uNew,solution);
-  solution.patch(0).coefs() -= mp.patch(0).coefs();// assuming 1 patch here
-  gsField<> solField(mp,solution);
+  assembler->constructSolution(uNew,mp_def);
+  mp_def.patch(0).coefs() -= mp.patch(0).coefs();// assuming 1 patch here
+  gsField<> solField(mp,mp_def);
   std::string fileName = dirname + "/solution" + util::to_string(i);
   gsWriteParaview<>(solField, fileName, 500);
   fileName = "solution" + util::to_string(i) + "0";
@@ -336,7 +336,7 @@ for (index_t i=0; i<steps; i++)
     gsMatrix<> v(2,1);
     v<<  0.0,0.0;
     gsMatrix<> res2;
-    solution.patch(0).eval_into(v,res2);
+    mp_def.patch(0).eval_into(v,res2);
     std::ofstream file;
     file.open(wn,std::ofstream::out | std::ofstream::app);
     file  << std::setprecision(10)
@@ -358,7 +358,7 @@ for (index_t i=0; i<steps; i++)
     gsMatrix<> res2;
     analytical.eval_into(u,res1);
     // gsInfo<<"Analytical: \n"<<res1<<"\n";
-    solution.patch(0).eval_into(v,res2);
+    mp_def.patch(0).eval_into(v,res2);
     // gsInfo<<"Numerical: "<<res2<<"\n";
 
     gsInfo<<"Mid-point error at t = "<<t<<":\t"<<math::abs(res1(2,0)-res2(2,0))<<"\n";
@@ -366,12 +366,12 @@ for (index_t i=0; i<steps; i++)
     gsInfo<<"L2-norm error at t = "<<t<<":\t"<<solField.distanceL2(anField)<<"\n";
     //gsInfo <<"Deformation norm       : "<< deformation.patch(0).coefs().norm() <<".\n";
     gsInfo <<"Maximum deformation coef: "
-           << solution.patch(0).coefs().colwise().maxCoeff() <<".\n";
+           << mp_def.patch(0).coefs().colwise().maxCoeff() <<".\n";
     gsInfo <<"Minimum deformation coef: "
-           << solution.patch(0).coefs().colwise().minCoeff() <<".\n";
+           << mp_def.patch(0).coefs().colwise().minCoeff() <<".\n";
   }
   // Update solution with multipatch coefficients to generate geometry again
-  solution.patch(0).coefs() += mp.patch(0).coefs();// assuming 1 patch here
+  mp_def.patch(0).coefs() += mp.patch(0).coefs();// assuming 1 patch here
 
   // gsInfo<<displacements.transpose()<<"\n";
 }
