@@ -620,7 +620,7 @@ namespace gismo
         m_t += (1-gamma)*m_dt;
         resetIteration();
 
-        while ( (m_updateNorm>1e-6 || m_residue>1e-6) && m_numIterations<=m_maxIterations )
+        while ( (m_updateNorm>m_tolerance || m_residue>m_tolerance) && m_numIterations<=m_maxIterations )
         {
             if ( (!m_quasiNewton) || (m_numIterations==0) )
                 m_jacMat = m_jacobian(m_uNew);

@@ -54,7 +54,7 @@ int main (int argc, char** argv)
     std::string wn;
 
     int steps = 100;
-    real_t tend = 1e-5;
+    real_t tend = 3e-4;
 
     std::string assemberOptionsFile("options/solver_options.xml");
 
@@ -79,7 +79,6 @@ int main (int argc, char** argv)
     cmd.addInt("e","degreeElevation",
                "Number of degree elevation steps to perform on the Geometry's basis before solving",
                numElevate);
-    cmd.addSwitch("nl", "Nonlinear elasticity (otherwise linear)", nonlinear);
     cmd.addSwitch("plot", "Plot result in ParaView format", plot);
     cmd.addSwitch("write", "Write convergence data to file", write);
 
@@ -173,7 +172,7 @@ int main (int argc, char** argv)
     gsMultiBasis<> dbasis(mp);
     // Linear isotropic material model
     gsConstantFunction<> force(tmp,3);
-    gsFunctionExpr<> thick(std::to_string(thickness), 3);
+    gsFunctionExpr<> t(std::to_string(thickness), 3);
     gsFunctionExpr<> E(std::to_string(E_modulus),3);
     gsFunctionExpr<> nu(std::to_string(PoissonRatio),3);
     gsFunctionExpr<> rho(std::to_string(Density),3);
@@ -186,14 +185,13 @@ int main (int argc, char** argv)
 
     gsOptionList options;
     options.addInt("Material","Material model: (0): SvK | (1): NH | (2): NH_ext | (3): MR | (4): Ogden",0);
-    options.addInt("Implementation","Implementation: (0): Composites | (1): Analytical | (2): Generalized | (3): Spectral",0);
-    materialMatrix = getMaterialMatrix<3,real_t>(mp,mp_def,t,parameters,rho,options);
+    options.addInt("Implementation","Implementation: (0): Composites | (1): Analytical | (2): Generalized | (3): Spectral",1);
+    materialMatrix = getMaterialMatrix<3,real_t>(mp,t,parameters,rho,options);
 
     gsThinShellAssemblerBase<real_t>* assembler;
     assembler = new gsThinShellAssembler<3, real_t, true >(mp,dbasis,BCs,force,materialMatrix);
 
     // Construct assembler object for dynamic computations
-    gsThinShellAssembler assembler(mp,dbasis,BCs,force,materialMat);
     assembler->setOptions(opts);
     assembler->setPointLoads(pLoads);
 
@@ -260,9 +258,9 @@ timeIntegrator.setAcceleration(aNew);
 //------------------------------------------------------------------------------
 // Nonlinear time integration
 //------------------------------------------------------------------------------
+real_t time;
 for (index_t i=0; i<steps; i++)
 {
-  real_t time = timeIntegrator.currentTime();
   timeIntegrator.step();
   timeIntegrator.constructSolution();
   gsMatrix<> displacements = timeIntegrator.displacements();
@@ -282,12 +280,12 @@ for (index_t i=0; i<steps; i++)
     v<<  0.0,0.0;
     gsMatrix<> res2;
     solution.patch(0).eval_into(v,res2);
-
+    time = timeIntegrator.currentTime();
     std::ofstream file;
     file.open(wn,std::ofstream::out | std::ofstream::app);
     file  << std::setprecision(10)
           << time << ","
-          << res2[2] <<"\n";
+          << res2(2,0) <<"\n";
     file.close();
   }
   // Update solution with multipatch coefficients to generate geometry again
