@@ -242,13 +242,13 @@ int main (int argc, char** argv)
         {
             options.addInt("Material","Material model: (0): SvK | (1): NH | (2): NH_ext | (3): MR | (4): Ogden",0);
             options.addInt("Implementation","Implementation: (0): Composites | (1): Analytical | (2): Generalized | (3): Spectral",0);
-            materialMatrix = getMaterialMatrix<3,real_t>(mp,mp_def,t,parameters,rho,options);
+            materialMatrix = getMaterialMatrix<3,real_t>(mp,t,parameters,rho,options);
         }
         else
         {
             options.addInt("Material","Material model: (0): SvK | (1): NH | (2): NH_ext | (3): MR | (4): Ogden",0);
             options.addInt("Implementation","Implementation: (0): Composites | (1): Analytical | (2): Generalized | (3): Spectral",1);
-            materialMatrix = getMaterialMatrix<3,real_t>(mp,mp_def,t,parameters,rho,options);
+            materialMatrix = getMaterialMatrix<3,real_t>(mp,t,parameters,rho,options);
         }
     }
     else
@@ -256,7 +256,7 @@ int main (int argc, char** argv)
         options.addInt("Material","Material model: (0): SvK | (1): NH | (2): NH_ext | (3): MR | (4): Ogden",material);
         options.addSwitch("Compressibility","Compressibility: (false): Imcompressible | (true): Compressible",Compressibility);
         options.addInt("Implementation","Implementation: (0): Composites | (1): Analytical | (2): Generalized | (3): Spectral",impl);
-        materialMatrix = getMaterialMatrix<3,real_t>(mp,mp_def,t,parameters,rho,options);
+        materialMatrix = getMaterialMatrix<3,real_t>(mp,t,parameters,rho,options);
     }
 
     gsThinShellAssemblerBase<real_t>* assembler;

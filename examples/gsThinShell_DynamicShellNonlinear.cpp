@@ -11,12 +11,6 @@
     Author(s): H.M. Verhelst (2019-..., TU Delft)
 */
 
-/*
-  To do:
-  - Add initial displacement/velocity/acceleration by L2 projection
-  - Add other test case
-*/
-
 #include <gismo.h>
 
 #include <gsKLShell/gsThinShellAssembler.h>
@@ -58,7 +52,7 @@ int main (int argc, char** argv)
     std::string wn;
 
     int steps = 100;
-    real_t tend = 3e-5;
+    real_t tend = 3e-4;
 
     std::string assemberOptionsFile("options/solver_options.xml");
 
@@ -142,6 +136,8 @@ int main (int argc, char** argv)
 
     gsInfo<<"Basis (patch 0): "<< mp.patch(0).basis() << "\n";
 
+    gsWriteParaview<>(mp, "mp", 500);
+
 //------------------------------------------------------------------------------
 // Define Boundary conditions and Initial conditions
 //------------------------------------------------------------------------------
@@ -161,7 +157,7 @@ int main (int argc, char** argv)
     BCs.addCondition(boundary::south, condition_type::clamped,0,0,false,2);
 
     BCs.addCondition(boundary::west, condition_type::clamped,0,0,false,2);
-    BCs.addCondition(boundary::west, condition_type::collapsed,0,0,false,2);
+    // BCs.addCondition(boundary::west, condition_type::collapsed,0,0,false,2);
 
     gsVector<> point(2); point<< 0, 0 ; // Point where surface force is applied
     gsVector<> loadvec (3); loadvec << 0, 0, -25 ;
@@ -174,10 +170,10 @@ int main (int argc, char** argv)
 // Define Beam Assembler and Assembler for L2-projection
 //------------------------------------------------------------------------------
 
-    gsMultiPatch<> mp_def = mp, solution = mp;
+    gsMultiPatch<> mp_def = mp;
     gsMultiBasis<> dbasis(mp);
     // Linear isotropic material model
-    gsConstantFunction<> force(tmp,3);
+    gsFunctionExpr<> force("0","0","0",3);
     gsFunctionExpr<> t(std::to_string(thickness), 3);
     gsFunctionExpr<> E(std::to_string(E_modulus),3);
     gsFunctionExpr<> nu(std::to_string(PoissonRatio),3);
@@ -192,7 +188,7 @@ int main (int argc, char** argv)
     gsOptionList options;
     options.addInt("Material","Material model: (0): SvK | (1): NH | (2): NH_ext | (3): MR | (4): Ogden",0);
     options.addInt("Implementation","Implementation: (0): Composites | (1): Analytical | (2): Generalized | (3): Spectral",1);
-    materialMatrix = getMaterialMatrix<3,real_t>(mp,mp_def,t,parameters,rho,options);
+    materialMatrix = getMaterialMatrix<3,real_t>(mp,t,parameters,rho,options);
 
     gsThinShellAssemblerBase<real_t>* assembler;
     assembler = new gsThinShellAssembler<3, real_t, true >(mp,dbasis,BCs,force,materialMatrix);
@@ -227,23 +223,32 @@ gsParaviewCollection collection(dirname + "/solution");
 typedef std::function<gsSparseMatrix<real_t> (gsVector<real_t> const &)>        Jacobian_t;
 typedef std::function<gsVector<real_t> (gsVector<real_t> const &, real_t time) >Residual_t;
 // Function for the Jacobian
-Jacobian_t Jacobian = [&assembler,&solution](gsMatrix<real_t> const &x)
+Jacobian_t Jacobian = [&assembler,&mp_def](gsMatrix<real_t> const &x)
 {
   // to do: add time dependency of forcing
-  assembler->constructSolution(x,solution);
-  assembler->assemble(solution);
+  assembler->constructSolution(x,mp_def);
+  assembler->assemble(mp_def);
   gsSparseMatrix<real_t> m = assembler->matrix();
   return m;
 };
 
 // Function for the Residual
-Residual_t Residual = [&assembler,&solution](gsMatrix<real_t> const &x, real_t time)
+Residual_t Residual = [&assembler,&mp_def](gsMatrix<real_t> const &x, real_t time)
 {
-  assembler->constructSolution(x,solution);
-  assembler->assemble(solution);
-  gsMatrix<real_t> r = assembler->rhs();
-  return r;
+  assembler->constructSolution(x,mp_def);
+  assembler->assembleVector(mp_def);
+  return assembler->rhs();
 };
+
+// // Function for the Residual (TEST FO CHANGE FUNCTION!)
+// Residual_t Residual = [&force,&assembler,&solution](gsMatrix<real_t> const &x, real_t time)
+// {
+//   gsFunctionExpr<> force2("0","0",std::to_string(time),3);
+//   force.swap(force2);
+//   assembler->constructSolution(x,solution);
+//   assembler->assembleVector(solution);
+//   return assembler->rhs();
+// };
 
 // Compute mass matrix (since it is constant over time)
 assembler->assembleMass();
@@ -257,7 +262,7 @@ assembler->assemble();
 gsTimeIntegrator<real_t> timeIntegrator(M,Jacobian,Residual,dt);
 
 timeIntegrator.verbose();
-timeIntegrator.setTolerance(1e-6);
+timeIntegrator.setTolerance(1e-2);
 timeIntegrator.setMethod(methodName);
 if (quasiNewton)
   timeIntegrator.quasiNewton();
@@ -273,18 +278,17 @@ timeIntegrator.setDisplacement(uNew);
 timeIntegrator.setVelocity(vNew);
 timeIntegrator.setAcceleration(aNew);
 
-
+real_t time;
 for (index_t i=0; i<steps; i++)
 {
-  real_t time = timeIntegrator.currentTime();
   timeIntegrator.step();
   timeIntegrator.constructSolution();
   gsMatrix<> displacements = timeIntegrator.displacements();
 
-  assembler->constructSolution(displacements,solution);
+  assembler->constructSolution(displacements,mp_def);
 
-  solution.patch(0).coefs() -= mp.patch(0).coefs();// assuming 1 patch here
-  gsField<> solField(mp,solution);
+  mp_def.patch(0).coefs() -= mp.patch(0).coefs();// assuming 1 patch here
+  gsField<> solField(mp,mp_def);
   std::string fileName = dirname + "/solution" + util::to_string(i);
   gsWriteParaview<>(solField, fileName, 500);
   fileName = "solution" + util::to_string(i) + "0";
@@ -295,8 +299,8 @@ for (index_t i=0; i<steps; i++)
     gsMatrix<> v(2,1);
     v<<  0.0,0.0;
     gsMatrix<> res2;
-    solution.patch(0).eval_into(v,res2);
-
+    mp_def.patch(0).eval_into(v,res2);
+    time = timeIntegrator.currentTime();
     std::ofstream file;
     file.open(wn,std::ofstream::out | std::ofstream::app);
     file  << std::setprecision(10)
@@ -305,7 +309,7 @@ for (index_t i=0; i<steps; i++)
     file.close();
   }
   // Update solution with multipatch coefficients to generate geometry again
-  solution.patch(0).coefs() += mp.patch(0).coefs();// assuming 1 patch here
+  mp_def.patch(0).coefs() += mp.patch(0).coefs();// assuming 1 patch here
 
   // gsInfo<<displacements.transpose()<<"\n";
 }
