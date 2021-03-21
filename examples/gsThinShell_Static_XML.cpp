@@ -30,6 +30,7 @@ int main(int argc, char *argv[])
     //! [Parse command line]
     bool plot  = false;
     bool stress= false;
+    bool mesh= false;
     index_t numRefine  = 1;
     index_t numElevate = 1;
 
@@ -64,6 +65,7 @@ int main(int argc, char *argv[])
     cmd.addSwitch("nl", "Solve nonlinear problem", nonlinear);
     cmd.addSwitch("verbose", "Full matrix and vector output", verbose);
     cmd.addSwitch("plot", "Create a ParaView visualization file with the solution", plot);
+    cmd.addSwitch("mesh", "Plot mesh", mesh);
     cmd.addSwitch("stress", "Create a ParaView visualization file with the stresses", stress);
     cmd.addSwitch("membrane", "Use membrane model (no bending)", membrane);
 
@@ -190,7 +192,7 @@ int main(int argc, char *argv[])
     gsInfo << dbasis.basis(0)<<"\n";
 
     if (plot)
-        gsWriteParaview<>( mp_def    , "mp", 1000, true);
+        gsWriteParaview<>( mp_def    , "mp", 1000, mesh);
 
 
     // Set MaterialMatrix
@@ -279,7 +281,7 @@ int main(int argc, char *argv[])
     {
         gsField<> solField(mp_def, deformation);
         gsInfo<<"Plotting in Paraview...\n";
-        gsWriteParaview<>( solField, "solution", 1000, true);
+        gsWriteParaview<>( solField, "solution", 1000, mesh);
         // ev.options().setSwitch("plot.elements", true);
         // ev.writeParaview( u_sol   , G, "solution");
 
