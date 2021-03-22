@@ -508,5 +508,5 @@ protected:
 } // namespace gismo
 
 #ifndef GISMO_BUILD_LIB
-#include GISMO_HPP_HEADER(gsShellfunctions.hpp)
+#include GISMO_HPP_HEADER(gsArcLengthIterator.hpp)
 #endif
