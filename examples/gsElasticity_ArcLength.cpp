@@ -88,7 +88,7 @@ int main (int argc, char** argv)
 
     // Arc length method options
     real_t dL = 0; // General arc length
-    real_t dLb = 0.5; // Ard length to find bifurcation
+    real_t dLb = 0.1; // Ard length to find bifurcation
     real_t tol = 1e-6;
     real_t tolU = 1e-6;
     real_t tolF = 1e-3;

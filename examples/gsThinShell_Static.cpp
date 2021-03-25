@@ -1073,7 +1073,7 @@ int main(int argc, char *argv[])
     gsConstantFunction<> mu3(-0.1e5/4.225e5*mu,3);
 
     real_t pi = math::atan(1)*4;
-    index_t kmax = 1;
+    index_t kmax = 2;
     gsVector<> E11(kmax), E22(kmax), G12(kmax), nu12(kmax), nu21(kmax), thick(kmax), phi(kmax);
     E11.setZero(); E22.setZero(); G12.setZero(); nu12.setZero(); nu21.setZero(); thick.setZero(); phi.setZero();
     for (index_t k=0; k != kmax; ++k)
@@ -1085,13 +1085,20 @@ int main(int argc, char *argv[])
         phi.at(kmax) = k / kmax * pi/2.0;
     }
 
-    gsConstantFunction<> E11fun(E11,3);
-    gsConstantFunction<> E22fun(E22,3);
-    gsConstantFunction<> G12fun(G12,3);
-    gsConstantFunction<> nu12fun(nu12,3);
-    gsConstantFunction<> nu21fun(nu21,3);
-    gsConstantFunction<> thickfun(thick,3);
-    gsConstantFunction<> phifun(phi,3);
+    // gsConstantFunction<> E11fun(E11,3);
+    // gsConstantFunction<> E22fun(E22,3);
+    // gsConstantFunction<> G12fun(G12,3);
+    // gsConstantFunction<> nu12fun(nu12,3);
+    // gsConstantFunction<> nu21fun(nu21,3);
+    // gsConstantFunction<> thickfun(thick,3);
+    // gsConstantFunction<> phifun(phi,3);
+    gsFunctionExpr<> E11fun(std::to_string(E_modulus),std::to_string(E_modulus),3);
+    gsFunctionExpr<> E22fun(std::to_string(E_modulus),std::to_string(E_modulus),3);
+    gsFunctionExpr<> G12fun(std::to_string(0.5 * E_modulus / (1+PoissonRatio)),std::to_string(0.5 * E_modulus / (1+PoissonRatio)),3);
+    gsFunctionExpr<> nu12fun(std::to_string(PoissonRatio),std::to_string(PoissonRatio),3);
+    gsFunctionExpr<> nu21fun(std::to_string(PoissonRatio),std::to_string(PoissonRatio),3);
+    gsFunctionExpr<> thickfun(std::to_string(thickness/kmax),std::to_string(thickness/kmax), 3);
+    gsFunctionExpr<> phifun("0","0", 3);
 
     std::vector<gsFunction<>*> parameters;
     if (material==0) // SvK & Composites
@@ -1148,7 +1155,7 @@ int main(int argc, char *argv[])
         {
             options.addInt("Material","Material model: (0): SvK | (1): NH | (2): NH_ext | (3): MR | (4): Ogden",0);
             options.addInt("Implementation","Implementation: (0): Composites | (1): Analytical | (2): Generalized | (3): Spectral",0);
-            materialMatrix = getMaterialMatrix<3,real_t>(mp,t,parameters,rho,options);
+            materialMatrix = getMaterialMatrix<3,real_t>(mp,thickfun,parameters,rho,options);
         }
         else
         {

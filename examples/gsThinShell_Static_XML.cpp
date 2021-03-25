@@ -42,7 +42,7 @@ int main(int argc, char *argv[])
     index_t testCase = -1;
     bool nonlinear = false;
     bool verbose = false;
-    std::string fn1,fn2,fn3;
+    std::string fn1,fn2,fn3,fn4;
     fn1 = "planar/unitplate.xml";
     fn2 = "pde/kirchhoff_shell1.xml";
     fn3 = "options/solver_options.xml";
@@ -62,6 +62,7 @@ int main(int argc, char *argv[])
     cmd.addInt( "t", "testCase", "Define test case",  testCase );
     cmd.addString( "f", "GEOMfile", "Input XML Geometry file", fn1 );
     cmd.addString( "F", "PDEfile", "Input XML PDE file", fn2 );
+    cmd.addString( "L", "LayupFile", "Layup file", fn4 );
     cmd.addSwitch("nl", "Solve nonlinear problem", nonlinear);
     cmd.addSwitch("verbose", "Full matrix and vector output", verbose);
     cmd.addSwitch("plot", "Create a ParaView visualization file with the solution", plot);
@@ -199,10 +200,37 @@ int main(int argc, char *argv[])
     gsMaterialMatrixBase<real_t>* materialMatrix;
 
     gsOptionList options;
+
+    gsFunctionExpr<> E11fun, E22fun, G12fun, nu12fun, nu21fun, phifun, thickfun;
+
     if      (material==0 && impl==1)
     {
         if (composite)
         {
+            GISMO_ENSURE(!fn4.empty(),"Layup file must be provided!");
+            fd.read(fn4);
+            GISMO_ENSURE(fd.count<gsFunctionExpr<>>()==7,"Composites must have 1 parameters!");
+            fd.getId(0,E11fun);
+            fd.getId(1,E22fun);
+            fd.getId(2,G12fun);
+            fd.getId(3,nu12fun);
+            fd.getId(4,nu21fun);
+            fd.getId(5,phifun);
+
+            gsDebugVar(E11fun);
+
+            parameters.resize(6);
+            parameters[0] = &E11fun;
+            parameters[1] = &E22fun;
+            parameters[2] = &G12fun;
+            parameters[3] = &nu12fun;
+            parameters[4] = &nu21fun;
+            parameters[5] = &phifun;
+
+            fd.getId(6,thickfun);
+            gsDebugVar(thickfun);
+
+            gsDebugVar(parameters[0]->targetDim());
             options.addInt("Material","Material model: (0): SvK | (1): NH | (2): NH_ext | (3): MR | (4): Ogden",0);
             options.addInt("Implementation","Implementation: (0): Composites | (1): Analytical | (2): Generalized | (3): Spectral",0);
             materialMatrix = getMaterialMatrix<3,real_t>(mp,t,parameters,rho,options);

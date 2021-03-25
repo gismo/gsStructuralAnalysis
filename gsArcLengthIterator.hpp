@@ -1496,13 +1496,13 @@ template <class T>
 void gsArcLengthIterator<T>::initOutputLC()
 {
   gsInfo<<"\t";
-  gsInfo<<std::setw(12)<<std::left<<"Iteration";
-  gsInfo<<std::setw(17)<<std::left<<"ResidualF";
-  gsInfo<<std::setw(17)<<std::left<<"ResidualU";
-  gsInfo<<std::setw(17)<<std::left<<"U.norm";
+  gsInfo<<std::setw(4)<<std::left<<"It.";
+  gsInfo<<std::setw(17)<<std::left<<"Res. F";
+  gsInfo<<std::setw(17)<<std::left<<"Res. U";
+  gsInfo<<std::setw(17)<<std::left<<"|U|";
   gsInfo<<std::setw(17)<<std::left<<"L";
-  gsInfo<<std::setw(17)<<std::left<<"DU.norm";
-  gsInfo<<std::setw(17)<<std::left<<"DL";
+  gsInfo<<std::setw(17)<<std::left<<"|ΔU|";
+  gsInfo<<std::setw(17)<<std::left<<"ΔL";
   gsInfo<<std::setw(17)<<std::left<<"Dmin";
   gsInfo<<std::setw(17)<<std::left<<"note";
   gsInfo<<"\n";
@@ -1514,19 +1514,19 @@ template <class T>
 void gsArcLengthIterator<T>::initOutputRiks()
 {
   gsInfo<<"\t";
-  gsInfo<<std::setw(12)<<std::left<<"Iteration";
-  gsInfo<<std::setw(17)<<std::left<<"ResidualF";
-  gsInfo<<std::setw(17)<<std::left<<"ResidualU";
-  gsInfo<<std::setw(17)<<std::left<<"ResidualL";
-  gsInfo<<std::setw(17)<<std::left<<"U.norm";
+  gsInfo<<std::setw(4)<<std::left<<"It.";
+  gsInfo<<std::setw(17)<<std::left<<"Res. F";
+  gsInfo<<std::setw(17)<<std::left<<"Res. U";
+  gsInfo<<std::setw(17)<<std::left<<"Res. L";
+  gsInfo<<std::setw(17)<<std::left<<"|U|";
   gsInfo<<std::setw(17)<<std::left<<"L";
-  gsInfo<<std::setw(17)<<std::left<<"DU.norm";
-  gsInfo<<std::setw(17)<<std::left<<"DL";
-  gsInfo<<std::setw(17)<<std::left<<"dU.norm";
-  gsInfo<<std::setw(17)<<std::left<<"dL";
-  gsInfo<<std::setw(17)<<std::left<<"ds";
-  gsInfo<<std::setw(17)<<std::left<<"dsU";
-  gsInfo<<std::setw(17)<<std::left<<"dsL";
+  gsInfo<<std::setw(17)<<std::left<<"|ΔU|";
+  gsInfo<<std::setw(17)<<std::left<<"ΔL";
+  gsInfo<<std::setw(17)<<std::left<<"|δU|";
+  gsInfo<<std::setw(17)<<std::left<<"δL";
+  gsInfo<<std::setw(17)<<std::left<<"δs²";
+  gsInfo<<std::setw(17)<<std::left<<"|δU|²";
+  gsInfo<<std::setw(17)<<std::left<<"δL²";
   gsInfo<<std::setw(17)<<std::left<<"Dmin";
   gsInfo<<std::setw(17)<<std::left<<"note";
   gsInfo<<"\n";
@@ -1538,19 +1538,19 @@ template <class T>
 void gsArcLengthIterator<T>::initOutputCrisfield()
 {
   gsInfo<<"\t";
-  gsInfo<<std::setw(12)<<std::left<<"Iteration";
-  gsInfo<<std::setw(17)<<std::left<<"ResidualF";
-  gsInfo<<std::setw(17)<<std::left<<"ResidualU";
-  gsInfo<<std::setw(17)<<std::left<<"ResidualL";
-  gsInfo<<std::setw(17)<<std::left<<"U.norm";
+  gsInfo<<std::setw(4)<<std::left<<"It.";
+  gsInfo<<std::setw(17)<<std::left<<"Res. F";
+  gsInfo<<std::setw(17)<<std::left<<"Res. U";
+  gsInfo<<std::setw(17)<<std::left<<"Res. L";
+  gsInfo<<std::setw(17)<<std::left<<"|U|";
   gsInfo<<std::setw(17)<<std::left<<"L";
-  gsInfo<<std::setw(17)<<std::left<<"DU.norm";
-  gsInfo<<std::setw(17)<<std::left<<"DL";
-  gsInfo<<std::setw(17)<<std::left<<"dU.norm";
-  gsInfo<<std::setw(17)<<std::left<<"dL";
-  gsInfo<<std::setw(17)<<std::left<<"ds";
-  gsInfo<<std::setw(17)<<std::left<<"dsU";
-  gsInfo<<std::setw(17)<<std::left<<"dsL";
+  gsInfo<<std::setw(17)<<std::left<<"|ΔU|";
+  gsInfo<<std::setw(17)<<std::left<<"ΔL";
+  gsInfo<<std::setw(17)<<std::left<<"|δU|";
+  gsInfo<<std::setw(17)<<std::left<<"δL";
+  gsInfo<<std::setw(17)<<std::left<<"δs²";
+  gsInfo<<std::setw(17)<<std::left<<"|δU|²";
+  gsInfo<<std::setw(17)<<std::left<<"δL²";
   gsInfo<<std::setw(17)<<std::left<<"Dmin";
   gsInfo<<std::setw(17)<<std::left<<"note";
   gsInfo<<"\n";
@@ -1562,20 +1562,20 @@ template <class T>
 void gsArcLengthIterator<T>::initOutputExtended()
 {
   gsInfo<<"\t";
-  gsInfo<<std::setw(12)<<std::left<<"Iteration";
-  gsInfo<<std::setw(17)<<std::left<<"ResidualF";
-  gsInfo<<std::setw(17)<<std::left<<"ResidualU";
-  gsInfo<<std::setw(17)<<std::left<<"ResidualL";
-  gsInfo<<std::setw(17)<<std::left<<"K_T * phi";
-  gsInfo<<std::setw(17)<<std::left<<"U.norm";
-  gsInfo<<std::setw(17)<<std::left<<"phi.norm";
+  gsInfo<<std::setw(4)<<std::left<<"It.";
+  gsInfo<<std::setw(17)<<std::left<<"Res. F";
+  gsInfo<<std::setw(17)<<std::left<<"Res. U";
+  gsInfo<<std::setw(17)<<std::left<<"Res. L";
+  gsInfo<<std::setw(17)<<std::left<<"K_T * φ";
+  gsInfo<<std::setw(17)<<std::left<<"|U|";
+  gsInfo<<std::setw(17)<<std::left<<"|φ|";
   gsInfo<<std::setw(17)<<std::left<<"L";
-  gsInfo<<std::setw(17)<<std::left<<"DU.norm";
-  gsInfo<<std::setw(17)<<std::left<<"Dphi.norm";
-  gsInfo<<std::setw(17)<<std::left<<"DL";
-  gsInfo<<std::setw(17)<<std::left<<"dU.norm";
-  gsInfo<<std::setw(17)<<std::left<<"dphi.norm";
-  gsInfo<<std::setw(17)<<std::left<<"dL";
+  gsInfo<<std::setw(17)<<std::left<<"|ΔU|";
+  gsInfo<<std::setw(17)<<std::left<<"|Δφ|";
+  gsInfo<<std::setw(17)<<std::left<<"ΔL";
+  gsInfo<<std::setw(17)<<std::left<<"|δU|";
+  gsInfo<<std::setw(17)<<std::left<<"|δφ|";
+  gsInfo<<std::setw(17)<<std::left<<"δL";
   gsInfo<<std::setw(17)<<std::left<<"Dmin";
   gsInfo<<std::setw(17)<<std::left<<"note";
   gsInfo<<"\n";
@@ -1602,7 +1602,7 @@ void gsArcLengthIterator<T>::stepOutputLC()
   computeStability(m_U,false);
 
   gsInfo<<"\t";
-  gsInfo<<std::setw(12)<<std::left<<m_numIterations;
+  gsInfo<<std::setw(4)<<std::left<<m_numIterations;
   gsInfo<<std::setw(17)<<std::left<<m_residueF;
   gsInfo<<std::setw(17)<<std::left<<m_residueU;
   gsInfo<<std::setw(17)<<std::left<<(m_U+m_DeltaU).norm();
@@ -1622,7 +1622,7 @@ void gsArcLengthIterator<T>::stepOutputRiks()
   computeStability(m_U,false);
 
   gsInfo<<"\t";
-  gsInfo<<std::setw(12)<<std::left<<m_numIterations;
+  gsInfo<<std::setw(4)<<std::left<<m_numIterations;
   gsInfo<<std::setw(17)<<std::left<<m_residueF;
   gsInfo<<std::setw(17)<<std::left<<m_residueU;
   gsInfo<<std::setw(17)<<std::left<<m_residueL;
@@ -1655,7 +1655,7 @@ void gsArcLengthIterator<T>::stepOutputCrisfield()
   T A0 = math::pow(m_phi,2)*m_forcing.dot(m_forcing);
 
   gsInfo<<"\t";
-  gsInfo<<std::setw(12)<<std::left<<m_numIterations;
+  gsInfo<<std::setw(4)<<std::left<<m_numIterations;
   gsInfo<<std::setw(17)<<std::left<<m_residueF;
   gsInfo<<std::setw(17)<<std::left<<m_residueU;
   gsInfo<<std::setw(17)<<std::left<<m_residueL;
@@ -1679,7 +1679,7 @@ template <class T>
 void gsArcLengthIterator<T>::stepOutputExtended()
 {
   gsInfo<<"\t";
-  gsInfo<<std::setw(12)<<std::left<<m_numIterations;
+  gsInfo<<std::setw(4)<<std::left<<m_numIterations;
   gsInfo<<std::setw(17)<<std::left<<m_residueF;
   gsInfo<<std::setw(17)<<std::left<<m_residueU;
   gsInfo<<std::setw(17)<<std::left<<m_residueL;
