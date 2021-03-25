@@ -217,8 +217,6 @@ int main(int argc, char *argv[])
             fd.getId(4,nu21fun);
             fd.getId(5,phifun);
 
-            gsDebugVar(E11fun);
-
             parameters.resize(6);
             parameters[0] = &E11fun;
             parameters[1] = &E22fun;
@@ -228,12 +226,10 @@ int main(int argc, char *argv[])
             parameters[5] = &phifun;
 
             fd.getId(6,thickfun);
-            gsDebugVar(thickfun);
 
-            gsDebugVar(parameters[0]->targetDim());
             options.addInt("Material","Material model: (0): SvK | (1): NH | (2): NH_ext | (3): MR | (4): Ogden",0);
             options.addInt("Implementation","Implementation: (0): Composites | (1): Analytical | (2): Generalized | (3): Spectral",0);
-            materialMatrix = getMaterialMatrix<3,real_t>(mp,t,parameters,rho,options);
+            materialMatrix = getMaterialMatrix<3,real_t>(mp,thickfun,parameters,rho,options);
         }
         else
         {
