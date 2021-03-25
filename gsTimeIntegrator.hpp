@@ -257,10 +257,15 @@ namespace gismo
     void gsTimeIntegrator<T>::stepExplEuler()
     {
         // ONLY FOR LINEAR SYSTEM!
+        m_solOld = m_sol;
+        gsMatrix<T> uOld = m_solOld.topRows(m_dofs);
+        gsMatrix<T> vOld = m_solOld.bottomRows(m_dofs);
         m_forceVec = m_forceFun(m_t);
-        m_sysvec.bottomRows(m_dofs) = m_dt*m_massInv*m_forceVec;
+        m_massInv = m_mass.toDense().inverse();
 
-        m_sol += m_sysmat * m_sol + m_sysvec;
+        m_sol.topRows(m_dofs) += m_dt * vOld;
+        m_sol.bottomRows(m_dofs) += m_dt * m_massInv * ( m_forceVec - m_stif * uOld - m_damp * vOld);
+
         m_t += m_dt;
     }
 
@@ -282,6 +287,7 @@ namespace gismo
     template <class T>
     void gsTimeIntegrator<T>::stepImplEuler()
     {
+        this->constructSystemImplEuler();
         m_forceVec = m_forceFun(m_t);
         m_sysvec.bottomRows(m_dofs) = m_dt*m_massInv*m_forceVec;
 
@@ -683,13 +689,13 @@ namespace gismo
 
         if (m_first)
         {
-            aOld = m_massInv * (m_forceVec - m_stif * uOld);
+            aOld = m_massInv * (m_forceVec - m_stif * uOld - m_damp * vOld);
             vOld = vOld + m_dt / 2 * aOld; // v_1/2 = v_0 + dt/2*a_0
             m_first = false;
         }
 
         m_uNew = uOld + m_dt * vOld;
-        m_aNew = m_massInv * (m_forceVec - m_stif * m_uNew);
+        m_aNew = m_massInv * (m_forceVec - m_stif * m_uNew - m_damp * vOld);
         m_vNew = vOld + m_dt * m_aNew; // v_n+1/2 = v_n-1/2 + dt*a_n
 
         m_t+=m_dt;
@@ -708,7 +714,7 @@ namespace gismo
         if (m_first)
         {
             m_resVec = m_residualFun(uOld,m_t);
-            aOld = m_massInv * m_resVec;
+            aOld = m_massInv * (m_resVec - m_damp * vOld);
             vOld = vOld + m_dt / 2 * aOld; // v_1/2 = v_0 + dt/2*a_0
             m_first = false;
         }
@@ -716,7 +722,7 @@ namespace gismo
         m_uNew = uOld + m_dt * vOld;
         m_t+=m_dt;
         m_resVec = m_residualFun(uOld,m_t);
-        m_aNew = m_massInv * m_resVec;
+        m_aNew = m_massInv * (m_resVec - m_damp * vOld);
         m_vNew = vOld + m_dt * m_aNew; // v_n+1/2 = v_n-1/2 + dt*a_n
 
     }
