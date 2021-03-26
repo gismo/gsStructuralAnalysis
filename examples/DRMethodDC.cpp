@@ -365,7 +365,6 @@ int main(int argc, char *argv[])
     mp_def = mp;
     gsWriteParaview<>( mp_def    , "mp", 1000, true);
 
-
     //! [Refinement]
     gsMultiBasis<> dbasis(mp);
 
@@ -388,11 +387,7 @@ int main(int argc, char *argv[])
     bc.addCondition(boundary::east, condition_type::dirichlet, 0, 0 ,false,1);
 
     bc.addCondition(boundary::east, condition_type::dirichlet, 0, 0 ,false,2);
-    bc.addCondition(boundary::east, condition_type::collapsed, 0, 0 ,false,0);
-
-    gsVector<> point(2); point<< 1.0, 0.5 ;
-    gsVector<> load (3); load << 0.5, 0.0, 0.0 ;
-    pLoads.addLoad(point, load, 0 );
+    bc.addCondition(boundary::east, condition_type::dirichlet, &displ, 0 ,false,0);
 
     gsVector<> tmp(3);
     tmp<<0,0,0;
@@ -543,13 +538,13 @@ int main(int argc, char *argv[])
     };
 
     // Function for the Residual
-    LCResidual_t LCResidual = [&assembler,&mp_def](gsVector<real_t> const &x, real_t lam, gsVector<real_t> const &force)
+    LCResidual_t LCResidual = [&displ,&bc,&assembler,&mp_def](gsVector<real_t> const &x, real_t lam, gsVector<real_t> const &force)
     {
+        displ.setValue(lam,3);
+        assembler->updateBCs(bc);
         assembler->constructSolution(x,mp_def);
         assembler->assembleVector(mp_def);
-        gsVector<real_t> Fint = -(assembler->rhs() - force);
-        gsVector<real_t> result = -(Fint - lam * force);
-        return result; // - lam * force;
+        return assembler->rhs(); // - lam * force;
     };
 
     assembler->assemble();

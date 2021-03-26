@@ -70,7 +70,7 @@ public:
         m_DeltaUold.setZero();
 
         m_L = m_DeltaL = m_deltaL = m_DeltaLold = 0.0;
-        m_phi = 1.0;
+        m_phi = 0.0;
 
         defaultOptions();
     }
@@ -95,14 +95,46 @@ public:
         m_damp = m_c * m_mass;
     }
 
+    void step(T length)
+    {
+        printHeader();
+        m_arcLength = length;
+        this->predictor();
+        m_Ek0 = m_Ek;
+        stepInfo(0);
+        for (index_t k=1; k!=m_maxIt; k++)
+        {
+            iteration();
+            if (m_c==0 && m_Ek_prev > m_Ek)
+                peak();
+
+            stepInfo(k);
+
+            if (m_R.norm()/m_forcing.norm() < m_tolF && m_Ek/m_Ek0 < m_tolE)
+            {
+                m_L += m_DeltaL;
+                m_U += m_DeltaU;
+                break;
+            }
+            if (k==m_maxIt-1)
+                gsWarn<<"Maximum iterations reached!\n";
+        }
+        gsInfo<<"\n";
+    }
+
     void predictor()
     {
-        m_DeltaU.setZero();
-        m_V.setZero();
+        // initiateStep
+        m_V = m_DeltaU = m_deltaU = m_deltaUbar = m_deltaUt = gsVector<T>::Zero(m_dofs);
         m_DeltaL = m_deltaL = 0.0;
 
-        m_deltaUt = 0.5*m_dt*m_dt*m_massInv*m_forcing;
+        // compute deltaUt
+        m_R = m_forcing;
+        m_V = 0.5*m_dt*m_massInv*m_R;
+        m_Ek = m_V.transpose() * m_mass * m_V;
+        m_deltaUt = m_V/m_dt;
 
+        // Predictor
         if (m_DeltaUold.dot(m_DeltaUold) == 0 && m_DeltaLold*m_DeltaLold == 0) // no information about previous step.
         {
             T DL = 1.;
@@ -110,12 +142,15 @@ public:
 
             m_deltaU = m_deltaL*m_deltaUt;
 
+            // m_phi = math::pow( m_deltaUt.dot(m_deltaUt) / m_forcing.dot(m_forcing),0.5);
+
             m_DeltaUold = m_deltaU;
             m_DeltaLold = m_deltaL;
         }
         else
         {
             m_phi = math::pow(m_U.dot(m_U)/( math::pow(m_L,2) * m_forcing.dot(m_forcing) ),0.5);
+            m_phi = 0.0;
             T A0 = math::pow(m_phi,2)* m_forcing.dot(m_forcing); // see Lam et al. 1991
             int dir = sign(m_DeltaUold.dot(m_deltaUt) + A0*m_DeltaLold); // Feng et al. 1995 with H = \Psi^2
             T denum = ( math::pow( m_deltaUt.dot(m_deltaUt) + A0 ,0.5) ); // Feng et al. 1995 with H = \Psi^2
@@ -129,17 +164,21 @@ public:
             m_deltaL = dir*mu;
             m_deltaU = m_deltaL*m_deltaUt;
         }
-        m_V = m_deltaU/m_dt;
 
         m_DeltaU += m_deltaU;
         m_DeltaL += m_deltaL;
     }
 
-    void step()
+    void iteration()
     {
+        m_Ek_prev = m_Ek;
+
         m_R = m_residualFun(m_U+m_DeltaU,m_L+m_DeltaL,m_forcing) - m_damp*m_V;
-        m_V += m_dt * m_massInv * m_R;                    // Velocities at t+dt/2
-        m_deltaUbar = m_dt* (m_massInv * m_R + m_V);               // Velocities at t+dt
+        m_V += m_dt * m_massInv * m_R;                   // Velocities at t+dt/2
+
+        m_Ek = m_V.transpose() * m_mass * m_V;
+
+        m_deltaUbar = m_dt*m_V;               // Velocities at t+dt
 
         T A0 = math::pow(m_phi,2)* m_forcing.dot(m_forcing); // see Lam et al. 1991,
 
@@ -191,18 +230,11 @@ public:
           }
         }
         else
+            GISMO_ERROR("Discriminant is negative!");
 
 
         m_DeltaU += m_deltaU;
         m_DeltaL += m_deltaL;
-
-
-        m_Ek_prev = m_Ek;
-        m_R = m_residualFun(m_U+m_DeltaU,m_L+m_DeltaL,m_forcing) - m_damp*m_V;
-        m_V += m_dt * m_massInv * m_R;                    // Velocities at t+dt/2
-        m_deltaU = m_dt * m_V;               // Velocities at t+dt
-        m_DeltaU += m_deltaU;               // Velocities at t+dt
-        m_Ek = m_V.transpose() * m_mass * m_V;
     }
 
     // void reset()
@@ -233,6 +265,9 @@ public:
         m_options.addReal("damping","damping factor",1.0);
         m_options.addReal("alpha","mass coefficient",2.0);
         m_options.addReal("length","arc-length",1.0);
+        m_options.addInt("maxIt","maximum number of iterations",1e2);
+        m_options.addReal("tolF","(Force) Residual tolerance",1e-6);
+        m_options.addReal("tolE","Kinetic energy tolerance",1e-12);
     }
 
     gsOptionList options() const {return m_options;}
@@ -242,11 +277,50 @@ public:
         m_c = m_options.getReal("damping");
         m_alpha = m_options.getReal("alpha");
         m_arcLength = m_options.getReal("length");
+        m_maxIt = m_options.getInt("maxIt");
+        m_tolF = m_options.getReal("tolF");
+        m_tolE = m_options.getReal("tolE");
     }
 
     void setOptions(gsOptionList & options) {m_options.update(options,gsOptionList::addIfUnknown); }
 
     T residualNorm() const { return m_R.norm(); }
+
+    void printHeader()
+    {
+        gsInfo  <<std::setw(4)<<std::left<<"It."
+                <<std::setw(16)<<std::left<<"|R|"
+                <<std::setw(16)<<std::left<<"Ek"
+                <<std::setw(16)<<std::left<<"|u|"
+                <<std::setw(16)<<std::left<<"|Du|" // Δu
+                <<std::setw(16)<<std::left<<"|du|" // δu
+                <<std::setw(16)<<std::left<<"L" // λ
+                <<std::setw(16)<<std::left<<"DL" // Δλ
+                <<std::setw(16)<<std::left<<"dL" // δλ
+                <<std::setw(16)<<std::left<<"Dl"
+                <<std::setw(16)<<std::left<<"Dlu"
+                <<std::setw(16)<<std::left<<"Dlλ"
+                <<"\n";
+    }
+
+    void stepInfo(index_t k)
+    {
+        T A0 = math::pow(m_phi,2)*m_forcing.dot(m_forcing);
+
+        gsInfo  <<std::setw(4)<<std::left<<k
+                <<std::setw(16)<<std::left<<m_R.norm()/m_forcing.norm()
+                <<std::setw(16)<<std::left<<m_Ek/m_Ek0
+                <<std::setw(16)<<std::left<<(m_U+m_DeltaU).norm()
+                <<std::setw(16)<<std::left<<m_DeltaU.norm()
+                <<std::setw(16)<<std::left<<m_deltaU.norm()
+                <<std::setw(16)<<std::left<<m_L+m_DeltaL
+                <<std::setw(16)<<std::left<<m_DeltaL
+                <<std::setw(16)<<std::left<<m_deltaL
+                <<std::setw(16)<<std::left<<m_arcLength //math::pow(m_DeltaU.dot(m_DeltaU) + A0*math::pow(m_DeltaL,2.0),0.5);
+                <<std::setw(16)<<std::left<<math::pow(m_DeltaU.norm(),2.0)
+                <<std::setw(16)<<std::left<<A0*math::pow(m_DeltaL,2.0)
+                <<"\n";
+    }
 
 protected:
     const gsSparseMatrix<T> m_stif;
@@ -262,10 +336,12 @@ protected:
     index_t m_dofs;
     T m_dt, m_alpha, m_c;
     gsOptionList m_options;
-    T m_Ek, m_Ek_prev;
+    T m_Ek, m_Ek_prev, m_Ek0;
     T m_L, m_DeltaL, m_deltaL;
     T m_arcLength;
     T m_phi;
+    index_t m_maxIt;
+    T m_tolF, m_tolE;
 };
 
 
@@ -310,7 +386,6 @@ int main(int argc, char *argv[])
                 "Number of degree elevation steps to perform before solving (0: equalize degree in all directions)", numElevate );
     cmd.addInt( "r", "uniformRefine", "Number of Uniform h-refinement steps to perform before solving",  numRefine );
 
-    cmd.addReal( "d", "dt", "dt",  dt );
     cmd.addReal( "a", "alpha", "alpha",  alpha );
     cmd.addReal( "c", "damping", "damping",  damping );
     cmd.addInt( "m", "Material", "Material law",  material );
@@ -398,7 +473,7 @@ int main(int argc, char *argv[])
     bc.addCondition(boundary::east, condition_type::collapsed, 0, 0 ,false,0);
 
     gsVector<> point(2); point<< 1.0, 0.5 ;
-    gsVector<> load (3); load << 0.125, 0.0, 0.0 ;
+    gsVector<> load (3); load << 0.5, 0.0, 0.0 ;
     pLoads.addLoad(point, load, 0 );
 
     gsVector<> tmp(3);
@@ -555,7 +630,7 @@ int main(int argc, char *argv[])
         assembler->constructSolution(x,mp_def);
         assembler->assembleVector(mp_def);
         gsVector<real_t> Fint = -(assembler->rhs() - force);
-        gsVector<real_t> result = Fint - lam * force;
+        gsVector<real_t> result = -(Fint - lam * force);
         return result; // - lam * force;
     };
 
@@ -569,47 +644,59 @@ int main(int argc, char *argv[])
     gsOptionList DROptions = DRM.options();
     DROptions.setReal("damping",damping);
     DROptions.setReal("alpha",alpha);
+    DROptions.setReal("maxIt",99);
     DRM.setOptions(DROptions);
     DRM.init();
 
+    index_t count = 0;
 
-    index_t steps = 1;
+    index_t steps = 10;
     for (index_t k=0; k!=steps; k++)
     {
         gsVector<> displacements;
-        DRM.predictor();
-        real_t Ek = DRM.kineticEnergy();
-        real_t EkOld = Ek;
-        for (index_t i=1; i<1e2; i++)
-        {
-            displacements = DRM.displacements();
-            mp_def = assembler->constructSolution(displacements);
-            gsMultiPatch<> deformation = mp_def;
-            deformation.patch(0).coefs() -= mp.patch(0).coefs();// assuming 1 patch here
-            gsField<> solField(mp,deformation);
-            std::string fileName = "incr_solution" + util::to_string(i);
-            gsWriteParaview<>(solField, fileName, 500);
-            fileName = "incr_solution" + util::to_string(i) + "0";
-            collection.addTimestep(fileName,i,".vts");
+        // real_t Ek = DRM.kineticEnergy();
+        // real_t EkOld = Ek;
+        // DRM.predictor((k+1) * 1. / steps);
+        // for (index_t i=1; i<1e2; i++)
+        // {
+        //     displacements = DRM.displacements();
+        //     mp_def = assembler->constructSolution(displacements);
+        //     gsMultiPatch<> deformation = mp_def;
+        //     deformation.patch(0).coefs() -= mp.patch(0).coefs();// assuming 1 patch here
+        //     gsField<> solField(mp,deformation);
+        //     std::string fileName = "incr_solution" + util::to_string(count);
+        //     gsWriteParaview<>(solField, fileName, 500);
+        //     fileName = "incr_solution" + util::to_string(count) + "0";
+        //     collection.addTimestep(fileName,count,".vts");
+        //     count++;
 
-            gsInfo<<"Step "<<i<<"\t";
-            DRM.step();
-            if (damping==0)
-            {
-                if (EkOld > DRM.kineticEnergy())
-                    DRM.peak();
-                EkOld = DRM.kineticEnergy();
-            }
-            gsInfo<<"Res norm = "<<DRM.residualNorm()/F.norm()<<"\t Kin energy = "<<DRM.kineticEnergy()/Ek<<"\n";
+        //     gsInfo<<"Step "<<i<<"\t";
+        //     DRM.iteration((k+1) * 1. / steps);
+        //     if (damping==0)
+        //     {
+        //         if (EkOld > DRM.kineticEnergy())
+        //             DRM.peak((k+1) * 1. / steps);
+        //         EkOld = DRM.kineticEnergy();
+        //     }
+        //     gsInfo<<"Res norm = "<<DRM.residualNorm()/F.norm()<<"\t Kin energy = "<<DRM.kineticEnergy()/Ek<<"\n";
 
-            if (DRM.residualNorm()/F.norm() < 1e-10 && DRM.kineticEnergy()/Ek < 1e-3)
-            {
-                DRM.finish();
-                break;
-            }
+        //     if (DRM.residualNorm()/F.norm() < 1e-10 && DRM.kineticEnergy()/Ek < 1e-3)
+        //         break;
+        // }
+
+        DRM.step(1./steps);
+        displacements = DRM.displacements();
+        mp_def = assembler->constructSolution(displacements);
+        gsMultiPatch<> deformation = mp_def;
+        deformation.patch(0).coefs() -= mp.patch(0).coefs();// assuming 1 patch here
+        gsField<> solField(mp,deformation);
+        std::string fileName = "incr_solution" + util::to_string(count);
+        gsWriteParaview<>(solField, fileName, 500);
+        fileName = "incr_solution" + util::to_string(count) + "0";
+        collection.addTimestep(fileName,count,".vts");
+        count++;
 
 
-        }
         displacements = DRM.displacements();
         DRM.setDisplacement(displacements);
     }
