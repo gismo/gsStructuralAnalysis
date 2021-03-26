@@ -112,12 +112,14 @@ public:
 
             if (m_R.norm()/m_forcing.norm() < m_tolF && m_Ek/m_Ek0 < m_tolE)
             {
-                m_L += m_DeltaL;
-                m_U += m_DeltaU;
+                finish();
                 break;
             }
             if (k==m_maxIt-1)
+            {
+                finish();
                 gsWarn<<"Maximum iterations reached!\n";
+            }
         }
         gsInfo<<"\n";
     }
@@ -644,7 +646,7 @@ int main(int argc, char *argv[])
     gsOptionList DROptions = DRM.options();
     DROptions.setReal("damping",damping);
     DROptions.setReal("alpha",alpha);
-    DROptions.setReal("maxIt",99);
+    // DROptions.setInt("maxIt",99);
     DRM.setOptions(DROptions);
     DRM.init();
 
