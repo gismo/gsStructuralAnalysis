@@ -263,24 +263,51 @@ int main (int argc, char** argv)
     // ![Read Geometry files]
     if (fn.empty())
     {
-      if (testCase==2)
-        fn = "deformations/wrinklingFu_full.xml";
-      else if (testCase==3)
-        fn = "deformations/wrinklingPanaitescu_full.xml";
-      else if (testCase==4)
-        fn = "deformations/wrinklingFu_half.xml";
-      else if (testCase==5)
-        fn = "deformations/wrinklingPanaitescu_half.xml";
-      else if (testCase==6)
-        fn = "deformations/wrinklingFu_quarter.xml";
-      else if (testCase==7)
-        fn = "deformations/wrinklingPanaitescu_quarter.xml";
-      else if (testCase==7)
-        fn = "deformations/wrinklingShear.xml";
-      else
-        GISMO_ERROR("No filename provided..");
+      std::vector<boxSide> sides;
+      sides.push_back(boundary::west);
+      sides.push_back(boundary::east);
+      if (symmetry && (testCase==4 || testCase==5 || testCase==6 || testCase==7))
+        sides.push_back(boundary::south);
+
+      if        (testCase==2 || testCase==3)
+        mpBspline = Rectangle(aDim,    bDim   );
+      else if   (testCase==4 || testCase==5)
+        mpBspline = Rectangle(aDim   , bDim/2.);
+      else if   (testCase==6 || testCase==7)
+        mpBspline = Rectangle(aDim/2., bDim/2.);
+
+      for(index_t i = 0; i< numElevate; ++i)
+        mpBspline.patch(0).degreeElevate();    // Elevate the degree
+
+      // h-refine
+      for(index_t i = 0; i< numHref; ++i)
+        mpBspline.patch(0).uniformRefine();
+
+      addClamping(mpBspline,0,sides, 1e-2);
+
+      index_t N = mpBspline.patch(0).coefs().rows();
+      mpBspline.patch(0).coefs().col(2) = gsMatrix<>::Random(N,1);
+
+      // if (testCase==2)
+      //   fn = "deformations/wrinklingFu_full.xml";
+      // else if (testCase==3)
+      //   fn = "deformations/wrinklingPanaitescu_full.xml";
+      // else if (testCase==4)
+      //   fn = "deformations/wrinklingFu_half.xml";
+      // else if (testCase==5)
+      //   fn = "deformations/wrinklingPanaitescu_half.xml";
+      // else if (testCase==6)
+      //   fn = "deformations/wrinklingFu_quarter.xml";
+      // else if (testCase==7)
+      //   fn = "deformations/wrinklingPanaitescu_quarter.xml";
+      // else if (testCase==7)
+      //   fn = "deformations/wrinklingShear.xml";
+      // else
+      //   GISMO_ERROR("No filename provided..");
     }
-    gsReadFile<>(fn,mpBspline);
+    else
+      gsReadFile<>(fn,mpBspline);
+
     mpBspline.patch(0).coefs().col(2) *= perturbation;
 
       // std::vector<boxSide> sides;
@@ -302,15 +329,15 @@ int main (int argc, char** argv)
 
     // Cast all patches of the mp object to THB splines
     gsTHBSpline<2,real_t> thb;
-    for (index_t k=0; k!=mpBspline.nPatches(); ++k)
-    {
-        gsTensorBSpline<2,real_t> *geo = dynamic_cast< gsTensorBSpline<2,real_t> * > (&mpBspline.patch(k));
-        thb = gsTHBSpline<2,real_t>(*geo);
-        mp.addPatch(thb);
-    }
-
     if (THB)
     {
+      for (index_t k=0; k!=mpBspline.nPatches(); ++k)
+      {
+          gsTensorBSpline<2,real_t> *geo = dynamic_cast< gsTensorBSpline<2,real_t> * > (&mpBspline.patch(k));
+          thb = gsTHBSpline<2,real_t>(*geo);
+          mp.addPatch(thb);
+      }
+
       gsMatrix<> refBoxes(2,2);
       if      (testCase==2 || testCase==3)
       {
@@ -332,6 +359,8 @@ int main (int argc, char** argv)
       std::vector<index_t> elements = mp.patch(0).basis().asElements(refBoxes, refExtension);
       mp.patch(0).refineElements( elements );
     }
+    else
+      mp = mpBspline;
 
     gsMultiBasis<> dbasis(mp);
     gsInfo<<"Basis (patch 0): "<< mp.patch(0).basis() << "\n";
