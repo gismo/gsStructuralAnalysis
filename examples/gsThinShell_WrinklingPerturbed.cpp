@@ -250,13 +250,13 @@ int main (int argc, char** argv)
     */
     else if (testCase==8)
     {
-      E_modulus = 1e6;
-      PoissonRatio = 0.3;
+      E_modulus = 3500;
+      PoissonRatio = 0.31;
       gsDebug<<"E = "<<E_modulus<<"; nu = "<<PoissonRatio<<"\n";
 
-      aDim = 2;
-      bDim = 1;
-      thickness = 1e-3;
+      aDim = 380;
+      bDim = 128;
+      thickness = 25e-3;
     }
     // ![Material data]
 
@@ -275,6 +275,8 @@ int main (int argc, char** argv)
         mpBspline = Rectangle(aDim   , bDim/2.);
       else if   (testCase==6 || testCase==7)
         mpBspline = Rectangle(aDim/2., bDim/2.);
+      else if   (testCase==8)
+        mpBspline = Rectangle(aDim,    bDim   );
 
       for(index_t i = 0; i< numElevate; ++i)
         mpBspline.patch(0).degreeElevate();    // Elevate the degree
@@ -367,6 +369,8 @@ int main (int argc, char** argv)
 
     // Boundary conditions
     gsBoundaryConditions<> BCs;
+    BCs.setGeoMap(mp);
+
     gsPointLoads<real_t> pLoads = gsPointLoads<real_t>();
 
     // Initiate Surface forces
@@ -379,6 +383,8 @@ int main (int argc, char** argv)
     tmp << 0, 0, 0;
     neu << 0, 0, 0;
     gsConstantFunction<> neuData(neu,3);
+
+    gsConstantFunction<> displ(0.05,3);
 
     // Buckling coefficient
     real_t fac = 1;
@@ -426,7 +432,7 @@ int main (int argc, char** argv)
 
       std::stringstream ss;
       ss<<perturbation;
-      dirname = dirname + "/FullSheet_Perturbed=" + ss.str();
+      dirname = dirname + "/FullSheet_Perturbed=" + ss.str() + "_r=" + std::to_string(numHref) + "_e=" + std::to_string(numElevate) + "_M=" + std::to_string(material) + "_c=" + std::to_string(Compressibility);
 
       output =  "solution";
       wn = output + "data.txt";
@@ -467,7 +473,7 @@ int main (int argc, char** argv)
 
       std::stringstream ss;
       ss<<perturbation;
-      dirname = dirname + "/HalfSheet_Perturbed=" + ss.str();
+      dirname = dirname + "/HalfSheet_Perturbed=" + ss.str() + "_r=" + std::to_string(numHref) + "_e=" + std::to_string(numElevate) + "_M=" + std::to_string(material) + "_c=" + std::to_string(Compressibility);
 
       output =  "solution";
       wn = output + "data.txt";
@@ -506,7 +512,7 @@ int main (int argc, char** argv)
 
       std::stringstream ss;
       ss<<perturbation;
-      dirname = dirname + "/QuarterSheet_Perturbed=" + ss.str();
+      dirname = dirname + "/QuarterSheet_Perturbed=" + ss.str() + "_r=" + std::to_string(numHref) + "_e=" + std::to_string(numElevate) + "_M=" + std::to_string(material) + "_c=" + std::to_string(Compressibility);
 
       output =  "solution";
       wn = output + "data.txt";
@@ -520,6 +526,7 @@ int main (int argc, char** argv)
       BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0 ,false,2);
 
       BCs.addCondition(boundary::north, condition_type::collapsed, 0, 0 ,false,0);
+      // BCs.addCondition(boundary::north, condition_type::dirichlet, &displ, 0 ,false,1);
       BCs.addCondition(boundary::north, condition_type::dirichlet, 0, 0 ,false,1);
       BCs.addCondition(boundary::north, condition_type::dirichlet, 0, 0 ,false,2);
 
@@ -530,7 +537,7 @@ int main (int argc, char** argv)
 
       std::stringstream ss;
       ss<<perturbation;
-      dirname = dirname + "/ShearSheet_Perturbed=" + ss.str();
+      dirname = dirname + "/ShearSheet_Perturbed=" + ss.str() + "_r=" + std::to_string(numHref) + "_e=" + std::to_string(numElevate) + "_M=" + std::to_string(material) + "_c=" + std::to_string(Compressibility);
       output =  "solution";
       wn = output + "data.txt";
       cross_coordinate = 0;
