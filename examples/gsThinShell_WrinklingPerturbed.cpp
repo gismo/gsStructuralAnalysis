@@ -264,10 +264,13 @@ int main (int argc, char** argv)
     if (fn.empty())
     {
       std::vector<boxSide> sides;
-      sides.push_back(boundary::west);
-      sides.push_back(boundary::east);
-      if (symmetry && (testCase==4 || testCase==5 || testCase==6 || testCase==7))
-        sides.push_back(boundary::south);
+      if (testCase >= 2 && testCase<=7)
+      {
+      	sides.push_back(boundary::west);
+      	sides.push_back(boundary::east);
+      	if (symmetry && (testCase==4 || testCase==5 || testCase==6 || testCase==7))
+          sides.push_back(boundary::south);
+      }
 
       if        (testCase==2 || testCase==3)
         mpBspline = Rectangle(aDim,    bDim   );
@@ -1245,7 +1248,7 @@ void initStepOutput(const std::string name, const gsMatrix<T> & points)
   file.open(name,std::ofstream::out);
   file  << std::setprecision(20)
         << "Deformation norm" << ",";
-        for (index_t k=0; k!=points.cols(); k++)
+        for (index_t k=0; k < points.cols(); k++)
         {
           file<< "point "<<k<<" - x" << ","
               << "point "<<k<<" - y" << ","
