@@ -250,37 +250,69 @@ int main (int argc, char** argv)
     */
     else if (testCase==8)
     {
-      E_modulus = 1e6;
-      PoissonRatio = 0.3;
+      E_modulus = 3500;
+      PoissonRatio = 0.31;
       gsDebug<<"E = "<<E_modulus<<"; nu = "<<PoissonRatio<<"\n";
 
-      aDim = 2;
-      bDim = 1;
-      thickness = 1e-3;
+      aDim = 380;
+      bDim = 128;
+      thickness = 25e-3;
     }
     // ![Material data]
 
     // ![Read Geometry files]
     if (fn.empty())
     {
-      if (testCase==2)
-        fn = "deformations/wrinklingFu_full.xml";
-      else if (testCase==3)
-        fn = "deformations/wrinklingPanaitescu_full.xml";
-      else if (testCase==4)
-        fn = "deformations/wrinklingFu_half.xml";
-      else if (testCase==5)
-        fn = "deformations/wrinklingPanaitescu_half.xml";
-      else if (testCase==6)
-        fn = "deformations/wrinklingFu_quarter.xml";
-      else if (testCase==7)
-        fn = "deformations/wrinklingPanaitescu_quarter.xml";
-      else if (testCase==7)
-        fn = "deformations/wrinklingShear.xml";
-      else
-        GISMO_ERROR("No filename provided..");
+      std::vector<boxSide> sides;
+      if (testCase >= 2 && testCase<=7)
+      {
+      	sides.push_back(boundary::west);
+      	sides.push_back(boundary::east);
+      	if (symmetry && (testCase==4 || testCase==5 || testCase==6 || testCase==7))
+          sides.push_back(boundary::south);
+      }
+
+      if        (testCase==2 || testCase==3)
+        mpBspline = Rectangle(aDim,    bDim   );
+      else if   (testCase==4 || testCase==5)
+        mpBspline = Rectangle(aDim   , bDim/2.);
+      else if   (testCase==6 || testCase==7)
+        mpBspline = Rectangle(aDim/2., bDim/2.);
+      else if   (testCase==8)
+        mpBspline = Rectangle(aDim,    bDim   );
+
+      for(index_t i = 0; i< numElevate; ++i)
+        mpBspline.patch(0).degreeElevate();    // Elevate the degree
+
+      // h-refine
+      for(index_t i = 0; i< numHref; ++i)
+        mpBspline.patch(0).uniformRefine();
+
+      addClamping(mpBspline,0,sides, 1e-2);
+
+      index_t N = mpBspline.patch(0).coefs().rows();
+      mpBspline.patch(0).coefs().col(2) = gsMatrix<>::Random(N,1);
+
+      // if (testCase==2)
+      //   fn = "deformations/wrinklingFu_full.xml";
+      // else if (testCase==3)
+      //   fn = "deformations/wrinklingPanaitescu_full.xml";
+      // else if (testCase==4)
+      //   fn = "deformations/wrinklingFu_half.xml";
+      // else if (testCase==5)
+      //   fn = "deformations/wrinklingPanaitescu_half.xml";
+      // else if (testCase==6)
+      //   fn = "deformations/wrinklingFu_quarter.xml";
+      // else if (testCase==7)
+      //   fn = "deformations/wrinklingPanaitescu_quarter.xml";
+      // else if (testCase==7)
+      //   fn = "deformations/wrinklingShear.xml";
+      // else
+      //   GISMO_ERROR("No filename provided..");
     }
-    gsReadFile<>(fn,mpBspline);
+    else
+      gsReadFile<>(fn,mpBspline);
+
     mpBspline.patch(0).coefs().col(2) *= perturbation;
 
       // std::vector<boxSide> sides;
@@ -302,15 +334,15 @@ int main (int argc, char** argv)
 
     // Cast all patches of the mp object to THB splines
     gsTHBSpline<2,real_t> thb;
-    for (index_t k=0; k!=mpBspline.nPatches(); ++k)
-    {
-        gsTensorBSpline<2,real_t> *geo = dynamic_cast< gsTensorBSpline<2,real_t> * > (&mpBspline.patch(k));
-        thb = gsTHBSpline<2,real_t>(*geo);
-        mp.addPatch(thb);
-    }
-
     if (THB)
     {
+      for (index_t k=0; k!=mpBspline.nPatches(); ++k)
+      {
+          gsTensorBSpline<2,real_t> *geo = dynamic_cast< gsTensorBSpline<2,real_t> * > (&mpBspline.patch(k));
+          thb = gsTHBSpline<2,real_t>(*geo);
+          mp.addPatch(thb);
+      }
+
       gsMatrix<> refBoxes(2,2);
       if      (testCase==2 || testCase==3)
       {
@@ -332,12 +364,16 @@ int main (int argc, char** argv)
       std::vector<index_t> elements = mp.patch(0).basis().asElements(refBoxes, refExtension);
       mp.patch(0).refineElements( elements );
     }
+    else
+      mp = mpBspline;
 
     gsMultiBasis<> dbasis(mp);
     gsInfo<<"Basis (patch 0): "<< mp.patch(0).basis() << "\n";
 
     // Boundary conditions
     gsBoundaryConditions<> BCs;
+    BCs.setGeoMap(mp);
+
     gsPointLoads<real_t> pLoads = gsPointLoads<real_t>();
 
     // Initiate Surface forces
@@ -350,6 +386,8 @@ int main (int argc, char** argv)
     tmp << 0, 0, 0;
     neu << 0, 0, 0;
     gsConstantFunction<> neuData(neu,3);
+
+    gsConstantFunction<> displ(0.05,3);
 
     // Buckling coefficient
     real_t fac = 1;
@@ -397,7 +435,7 @@ int main (int argc, char** argv)
 
       std::stringstream ss;
       ss<<perturbation;
-      dirname = dirname + "/FullSheet_Perturbed=" + ss.str();
+      dirname = dirname + "/FullSheet_Perturbed=" + ss.str() + "_r=" + std::to_string(numHref) + "_e=" + std::to_string(numElevate) + "_M=" + std::to_string(material) + "_c=" + std::to_string(Compressibility);
 
       output =  "solution";
       wn = output + "data.txt";
@@ -438,7 +476,7 @@ int main (int argc, char** argv)
 
       std::stringstream ss;
       ss<<perturbation;
-      dirname = dirname + "/HalfSheet_Perturbed=" + ss.str();
+      dirname = dirname + "/HalfSheet_Perturbed=" + ss.str() + "_r=" + std::to_string(numHref) + "_e=" + std::to_string(numElevate) + "_M=" + std::to_string(material) + "_c=" + std::to_string(Compressibility);
 
       output =  "solution";
       wn = output + "data.txt";
@@ -477,7 +515,7 @@ int main (int argc, char** argv)
 
       std::stringstream ss;
       ss<<perturbation;
-      dirname = dirname + "/QuarterSheet_Perturbed=" + ss.str();
+      dirname = dirname + "/QuarterSheet_Perturbed=" + ss.str() + "_r=" + std::to_string(numHref) + "_e=" + std::to_string(numElevate) + "_M=" + std::to_string(material) + "_c=" + std::to_string(Compressibility);
 
       output =  "solution";
       wn = output + "data.txt";
@@ -491,6 +529,7 @@ int main (int argc, char** argv)
       BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0 ,false,2);
 
       BCs.addCondition(boundary::north, condition_type::collapsed, 0, 0 ,false,0);
+      // BCs.addCondition(boundary::north, condition_type::dirichlet, &displ, 0 ,false,1);
       BCs.addCondition(boundary::north, condition_type::dirichlet, 0, 0 ,false,1);
       BCs.addCondition(boundary::north, condition_type::dirichlet, 0, 0 ,false,2);
 
@@ -501,7 +540,7 @@ int main (int argc, char** argv)
 
       std::stringstream ss;
       ss<<perturbation;
-      dirname = dirname + "/ShearSheet_Perturbed=" + ss.str();
+      dirname = dirname + "/ShearSheet_Perturbed=" + ss.str() + "_r=" + std::to_string(numHref) + "_e=" + std::to_string(numElevate) + "_M=" + std::to_string(material) + "_c=" + std::to_string(Compressibility);
       output =  "solution";
       wn = output + "data.txt";
       cross_coordinate = 0;
@@ -643,7 +682,7 @@ int main (int argc, char** argv)
         {
             options.addInt("Material","Material model: (0): SvK | (1): NH | (2): NH_ext | (3): MR | (4): Ogden",0);
             options.addInt("Implementation","Implementation: (0): Composites | (1): Analytical | (2): Generalized | (3): Spectral",0);
-            materialMatrix = getMaterialMatrix<3,real_t>(mp,t,parameters,rho,options);
+            materialMatrix = getMaterialMatrix<3,real_t>(mp,thickfun,parameters,rho,options);
         }
         else
         {
@@ -1209,7 +1248,7 @@ void initStepOutput(const std::string name, const gsMatrix<T> & points)
   file.open(name,std::ofstream::out);
   file  << std::setprecision(20)
         << "Deformation norm" << ",";
-        for (index_t k=0; k!=points.cols(); k++)
+        for (index_t k=0; k < points.cols(); k++)
         {
           file<< "point "<<k<<" - x" << ","
               << "point "<<k<<" - y" << ","
