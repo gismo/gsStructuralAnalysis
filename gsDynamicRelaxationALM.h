@@ -55,6 +55,11 @@ public:
 
     T kineticEnergy() const { return m_Ek; }
 
+    index_t iterations() const { return m_iterations; }
+
+    gsVector<T> energies() const { return gsAsVector<T>(m_Eks); }
+    gsVector<T> relEnergies() const { return gsAsVector<T>(m_Eks)/m_Ek0; }
+
     void init()
     {
         getOptions();
@@ -65,25 +70,31 @@ public:
 
     void step(T length)
     {
+        m_Eks.clear();
+        m_Eks.reserve(m_maxIt);
+
         printHeader();
         m_arcLength = length;
         this->predictor();
         m_Ek0 = m_Ek;
+        m_Eks.push_back(m_Ek);
         stepInfo(0);
-        for (index_t k=1; k!=m_maxIt; k++)
+        for (index_t m_iterations=1; m_iterations!=m_maxIt; m_iterations++)
         {
             iteration();
             if (m_c==0 && m_Ek_prev > m_Ek)
                 peak();
 
-            stepInfo(k);
+        	m_Eks.push_back(m_Ek);
+
+            stepInfo(m_iterations);
 
             if (m_R.norm()/m_forcing.norm() < m_tolF && m_Ek/m_Ek0 < m_tolE)
             {
                 finish();
                 break;
             }
-            if (k==m_maxIt-1)
+            if (m_iterations==m_maxIt-1)
             {
                 finish();
                 gsWarn<<"Maximum iterations reached!\n";
@@ -310,6 +321,8 @@ protected:
     T m_L, m_DeltaL, m_deltaL;
     T m_arcLength;
     T m_phi;
-    index_t m_maxIt;
+    index_t m_maxIt, m_iterations;
     T m_tolF, m_tolE;
+
+    std::vector<T> m_Eks;
 };
