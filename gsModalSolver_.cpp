@@ -7,5 +7,5 @@
 
 namespace gismo
 {
-		CLASS_TEMPLATE_INST gsModalSolver<real_t>;
+	CLASS_TEMPLATE_INST gsModalSolver<real_t>;
 }

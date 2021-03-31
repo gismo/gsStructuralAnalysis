@@ -12,7 +12,8 @@
 */
 
 #include <gismo.h>
-using namespace gismo;
+namespace gismo
+{
 
 template <class T>
 class gsDynamicRelaxationLC
@@ -40,7 +41,7 @@ public:
     }
 
     gsVector<T> displacements() const {return m_U;}
-    gsVector<T> load() const {return m_L;}
+    T load() const {return m_L;}
     gsVector<T> velocities() const {return m_v;}
 
     void setDisplacement(gsVector<T> displacement) { m_U = displacement; }
@@ -115,7 +116,6 @@ public:
                 peak();
 
             stepInfo(m_iterations);
-
             m_Eks.push_back(m_Ek);
 
             if (m_R.norm()/m_R0.norm() < m_tolF && m_Ek/m_Ek0 < m_tolE)
@@ -248,3 +248,5 @@ protected:
 
     mutable std::vector<T> m_Eks;
 };
+
+} //namespace
