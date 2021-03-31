@@ -47,6 +47,11 @@ public:
 
     T kineticEnergy() const { return m_Ek; }
 
+    index_t iterations() const { return m_iterations; }
+
+    gsVector<T> energies() const { return gsAsVector<T>(m_Eks); }
+    gsVector<T> relEnergies() const { return gsAsVector<T>(m_Eks)/m_Ek0; }
+
     void init()
     {
         getOptions();
@@ -92,26 +97,34 @@ public:
 
     void step(T loadStep)
     {
+        m_Eks.clear();
+        m_Eks.reserve(m_maxIt);
+
         printHeader();
         m_DeltaL = loadStep;
         predictor();
         m_Ek0 = m_Ek;
+        m_Eks.push_back(m_Ek);
+
+        m_R0 = m_R;
         stepInfo(0);
-        for (index_t k=1; k!=m_maxIt; k++)
+        for (m_iterations=1; m_iterations!=m_maxIt; m_iterations++)
         {
             iteration();
-            if (m_c==0 && m_Ek_prev > m_Ek)
+            if ((m_c==0 && m_Ek_prev > m_Ek))// || (m_Ek/m_Ek_prev > 1/m_tolE && m_Ek_prev!=0))
                 peak();
 
-            stepInfo(k);
+            stepInfo(m_iterations);
 
-            if (m_R.norm()/m_forcing.norm() < m_tolF && m_Ek/m_Ek0 < m_tolE)
+            m_Eks.push_back(m_Ek);
+
+            if (m_R.norm()/m_R0.norm() < m_tolF && m_Ek/m_Ek0 < m_tolE)
             {
                 m_L += m_DeltaL;
                 m_U += m_DeltaU;
                 break;
             }
-            if (k==m_maxIt-1)
+            if (m_iterations==m_maxIt-1)
             {
                 m_L += m_DeltaL;
                 m_U += m_DeltaU;
@@ -139,6 +152,7 @@ public:
         m_DeltaU += m_deltaU;
 
         m_v.setZero();
+        m_Ek = 0.0;
         // m_v = 0.5 * m_dt * m_massInv * m_R; // Velocities at dt/2
     }
 
@@ -195,13 +209,14 @@ public:
                 <<std::setw(16)<<"λ"
                 <<std::setw(16)<<"Δλ"
                 <<std::setw(16)<<"ΔL"
+                <<std::setw(16)<<"|Δv|"
                 <<"\n";
     }
 
     void stepInfo(index_t k)
     {
         gsInfo  <<std::setw(4)<<k
-                <<std::setw(16)<<m_R.norm()/m_forcing.norm()
+                <<std::setw(16)<<m_R.norm()/m_R0.norm()
                 <<std::setw(16)<<m_Ek/m_Ek0
                 <<std::setw(16)<<(m_U+m_DeltaU).norm()
                 <<std::setw(16)<<m_DeltaU.norm()
@@ -209,6 +224,7 @@ public:
                 <<std::setw(16)<<m_L+m_DeltaL
                 <<std::setw(16)<<m_DeltaL
                 <<std::setw(16)<<m_DeltaU.norm()+m_DeltaL*m_DeltaL
+                <<std::setw(16)<<m_v.norm()
                 <<"\n";
     }
 
@@ -218,7 +234,7 @@ protected:
     const std::function<gsVector<T> ( gsVector<T> const &, T, gsVector<T> const &) > m_residualFun;
     gsVector<T> m_U, m_v;
     gsVector<T> m_DeltaU, m_deltaU;
-    gsVector<T> m_R;
+    gsVector<T> m_R, m_R0;
     gsSparseMatrix<T> m_mass, m_damp;
     gsMatrix<T> m_massInv;
     index_t m_dofs;
@@ -227,6 +243,8 @@ protected:
     T m_Ek, m_Ek_prev, m_Ek0;
     T m_L, m_DeltaL;
 
-    index_t m_maxIt;
+    index_t m_maxIt, m_iterations;
     T m_tolF, m_tolE;
+
+    mutable std::vector<T> m_Eks;
 };
