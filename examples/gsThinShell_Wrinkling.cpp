@@ -72,6 +72,7 @@ int main (int argc, char** argv)
     int numElevateL = -1;
     int numHrefL    = -1;
     bool plot       = false;
+    bool mesh       = false;
     bool stress       = false;
     bool membrane       = false;
     bool first  = false;
@@ -175,6 +176,7 @@ int main (int argc, char** argv)
     cmd.addSwitch("membrane", "Use membrane model (no bending)", membrane);
     cmd.addSwitch("symmetry", "Use symmetry boundary condition (different per problem)", symmetry);
     cmd.addSwitch("deformed", "plot on deformed shape", deformed);
+    cmd.addSwitch("mesh","plot the mesh",mesh);
     cmd.addSwitch("weak", "Use weak clamping", weak);
 
     cmd.addSwitch("THB", "Use refinement", THB);
@@ -619,7 +621,7 @@ int main (int argc, char** argv)
 
     // plot geometry
     if (plot)
-      gsWriteParaview(mp,dirname + "/" + "mp",1000,true);
+      gsWriteParaview(mp,dirname + "/" + "mp",1000,mesh);
 
     if (writeG)
     {
@@ -890,7 +892,7 @@ int main (int argc, char** argv)
 
         //   gsField<> solField(mp,deformation);
         //   std::string fileName = dirname + "/" + output + util::to_string(k);
-        //   gsWriteParaview<>(solField, fileName, 5000);
+        //   gsWriteParaview<>(solField, fileName, 5000,mesh);
         //   fileName = output + util::to_string(k) + "0";
         //   collection.addTimestep(fileName,k,".vts");
         // }
@@ -953,7 +955,7 @@ int main (int argc, char** argv)
           solField= gsField<>(mp,deformation);
 
         std::string fileName = dirname + "/" + output + util::to_string(k);
-        gsWriteParaview<>(solField, fileName, 1000,true);
+        gsWriteParaview<>(solField, fileName, 1000,mesh);
         fileName = output + util::to_string(k) + "0";
         collection.addTimestep(fileName,k,".vts");
         collection.addTimestep(fileName,k,"_mesh.vtp");
