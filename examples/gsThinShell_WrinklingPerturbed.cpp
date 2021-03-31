@@ -72,6 +72,7 @@ int main (int argc, char** argv)
     int numElevateL = -1;
     int numHrefL    = -1;
     bool plot       = false;
+    bool mesh       = false;
     bool stress       = false;
     bool membrane       = false;
     bool first  = false;
@@ -175,7 +176,7 @@ int main (int argc, char** argv)
     cmd.addSwitch("symmetry", "Use symmetry boundary condition (different per problem)", symmetry);
     cmd.addSwitch("deformed", "plot on deformed shape", deformed);
     cmd.addSwitch("weak", "Use weak clamping", weak);
-
+    cmd.addSwitch("mesh", "plot mesh", mesh);
     cmd.addSwitch("THB", "Use refinement", THB);
 
     cmd.addString("i","input", "Perturbation filename", fn);
@@ -290,8 +291,15 @@ int main (int argc, char** argv)
 
       addClamping(mpBspline,0,sides, 1e-2);
 
+      gsMultiPatch<> original = mpBspline;
+
       index_t N = mpBspline.patch(0).coefs().rows();
       mpBspline.patch(0).coefs().col(2) = gsMatrix<>::Random(N,1);
+
+      gsMultiPatch<> deformation = mpBspline;
+      deformation.patch(0).coefs() -= original.patch(0).coefs();
+      gsField<> solField(mpBspline,deformation);
+      gsWriteParaview(solField,"initialPerturbation",1000,mesh);
 
       // if (testCase==2)
       //   fn = "deformations/wrinklingFu_full.xml";
@@ -560,7 +568,7 @@ int main (int argc, char** argv)
 
     // plot geometry
     if (plot)
-      gsWriteParaview(mp,dirname + "/" + "mp",1000,true);
+      gsWriteParaview(mp,dirname + "/" + "mp",1000,mesh);
 
     if (writeG)
     {
@@ -816,7 +824,7 @@ int main (int argc, char** argv)
         dLb = dLb / 2.;
         arcLength.setLength(dLb);
         arcLength.setSolution(Uold,Lold);
-        bisected = true;
+//        bisected = true;
         k -= 1;
         continue;
         // if (plot)
@@ -881,7 +889,7 @@ int main (int argc, char** argv)
           solField= gsField<>(mp,deformation);
 
         std::string fileName = dirname + "/" + output + util::to_string(k);
-        gsWriteParaview<>(solField, fileName, 1000,true);
+        gsWriteParaview<>(solField, fileName, 1000,mesh);
         fileName = output + util::to_string(k) + "0";
         collection.addTimestep(fileName,k,".vts");
         collection.addTimestep(fileName,k,"_mesh.vtp");
