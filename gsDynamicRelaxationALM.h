@@ -12,7 +12,8 @@
 */
 
 #include <gismo.h>
-using namespace gismo;
+namespace gismo
+{
 
 template <class T>
 class gsDynamicRelaxationALM
@@ -85,9 +86,8 @@ public:
             if (m_c==0 && m_Ek_prev > m_Ek)
                 peak();
 
-        	m_Eks.push_back(m_Ek);
-
             stepInfo(m_iterations);
+        	m_Eks.push_back(m_Ek);
 
             if (m_R.norm()/m_forcing.norm() < m_tolF && m_Ek/m_Ek0 < m_tolE)
             {
@@ -324,5 +324,7 @@ protected:
     index_t m_maxIt, m_iterations;
     T m_tolF, m_tolE;
 
-    std::vector<T> m_Eks;
+    mutable std::vector<T> m_Eks;
 };
+
+} // namespace gismo
