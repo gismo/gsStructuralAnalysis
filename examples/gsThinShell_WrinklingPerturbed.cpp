@@ -164,6 +164,8 @@ int main (int argc, char** argv)
     cmd.addInt("q","QuasiNewtonInt","Use the Quasi Newton method every INT iterations",quasiNewtonInt);
     cmd.addInt("N", "maxsteps", "Maximum number of steps", step);
 
+    cmd.addReal("U","tolU","displacement tolerance",tolU);
+
     cmd.addSwitch("adaptive", "Adaptive length ", adaptive);
     cmd.addSwitch("quasi", "Use the Quasi Newton method", quasiNewton);
     cmd.addSwitch("plot", "Plot result in ParaView format", plot);
