@@ -222,7 +222,7 @@ int main (int argc, char** argv)
     /*
       Case: Shear
     */
-    else if (testCase==8)
+    else if (testCase==8 || testCase==9)
     {
       E_modulus = 3500;
       PoissonRatio = 0.31;
@@ -238,7 +238,7 @@ int main (int argc, char** argv)
     if (fn.empty())
     {
       std::vector<boxSide> sides;
-      if (testCase >= 2 && testCase<=7)
+      if (testCase >= 2 && testCase<=7 || testCase ==9)
       {
       	sides.push_back(boundary::west);
       	sides.push_back(boundary::east);
@@ -252,7 +252,7 @@ int main (int argc, char** argv)
         mpBspline = Rectangle(aDim   , bDim/2.);
       else if   (testCase==6 || testCase==7)
         mpBspline = Rectangle(aDim/2., bDim/2.);
-      else if   (testCase==8)
+      else if   (testCase==8 || testCase==9)
         mpBspline = Rectangle(aDim,    bDim   );
 
       for(index_t i = 0; i< numElevate; ++i)
@@ -494,6 +494,32 @@ int main (int argc, char** argv)
       std::stringstream ss;
       ss<<perturbation;
       dirname = dirname + "/ShearSheet_Perturbed=" + ss.str() + "_r=" + std::to_string(numHref) + "_e=" + std::to_string(numElevate) + "_M=" + std::to_string(material) + "_c=" + std::to_string(Compressibility);
+      output =  "solution";
+      wn = output + "data.txt";
+      cross_coordinate = 0;
+      cross_val = 0.0;
+
+      Dtarget = 3.0;
+    }
+    else if (testCase == 9)
+    {
+      displ.setValue(0.05,3);
+      BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0 ,false,0);
+      BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0 ,false,1);
+      BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0 ,false,2);
+
+      BCs.addCondition(boundary::north, condition_type::dirichlet, &displ, 0 ,false,0);
+      BCs.addCondition(boundary::north, condition_type::dirichlet, &displ_const, 0 ,false,1);
+      // BCs.addCondition(boundary::north, condition_type::dirichlet, 0, 0 ,false,1);
+      BCs.addCondition(boundary::north, condition_type::dirichlet, 0, 0 ,false,2);
+
+      BCs.addCondition(boundary::east, condition_type::clamped, 0, 0 ,false,2);
+      BCs.addCondition(boundary::west, condition_type::clamped, 0, 0 ,false,2);
+
+
+      std::stringstream ss;
+      ss<<perturbation;
+      dirname = dirname + "/ShearSheetRestrained_Perturbed=" + ss.str() + "_r=" + std::to_string(numHref) + "_e=" + std::to_string(numElevate) + "_M=" + std::to_string(material) + "_c=" + std::to_string(Compressibility);
       output =  "solution";
       wn = output + "data.txt";
       cross_coordinate = 0;
