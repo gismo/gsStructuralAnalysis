@@ -159,14 +159,15 @@ int main(int argc, char *argv[])
     bc.setGeoMap(mp);
 
     gsConstantFunction<> displ(0.1,3);
+    gsConstantFunction<> displx(0.1,3);
 
     gsPointLoads<real_t> pLoads = gsPointLoads<real_t>();
-    for (index_t i=0; i!=3; ++i)
-    {
-        bc.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, i ); // unknown 2 - z
-    }
-    bc.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z
-    bc.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z
+    bc.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 0 ); // unknown 2 - z
+    bc.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 2 - z
+    bc.addCondition(boundary::west, condition_type::dirichlet, &displx, 0, false, 2 ); // unknown 2 - z
+
+    // bc.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z
+    // bc.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z
     bc.addCondition(boundary::east, condition_type::dirichlet, 0, 0 ,false,1);
 
     bc.addCondition(boundary::east, condition_type::dirichlet, 0, 0 ,false,2);
@@ -340,6 +341,7 @@ int main(int argc, char *argv[])
     gsOptionList DROptions = DRM.options();
     DROptions.setReal("damping",damping);
     DROptions.setReal("alpha",alpha);
+    DROptions.setInt("maxIt",1e3);
     DRM.setOptions(DROptions);
 
     index_t count = 0;

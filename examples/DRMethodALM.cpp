@@ -347,6 +347,7 @@ int main(int argc, char *argv[])
     gsOptionList DROptions = DRM.options();
     DROptions.setReal("damping",damping);
     DROptions.setReal("alpha",alpha);
+    DROptions.setReal("maxIt",1e3);
     // DROptions.setInt("maxIt",99);
     DRM.setOptions(DROptions);
     DRM.init();
