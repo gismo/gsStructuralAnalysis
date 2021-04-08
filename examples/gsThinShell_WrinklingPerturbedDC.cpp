@@ -238,7 +238,7 @@ int main (int argc, char** argv)
     if (fn.empty())
     {
       std::vector<boxSide> sides;
-      if (testCase >= 2 && testCase<=7 || testCase ==9)
+      if ((testCase >= 2 && testCase<=7) || testCase ==9)
       {
       	sides.push_back(boundary::west);
       	sides.push_back(boundary::east);
