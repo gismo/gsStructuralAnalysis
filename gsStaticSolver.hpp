@@ -41,31 +41,33 @@ gsVector<T> gsStaticSolver<T>::solveNonlinear()
         m_solVec = this->solveLinear();
 
     T residual = m_force.norm();
+    if (residual==0) residual=1;
     T residual0 = residual;
     T residualOld = residual;
-    gsVector<T> updateVector = m_solVec;
+    gsVector<T> DeltaU = gsVector<T>::Zero(m_solVec.rows());
+    gsVector<T> deltaU = gsVector<T>::Zero(m_solVec.rows());
     gsVector<T> resVec = m_residual(m_solVec);
     gsSparseMatrix<T> jacMat;
     for (m_iterations = 0; m_iterations != m_maxIterations; ++m_iterations)
     {
-        jacMat = m_nonlinear(m_solVec);
+        jacMat = m_nonlinear(m_solVec+DeltaU);
         if (m_verbose==2)
         {
             gsInfo<<"Matrix: \n"<<jacMat.toDense()<<"\n";
             gsInfo<<"Vector: \n"<<resVec<<"\n";
         }
         m_solver.compute(jacMat);
-        updateVector = m_solver.solve(resVec); // this is the UPDATE
-        m_solVec += updateVector;
+        deltaU = m_solver.solve(resVec); // this is the UPDATE
+        DeltaU += deltaU;
 
-        resVec = m_residual(m_solVec);
+        resVec = m_residual(m_solVec+DeltaU);
         residual = resVec.norm();
 
         if (m_verbose>0)
         {
             gsInfo<<"Iteration: "<< m_iterations
-               <<", residue: "<< residual
-               <<", update norm: "<<updateVector.norm()
+               <<", residue: "<< residual/residual0
+               <<", update norm: "<<deltaU.norm()
                <<", log(Ri/R0): "<< math::log10(residualOld/residual0)
                <<", log(Ri+1/R0): "<< math::log10(residual/residual0)
                <<"\n";
@@ -73,9 +75,10 @@ gsVector<T> gsStaticSolver<T>::solveNonlinear()
 
         residualOld = residual;
 
-        if (updateVector.norm() < m_tolerance)
+        if (deltaU.norm()  < m_tolerance && residual/residual0 < m_tolerance)
         {
             m_converged = true;
+            m_solVec+=DeltaU;
             break;
         }
         else if (m_iterations+1 == m_maxIterations)

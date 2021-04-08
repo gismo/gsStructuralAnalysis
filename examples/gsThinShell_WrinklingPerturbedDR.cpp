@@ -17,7 +17,7 @@
 #include <gsKLShell/getMaterialMatrix.h>
 
 // #include <gsThinShell/gsArcLengthIterator.h>
-#include <gsStructuralAnalysis/gsStaticSolver.h>
+#include <gsStructuralAnalysis/gsDynamicRelaxationLC.h>
 
 using namespace gismo;
 
@@ -57,7 +57,7 @@ template <class T>
 void initStepOutput( const std::string name, const gsMatrix<T> & points);
 
 template <class T>
-void writeStepOutput(const gsMultiPatch<T> & deformation, const gsMatrix<T> solVector, const T indicator, const T load, const std::string name, const gsMatrix<T> & points, const index_t extreme=-1, const index_t kmax=100); // extreme: the column of point indices to compute the extreme over (default -1);
+void writeStepOutput(const gsMatrix<T> & solution, const T &load, const gsMultiPatch<T> & deformation, const std::string name, const gsMatrix<T> & points, const index_t extreme=-1, const index_t kmax=100);
 
 void initSectionOutput( const std::string dirname, bool undeformed=false);
 
@@ -72,10 +72,10 @@ int main (int argc, char** argv)
     int numElevateL = -1;
     int numHrefL    = -1;
     bool plot       = false;
+    bool energyPlot = false;
     bool stress       = false;
     bool membrane       = false;
     int step = 10;
-    int method = 2; // (0: Load control; 1: Riks' method; 2: Crisfield's method; 3: consistent crisfield method; 4: extended iterations)
     bool symmetry = false;
     bool deformed = false;
     real_t perturbation = 0;
@@ -107,11 +107,14 @@ int main (int argc, char** argv)
 
     bool weak = false;
 
-    index_t maxit = 20;
+    index_t maxit = 2e6;
+
+    real_t alpha = 2.0;
+    real_t damping = 1.0;
 
     // Arc length method options
-    real_t dL = 0; // General arc length
-    real_t tol = 1e-6;
+    real_t tolE = 1e-3;
+    real_t tolF = 1e-5;
 
     std::string wn("data.csv");
 
@@ -135,17 +138,15 @@ int main (int argc, char** argv)
     cmd.addSwitch("composite", "Composite material", composite);
 
     cmd.addReal("T","hdim", "thickness of the plate", thickness);
-    cmd.addReal("a","adim", "dimension a", aDim);
-    cmd.addReal("b","bdim", "dimension b", bDim);
 
-    cmd.addInt("m","Method", "Arc length method; 1: Crisfield's method; 2: RIks' method.", method);
-    cmd.addReal("L","dLb", "arc length", dL);
-
+    cmd.addReal( "a", "alpha", "alpha",  alpha );
+    cmd.addReal( "D", "damping", "damping",  damping );
     cmd.addReal("P","perturbation", "perturbation factor", perturbation);
 
     cmd.addInt("N", "maxsteps", "Maximum number of steps", step);
 
     cmd.addSwitch("plot", "Plot result in ParaView format", plot);
+    cmd.addSwitch("eplot", "Plot the energies", energyPlot);
     cmd.addSwitch("stress", "Plot stress in ParaView format", stress);
     cmd.addSwitch("write", "Write output to file", write);
     cmd.addSwitch("writeG", "Write refined geometry", writeG);
@@ -310,7 +311,7 @@ int main (int argc, char** argv)
     gsTHBSpline<2,real_t> thb;
     if (THB)
     {
-      for (index_t k=0; k!=mpBspline.nPatches(); ++k)
+      for (size_t k=0; k!=mpBspline.nPatches(); ++k)
       {
           gsTensorBSpline<2,real_t> *geo = dynamic_cast< gsTensorBSpline<2,real_t> * > (&mpBspline.patch(k));
           thb = gsTHBSpline<2,real_t>(*geo);
@@ -348,22 +349,8 @@ int main (int argc, char** argv)
     gsBoundaryConditions<> BCs;
     BCs.setGeoMap(mp);
 
-    // Initiate Surface forces
-    std::string tx("0");
-    std::string ty("0");
-    std::string tz("0");
-
-    gsVector<> tmp(3);
-    gsVector<> neu(3);
-    tmp << 0, 0, 0;
-    neu << 0, 0, 0;
-    gsConstantFunction<> neuData(neu,3);
-
-    gsConstantFunction<> displ(0.0,3);
-    gsConstantFunction<> displ_const(0.05,3);
-
     std::string output = "solution";
-    std::string dirname = "DisplacementControl";
+    std::string dirname = "DynamicRelaxationResults";
 
     gsMatrix<> writePoints(2,3);
     writePoints.col(0)<< 0.0,0.5;
@@ -371,17 +358,21 @@ int main (int argc, char** argv)
     writePoints.col(2)<< 1.0,0.5;
     index_t cross_coordinate = -1;
     real_t cross_val = 0.0;
+    gsConstantFunction<> displ(0.0,3);
+    gsConstantFunction<> disply(0.0,3);
 
-    real_t Dtarget = 0;
+    real_t Displ;
+
     if (testCase == 2 || testCase == 3)
     {
+      Displ = -aDim/2;
       BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0 ,false,0);
       BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0 ,false,1);
       BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0 ,false,2);
 
       BCs.addCondition(boundary::east, condition_type::dirichlet, 0, 0 ,false,1);
       BCs.addCondition(boundary::east, condition_type::dirichlet, 0, 0 ,false,2);
-      BCs.addCondition(boundary::east, condition_type::dirichlet, &displ, 0 ,false,0);
+      BCs.addCondition(boundary::east, condition_type::dirichlet, &displ, 0 ,false,2);
 
       if (weak)
       {
@@ -402,11 +393,10 @@ int main (int argc, char** argv)
       wn = output + "data.txt";
       cross_coordinate = 0;
       cross_val = 0.5;
-
-      Dtarget = 0.5*aDim;
     }
     else if (testCase == 4 || testCase == 5)
     {
+      Displ = -aDim/2;
       BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0 ,false,0);
       BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0 ,false,1);
       BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0 ,false,2);
@@ -440,11 +430,10 @@ int main (int argc, char** argv)
       wn = output + "data.txt";
       cross_coordinate = 0;
       cross_val = 0.5;
-
-      Dtarget = 0.5*aDim;
     }
     else if (testCase == 6 || testCase == 7)
     {
+      Displ = aDim/4;
       BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0 ,false,0);
 
       BCs.addCondition(boundary::east, condition_type::dirichlet, &displ, 0 ,false,0);
@@ -476,18 +465,17 @@ int main (int argc, char** argv)
       wn = output + "data.txt";
       cross_coordinate = 0;
       cross_val = 0.0;
-
-      Dtarget = 0.5*aDim/2;
     }
     else if (testCase == 8)
     {
-      displ.setValue(0.05,3);
+      Displ = 3;
+      disply.setValue(0.05,3);
       BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0 ,false,0);
       BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0 ,false,1);
       BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0 ,false,2);
 
       BCs.addCondition(boundary::north, condition_type::dirichlet, &displ, 0 ,false,0);
-      BCs.addCondition(boundary::north, condition_type::dirichlet, &displ_const, 0 ,false,1);
+      BCs.addCondition(boundary::north, condition_type::dirichlet, &disply, 0 ,false,1);
       // BCs.addCondition(boundary::north, condition_type::dirichlet, 0, 0 ,false,1);
       BCs.addCondition(boundary::north, condition_type::dirichlet, 0, 0 ,false,2);
 
@@ -498,8 +486,6 @@ int main (int argc, char** argv)
       wn = output + "data.txt";
       cross_coordinate = 0;
       cross_val = 0.0;
-
-      Dtarget = 3.0;
     }
 
     if (THB)
@@ -538,13 +524,12 @@ int main (int argc, char** argv)
     }
 
 
-    gsFunctionExpr<> surfForce(tx,ty,tz,3);
     // Initialise solution object
     gsMultiPatch<> mp_def = mp;
     gsSparseSolver<>::LU solver;
 
     // Linear isotropic material model
-    gsConstantFunction<> force(tmp,3);
+    gsFunctionExpr<> force("0","0","0",3);
     gsFunctionExpr<> t(std::to_string(thickness), 3);
     gsFunctionExpr<> E(std::to_string(E_modulus),3);
     gsFunctionExpr<> nu(std::to_string(PoissonRatio),3);
@@ -663,119 +648,185 @@ int main (int argc, char** argv)
     // Construct assembler object
     assembler->setOptions(opts);
 
-    typedef std::function<gsSparseMatrix<real_t> (gsVector<real_t> const &)>                                Jacobian_t;
-    typedef std::function<gsVector<real_t> (gsVector<real_t> const &) >         Residual_t;
-    // Function for the Jacobian
-    Jacobian_t Jacobian = [&assembler,&mp_def](gsVector<real_t> const &x)
-    {
-      assembler->homogenizeDirichlet();
-      assembler->constructSolution(x,mp_def);
-      assembler->assembleMatrix(mp_def);
-
-      gsSparseMatrix<real_t> m = assembler->matrix();
-      // gsInfo<<"matrix = \n"<<m.toDense()<<"\n";
-      return m;
-    };
-
+    typedef std::function<gsVector<real_t> (gsVector<real_t> const &, real_t, gsVector<real_t> const &) >   DCResidual_t;
     // Function for the Residual
-    Residual_t Residual = [&assembler,&mp_def](gsVector<real_t> const &x)
+    DCResidual_t DCResidual = [&displ,&BCs,&assembler,&mp_def](gsVector<real_t> const &x, real_t lam, gsVector<real_t> const &force)
     {
+        displ.setValue(lam,3);
+        assembler->updateBCs(BCs);
         assembler->constructSolution(x,mp_def);
         assembler->assembleVector(mp_def);
         return assembler->rhs(); // - lam * force;
     };
 
+    // Assemble linear system to obtain the force vector
+    assembler->assemble();
+    gsVector<> F = assembler->rhs();
+    gsSparseMatrix<> K = assembler->matrix();
 
-    gsSparseMatrix<> matrix;
-    gsVector<> vector;
 
-    gsStaticSolver<real_t> staticSolver(matrix,vector,Jacobian,Residual);
-    gsOptionList solverOptions = staticSolver.options();
-    solverOptions.setInt("Verbose",true);
-    solverOptions.setInt("MaxIterations",maxit);
-    solverOptions.setReal("Tolerance",tol);
-    staticSolver.setOptions(solverOptions);
+    gsDynamicRelaxationLC<real_t> DRM(K,F,DCResidual);
+    gsOptionList DROptions = DRM.options();
+    DROptions.setReal("damping",damping);
+    DROptions.setReal("alpha",alpha);
+    DROptions.setInt("maxIt",maxit);
+    DROptions.setReal("tolF",tolF);
+    DROptions.setReal("tolE",tolE);
+    DRM.setOptions(DROptions);
 
     gsParaviewCollection collection(dirname + "/" + output);
+    gsParaviewCollection Smembrane(dirname + "/" + "membrane");
+    gsParaviewCollection Sflexural(dirname + "/" + "flexural");
+    gsParaviewCollection Smembrane_p(dirname + "/" + "membrane_p");
     gsMultiPatch<> deformation = mp;
 
-    gsMatrix<> updateVector, solVector;
+    gsMatrix<> solVector;
+    DRM.init();
+    real_t Load;
+    gsVector<real_t> energies;
 
-
-    real_t dL0 = dL;
-    gsMultiPatch<> mp_def0 = mp_def;
-    real_t indicator;
-    real_t D = 0;
-    real_t Dold = 0;
-    int reset = 0;
-    index_t k = 0;
-    while (D-dL < Dtarget)
+    if (energyPlot)
     {
-      displ.setValue(D,3);
-      gsInfo<<"Load step "<< k<<"; D = "<<D<<"\n";
+#ifdef GISMO_WITH_MATPLOTLIB
+        plt::figure();
+#endif
+    }
 
-      assembler->updateBCs(BCs);
-      assembler->assemble();
+    for (index_t k=0; k<step; k++)
+    {
+      gsInfo<<"Load step "<< k<<"\n";
+      Load = Displ/step;
+      DRM.step(Load);
+      gsInfo<<"Step finished in "<<DRM.iterations()<<" iterations";
 
-      matrix = assembler->matrix();
-      vector = assembler->rhs();
-      solVector = staticSolver.solveNonlinear();
+      energies = DRM.relEnergies();
 
-      if (!staticSolver.converged())
+      if (energyPlot)
       {
-        dL = dL/2;
-        D = Dold+dL;
-        mp_def = mp_def0;
-        gsInfo<<"Iterations did not converge\n";
-        reset = 1;
-        continue;
+#ifdef GISMO_WITH_MATPLOTLIB
+        std::vector<real_t> xa(DRM.iterations()+1);
+        std::iota(std::begin(xa), std::end(xa), 0);
+
+        std::vector<real_t> E(energies.data(), energies.data() + energies.rows() * energies.cols());
+
+        plt::clf();
+        plt::title("Kinetic Energy at step " + std::to_string(k));
+        plt::semilogy(xa, E);
+        plt::show();
+        //plt::save("./poisson2_example.png");
+#endif
       }
 
-      indicator = staticSolver.indicator();
+      solVector = DRM.displacements();
+      mp_def = assembler->constructSolution(solVector);
 
-      assembler->constructSolution(solVector,mp_def);
-      real_t Load = 0;
+      // assembler->constructSolution(solVector,solution);
+
+
+      gsMatrix<> pts(2,1);
+      pts<<0.5,0.5;
+      if (testCase==8 || testCase==9)
+      {
+        pts.resize(2,3);
+        pts.col(0)<<0.0,1.0;
+        pts.col(1)<<0.5,1.0;
+        pts.col(2)<<1.0,1.0;
+      }
+      gsMatrix<> lambdas = assembler->computePrincipalStretches(pts,mp_def,0);
+      std::streamsize ss = std::cout.precision();
+      std::cout <<std::setprecision(20)
+                <<"lambdas = \n"<<lambdas<<"\n";
+      std::cout<<std::setprecision(ss);
 
       deformation = mp_def;
       deformation.patch(0).coefs() -= mp.patch(0).coefs();// assuming 1 patch here
 
-      if (stress)
-      {
-        gsPiecewiseFunction<> stresses;
-        assembler->constructStress(mp_def,stresses,stress_type::principal_stretch);
-        gsField<> stressField(mp,stresses, true);
-        gsWriteParaview( stressField, "stress", 5000);
-      }
 
       if (plot)
       {
-        gsField<> solField(mp,deformation);
+        gsField<> solField;
+        if (deformed)
+          solField= gsField<>(mp_def,deformation);
+        else
+          solField= gsField<>(mp,deformation);
+
         std::string fileName = dirname + "/" + output + util::to_string(k);
-        gsWriteParaview<>(solField, fileName, 5000);
+        gsWriteParaview<>(solField, fileName, 1000,true);
         fileName = output + util::to_string(k) + "0";
         collection.addTimestep(fileName,k,".vts");
+        collection.addTimestep(fileName,k,"_mesh.vtp");
+      }
+      if (stress)
+      {
+        gsField<> membraneStress, flexuralStress, membraneStress_p;
+
+        gsPiecewiseFunction<> membraneStresses;
+        assembler->constructStress(mp_def,membraneStresses,stress_type::membrane);
+        if (deformed)
+          membraneStress = gsField<>(mp_def,membraneStresses,true);
+        else
+          membraneStress = gsField<>(mp,membraneStresses,true);
+
+        gsPiecewiseFunction<> flexuralStresses;
+        assembler->constructStress(mp_def,flexuralStresses,stress_type::flexural);
+        if (deformed)
+          flexuralStress = gsField<>(mp_def,flexuralStresses, true);
+        else
+          flexuralStress = gsField<>(mp,flexuralStresses, true);
+
+        gsPiecewiseFunction<> membraneStresses_p;
+        assembler->constructStress(mp_def,membraneStresses_p,stress_type::principal_stress_membrane);
+        if (deformed)
+          membraneStress_p = gsField<>(mp_def,membraneStresses_p, true);
+        else
+          membraneStress_p = gsField<>(mp,membraneStresses_p, true);
+
+        std::string fileName;
+        fileName = dirname + "/" + "membrane" + util::to_string(k);
+        gsWriteParaview( membraneStress, fileName, 1000);
+        fileName = "membrane" + util::to_string(k) + "0";
+        Smembrane.addTimestep(fileName,k,".vts");
+
+        fileName = dirname + "/" + "flexural" + util::to_string(k);
+        gsWriteParaview( flexuralStress, fileName, 1000);
+        fileName = "flexural" + util::to_string(k) + "0";
+        Sflexural.addTimestep(fileName,k,".vts");
+
+        fileName = dirname + "/" + "membrane_p" + util::to_string(k);
+        gsWriteParaview( membraneStress_p, fileName, 1000);
+        fileName = "membrane_p" + util::to_string(k) + "0";
+        Smembrane_p.addTimestep(fileName,k,".vts");
       }
 
+
+
       if (write)
-        writeStepOutput(deformation,solVector,indicator,Load, dirname + "/" + wn, writePoints,1, 201);
+        writeStepOutput(solVector,Load,deformation, dirname + "/" + wn, writePoints,1, 201);
 
-      if (reset!=1)
-        dL = dL0;
+      if (crosssection && cross_coordinate!=-1)
+        writeSectionOutput(deformation,dirname,cross_coordinate,cross_val,201,false);
 
-      reset = 0;
-      mp_def0 = mp_def;
-      Dold = D;
-      // last step
-      if (Dtarget-D < dL)
-        dL0 = dL = Dtarget - D;
+      DRM.setDisplacement(solVector);
 
-      D += dL;
-      k++;
-
-      gsInfo<<"--------------------------------------------------------------------------------------------------------------\n";
     }
+
     if (plot)
+    {
       collection.save();
+    }
+    if (stress)
+    {
+      Smembrane.save();
+      Sflexural.save();
+      Smembrane_p.save();
+    }
+
+    if (energyPlot)
+    {
+      #ifdef GISMO_WITH_MATPLOTLIB
+        Py_Finalize();
+      #endif
+    }
 
   return result;
 }
@@ -879,9 +930,9 @@ void addClamping(gsMultiPatch<T>& mp, index_t patch, std::vector<boxSide> sides,
       else if (*it==boundary::south || *it==boundary::north) // west or east
       {
        if (*it==boundary::north) // north
-         geo->insertKnot(1 - std::min(offset, dknot0 / 2),1);
+         geo->insertKnot(1 - std::min(offset, dknot1 / 2),1);
        else if (*it==boundary::south) // south
-         geo->insertKnot(std::min(offset, dknot0 / 2),1);
+         geo->insertKnot(std::min(offset, dknot1 / 2),1);
       }
       else if (*it==boundary::none)
         gsWarn<<*it<<"\n";
@@ -1016,6 +1067,8 @@ gsMultiPatch<T> FrustrumDomain(int n, int p, T R1, T R2, T h)
   for(index_t i = 0; i< n; ++i)
       kv1.uniformRefine();
 
+  gsDebug<<kv1;
+
   // Make basis
   // gsTensorNurbsBasis<2,T> basis(kv0,kv1);
 
@@ -1082,9 +1135,8 @@ void initStepOutput(const std::string name, const gsMatrix<T> & points)
   gsInfo<<"Step results will be written in file: "<<name<<"\n";
 }
 
-
 template <class T>
-void writeStepOutput(const gsMultiPatch<T> & deformation, const gsMatrix<T> solVector, const T indicator, const T load, const std::string name, const gsMatrix<T> & points, const index_t extreme, const index_t kmax) // extreme: the column of point indices to compute the extreme over (default -1)
+void writeStepOutput(const gsMatrix<T> & solution, const T & load, const gsMultiPatch<T> & deformation, const std::string name, const gsMatrix<T> & points, const index_t extreme, const index_t kmax) // extreme: the column of point indices to compute the extreme over (default -1)
 {
   gsMatrix<T> P(2,1), Q(2,1);
   gsMatrix<T> out(3,points.cols());
@@ -1102,7 +1154,7 @@ void writeStepOutput(const gsMultiPatch<T> & deformation, const gsMatrix<T> solV
   if (extreme==-1)
   {
     file  << std::setprecision(6)
-          << solVector.norm() << ",";
+          << solution.norm() << ",";
           for (index_t p=0; p!=points.cols(); p++)
           {
             file<< out(0,p) << ","
@@ -1111,7 +1163,7 @@ void writeStepOutput(const gsMultiPatch<T> & deformation, const gsMatrix<T> solV
           }
 
     file  << load << ","
-          << indicator << ","
+          << 0.0 << ","
           << "\n";
   }
   else if (extreme==0 || extreme==1)
@@ -1129,7 +1181,7 @@ void writeStepOutput(const gsMultiPatch<T> & deformation, const gsMatrix<T> solV
     }
 
     file  << std::setprecision(6)
-          << solVector.norm() << ",";
+          << solution.norm() << ",";
           for (index_t p=0; p!=points.cols(); p++)
           {
             file<< out(0,p) << ","
@@ -1138,7 +1190,7 @@ void writeStepOutput(const gsMultiPatch<T> & deformation, const gsMatrix<T> solV
           }
 
     file  << load << ","
-          << indicator << ","
+          << 0.0 << ","
           << "\n";
   }
   else
