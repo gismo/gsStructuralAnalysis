@@ -444,7 +444,7 @@ int main (int argc, char** argv)
         BCs.addCondition(boundary::west, condition_type::neumann, &neuData2 ); // unknown 0 - x
         BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0,false,2 ); // unknown 2 - z
     }
-    else if (testCase == 8)
+    else if (testCase == 8 || testCase == 10)
     {
       BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0 ,false,0);
       BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0 ,false,1);
@@ -627,8 +627,6 @@ int main (int argc, char** argv)
       return m;
     };
 
-
-
       gsBucklingSolver<real_t> buckling(K_L,rhs,K_NL);
       buckling.verbose();
       // buckling.computePower();
@@ -644,11 +642,11 @@ int main (int argc, char** argv)
       gsDebugVar(buckling.vectors().cols());
 
     gsInfo<< "First 10 eigenvalues:\n";
-    for (index_t k = 0; k<2; k++)
+    for (index_t k = 0; k<10; k++)
         gsInfo<<"\t"<<std::setprecision(20)<<values.at(k)<<"\n";
     gsInfo<<"\n";
 
-    for (index_t k = 0; k<2; k++)
+    for (index_t k = 0; k<10; k++)
     {
       gsInfo<<"\t"<<values.at(k)*Load<<"\n";
     }
