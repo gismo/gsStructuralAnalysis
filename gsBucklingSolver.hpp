@@ -20,8 +20,8 @@
 namespace gismo
 {
 
-template <class T>
-void gsBucklingSolver<T>::initializeMatrix()
+template <class T, Spectra::GEigsMode GEigsMode>
+void gsBucklingSolver<T,GEigsMode>::initializeMatrix()
 {
   if (m_verbose) { gsInfo<<"Computing matrices" ; }
   m_solver.compute(m_linear);
@@ -33,39 +33,71 @@ void gsBucklingSolver<T>::initializeMatrix()
   if (m_verbose) { gsInfo<<"Finished\n" ; }
 };
 
-template <class T>
-void gsBucklingSolver<T>::compute()
+template <class T, Spectra::GEigsMode GEigsMode>
+void gsBucklingSolver<T,GEigsMode>::compute(T shift)
 {
     if (m_verbose) { gsInfo<<"Solving eigenvalue problem" ; }
-    m_eigSolver.compute(m_linear,m_nonlinear - m_linear);
+    m_eigSolver.compute(m_linear-shift*(m_nonlinear - m_linear),m_nonlinear - m_linear);
     if (m_verbose) { gsInfo<<"." ; }
     m_values  = m_eigSolver.eigenvalues();
+    m_values.array() += shift;
     if (m_verbose) { gsInfo<<"." ; }
     m_vectors = m_eigSolver.eigenvectors();
     if (m_verbose) { gsInfo<<"." ; }
     if (m_verbose) { gsInfo<<"Finished\n" ; }
 };
 
-template <class T>
-void gsBucklingSolver<T>::computeSparse(T shift, index_t number)
+template <class T, Spectra::GEigsMode GEigsMode>
+template<Spectra::GEigsMode _GEigsMode>
+typename std::enable_if<_GEigsMode==Spectra::GEigsMode::Cholesky ||
+                        _GEigsMode==Spectra::GEigsMode::RegularInverse
+                        ,
+                        void>::type
+gsBucklingSolver<T,GEigsMode>::computeSparse_impl(T shift, index_t number)
 {
-    if (m_verbose) { gsInfo<<"Solving eigenvalue problem" ; }
-    gsSparseMatrix<T> lhs = m_linear-shift*(m_nonlinear - m_linear);
-    gsSpectraGenSymSolver<gsSparseMatrix<T>,Spectra::GEigsMode::Cholesky> solver(lhs,m_nonlinear - m_linear,number,2*number);
-    if (m_verbose) { gsInfo<<"." ; }
-    solver.init();
-    if (m_verbose) { gsInfo<<"." ; }
-    solver.compute(Spectra::SortRule::SmallestMagn,1000,1e-10,Spectra::SortRule::SmallestAlge);
-    if (m_verbose) { gsInfo<<"." ; }
-    m_values  = solver.eigenvalues();
-    m_values.array() += shift;
-    if (m_verbose) { gsInfo<<"." ; }
-    m_vectors = solver.eigenvectors();
-    if (m_verbose) { gsInfo<<"Finished\n" ; }
+  if (m_verbose) { gsInfo<<"Solving eigenvalue problem" ; }
+  gsSparseMatrix<T> lhs = m_linear-shift*(m_nonlinear - m_linear);
+  gsSpectraGenSymSolver<gsSparseMatrix<T>,GEigsMode> solver(lhs,m_nonlinear - m_linear,number,2*number);
+  // gsSpectraGenSymShiftSolver<gsSparseMatrix<T>,Spectra::GEigsMode::ShiftInvert> solver(m_linear,m_nonlinear - m_linear,number,2*number,shift);
+  if (m_verbose) { gsInfo<<"." ; }
+  solver.init();
+  if (m_verbose) { gsInfo<<"." ; }
+  solver.compute(Spectra::SortRule::SmallestMagn,1000,1e-6,Spectra::SortRule::SmallestMagn);
+  GISMO_ASSERT(solver.info()==Spectra::CompInfo::Successful,"Spectra did not converge!"); // Reason for not converging can be due to the value of ncv (last input in the class member), which is too low.
+  if (m_verbose) { gsInfo<<"." ; }
+  m_values  = solver.eigenvalues();
+  m_values.array() += shift;
+  if (m_verbose) { gsInfo<<"." ; }
+  m_vectors = solver.eigenvectors();
+  if (m_verbose) { gsInfo<<"Finished\n" ; }
+}
+
+template <class T, Spectra::GEigsMode GEigsMode>
+template<Spectra::GEigsMode _GEigsMode>
+typename std::enable_if<_GEigsMode==Spectra::GEigsMode::ShiftInvert ||
+                        _GEigsMode==Spectra::GEigsMode::Buckling ||
+                        _GEigsMode==Spectra::GEigsMode::Cayley
+                        ,
+                        void>::type
+gsBucklingSolver<T,GEigsMode>::computeSparse_impl(T shift, index_t number)
+{
+  if (m_verbose) { gsInfo<<"Solving eigenvalue problem" ; }
+  gsSpectraGenSymShiftSolver<gsSparseMatrix<T>,GEigsMode> solver(m_linear,m_nonlinear - m_linear,number,2*number,shift);
+  // gsSpectraGenSymShiftSolver<gsSparseMatrix<T>,Spectra::GEigsMode::ShiftInvert> solver(m_linear,m_nonlinear - m_linear,number,2*number,shift);
+  if (m_verbose) { gsInfo<<"." ; }
+  solver.init();
+  if (m_verbose) { gsInfo<<"." ; }
+  solver.compute(Spectra::SortRule::SmallestMagn,1000,1e-6,Spectra::SortRule::SmallestMagn);
+  GISMO_ASSERT(solver.info()==Spectra::CompInfo::Successful,"Spectra did not converge!"); // Reason for not converging can be due to the value of ncv (last input in the class member), which is too low.
+  if (m_verbose) { gsInfo<<"." ; }
+  m_values  = solver.eigenvalues();
+  if (m_verbose) { gsInfo<<"." ; }
+  m_vectors = solver.eigenvectors();
+  if (m_verbose) { gsInfo<<"Finished\n" ; }
 };
 
-template <class T>
-void gsBucklingSolver<T>::computePower()
+template <class T, Spectra::GEigsMode GEigsMode>
+void gsBucklingSolver<T,GEigsMode>::computePower()
 {
     if (m_verbose) { gsInfo<<"Solving eigenvalue problem" ; }
     gsMatrix<T> D = m_linear.toDense().inverse() * (m_nonlinear.toDense() - m_linear.toDense());
@@ -97,8 +129,8 @@ void gsBucklingSolver<T>::computePower()
 };
 
 
-template <class T>
-std::vector<std::pair<T,gsMatrix<T>> > gsBucklingSolver<T>::makeMode(int k) const
+template <class T, Spectra::GEigsMode GEigsMode>
+std::vector<std::pair<T,gsMatrix<T>> > gsBucklingSolver<T,GEigsMode>::makeMode(int k) const
 {
     std::vector<std::pair<T,gsMatrix<T>> > mode;
     mode.push_back( std::make_pair( m_values.at(k), m_vectors.col(k) ) );
