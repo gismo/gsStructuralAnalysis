@@ -74,6 +74,7 @@ int main (int argc, char** argv)
     bool plot       = false;
     bool stress       = false;
     bool membrane       = false;
+    bool mesh = false;
     int step = 10;
     int method = 2; // (0: Load control; 1: Riks' method; 2: Crisfield's method; 3: consistent crisfield method; 4: extended iterations)
     bool symmetry = false;
@@ -146,6 +147,7 @@ int main (int argc, char** argv)
     cmd.addInt("N", "maxsteps", "Maximum number of steps", step);
 
     cmd.addSwitch("plot", "Plot result in ParaView format", plot);
+    cmd.addSwitch("mesh", "Plot mesh?", mesh);
     cmd.addSwitch("stress", "Plot stress in ParaView format", stress);
     cmd.addSwitch("write", "Write output to file", write);
     cmd.addSwitch("writeG", "Write refined geometry", writeG);
@@ -219,26 +221,13 @@ int main (int argc, char** argv)
       bDim = 0.14;
       thickness = 0.14e-3;
     }
-    /*
-      Case: Shear
-    */
-    else if (testCase==8 || testCase==9)
-    {
-      E_modulus = 3500;
-      PoissonRatio = 0.31;
-      gsDebug<<"E = "<<E_modulus<<"; nu = "<<PoissonRatio<<"\n";
-
-      aDim = 380;
-      bDim = 128;
-      thickness = 25e-3;
-    }
     // ![Material data]
 
     // ![Read Geometry files]
     if (fn.empty())
     {
       std::vector<boxSide> sides;
-      if ((testCase >= 2 && testCase<=7) || testCase ==9)
+      if ((testCase >= 2 && testCase<=7))
       {
       	sides.push_back(boundary::west);
       	sides.push_back(boundary::east);
@@ -252,8 +241,6 @@ int main (int argc, char** argv)
         mpBspline = Rectangle(aDim   , bDim/2.);
       else if   (testCase==6 || testCase==7)
         mpBspline = Rectangle(aDim/2., bDim/2.);
-      else if   (testCase==8 || testCase==9)
-        mpBspline = Rectangle(aDim,    bDim   );
 
       for(index_t i = 0; i< numElevate; ++i)
         mpBspline.patch(0).degreeElevate();    // Elevate the degree
@@ -479,54 +466,6 @@ int main (int argc, char** argv)
 
       Dtarget = 0.5*aDim/2;
     }
-    else if (testCase == 8)
-    {
-      displ.setValue(0.05,3);
-      BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0 ,false,0);
-      BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0 ,false,1);
-      BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0 ,false,2);
-
-      BCs.addCondition(boundary::north, condition_type::dirichlet, &displ, 0 ,false,0);
-      BCs.addCondition(boundary::north, condition_type::dirichlet, &displ_const, 0 ,false,1);
-      // BCs.addCondition(boundary::north, condition_type::dirichlet, 0, 0 ,false,1);
-      BCs.addCondition(boundary::north, condition_type::dirichlet, 0, 0 ,false,2);
-
-      std::stringstream ss;
-      ss<<perturbation;
-      dirname = dirname + "/ShearSheet_Perturbed=" + ss.str() + "_r=" + std::to_string(numHref) + "_e=" + std::to_string(numElevate) + "_M=" + std::to_string(material) + "_c=" + std::to_string(Compressibility);
-      output =  "solution";
-      wn = output + "data.txt";
-      cross_coordinate = 0;
-      cross_val = 0.0;
-
-      Dtarget = 3.0;
-    }
-    else if (testCase == 9)
-    {
-      displ.setValue(0.05,3);
-      BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0 ,false,0);
-      BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0 ,false,1);
-      BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0 ,false,2);
-
-      BCs.addCondition(boundary::north, condition_type::dirichlet, &displ, 0 ,false,0);
-      BCs.addCondition(boundary::north, condition_type::dirichlet, &displ_const, 0 ,false,1);
-      // BCs.addCondition(boundary::north, condition_type::dirichlet, 0, 0 ,false,1);
-      BCs.addCondition(boundary::north, condition_type::dirichlet, 0, 0 ,false,2);
-
-      BCs.addCondition(boundary::east, condition_type::clamped, 0, 0 ,false,2);
-      BCs.addCondition(boundary::west, condition_type::clamped, 0, 0 ,false,2);
-
-
-      std::stringstream ss;
-      ss<<perturbation;
-      dirname = dirname + "/ShearSheetRestrained_Perturbed=" + ss.str() + "_r=" + std::to_string(numHref) + "_e=" + std::to_string(numElevate) + "_M=" + std::to_string(material) + "_c=" + std::to_string(Compressibility);
-      output =  "solution";
-      wn = output + "data.txt";
-      cross_coordinate = 0;
-      cross_val = 0.0;
-
-      Dtarget = 3.0;
-    }
 
     if (THB)
       dirname = dirname + "_THB";
@@ -706,8 +645,11 @@ int main (int argc, char** argv)
     // Function for the Residual
     Residual_t Residual = [&assembler,&mp_def](gsVector<real_t> const &x)
     {
+        assembler->homogenizeDirichlet();
         assembler->constructSolution(x,mp_def);
         assembler->assembleVector(mp_def);
+        gsDebugVar(assembler->rhs());
+        gsDebugVar(x);
         return assembler->rhs(); // - lam * force;
     };
 
@@ -735,6 +677,7 @@ int main (int argc, char** argv)
     real_t Dold = 0;
     int reset = 0;
     index_t k = 0;
+
     while (D-dL < Dtarget)
     {
       displ.setValue(D,3);
@@ -745,6 +688,8 @@ int main (int argc, char** argv)
 
       matrix = assembler->matrix();
       vector = assembler->rhs();
+    gsDebugVar(vector);
+
       solVector = staticSolver.solveNonlinear();
 
       if (!staticSolver.converged())
@@ -777,9 +722,10 @@ int main (int argc, char** argv)
       {
         gsField<> solField(mp,deformation);
         std::string fileName = dirname + "/" + output + util::to_string(k);
-        gsWriteParaview<>(solField, fileName, 5000);
+        gsWriteParaview<>(solField, fileName, 5000, mesh);
         fileName = output + util::to_string(k) + "0";
         collection.addTimestep(fileName,k,".vts");
+        if (mesh) collection.addTimestep(fileName,k,"_mesh.vtp");
       }
 
       if (write)

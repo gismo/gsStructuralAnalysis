@@ -16,8 +16,8 @@
 #include <gsKLShell/gsThinShellAssembler.h>
 #include <gsKLShell/getMaterialMatrix.h>
 
-// #include <gsThinShell/gsArcLengthIterator.h>
 #include <gsStructuralAnalysis/gsArcLengthIterator.h>
+#include <gsStructuralAnalysis/gsStaticSolver.h>
 
 using namespace gismo;
 
@@ -74,7 +74,7 @@ int main (int argc, char** argv)
     bool plot       = false;
     bool stress       = false;
     bool membrane       = false;
-    bool first  = false;
+    bool mesh  = false;
     bool quasiNewton = false;
     int quasiNewtonInt = -1;
     bool adaptive = false;
@@ -166,8 +166,8 @@ int main (int argc, char** argv)
     cmd.addSwitch("adaptive", "Adaptive length ", adaptive);
     cmd.addSwitch("quasi", "Use the Quasi Newton method", quasiNewton);
     cmd.addSwitch("plot", "Plot result in ParaView format", plot);
+    cmd.addSwitch("mesh", "Plot mesh?", mesh);
     cmd.addSwitch("stress", "Plot stress in ParaView format", stress);
-    cmd.addSwitch("first", "Plot only first", first);
     cmd.addSwitch("write", "Write output to file", write);
     cmd.addSwitch("writeG", "Write refined geometry", writeG);
     cmd.addSwitch("cross", "Write cross-section to file", crosssection);
@@ -245,19 +245,6 @@ int main (int argc, char** argv)
       bDim = 0.14;
       thickness = 0.14e-3;
     }
-    /*
-      Case: Shear
-    */
-    else if (testCase==8)
-    {
-      E_modulus = 3500;
-      PoissonRatio = 0.31;
-      gsDebug<<"E = "<<E_modulus<<"; nu = "<<PoissonRatio<<"\n";
-
-      aDim = 380;
-      bDim = 128;
-      thickness = 25e-3;
-    }
     // ![Material data]
 
     // ![Read Geometry files]
@@ -278,8 +265,6 @@ int main (int argc, char** argv)
         mpBspline = Rectangle(aDim   , bDim/2.);
       else if   (testCase==6 || testCase==7)
         mpBspline = Rectangle(aDim/2., bDim/2.);
-      else if   (testCase==8)
-        mpBspline = Rectangle(aDim,    bDim   );
 
       for(index_t i = 0; i< numElevate; ++i)
         mpBspline.patch(0).degreeElevate();    // Elevate the degree
@@ -336,7 +321,7 @@ int main (int argc, char** argv)
     gsTHBSpline<2,real_t> thb;
     if (THB)
     {
-      for (index_t k=0; k!=mpBspline.nPatches(); ++k)
+      for (size_t k=0; k!=mpBspline.nPatches(); ++k)
       {
           gsTensorBSpline<2,real_t> *geo = dynamic_cast< gsTensorBSpline<2,real_t> * > (&mpBspline.patch(k));
           thb = gsTHBSpline<2,real_t>(*geo);
@@ -389,8 +374,6 @@ int main (int argc, char** argv)
 
     gsConstantFunction<> displ(0.05,3);
 
-    // Buckling coefficient
-    real_t fac = 1;
     // Unscaled load
     real_t Load = 0;
 
@@ -517,30 +500,6 @@ int main (int argc, char** argv)
       ss<<perturbation;
       dirname = dirname + "/QuarterSheet_Perturbed=" + ss.str() + "_r=" + std::to_string(numHref) + "_e=" + std::to_string(numElevate) + "_M=" + std::to_string(material) + "_c=" + std::to_string(Compressibility);
 
-      output =  "solution";
-      wn = output + "data.txt";
-      cross_coordinate = 0;
-      cross_val = 0.0;
-    }
-    else if (testCase == 8)
-    {
-      BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0 ,false,0);
-      BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0 ,false,1);
-      BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0 ,false,2);
-
-      BCs.addCondition(boundary::north, condition_type::collapsed, 0, 0 ,false,0);
-      // BCs.addCondition(boundary::north, condition_type::dirichlet, &displ, 0 ,false,1);
-      BCs.addCondition(boundary::north, condition_type::dirichlet, 0, 0 ,false,1);
-      BCs.addCondition(boundary::north, condition_type::dirichlet, 0, 0 ,false,2);
-
-      Load = 1e0;
-      gsVector<> point(2); point<< 1.0, 1.0 ;
-      gsVector<> load (3); load << Load,0.0, 0.0;
-      pLoads.addLoad(point, load, 0 );
-
-      std::stringstream ss;
-      ss<<perturbation;
-      dirname = dirname + "/ShearSheet_Perturbed=" + ss.str() + "_r=" + std::to_string(numHref) + "_e=" + std::to_string(numElevate) + "_M=" + std::to_string(material) + "_c=" + std::to_string(Compressibility);
       output =  "solution";
       wn = output + "data.txt";
       cross_coordinate = 0;
@@ -724,6 +683,7 @@ int main (int argc, char** argv)
     Jacobian_t Jacobian = [&time,&stopwatch,&assembler,&mp_def](gsVector<real_t> const &x)
     {
       stopwatch.restart();
+      assembler->homogenizeDirichlet();
       assembler->constructSolution(x,mp_def);
       assembler->assembleMatrix(mp_def);
       time += stopwatch.stop();
@@ -746,7 +706,6 @@ int main (int argc, char** argv)
     // Assemble linear system to obtain the force vector
     assembler->assemble();
     gsVector<> Force = assembler->rhs();
-
 
     gsArcLengthIterator<real_t> arcLength(Jacobian, ALResidual, Force);
 
@@ -850,21 +809,6 @@ int main (int argc, char** argv)
       Lold = arcLength.solutionL();
       assembler->constructSolution(solVector,mp_def);
 
-      gsMatrix<> pts(2,1);
-      pts<<0.5,0.5;
-      if (testCase==8 || testCase==9)
-      {
-        pts.resize(2,3);
-        pts.col(0)<<0.0,1.0;
-        pts.col(1)<<0.5,1.0;
-        pts.col(2)<<1.0,1.0;
-      }
-      gsMatrix<> lambdas = assembler->computePrincipalStretches(pts,mp_def,0);
-      std::streamsize ss = std::cout.precision();
-      std::cout <<std::setprecision(20)
-                <<"lambdas = \n"<<lambdas<<"\n";
-      std::cout<<std::setprecision(ss);
-
       deformation = mp_def;
       deformation.patch(0).coefs() -= mp.patch(0).coefs();// assuming 1 patch here
 
@@ -881,10 +825,10 @@ int main (int argc, char** argv)
           solField= gsField<>(mp,deformation);
 
         std::string fileName = dirname + "/" + output + util::to_string(k);
-        gsWriteParaview<>(solField, fileName, 1000,true);
+        gsWriteParaview<>(solField, fileName, 1000,mesh);
         fileName = output + util::to_string(k) + "0";
         collection.addTimestep(fileName,k,".vts");
-        collection.addTimestep(fileName,k,"_mesh.vtp");
+        if (mesh) collection.addTimestep(fileName,k,"_mesh.vtp");
       }
       if (stress)
       {

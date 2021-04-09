@@ -75,6 +75,7 @@ int main (int argc, char** argv)
     bool energyPlot = false;
     bool stress       = false;
     bool membrane       = false;
+    bool mesh = false;
     int step = 10;
     bool symmetry = false;
     bool deformed = false;
@@ -146,6 +147,7 @@ int main (int argc, char** argv)
     cmd.addInt("N", "maxsteps", "Maximum number of steps", step);
 
     cmd.addSwitch("plot", "Plot result in ParaView format", plot);
+    cmd.addSwitch("mesh", "Plot mesh?", mesh);
     cmd.addSwitch("eplot", "Plot the energies", energyPlot);
     cmd.addSwitch("stress", "Plot stress in ParaView format", stress);
     cmd.addSwitch("write", "Write output to file", write);
@@ -220,19 +222,6 @@ int main (int argc, char** argv)
       bDim = 0.14;
       thickness = 0.14e-3;
     }
-    /*
-      Case: Shear
-    */
-    else if (testCase==8)
-    {
-      E_modulus = 3500;
-      PoissonRatio = 0.31;
-      gsDebug<<"E = "<<E_modulus<<"; nu = "<<PoissonRatio<<"\n";
-
-      aDim = 380;
-      bDim = 128;
-      thickness = 25e-3;
-    }
     // ![Material data]
 
     // ![Read Geometry files]
@@ -253,8 +242,6 @@ int main (int argc, char** argv)
         mpBspline = Rectangle(aDim   , bDim/2.);
       else if   (testCase==6 || testCase==7)
         mpBspline = Rectangle(aDim/2., bDim/2.);
-      else if   (testCase==8)
-        mpBspline = Rectangle(aDim,    bDim   );
 
       for(index_t i = 0; i< numElevate; ++i)
         mpBspline.patch(0).degreeElevate();    // Elevate the degree
@@ -280,8 +267,6 @@ int main (int argc, char** argv)
       //   fn = "deformations/wrinklingFu_quarter.xml";
       // else if (testCase==7)
       //   fn = "deformations/wrinklingPanaitescu_quarter.xml";
-      // else if (testCase==7)
-      //   fn = "deformations/wrinklingShear.xml";
       // else
       //   GISMO_ERROR("No filename provided..");
     }
@@ -461,27 +446,6 @@ int main (int argc, char** argv)
       ss<<perturbation;
       dirname = dirname + "/QuarterSheet_Perturbed=" + ss.str() + "_r=" + std::to_string(numHref) + "_e=" + std::to_string(numElevate) + "_M=" + std::to_string(material) + "_c=" + std::to_string(Compressibility);
 
-      output =  "solution";
-      wn = output + "data.txt";
-      cross_coordinate = 0;
-      cross_val = 0.0;
-    }
-    else if (testCase == 8)
-    {
-      Displ = 3;
-      disply.setValue(0.05,3);
-      BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0 ,false,0);
-      BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0 ,false,1);
-      BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0 ,false,2);
-
-      BCs.addCondition(boundary::north, condition_type::dirichlet, &displ, 0 ,false,0);
-      BCs.addCondition(boundary::north, condition_type::dirichlet, &disply, 0 ,false,1);
-      // BCs.addCondition(boundary::north, condition_type::dirichlet, 0, 0 ,false,1);
-      BCs.addCondition(boundary::north, condition_type::dirichlet, 0, 0 ,false,2);
-
-      std::stringstream ss;
-      ss<<perturbation;
-      dirname = dirname + "/ShearSheet_Perturbed=" + ss.str() + "_r=" + std::to_string(numHref) + "_e=" + std::to_string(numElevate) + "_M=" + std::to_string(material) + "_c=" + std::to_string(Compressibility);
       output =  "solution";
       wn = output + "data.txt";
       cross_coordinate = 0;
@@ -722,22 +686,6 @@ int main (int argc, char** argv)
 
       // assembler->constructSolution(solVector,solution);
 
-
-      gsMatrix<> pts(2,1);
-      pts<<0.5,0.5;
-      if (testCase==8 || testCase==9)
-      {
-        pts.resize(2,3);
-        pts.col(0)<<0.0,1.0;
-        pts.col(1)<<0.5,1.0;
-        pts.col(2)<<1.0,1.0;
-      }
-      gsMatrix<> lambdas = assembler->computePrincipalStretches(pts,mp_def,0);
-      std::streamsize ss = std::cout.precision();
-      std::cout <<std::setprecision(20)
-                <<"lambdas = \n"<<lambdas<<"\n";
-      std::cout<<std::setprecision(ss);
-
       deformation = mp_def;
       deformation.patch(0).coefs() -= mp.patch(0).coefs();// assuming 1 patch here
 
@@ -751,10 +699,10 @@ int main (int argc, char** argv)
           solField= gsField<>(mp,deformation);
 
         std::string fileName = dirname + "/" + output + util::to_string(k);
-        gsWriteParaview<>(solField, fileName, 1000,true);
+        gsWriteParaview<>(solField, fileName, 1000,mesh);
         fileName = output + util::to_string(k) + "0";
         collection.addTimestep(fileName,k,".vts");
-        collection.addTimestep(fileName,k,"_mesh.vtp");
+        if (mesh) collection.addTimestep(fileName,k,"_mesh.vtp");
       }
       if (stress)
       {
