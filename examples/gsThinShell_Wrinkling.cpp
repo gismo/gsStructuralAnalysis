@@ -74,7 +74,7 @@ int main (int argc, char** argv)
     bool plot       = false;
     bool stress       = false;
     bool membrane       = false;
-    bool first  = false;
+    bool mesh = false;
     bool SingularPoint = false;
     bool quasiNewton = false;
     int quasiNewtonInt = -1;
@@ -166,8 +166,8 @@ int main (int argc, char** argv)
     cmd.addSwitch("bifurcation", "Compute singular points and bifurcation paths", SingularPoint);
     cmd.addSwitch("quasi", "Use the Quasi Newton method", quasiNewton);
     cmd.addSwitch("plot", "Plot result in ParaView format", plot);
+    cmd.addSwitch("mesh", "Plot mesh?", mesh);
     cmd.addSwitch("stress", "Plot stress in ParaView format", stress);
-    cmd.addSwitch("first", "Plot only first", first);
     cmd.addSwitch("write", "Write output to file", write);
     cmd.addSwitch("writeP", "Write perturbation", writeP);
     cmd.addSwitch("writeG", "Write refined geometry", writeG);
@@ -953,10 +953,10 @@ int main (int argc, char** argv)
           solField= gsField<>(mp,deformation);
 
         std::string fileName = dirname + "/" + output + util::to_string(k);
-        gsWriteParaview<>(solField, fileName, 1000,true);
+        gsWriteParaview<>(solField, fileName, 1000,mesh);
         fileName = output + util::to_string(k) + "0";
         collection.addTimestep(fileName,k,".vts");
-        collection.addTimestep(fileName,k,"_mesh.vtp");
+        if (mesh) collection.addTimestep(fileName,k,"_mesh.vtp");
       }
       if (stress)
       {
