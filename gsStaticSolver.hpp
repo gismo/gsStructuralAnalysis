@@ -40,13 +40,13 @@ gsVector<T> gsStaticSolver<T>::solveNonlinear()
     if (m_solVec.rows()==0)
         m_solVec = this->solveLinear();
 
-    T residual = m_force.norm();
+    gsVector<T> resVec = m_residual(m_solVec);
+    T residual = resVec.norm();
     if (residual==0) residual=1;
     T residual0 = residual;
     T residualOld = residual;
     gsVector<T> DeltaU = gsVector<T>::Zero(m_solVec.rows());
     gsVector<T> deltaU = gsVector<T>::Zero(m_solVec.rows());
-    gsVector<T> resVec = m_residual(m_solVec);
     gsSparseMatrix<T> jacMat;
     for (m_iterations = 0; m_iterations != m_maxIterations; ++m_iterations)
     {

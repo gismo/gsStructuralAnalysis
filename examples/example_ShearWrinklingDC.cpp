@@ -289,7 +289,7 @@ int main (int argc, char** argv)
     index_t cross_coordinate = -1;
     real_t cross_val = 0.0;
 
-    real_t Dtarget = 3.0;
+    std::vector<real_t> Dtarget{ 0.1,0.2,0.5,0.6,1.4,2.6,3.0 };
     if (testCase == 1)
     {
       displ.setValue(0.05,3);
@@ -536,9 +536,11 @@ int main (int argc, char** argv)
     real_t indicator;
     real_t D = 0;
     real_t Dold = 0;
-    int reset = 0;
+    // int reset = 0;
     index_t k = 0;
-    while (D-dL < Dtarget)
+    index_t tIdx = 0;
+    std::sort(Dtarget.begin(), Dtarget.end());
+    while (D-dL < Dtarget.back())
     {
       displ.setValue(D,3);
       gsInfo<<"Load step "<< k<<"; D = "<<D<<"\n";
@@ -556,7 +558,7 @@ int main (int argc, char** argv)
         D = Dold+dL;
         mp_def = mp_def0;
         gsInfo<<"Iterations did not converge\n";
-        reset = 1;
+        // reset = 1;
         continue;
       }
 
@@ -589,15 +591,28 @@ int main (int argc, char** argv)
       if (write)
         writeStepOutput(deformation,solVector,indicator,Load, dirname + "/" + wn, writePoints,1, 201);
 
-      if (reset!=1)
+      // if (reset!=1)
         dL = dL0;
 
-      reset = 0;
+      // reset = 0;
       mp_def0 = mp_def;
       Dold = D;
       // last step
-      if (Dtarget-D < dL)
-        dL0 = dL = Dtarget - D;
+      //
+      // if (Dtarget.at(t)-D < dL)
+      // for (std::vector<real_t>::iterator it=Dtarget.begin(); it!=Dtarget.end(); it++)
+      // {
+      //   if ()
+      //   dL = (*it-D) < dL && (*it-D) > dL*1e-12 ? (*it-D) : dL;
+      // }
+
+      if (D >= Dtarget.front())
+        Dtarget.erase(Dtarget.begin());
+      if (Dtarget.front() - D < dL)        // The next target is larger than D, but within one step
+        dL = Dtarget.front() - D;
+
+
+      gsDebugVar(Dtarget.front());
 
       D += dL;
       k++;
