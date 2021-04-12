@@ -12,6 +12,7 @@
 */
 
 #include <gismo.h>
+
 namespace gismo
 {
 
@@ -20,24 +21,26 @@ class gsDynamicRelaxationLC
 {
 public:
     /// Constructor given the matrices and timestep
-    gsDynamicRelaxationLC(  const gsSparseMatrix<T> & K,
+    gsDynamicRelaxationLC(  const gsVector<T> & M, // lumped
                             const gsVector<T> & F,
                             const std::function < gsVector<T> ( gsVector<T> const & , T, gsVector<T> const &) > &Residual
                         )
     :
-    m_stif(K),
+    m_mass(M),
     m_forcing(F),
     m_residualFun(Residual)
     {
         m_dt = 1.0;
-        m_dofs = m_stif.rows();
+        m_dofs = m_mass.rows();
         m_v = m_U = m_DeltaU = m_deltaU = gsVector<T>(m_dofs);
         m_v.setZero();
         m_U.setZero();
         m_DeltaU.setZero();
         m_deltaU.setZero();
         m_L = m_DeltaL = 0.0;
+
         defaultOptions();
+        m_massInv = M.array().inverse();
     }
 
     gsVector<T> displacements() const {return m_U;}
@@ -56,8 +59,7 @@ public:
     void init()
     {
         getOptions();
-        m_mass = m_alpha * m_dt*m_dt / 2. * m_stif;
-        m_massInv = m_mass.toDense().inverse();
+        m_massInv *= 1./m_alpha;
         m_damp = m_c * m_mass;
     }
 
@@ -70,7 +72,7 @@ public:
     void predictor()
     {
         start();
-        m_Ek = m_v.transpose() * m_mass * m_v;
+        m_Ek = m_v.transpose() * m_mass.cwiseProduct(m_v);
     }
 
     void iteration(T loadStep)
@@ -83,9 +85,9 @@ public:
     {
         m_Ek_prev = m_Ek;
 
-        m_R = m_residualFun(m_U+m_DeltaU,m_L+m_DeltaL,m_forcing) - m_damp*m_v;
+        m_R = m_residualFun(m_U+m_DeltaU,m_L+m_DeltaL,m_forcing) - m_damp.cwiseProduct(m_v);
 //----------------------------------------------------------------------------------
-        m_v += m_dt * m_massInv * m_R;                    // Velocities at t+dt/2
+        m_v += m_dt * m_massInv.cwiseProduct(m_R);                    // Velocities at t+dt/2
         m_deltaU = m_dt * m_v;               // Velocities at t+dt
 //----------------------------------------------------------------------------------
         // m_deltaU = m_deltaU + m_dt*m_dt*m_massInv*m_R;
@@ -93,7 +95,7 @@ public:
 //----------------------------------------------------------------------------------
 
         m_DeltaU += m_deltaU;               // Velocities at t+dt
-        m_Ek = m_v.transpose() * m_mass * m_v;
+        m_Ek = m_v.transpose() * m_mass.cwiseProduct(m_v);
     }
 
     void step(T loadStep)
@@ -147,8 +149,8 @@ public:
 
     void peak()
     {
-        m_R = m_residualFun(m_U+m_DeltaU,m_L+m_DeltaL,m_forcing)- m_damp*m_v;
-        m_deltaU = - 1.5 * m_dt * m_v + m_dt*m_dt / 2. * m_massInv * m_R;
+        m_R = m_residualFun(m_U+m_DeltaU,m_L+m_DeltaL,m_forcing)- m_damp.cwiseProduct(m_v);
+        m_deltaU = - 1.5 * m_dt * m_v + m_dt*m_dt / 2. * m_massInv.cwiseProduct(m_R);
         m_DeltaU += m_deltaU;
 
         m_v.setZero();
@@ -163,7 +165,7 @@ public:
 
 //----------------------------------------------------------------------------------
         m_R = m_residualFun(m_U+m_DeltaU,m_L+m_DeltaL,m_forcing);
-        m_deltaU = 0.5*m_dt*m_dt*m_massInv*m_R;
+        m_deltaU = 0.5*m_dt*m_dt*m_massInv.cwiseProduct(m_R);
         m_v = m_deltaU/m_dt;
 //----------------------------------------------------------------------------------
         // m_R = m_residualFun(m_U+m_DeltaU,load,m_forcing)- m_damp*m_v;
@@ -229,14 +231,13 @@ public:
     }
 
 protected:
-    const gsSparseMatrix<T> m_stif;
+    const gsVector<T> m_mass;
     const gsVector<T> m_forcing;
     const std::function<gsVector<T> ( gsVector<T> const &, T, gsVector<T> const &) > m_residualFun;
     gsVector<T> m_U, m_v;
     gsVector<T> m_DeltaU, m_deltaU;
     gsVector<T> m_R, m_R0;
-    gsSparseMatrix<T> m_mass, m_damp;
-    gsMatrix<T> m_massInv;
+    gsVector<T> m_massInv, m_damp;
     index_t m_dofs;
     T m_dt, m_alpha, m_c;
     gsOptionList m_options;

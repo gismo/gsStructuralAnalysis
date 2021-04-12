@@ -476,10 +476,13 @@ int main (int argc, char** argv)
     // Assemble linear system to obtain the force vector
     assembler->assemble();
     gsVector<> F = assembler->rhs();
-    gsSparseMatrix<> K = assembler->matrix();
+
+    assembler->assembleMass(false);
+    gsVector<> M = assembler->rhs();
 
 
-    gsDynamicRelaxationLC<real_t> DRM(K,F,DCResidual);
+
+    gsDynamicRelaxationLC<real_t> DRM(M,F,DCResidual);
     gsOptionList DROptions = DRM.options();
     DROptions.setReal("damping",damping);
     DROptions.setReal("alpha",alpha);
