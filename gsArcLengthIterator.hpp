@@ -169,9 +169,10 @@ void gsArcLengthIterator<T>::computeResidualNorms()
 {
   if (m_numIterations ==0 ) // then define the residual
   {
-    // m_basisResidualF = m_resVec.norm();
+    m_basisResidualF = m_resVec.norm();
     m_basisResidualU = m_DeltaU.norm();
 
+    // m_residueF = m_resVec.norm() / (((m_L+m_DeltaL) * m_forcing).norm());
     m_residueF = m_resVec.norm() / (((m_L+m_DeltaL) * m_forcing).norm());
     m_residueU = m_deltaU.norm()/m_DeltaU.norm();
     // m_residueU = m_basisResidualU;
@@ -179,8 +180,8 @@ void gsArcLengthIterator<T>::computeResidualNorms()
   }
   else
   {
-    m_residueF = m_resVec.norm() / (((m_L+m_DeltaL) * m_forcing).norm());
-    // m_residueF = m_resVec.norm() / m_forcing.norm();
+    // m_residueF = m_resVec.norm() / (((m_L+m_DeltaL) * m_forcing).norm());
+    m_residueF = m_resVec.norm() / m_basisResidualF;
     m_residueU = m_deltaU.norm() / m_basisResidualU;
     m_residueL = m_deltaL / m_DeltaL;
   }
@@ -1276,7 +1277,7 @@ void gsArcLengthIterator<T>::extendedSystemSolve(gsVector<T> U, T L, T tol)
   gsInfo<<"Extended iterations --- Starting with U.norm = "<<m_U.norm()<<" and L = "<<m_L<<"\n";
 
   this->computeJacobian(m_U); // Jacobian evaluated on m_U
-  m_basisResidualKTPhi = (m_jacMat.toDense()*m_V).norm();
+  m_basisResidualKTPhi = (m_jacMat*m_V).norm();
 
   m_DeltaV = gsVector<T>::Zero(m_numDof);
   m_DeltaU.setZero();
@@ -1302,10 +1303,7 @@ void gsArcLengthIterator<T>::extendedSystemSolve(gsVector<T> U, T L, T tol)
     this->computeJacobian(m_U+m_DeltaU);
     m_residueKTPhi = (m_jacMat*(m_V+m_DeltaV)).norm(); // /m_basisResidualKTPhi;
     m_resVec = m_residualFun(m_U+m_DeltaU,m_L+m_DeltaL,m_forcing);
-    m_residueF = m_resVec.norm();
-    // gsInfo<<"residualF extended:"<<m_residueF<<"\n";
-    m_residueU = m_deltaU.norm();
-    m_residueL = m_deltaL;
+    computeResidualNorms();
     if (m_verbose)
       stepOutputExtended();
 
