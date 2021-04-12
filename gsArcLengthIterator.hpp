@@ -169,7 +169,8 @@ void gsArcLengthIterator<T>::computeResidualNorms()
 {
   if (m_numIterations ==0 ) // then define the residual
   {
-    m_basisResidualF = m_resVec.norm();
+    // m_basisResidualF = m_resVec.norm();
+    m_basisResidualF = ((m_L+m_DeltaL) * m_forcing).norm();
     m_basisResidualU = m_DeltaU.norm();
 
     // m_residueF = m_resVec.norm() / (((m_L+m_DeltaL) * m_forcing).norm());
