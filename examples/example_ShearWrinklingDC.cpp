@@ -108,7 +108,7 @@ int main (int argc, char** argv)
     index_t maxit = 20;
 
     // Arc length method options
-    real_t dL = 0; // General arc length
+    real_t dL = 1e-2; // General arc length
     real_t tol = 1e-6;
 
     std::string wn("data.csv");
@@ -282,12 +282,10 @@ int main (int argc, char** argv)
     std::string output = "solution";
     std::string dirname = "DisplacementControl";
 
-    gsMatrix<> writePoints(2,3);
-    writePoints.col(0)<< 0.0,0.5;
-    writePoints.col(1)<< 0.5,0.5;
-    writePoints.col(2)<< 1.0,0.5;
-    index_t cross_coordinate = -1;
-    real_t cross_val = 0.0;
+    gsMatrix<> writePoints(2,1);
+    writePoints.col(0)<< 1.0,1.0;
+    index_t cross_coordinate = 1;
+    real_t cross_val = 0.5;
 
     std::vector<real_t> Dtarget{ 0.1,0.2,0.5,0.6,1.4,2.6,3.0 };
     if (testCase == 1)
@@ -307,8 +305,6 @@ int main (int argc, char** argv)
       dirname = dirname + "/ShearSheet_Perturbed=" + ss.str() + "_r=" + std::to_string(numHref) + "_e=" + std::to_string(numElevate) + "_M=" + std::to_string(material) + "_c=" + std::to_string(Compressibility);
       output =  "solution";
       wn = output + "data.txt";
-      cross_coordinate = 0;
-      cross_val = 0.0;
     }
     else if (testCase == 2)
     {
@@ -331,8 +327,6 @@ int main (int argc, char** argv)
       dirname = dirname + "/ShearSheetRestrained_Perturbed=" + ss.str() + "_r=" + std::to_string(numHref) + "_e=" + std::to_string(numElevate) + "_M=" + std::to_string(material) + "_c=" + std::to_string(Compressibility);
       output =  "solution";
       wn = output + "data.txt";
-      cross_coordinate = 0;
-      cross_val = 0.0;
     }
 
     if (THB)
@@ -582,7 +576,7 @@ int main (int argc, char** argv)
       {
         gsField<> solField(mp,deformation);
         std::string fileName = dirname + "/" + output + util::to_string(k);
-        gsWriteParaview<>(solField, fileName, 5000, mesh);
+        gsWriteParaview<>(solField, fileName, 10000, mesh);
         fileName = output + util::to_string(k) + "0";
         collection.addTimestep(fileName,k,".vts");
         if (mesh) collection.addTimestep(fileName,k,"_mesh.vtp");
@@ -590,6 +584,9 @@ int main (int argc, char** argv)
 
       if (write)
         writeStepOutput(deformation,solVector,indicator,Load, dirname + "/" + wn, writePoints,1, 201);
+
+      if (crosssection && cross_coordinate!=-1)
+        writeSectionOutput(deformation,dirname,cross_coordinate,cross_val,201,false);
 
       // if (reset!=1)
         dL = dL0;
@@ -956,8 +953,7 @@ void writeStepOutput(const gsMultiPatch<T> & deformation, const gsMatrix<T> solV
           }
 
     file  << load << ","
-          << indicator << ","
-          << "\n";
+          << indicator << "\n";
   }
   else if (extreme==0 || extreme==1)
   {
@@ -983,8 +979,7 @@ void writeStepOutput(const gsMultiPatch<T> & deformation, const gsMatrix<T> solV
           }
 
     file  << load << ","
-          << indicator << ","
-          << "\n";
+          << indicator << "\n";
   }
   else
     GISMO_ERROR("Extremes setting unknown");

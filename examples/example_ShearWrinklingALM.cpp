@@ -119,7 +119,7 @@ int main (int argc, char** argv)
 
     // Arc length method options
     real_t dL = 0; // General arc length
-    real_t dLb = 0.5; // Ard length to find bifurcation
+    real_t dLb = 1e-2; // Ard length to find bifurcation
     real_t tol = 1e-6;
     real_t tolU = 1e-6;
     real_t tolF = 1e-3;
@@ -296,12 +296,10 @@ int main (int argc, char** argv)
     std::string output = "solution";
     std::string dirname = "ArcLengthResults";
 
-    gsMatrix<> writePoints(2,3);
-    writePoints.col(0)<< 0.0,0.5;
-    writePoints.col(1)<< 0.5,0.5;
-    writePoints.col(2)<< 1.0,0.5;
-    index_t cross_coordinate = -1;
-    real_t cross_val = 0.0;
+    gsMatrix<> writePoints(2,1);
+    writePoints.col(0)<< 1.0,1.0;
+    index_t cross_coordinate = 0;
+    real_t cross_val = 0.5;
 
     if (testCase == 1)
     {
@@ -328,8 +326,6 @@ int main (int argc, char** argv)
       dirname = dirname + "/ShearSheet_Perturbed=" + ss.str() + "_r=" + std::to_string(numHref) + "_e=" + std::to_string(numElevate) + "_M=" + std::to_string(material) + "_c=" + std::to_string(Compressibility);
       output =  "solution";
       wn = output + "data.txt";
-      cross_coordinate = 0;
-      cross_val = 0.0;
     }
     else if (testCase == 2)
     {
@@ -359,8 +355,6 @@ int main (int argc, char** argv)
       dirname = dirname + "/ShearSheetRestrained_Perturbed=" + ss.str() + "_r=" + std::to_string(numHref) + "_e=" + std::to_string(numElevate) + "_M=" + std::to_string(material) + "_c=" + std::to_string(Compressibility);
       output =  "solution";
       wn = output + "data.txt";
-      cross_coordinate = 0;
-      cross_val = 0.0;
     }
 
     if (THB)
@@ -714,7 +708,7 @@ int main (int argc, char** argv)
           solField= gsField<>(mp,deformation);
 
         std::string fileName = dirname + "/" + output + util::to_string(k);
-        gsWriteParaview<>(solField, fileName, 1000,mesh);
+        gsWriteParaview<>(solField, fileName, 10000,mesh);
         fileName = output + util::to_string(k) + "0";
         collection.addTimestep(fileName,k,".vts");
         if (mesh) collection.addTimestep(fileName,k,"_mesh.vtp");
@@ -1089,8 +1083,7 @@ void initStepOutput(const std::string name, const gsMatrix<T> & points)
         }
 
   file  << "Lambda" << ","
-        << "Indicator"
-        << "\n";
+        << "Indicator" << "\n";
   file.close();
 
   gsInfo<<"Step results will be written in file: "<<name<<"\n";
@@ -1151,8 +1144,7 @@ void writeStepOutput(const gsArcLengthIterator<T> & arcLength, const gsMultiPatc
           }
 
     file  << arcLength.solutionL() << ","
-          << arcLength.indicator() << ","
-          << "\n";
+          << arcLength.indicator() << "\n";
   }
   else
     GISMO_ERROR("Extremes setting unknown");

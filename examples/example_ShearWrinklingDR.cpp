@@ -254,12 +254,10 @@ int main (int argc, char** argv)
     std::string output = "solution";
     std::string dirname = "DynamicRelaxationResults";
 
-    gsMatrix<> writePoints(2,3);
-    writePoints.col(0)<< 0.0,0.5;
-    writePoints.col(1)<< 0.5,0.5;
-    writePoints.col(2)<< 1.0,0.5;
-    index_t cross_coordinate = -1;
-    real_t cross_val = 0.0;
+    gsMatrix<> writePoints(2,1);
+    writePoints.col(0)<< 1.0,1.0;
+    index_t cross_coordinate = 1;
+    real_t cross_val = 0.5;
     gsConstantFunction<> displ(0.0,3);
     gsConstantFunction<> displ_const(0.05,3);
 
@@ -280,8 +278,6 @@ int main (int argc, char** argv)
       dirname = dirname + "/ShearSheet_Perturbed=" + ss.str() + "_r=" + std::to_string(numHref) + "_e=" + std::to_string(numElevate) + "_M=" + std::to_string(material) + "_c=" + std::to_string(Compressibility);
       output =  "solution";
       wn = output + "data.txt";
-      cross_coordinate = 0;
-      cross_val = 0.0;
     }
     else if (testCase == 2)
     {
@@ -302,8 +298,6 @@ int main (int argc, char** argv)
       dirname = dirname + "/ShearSheetRestrained_Perturbed=" + ss.str() + "_r=" + std::to_string(numHref) + "_e=" + std::to_string(numElevate) + "_M=" + std::to_string(material) + "_c=" + std::to_string(Compressibility);
       output =  "solution";
       wn = output + "data.txt";
-      cross_coordinate = 0;
-      cross_val = 0.0;
     }
 
     if (THB)
@@ -477,7 +471,7 @@ int main (int argc, char** argv)
     assembler->assemble();
     gsVector<> F = assembler->rhs();
 
-    assembler->assembleMass(false);
+    assembler->assembleMass(true);
     gsVector<> M = assembler->rhs();
 
 
@@ -550,7 +544,7 @@ int main (int argc, char** argv)
           solField= gsField<>(mp,deformation);
 
         std::string fileName = dirname + "/" + output + util::to_string(k);
-        gsWriteParaview<>(solField, fileName, 1000,mesh);
+        gsWriteParaview<>(solField, fileName, 10000,mesh);
         fileName = output + util::to_string(k) + "0";
         collection.addTimestep(fileName,k,".vts");
         if (mesh) collection.addTimestep(fileName,k,"_mesh.vtp");
@@ -962,8 +956,7 @@ void writeStepOutput(const gsMatrix<T> & solution, const T & load, const gsMulti
           }
 
     file  << load << ","
-          << 0.0 << ","
-          << "\n";
+          << 0.0 << "\n";
   }
   else if (extreme==0 || extreme==1)
   {
@@ -989,8 +982,7 @@ void writeStepOutput(const gsMatrix<T> & solution, const T & load, const gsMulti
           }
 
     file  << load << ","
-          << 0.0 << ","
-          << "\n";
+          << 0.0 << "\n";
   }
   else
     GISMO_ERROR("Extremes setting unknown");
