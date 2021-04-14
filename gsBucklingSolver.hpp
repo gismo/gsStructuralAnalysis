@@ -48,7 +48,7 @@ void gsBucklingSolver<T,GEigsMode>::compute(T shift)
 };
 
 template <class T, Spectra::GEigsMode GEigsMode>
-template<Spectra::GEigsMode _GEigsMode>
+template< Spectra::GEigsMode _GEigsMode>
 typename std::enable_if<_GEigsMode==Spectra::GEigsMode::Cholesky ||
                         _GEigsMode==Spectra::GEigsMode::RegularInverse
                         ,
@@ -63,7 +63,18 @@ gsBucklingSolver<T,GEigsMode>::computeSparse_impl(T shift, index_t number)
   solver.init();
   if (m_verbose) { gsInfo<<"." ; }
   solver.compute(Spectra::SortRule::SmallestMagn,1000,1e-6,Spectra::SortRule::SmallestMagn);
-  GISMO_ASSERT(solver.info()==Spectra::CompInfo::Successful,"Spectra did not converge!"); // Reason for not converging can be due to the value of ncv (last input in the class member), which is too low.
+
+  if (solver.info()==Spectra::CompInfo::Successful)
+    gsDebug<<"Spectra converged in "<<solver.num_iterations()<<" iterations and with "<<solver.num_operations()<<"operations. \n";
+  else if (solver.info()==Spectra::CompInfo::NumericalIssue)
+    GISMO_ERROR("Spectra did not converge! Error code: NumericalIssue");
+  else if (solver.info()==Spectra::CompInfo::NotConverging)
+    GISMO_ERROR("Spectra did not converge! Error code: NotConverging");
+  else if (solver.info()==Spectra::CompInfo::NotComputed)
+    GISMO_ERROR("Spectra did not converge! Error code: NotComputed");
+  else
+    GISMO_ERROR("No error code known");
+
   if (m_verbose) { gsInfo<<"." ; }
   m_values  = solver.eigenvalues();
   m_values.array() += shift;
@@ -73,7 +84,7 @@ gsBucklingSolver<T,GEigsMode>::computeSparse_impl(T shift, index_t number)
 }
 
 template <class T, Spectra::GEigsMode GEigsMode>
-template<Spectra::GEigsMode _GEigsMode>
+template< Spectra::GEigsMode _GEigsMode>
 typename std::enable_if<_GEigsMode==Spectra::GEigsMode::ShiftInvert ||
                         _GEigsMode==Spectra::GEigsMode::Buckling ||
                         _GEigsMode==Spectra::GEigsMode::Cayley
@@ -88,7 +99,18 @@ gsBucklingSolver<T,GEigsMode>::computeSparse_impl(T shift, index_t number)
   solver.init();
   if (m_verbose) { gsInfo<<"." ; }
   solver.compute(Spectra::SortRule::SmallestMagn,1000,1e-6,Spectra::SortRule::SmallestMagn);
-  GISMO_ASSERT(solver.info()==Spectra::CompInfo::Successful,"Spectra did not converge!"); // Reason for not converging can be due to the value of ncv (last input in the class member), which is too low.
+
+  if (solver.info()==Spectra::CompInfo::Successful)
+    gsDebug<<"Spectra converged in "<<solver.num_iterations()<<" iterations and with "<<solver.num_operations()<<"operations. \n";
+  else if (solver.info()==Spectra::CompInfo::NumericalIssue)
+    GISMO_ERROR("Spectra did not converge! Error code: NumericalIssue");
+  else if (solver.info()==Spectra::CompInfo::NotConverging)
+    GISMO_ERROR("Spectra did not converge! Error code: NotConverging");
+  else if (solver.info()==Spectra::CompInfo::NotComputed)
+    GISMO_ERROR("Spectra did not converge! Error code: NotComputed");
+  else
+    GISMO_ERROR("No error code known");
+
   if (m_verbose) { gsInfo<<"." ; }
   m_values  = solver.eigenvalues();
   if (m_verbose) { gsInfo<<"." ; }

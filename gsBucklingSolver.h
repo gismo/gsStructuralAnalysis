@@ -26,7 +26,7 @@ namespace gismo
 
     \ingroup ThinShell
 */
-template <class T,Spectra::GEigsMode GEigsMode = Spectra::GEigsMode::Cholesky>
+template <class T, Spectra::GEigsMode GEigsMode = Spectra::GEigsMode::Cholesky>
 class gsBucklingSolver
 {
 protected:

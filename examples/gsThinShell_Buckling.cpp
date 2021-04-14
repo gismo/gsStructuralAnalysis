@@ -627,7 +627,7 @@ int main (int argc, char** argv)
       return m;
     };
 
-      gsBucklingSolver<real_t> buckling(K_L,rhs,K_NL);
+      gsBucklingSolver<real_t,Spectra::GEigsMode::ShiftInvert> buckling(K_L,rhs,K_NL);
       buckling.verbose();
       // buckling.computePower();
 
