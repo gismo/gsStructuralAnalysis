@@ -1401,10 +1401,11 @@ void gsArcLengthIterator<T>::bisectionSolve(gsVector<T> U, T L, T tol)
   // T termU =  bisectionTerminationFunction(m_U);
   for (int k = 1; k < m_maxIterations; ++k)
   {
+    if (m_verbose) gsInfo<<"\t bisection iteration "<<k<<"\t arc length = "<<m_arcLength<<":\n";
+
     // Reset start point
     m_U = U_old;
     m_L = L_old;
-    m_arcLength = m_arcLength/2.0; // ONLY IF fa==fb??
 
     // Make an arc length step; m_U and U_old and m_L and L_old are different
     step();
@@ -1419,14 +1420,15 @@ void gsArcLengthIterator<T>::bisectionSolve(gsVector<T> U, T L, T tol)
       // Objective function on previous point
       fa = fb;
     }
+    else
+      m_arcLength = m_arcLength/2.0; // ONLY IF fa==fb??
 
     // termination criteria
     // relative error
     T term = bisectionTerminationFunction(m_U, false); // jacobian on the new point already computed
-    if (m_verbose)
-    {
-      gsInfo<<"\t bisection iteration "<<k<<"\t arc length = "<<m_arcLength<<"\t relative error = "<< abs(term/referenceError)<<"\t"<<"obj.value = "<<term<<"\n";
-    }
+
+    if (m_verbose) gsInfo<<"\t Finished. Relative error = "<< abs(term/referenceError)<<"\t"<<" obj.value = "<<term<<"\n";
+
     // if (  m_arcLength < tol && abs(term) < tol )
     if (  abs(term/referenceError) < tol )
     {
