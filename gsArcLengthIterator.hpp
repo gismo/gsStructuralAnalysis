@@ -823,7 +823,7 @@ void gsArcLengthIterator<T>::predictorCrisfield()
   m_DeltaU += m_deltaU;
   m_DeltaL += m_deltaL;
 
-  if (m_angleDetermine == angmethod::Iteration)
+  if (m_angleDetermine == angmethod::Iteration || m_angleDetermine == angmethod::Predictor)
   {
    m_DeltaUold = m_DeltaU;
    m_DeltaLold = m_DeltaL;
@@ -1401,11 +1401,13 @@ void gsArcLengthIterator<T>::bisectionSolve(gsVector<T> U, T L, T tol)
   // T termU =  bisectionTerminationFunction(m_U);
   for (int k = 1; k < m_maxIterations; ++k)
   {
-    if (m_verbose) gsInfo<<"\t bisection iteration "<<k<<"\t arc length = "<<m_arcLength<<":\n";
+    if (m_verbose) gsInfo<<"\t bisection iteration "<<k<<"\t arc length = "<<m_arcLength<<"; ";
 
     // Reset start point
     m_U = U_old;
     m_L = L_old;
+
+    gsInfo<<"From U.norm = "<<m_U.norm()<<" and L = "<<m_L<<"\n";
 
     // Make an arc length step; m_U and U_old and m_L and L_old are different
     step();
@@ -1413,7 +1415,7 @@ void gsArcLengthIterator<T>::bisectionSolve(gsVector<T> U, T L, T tol)
     // Objective function on new point
     fb = bisectionObjectiveFunction(m_U, true); // m_u is the new solution
 
-    if (fa==fb)
+    if (fa==fb && m_converged)
     {
       U_old = m_U;
       L_old = m_L;
@@ -1499,11 +1501,13 @@ void gsArcLengthIterator<T>::initOutputLC()
   gsInfo<<"\t";
   gsInfo<<std::setw(4)<<std::left<<"It.";
   gsInfo<<std::setw(17)<<std::left<<"Res. F";
-  gsInfo<<std::setw(17)<<std::left<<"Res. U";
+  gsInfo<<std::setw(17)<<std::left<<"|dU|/|Du|";
   gsInfo<<std::setw(17)<<std::left<<"|U|";
   gsInfo<<std::setw(17)<<std::left<<"L";
-  gsInfo<<std::setw(17)<<std::left<<"|ΔU|";
-  gsInfo<<std::setw(17)<<std::left<<"ΔL";
+  gsInfo<<std::setw(17)<<std::left<<"|DU|";
+  gsInfo<<std::setw(17)<<std::left<<"DL";
+  gsInfo<<std::setw(17)<<std::left<<"|dU|";
+  gsInfo<<std::setw(17)<<std::left<<"dL";
   gsInfo<<std::setw(17)<<std::left<<"Dmin";
   gsInfo<<std::setw(17)<<std::left<<"note";
   gsInfo<<"\n";
@@ -1517,17 +1521,17 @@ void gsArcLengthIterator<T>::initOutputRiks()
   gsInfo<<"\t";
   gsInfo<<std::setw(4)<<std::left<<"It.";
   gsInfo<<std::setw(17)<<std::left<<"Res. F";
-  gsInfo<<std::setw(17)<<std::left<<"Res. U";
-  gsInfo<<std::setw(17)<<std::left<<"Res. L";
+  gsInfo<<std::setw(17)<<std::left<<"|dU|/|Du|";
+  gsInfo<<std::setw(17)<<std::left<<"dL/DL";
   gsInfo<<std::setw(17)<<std::left<<"|U|";
   gsInfo<<std::setw(17)<<std::left<<"L";
-  gsInfo<<std::setw(17)<<std::left<<"|ΔU|";
-  gsInfo<<std::setw(17)<<std::left<<"ΔL";
-  gsInfo<<std::setw(17)<<std::left<<"|δU|";
-  gsInfo<<std::setw(17)<<std::left<<"δL";
-  gsInfo<<std::setw(17)<<std::left<<"δs²";
-  gsInfo<<std::setw(17)<<std::left<<"|δU|²";
-  gsInfo<<std::setw(17)<<std::left<<"δL²";
+  gsInfo<<std::setw(17)<<std::left<<"|DU|";
+  gsInfo<<std::setw(17)<<std::left<<"DL";
+  gsInfo<<std::setw(17)<<std::left<<"|dU|";
+  gsInfo<<std::setw(17)<<std::left<<"dL";
+  gsInfo<<std::setw(17)<<std::left<<"ds²";
+  gsInfo<<std::setw(17)<<std::left<<"|dU|²";
+  gsInfo<<std::setw(17)<<std::left<<"dL²";
   gsInfo<<std::setw(17)<<std::left<<"Dmin";
   gsInfo<<std::setw(17)<<std::left<<"note";
   gsInfo<<"\n";
@@ -1541,17 +1545,17 @@ void gsArcLengthIterator<T>::initOutputCrisfield()
   gsInfo<<"\t";
   gsInfo<<std::setw(4)<<std::left<<"It.";
   gsInfo<<std::setw(17)<<std::left<<"Res. F";
-  gsInfo<<std::setw(17)<<std::left<<"Res. U";
-  gsInfo<<std::setw(17)<<std::left<<"Res. L";
+  gsInfo<<std::setw(17)<<std::left<<"|dU|/|Du|";
+  gsInfo<<std::setw(17)<<std::left<<"dL/DL";
   gsInfo<<std::setw(17)<<std::left<<"|U|";
   gsInfo<<std::setw(17)<<std::left<<"L";
-  gsInfo<<std::setw(17)<<std::left<<"|ΔU|";
-  gsInfo<<std::setw(17)<<std::left<<"ΔL";
-  gsInfo<<std::setw(17)<<std::left<<"|δU|";
-  gsInfo<<std::setw(17)<<std::left<<"δL";
-  gsInfo<<std::setw(17)<<std::left<<"δs²";
-  gsInfo<<std::setw(17)<<std::left<<"|δU|²";
-  gsInfo<<std::setw(17)<<std::left<<"δL²";
+  gsInfo<<std::setw(17)<<std::left<<"|DU|";
+  gsInfo<<std::setw(17)<<std::left<<"DL";
+  gsInfo<<std::setw(17)<<std::left<<"|dU|";
+  gsInfo<<std::setw(17)<<std::left<<"dL";
+  gsInfo<<std::setw(17)<<std::left<<"ds²";
+  gsInfo<<std::setw(17)<<std::left<<"|dU|²";
+  gsInfo<<std::setw(17)<<std::left<<"dL²";
   gsInfo<<std::setw(17)<<std::left<<"Dmin";
   gsInfo<<std::setw(17)<<std::left<<"note";
   gsInfo<<"\n";
@@ -1565,18 +1569,18 @@ void gsArcLengthIterator<T>::initOutputExtended()
   gsInfo<<"\t";
   gsInfo<<std::setw(4)<<std::left<<"It.";
   gsInfo<<std::setw(17)<<std::left<<"Res. F";
-  gsInfo<<std::setw(17)<<std::left<<"Res. U";
-  gsInfo<<std::setw(17)<<std::left<<"Res. L";
+  gsInfo<<std::setw(17)<<std::left<<"|dU|/|Du|";
+  gsInfo<<std::setw(17)<<std::left<<"dL/DL";
   gsInfo<<std::setw(17)<<std::left<<"K_T * φ";
   gsInfo<<std::setw(17)<<std::left<<"|U|";
   gsInfo<<std::setw(17)<<std::left<<"|φ|";
   gsInfo<<std::setw(17)<<std::left<<"L";
-  gsInfo<<std::setw(17)<<std::left<<"|ΔU|";
-  gsInfo<<std::setw(17)<<std::left<<"|Δφ|";
-  gsInfo<<std::setw(17)<<std::left<<"ΔL";
-  gsInfo<<std::setw(17)<<std::left<<"|δU|";
-  gsInfo<<std::setw(17)<<std::left<<"|δφ|";
-  gsInfo<<std::setw(17)<<std::left<<"δL";
+  gsInfo<<std::setw(17)<<std::left<<"|DU|";
+  gsInfo<<std::setw(17)<<std::left<<"|Dφ|";
+  gsInfo<<std::setw(17)<<std::left<<"DL";
+  gsInfo<<std::setw(17)<<std::left<<"|dU|";
+  gsInfo<<std::setw(17)<<std::left<<"|dφ|";
+  gsInfo<<std::setw(17)<<std::left<<"dL";
   gsInfo<<std::setw(17)<<std::left<<"Dmin";
   gsInfo<<std::setw(17)<<std::left<<"note";
   gsInfo<<"\n";
@@ -1610,6 +1614,8 @@ void gsArcLengthIterator<T>::stepOutputLC()
   gsInfo<<std::setw(17)<<std::left<<(m_L + m_DeltaL);
   gsInfo<<std::setw(17)<<std::left<<m_DeltaU.norm();
   gsInfo<<std::setw(17)<<std::left<<m_DeltaL;
+  gsInfo<<std::setw(17)<<std::left<<m_deltaU.norm();
+  gsInfo<<std::setw(17)<<std::left<<m_deltaL;
   gsInfo<<std::setw(17)<<std::left<<m_indicator;
   gsInfo<<std::setw(17)<<std::left<<note;
   gsInfo<<"\n";

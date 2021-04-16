@@ -98,7 +98,7 @@ protected:
 
     mutable gsOptionList m_options;
 
-    mutable T m_tolerance;
+    mutable T m_toleranceU, m_toleranceF;
     mutable index_t m_maxIterations;
     index_t m_iterations;
 

@@ -346,6 +346,7 @@ protected:
         {
             Step = 0,
             Iteration  = 1,
+            Predictor  = 2,
         };
     };
 
