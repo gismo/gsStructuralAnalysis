@@ -75,7 +75,7 @@ gsVector<T> gsStaticSolver<T>::solveNonlinear()
 
         residualOld = residual;
 
-        if (deltaU.norm()  < m_tolerance && residual/residual0 < m_tolerance)
+        if (deltaU.norm()  < m_toleranceU && residual/residual0 < m_toleranceF)
         {
             m_converged = true;
             m_solVec+=DeltaU;
@@ -114,14 +114,17 @@ void gsStaticSolver<T>::defaultOptions()
 {
     m_options.addInt("Verbose","Verbose output",verbose::iterations);
     m_options.addInt("MaxIterations","Maximum number of iterations",25);
-    m_options.addReal("Tolerance","Relative Tolerance",1e-6);
+    m_options.addReal("Tolerance","Relative Tolerance Force",1e-6);
+    m_options.addReal("ToleranceF","Relative Tolerance Force",-1);
+    m_options.addReal("ToleranceU","Relative Tolerance Displacements",-1);
 };
 
 template <class T>
 void gsStaticSolver<T>::getOptions() const
 {
     m_maxIterations = m_options.getInt("MaxIterations");
-    m_tolerance = m_options.getReal("Tolerance");
+    m_toleranceF = m_options.getReal("ToleranceF")!=-1 ? m_options.getReal("ToleranceF") : m_options.getReal("Tolerance");
+    m_toleranceU = m_options.getReal("ToleranceU")!=-1 ? m_options.getReal("ToleranceU") : m_options.getReal("Tolerance");
     m_verbose = m_options.getInt("Verbose");
 };
 
