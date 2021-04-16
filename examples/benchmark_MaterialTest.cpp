@@ -457,8 +457,10 @@ int main (int argc, char** argv)
     arcLength.initialize();
 
     gsParaviewCollection collection(dirname + "/" + output);
+    gsParaviewCollection PStretch(dirname + "/" + "stretch");
+    gsParaviewCollection PStretch1dir(dirname + "/" + "stretch1dir");
+    gsParaviewCollection PStretch2dir(dirname + "/" + "stretch2dir");
     gsParaviewCollection Smembrane(dirname + "/" + "membrane");
-    gsParaviewCollection Sflexural(dirname + "/" + "flexural");
     gsParaviewCollection Smembrane_p(dirname + "/" + "membrane_p");
     gsMultiPatch<> deformation = mp;
 
@@ -496,7 +498,28 @@ int main (int argc, char** argv)
       }
       if (stress)
       {
-        gsField<> membraneStress, flexuralStress, membraneStress_p;
+        gsField<> stretch, stretch1dir, stretch2dir, membraneStress, membraneStress_p;
+
+        gsPiecewiseFunction<> stretches;
+        assembler->constructStress(mp_def,stretches,stress_type::principal_stretch);
+        if (deformed)
+          stretch = gsField<>(mp_def,stretches, true);
+        else
+          stretch = gsField<>(mp,stretches, true);
+
+        gsPiecewiseFunction<> stretch1dirs;
+        assembler->constructStress(mp_def,stretch1dirs,stress_type::principal_stretch_dir1);
+        if (deformed)
+          stretch1dir = gsField<>(mp_def,stretch1dirs, true);
+        else
+          stretch1dir = gsField<>(mp,stretch1dirs, true);
+
+        gsPiecewiseFunction<> stretch2dirs;
+        assembler->constructStress(mp_def,stretch2dirs,stress_type::principal_stretch_dir2);
+        if (deformed)
+          stretch2dir = gsField<>(mp_def,stretch2dirs, true);
+        else
+          stretch2dir = gsField<>(mp,stretch2dirs, true);
 
         gsPiecewiseFunction<> membraneStresses;
         assembler->constructStress(mp_def,membraneStresses,stress_type::membrane);
@@ -505,13 +528,6 @@ int main (int argc, char** argv)
         else
           membraneStress = gsField<>(mp,membraneStresses,true);
 
-        gsPiecewiseFunction<> flexuralStresses;
-        assembler->constructStress(mp_def,flexuralStresses,stress_type::flexural);
-        if (deformed)
-          flexuralStress = gsField<>(mp_def,flexuralStresses, true);
-        else
-          flexuralStress = gsField<>(mp,flexuralStresses, true);
-
         gsPiecewiseFunction<> membraneStresses_p;
         assembler->constructStress(mp_def,membraneStresses_p,stress_type::principal_stress_membrane);
         if (deformed)
@@ -519,21 +535,33 @@ int main (int argc, char** argv)
         else
           membraneStress_p = gsField<>(mp,membraneStresses_p, true);
 
+
         std::string fileName;
+        fileName = dirname + "/" + "stretch" + util::to_string(k);
+        gsWriteParaview( stretch, fileName, 5000);
+        fileName = "stretch" + util::to_string(k) + "0";
+        PStretch.addTimestep(fileName,k,".vts");
+
+        fileName = dirname + "/" + "stretch1dir" + util::to_string(k);
+        gsWriteParaview( stretch1dir, fileName, 5000);
+        fileName = "stretch1dir" + util::to_string(k) + "0";
+        PStretch1dir.addTimestep(fileName,k,".vts");
+
+        fileName = dirname + "/" + "stretch2dir" + util::to_string(k);
+        gsWriteParaview( stretch2dir, fileName, 5000);
+        fileName = "stretch2dir" + util::to_string(k) + "0";
+        PStretch2dir.addTimestep(fileName,k,".vts");
+
         fileName = dirname + "/" + "membrane" + util::to_string(k);
-        gsWriteParaview( membraneStress, fileName, 1000);
+        gsWriteParaview( membraneStress, fileName, 5000);
         fileName = "membrane" + util::to_string(k) + "0";
         Smembrane.addTimestep(fileName,k,".vts");
 
-        fileName = dirname + "/" + "flexural" + util::to_string(k);
-        gsWriteParaview( flexuralStress, fileName, 1000);
-        fileName = "flexural" + util::to_string(k) + "0";
-        Sflexural.addTimestep(fileName,k,".vts");
-
         fileName = dirname + "/" + "membrane_p" + util::to_string(k);
-        gsWriteParaview( membraneStress_p, fileName, 1000);
+        gsWriteParaview( membraneStress_p, fileName, 5000);
         fileName = "membrane_p" + util::to_string(k) + "0";
         Smembrane_p.addTimestep(fileName,k,".vts");
+
       }
 
       if (write)
@@ -546,8 +574,10 @@ int main (int argc, char** argv)
     }
     if (stress)
     {
+      PStretch.save();
+      PStretch1dir.save();
+      PStretch2dir.save();
       Smembrane.save();
-      Sflexural.save();
       Smembrane_p.save();
     }
 
