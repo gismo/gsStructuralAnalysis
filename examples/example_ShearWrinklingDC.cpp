@@ -109,7 +109,8 @@ int main (int argc, char** argv)
 
     // Arc length method options
     real_t dL = 1e-2; // General arc length
-    real_t tol = 1e-6;
+    real_t tolF = 1e-6;
+    real_t tolU = 1e-6;
 
     std::string wn("data.csv");
 
@@ -142,6 +143,8 @@ int main (int argc, char** argv)
     cmd.addReal("P","perturbation", "perturbation factor", perturbation);
 
     cmd.addInt("N", "maxsteps", "Maximum number of steps", step);
+
+    cmd.addReal("U","tolU","displacement tolerance",tolU);
 
     cmd.addSwitch("plot", "Plot result in ParaView format", plot);
     cmd.addSwitch("mesh", "Plot mesh?", mesh);
@@ -508,7 +511,6 @@ int main (int argc, char** argv)
         return assembler->rhs(); // - lam * force;
     };
 
-
     gsSparseMatrix<> matrix;
     gsVector<> vector;
 
@@ -516,8 +518,13 @@ int main (int argc, char** argv)
     gsOptionList solverOptions = staticSolver.options();
     solverOptions.setInt("Verbose",true);
     solverOptions.setInt("MaxIterations",maxit);
-    solverOptions.setReal("Tolerance",tol);
+    solverOptions.setReal("ToleranceF",tolF);
+    solverOptions.setReal("ToleranceU",tolU);
     staticSolver.setOptions(solverOptions);
+
+    gsArcLengthIterator<real_t> arcLength(Jacobian, ALResidual, Force);
+
+
 
     gsParaviewCollection collection(dirname + "/" + output);
     gsMultiPatch<> deformation = mp;
@@ -549,6 +556,7 @@ int main (int argc, char** argv)
       if (!staticSolver.converged())
       {
         dL = dL/2;
+        GISMO_ASSERT(dL / dL0 > 1e-6,"Step size is becoming very small...");
         D = Dold+dL;
         mp_def = mp_def0;
         gsInfo<<"Iterations did not converge\n";

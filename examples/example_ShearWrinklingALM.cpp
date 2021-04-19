@@ -160,6 +160,8 @@ int main (int argc, char** argv)
     cmd.addInt("q","QuasiNewtonInt","Use the Quasi Newton method every INT iterations",quasiNewtonInt);
     cmd.addInt("N", "maxsteps", "Maximum number of steps", step);
 
+    cmd.addReal("U","tolU","displacement tolerance",tolU);
+
     cmd.addSwitch("adaptive", "Adaptive length ", adaptive);
     cmd.addSwitch("quasi", "Use the Quasi Newton method", quasiNewton);
     cmd.addSwitch("plot", "Plot result in ParaView format", plot);
@@ -556,17 +558,19 @@ int main (int argc, char** argv)
     };
 
 
-    // Force vector excl Dirichlet contributions
+    // Assemble vector and matrix for first step static solve
     assembler->updateBCs(BCs_ini);
     assembler->assemble();
     gsVector<> vector = assembler->rhs();
     gsSparseMatrix<> matrix = assembler->matrix();
 
+    // Run first static solve
     gsStaticSolver<real_t> staticSolver(matrix,vector,Jacobian,Residual);
     gsVector<> Uini = staticSolver.solveNonlinear();
     assembler->constructDisplacement(Uini,mp_def);
 
 
+    // Assemble vector and matrix for ALM
     assembler->updateBCs(BCs);
     // Force vector excl Dirichlet contributions
     assembler->homogenizeDirichlet();
@@ -637,11 +641,13 @@ int main (int argc, char** argv)
       // assembler->constructSolution(solVector,solution);
       arcLength.step();
 
+
       // gsInfo<<"m_U = "<<arcLength.solutionU()<<"\n";
       if (!(arcLength.converged()))
       {
         gsInfo<<"Error: Loop terminated, arc length method did not converge.\n";
         dLb = dLb / 2.;
+        GISMO_ASSERT(dLb / dLb0 > 1e-6,"Step size is becoming very small...");
         arcLength.setLength(dLb);
         arcLength.setSolution(Uold,Lold);
         bisected = true;
