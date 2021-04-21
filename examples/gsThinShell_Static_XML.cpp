@@ -316,6 +316,7 @@ int main(int argc, char *argv[])
     gsStaticSolver<real_t> staticSolver(matrix,vector,Jacobian,Residual);
     gsDebugVar(solverOptions);
     staticSolver.setOptions(solverOptions);
+    gsDebugVar(solverOptions);
 
     // Solve linear problem
     gsVector<> solVector;

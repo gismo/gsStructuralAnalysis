@@ -277,8 +277,6 @@ int main (int argc, char** argv)
     gsBoundaryConditions<> BCs,BCs_ini;
     BCs.setGeoMap(mp);
 
-    gsPointLoads<real_t> pLoads = gsPointLoads<real_t>();
-
     // Initiate Surface forces
     std::string tx("0");
     std::string ty("0");
@@ -318,10 +316,9 @@ int main (int argc, char** argv)
 
       BCs.addCondition(boundary::north, condition_type::collapsed, 0, 0 ,false,0);
 
-      Load = 1e0;
-      gsVector<> point(2); point<< 1.0, 1.0 ;
-      gsVector<> load (3); load << Load,0.0, 0.0;
-      pLoads.addLoad(point, load, 0 );
+      neu<<1/aDim,0,0;
+      neuData.setValue(neu,3);
+      BCs.addCondition(boundary::north, condition_type::neumann, &neuData);
 
       std::stringstream ss;
       ss<<perturbation;
@@ -347,10 +344,9 @@ int main (int argc, char** argv)
 
       BCs.addCondition(boundary::north, condition_type::collapsed, 0, 0 ,false,0);
 
-      Load = 1e0;
-      gsVector<> point(2); point<< 1.0, 1.0 ;
-      gsVector<> load (3); load << Load,0.0, 0.0;
-      pLoads.addLoad(point, load, 0 );
+      neu<<1/aDim,0,0;
+      neuData.setValue(neu,3);
+      BCs.addCondition(boundary::north, condition_type::neumann, &neuData);
 
       std::stringstream ss;
       ss<<perturbation;
@@ -515,7 +511,6 @@ int main (int argc, char** argv)
 
     // Construct assembler object
     assembler->setOptions(opts);
-    assembler->setPointLoads(pLoads);
 
     gsStopwatch stopwatch;
     real_t time = 0.0;
@@ -593,7 +588,7 @@ int main (int argc, char** argv)
 
     arcLength.options().setInt("Method",method);
     arcLength.options().setReal("Length",dLb);
-    arcLength.options().setInt("AngleMethod",0); // 0: step, 1: iteration
+    arcLength.options().setInt("AngleMethod",2); // 0: step, 1: iteration, 2: predictor
     arcLength.options().setSwitch("AdaptiveLength",adaptive);
     arcLength.options().setInt("AdaptiveIterations",5);
     arcLength.options().setReal("Perturbation",tau);
@@ -635,6 +630,12 @@ int main (int argc, char** argv)
     arcLength.setIndicator(indicator); // RESET INDICATOR
     bool bisected = false;
     real_t dLb0 = dLb;
+
+    real_t e = 1, eold = 1, eold2 = 1;
+    real_t kp = 1;
+    real_t ki = 0.1;
+    real_t kd = 0.1;
+
     for (index_t k=0; k<step; k++)
     {
       gsInfo<<"Load step "<< k<<"\n";
@@ -694,6 +695,26 @@ int main (int argc, char** argv)
       indicator = arcLength.indicator();
 
       solVector = arcLength.solutionU();
+
+      ///// PID control
+      real_t tol = 1;
+      if (Uold.rows()!=0)
+      {
+        gsDebugVar((solVector - Uold).norm() / solVector.norm());
+        e   = ( (solVector - Uold).norm() / solVector.norm() ) / tol;
+
+        gsDebugVar(math::pow( eold / e, kp ) );
+        gsDebugVar(math::pow( 1 / e, ki ));
+        gsDebugVar(math::pow( eold*eold / ( e*eold2 ), kd ));
+
+
+        dLb0 *= math::pow( eold / e, kp ) * math::pow( 1 / e, ki ) * math::pow( eold*eold / ( e*eold2 ), kd );
+      }
+      ///// !PID control
+
+
+
+
       Uold = solVector;
       Lold = arcLength.solutionL();
       assembler->constructSolution(solVector,mp_def);

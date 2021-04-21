@@ -48,6 +48,20 @@ gsVector<T> gsStaticSolver<T>::solveNonlinear()
     gsVector<T> DeltaU = gsVector<T>::Zero(m_solVec.rows());
     gsVector<T> deltaU = gsVector<T>::Zero(m_solVec.rows());
     gsSparseMatrix<T> jacMat;
+
+
+    if (m_verbose>0)
+    {
+        gsInfo<<"\t";
+        gsInfo<<std::setw(4)<<std::left<<"It.";
+        gsInfo<<std::setw(17)<<std::left<<"Res. F";
+        gsInfo<<std::setw(17)<<std::left<<"|dU|/|DU|";
+        gsInfo<<std::setw(17)<<std::left<<"|dU|/|U|";
+        gsInfo<<std::setw(17)<<std::left<<"log(Ri/R0):";
+        gsInfo<<std::setw(17)<<std::left<<"log(Ri+1/R0)";
+        gsInfo<<"\n";
+    }
+
     for (m_iterations = 0; m_iterations != m_maxIterations; ++m_iterations)
     {
         jacMat = m_nonlinear(m_solVec+DeltaU);
@@ -58,24 +72,26 @@ gsVector<T> gsStaticSolver<T>::solveNonlinear()
         }
         m_solver.compute(jacMat);
         deltaU = m_solver.solve(resVec); // this is the UPDATE
-        DeltaU += deltaU;
+        DeltaU += m_relax * deltaU;
 
         resVec = m_residual(m_solVec+DeltaU);
         residual = resVec.norm();
 
         if (m_verbose>0)
         {
-            gsInfo<<"Iteration: "<< m_iterations
-               <<", residue: "<< residual/residual0
-               <<", update norm: "<<deltaU.norm()
-               <<", log(Ri/R0): "<< math::log10(residualOld/residual0)
-               <<", log(Ri+1/R0): "<< math::log10(residual/residual0)
-               <<"\n";
+            gsInfo<<"\t";
+            gsInfo<<std::setw(4)<<std::left<<m_iterations;
+            gsInfo<<std::setw(17)<<std::left<<residual/residual0;
+            gsInfo<<std::setw(17)<<std::left<<m_relax * deltaU.norm()/DeltaU.norm();
+            gsInfo<<std::setw(17)<<std::left<<m_relax * deltaU.norm()/m_solVec.norm();
+            gsInfo<<std::setw(17)<<std::left<<math::log10(residualOld/residual0);
+            gsInfo<<std::setw(17)<<std::left<<math::log10(residual/residual0);
+            gsInfo<<"\n";
         }
 
         residualOld = residual;
 
-        if (deltaU.norm()  < m_toleranceU && residual/residual0 < m_toleranceF)
+        if (m_relax * deltaU.norm()/m_solVec.norm()  < m_toleranceU && residual/residual0 < m_toleranceF)
         {
             m_converged = true;
             m_solVec+=DeltaU;
@@ -117,6 +133,7 @@ void gsStaticSolver<T>::defaultOptions()
     m_options.addReal("Tolerance","Relative Tolerance Force",1e-6);
     m_options.addReal("ToleranceF","Relative Tolerance Force",-1);
     m_options.addReal("ToleranceU","Relative Tolerance Displacements",-1);
+    m_options.addReal("Relaxation","Relaxation parameter",1);
 };
 
 template <class T>
@@ -126,6 +143,7 @@ void gsStaticSolver<T>::getOptions() const
     m_toleranceF = m_options.getReal("ToleranceF")!=-1 ? m_options.getReal("ToleranceF") : m_options.getReal("Tolerance");
     m_toleranceU = m_options.getReal("ToleranceU")!=-1 ? m_options.getReal("ToleranceU") : m_options.getReal("Tolerance");
     m_verbose = m_options.getInt("Verbose");
+    m_relax = m_options.getReal("Relaxation");
 };
 
 } // namespace gismo

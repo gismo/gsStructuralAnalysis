@@ -109,8 +109,8 @@ int main (int argc, char** argv)
 
     // Arc length method options
     real_t dL = 1e-2; // General arc length
-    real_t tolF = 1e-6;
-    real_t tolU = 1e-6;
+    real_t tolF = 1e-3;
+    real_t tolU = 1e-2;
 
     std::string wn("data.csv");
 
@@ -520,17 +520,13 @@ int main (int argc, char** argv)
     solverOptions.setInt("MaxIterations",maxit);
     solverOptions.setReal("ToleranceF",tolF);
     solverOptions.setReal("ToleranceU",tolU);
+    solverOptions.setReal("Relaxation",0.5);
     staticSolver.setOptions(solverOptions);
-
-    gsArcLengthIterator<real_t> arcLength(Jacobian, ALResidual, Force);
-
-
 
     gsParaviewCollection collection(dirname + "/" + output);
     gsMultiPatch<> deformation = mp;
 
-    gsMatrix<> updateVector, solVector;
-
+    gsMatrix<> updateVector, solVector, solVectorOld;
 
     real_t dL0 = dL;
     gsMultiPatch<> mp_def0 = mp_def;
@@ -540,11 +536,15 @@ int main (int argc, char** argv)
     // int reset = 0;
     index_t k = 0;
     index_t tIdx = 0;
+    real_t e = 1, eold = 1, eold2 = 1;
+    real_t kp = 1;
+    real_t ki = 0.1;
+    real_t kd = 0.1;
     std::sort(Dtarget.begin(), Dtarget.end());
     while (D-dL < Dtarget.back())
     {
       displ.setValue(D,3);
-      gsInfo<<"Load step "<< k<<"; D = "<<D<<"\n";
+      gsInfo<<"Load step "<< k<<"; D = "<<D<<"; dD = "<<dL<<"\n";
 
       assembler->updateBCs(BCs);
       assembler->assemble();
@@ -565,6 +565,7 @@ int main (int argc, char** argv)
       }
 
       indicator = staticSolver.indicator();
+      gsInfo<<"\t\tIndicator =  "<<indicator<<"\n";
 
       assembler->constructSolution(solVector,mp_def);
       real_t Load = 0;
@@ -599,6 +600,13 @@ int main (int argc, char** argv)
       // if (reset!=1)
         dL = dL0;
 
+      real_t tol = 1;
+      if (solVectorOld.rows()!=0)
+      {
+        e   = ( (solVector - solVectorOld).norm() / solVector.norm() ) / tol;
+        dL *= math::pow( eold / e, kp ) * math::pow( 1 / e, ki ) * math::pow( eold*eold / ( e*eold2 ), kd );
+      }
+
       // reset = 0;
       mp_def0 = mp_def;
       Dold = D;
@@ -617,10 +625,11 @@ int main (int argc, char** argv)
         dL = Dtarget.front() - D;
 
 
-      gsDebugVar(Dtarget.front());
-
       D += dL;
       k++;
+      solVectorOld = solVector;
+      eold2 = eold;
+      eold = e;
 
       gsInfo<<"--------------------------------------------------------------------------------------------------------------\n";
     }
