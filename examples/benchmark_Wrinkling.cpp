@@ -75,7 +75,6 @@ int main (int argc, char** argv)
 
     index_t Compressibility = 0;
     index_t material = 0;
-    bool composite = false;
     index_t impl = 1; // 1= analytical, 2= generalized, 3= spectral
 
     real_t relax = 1.0;
@@ -109,7 +108,6 @@ int main (int argc, char** argv)
     cmd.addInt( "M", "Material", "Material law",  material );
     cmd.addInt( "c", "Compressibility", "1: compressible, 0: incompressible",  Compressibility );
     cmd.addInt( "I", "Implementation", "Implementation: 1= analytical, 2= generalized, 3= spectral",  impl );
-    cmd.addSwitch("composite", "Composite material", composite);
 
     cmd.addInt("m","Method", "Arc length method; 1: Crisfield's method; 2: RIks' method.", method);
     cmd.addReal("L","dLb", "arc length", dLb);
@@ -285,46 +283,12 @@ int main (int argc, char** argv)
     gsConstantFunction<> alpha3(-2.0,3);
     gsConstantFunction<> mu3(-0.1e5/4.225e5*mu,3);
 
-    real_t pi = math::atan(1)*4;
-    index_t kmax = 1;
-    gsVector<> E11(kmax), E22(kmax), G12(kmax), nu12(kmax), nu21(kmax), thick(kmax), phi(kmax);
-    E11.setZero(); E22.setZero(); G12.setZero(); nu12.setZero(); nu21.setZero(); thick.setZero(); phi.setZero();
-    for (index_t k=0; k != kmax; ++k)
-    {
-        E11.at(k) = E22.at(k) = E_modulus;
-        nu12.at(k) = nu21.at(k) = PoissonRatio;
-        G12.at(k) = 0.5 * E_modulus / (1+PoissonRatio);
-        thick.at(k) = thickness/kmax;
-        phi.at(kmax) = k / kmax * pi/2.0;
-    }
-
-    gsConstantFunction<> E11fun(E11,3);
-    gsConstantFunction<> E22fun(E22,3);
-    gsConstantFunction<> G12fun(G12,3);
-    gsConstantFunction<> nu12fun(nu12,3);
-    gsConstantFunction<> nu21fun(nu21,3);
-    gsConstantFunction<> thickfun(thick,3);
-    gsConstantFunction<> phifun(phi,3);
-
     std::vector<gsFunction<>*> parameters;
-    if (material==0) // SvK & Composites
+    if (material==0) // SvK
     {
-      if (composite)
-      {
-        parameters.resize(6);
-        parameters[0] = &E11fun;
-        parameters[1] = &E22fun;
-        parameters[2] = &G12fun;
-        parameters[3] = &nu12fun;
-        parameters[4] = &nu21fun;
-        parameters[5] = &phifun;
-      }
-      else
-      {
         parameters.resize(2);
         parameters[0] = &E;
         parameters[1] = &nu;
-      }
     }
     else if (material==1 || material==2) // NH & NH_ext
     {
@@ -357,19 +321,10 @@ int main (int argc, char** argv)
     gsOptionList options;
     if      (material==0 && impl==1)
     {
-        if (composite)
-        {
-            options.addInt("Material","Material model: (0): SvK | (1): NH | (2): NH_ext | (3): MR | (4): Ogden",0);
-            options.addInt("Implementation","Implementation: (0): Composites | (1): Analytical | (2): Generalized | (3): Spectral",0);
-            materialMatrix = getMaterialMatrix<3,real_t>(mp,thickfun,parameters,rho,options);
-        }
-        else
-        {
-            parameters.resize(2);
-            options.addInt("Material","Material model: (0): SvK | (1): NH | (2): NH_ext | (3): MR | (4): Ogden",0);
-            options.addInt("Implementation","Implementation: (0): Composites | (1): Analytical | (2): Generalized | (3): Spectral",1);
-            materialMatrix = getMaterialMatrix<3,real_t>(mp,t,parameters,rho,options);
-        }
+        parameters.resize(2);
+        options.addInt("Material","Material model: (0): SvK | (1): NH | (2): NH_ext | (3): MR | (4): Ogden",0);
+        options.addInt("Implementation","Implementation: (0): Composites | (1): Analytical | (2): Generalized | (3): Spectral",1);
+        materialMatrix = getMaterialMatrix<3,real_t>(mp,t,parameters,rho,options);
     }
     else
     {
