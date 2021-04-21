@@ -72,6 +72,7 @@ int main (int argc, char** argv)
     int numElevateL = -1;
     int numHrefL    = -1;
     bool plot       = false;
+    bool mesh       = false;
     bool stress       = false;
     bool membrane       = false;
     bool mesh  = false;
@@ -177,7 +178,7 @@ int main (int argc, char** argv)
     cmd.addSwitch("symmetry", "Use symmetry boundary condition (different per problem)", symmetry);
     cmd.addSwitch("deformed", "plot on deformed shape", deformed);
     cmd.addSwitch("weak", "Use weak clamping", weak);
-
+    cmd.addSwitch("mesh", "plot mesh", mesh);
     cmd.addSwitch("THB", "Use refinement", THB);
 
     cmd.addString("i","input", "Perturbation filename", fn);
@@ -277,8 +278,15 @@ int main (int argc, char** argv)
 
       addClamping(mpBspline,0,sides, 1e-2);
 
+      gsMultiPatch<> original = mpBspline;
+
       index_t N = mpBspline.patch(0).coefs().rows();
       mpBspline.patch(0).coefs().col(2) = gsMatrix<>::Random(N,1);
+
+      gsMultiPatch<> deformation = mpBspline;
+      deformation.patch(0).coefs() -= original.patch(0).coefs();
+      gsField<> solField(mpBspline,deformation);
+      gsWriteParaview(solField,"initialPerturbation",1000,mesh);
 
       // if (testCase==2)
       //   fn = "deformations/wrinklingFu_full.xml";
@@ -521,7 +529,7 @@ int main (int argc, char** argv)
 
     // plot geometry
     if (plot)
-      gsWriteParaview(mp,dirname + "/" + "mp",1000,true);
+      gsWriteParaview(mp,dirname + "/" + "mp",1000,mesh);
 
     if (writeG)
     {
@@ -567,46 +575,31 @@ int main (int argc, char** argv)
     gsConstantFunction<> alpha3(-2.0,3);
     gsConstantFunction<> mu3(-0.1e5/4.225e5*mu,3);
 
-    real_t pi = math::atan(1)*4;
     index_t kmax = 1;
-    gsVector<> E11(kmax), E22(kmax), G12(kmax), nu12(kmax), nu21(kmax), thick(kmax), phi(kmax);
-    E11.setZero(); E22.setZero(); G12.setZero(); nu12.setZero(); nu21.setZero(); thick.setZero(); phi.setZero();
-    for (index_t k=0; k != kmax; ++k)
-    {
-        E11.at(k) = E22.at(k) = E_modulus;
-        nu12.at(k) = nu21.at(k) = PoissonRatio;
-        G12.at(k) = 0.5 * E_modulus / (1+PoissonRatio);
-        thick.at(k) = thickness/kmax;
-        phi.at(kmax) = k / kmax * pi/2.0;
-    }
 
-    gsConstantFunction<> E11fun(E11,3);
-    gsConstantFunction<> E22fun(E22,3);
-    gsConstantFunction<> G12fun(G12,3);
-    gsConstantFunction<> nu12fun(nu12,3);
-    gsConstantFunction<> nu21fun(nu21,3);
-    gsConstantFunction<> thickfun(thick,3);
-    gsConstantFunction<> phifun(phi,3);
+    std::vector<gsFunctionSet<> * > Gs(kmax);
+    std::vector<gsFunctionSet<> * > Ts(kmax);
+    std::vector<gsFunctionSet<> * > Phis(kmax);
+
+    gsMatrix<> Gmat = gsCompositeMatrix(E_modulus,E_modulus,0.5 * E_modulus / (1+PoissonRatio),PoissonRatio,PoissonRatio);
+    Gmat.resize(Gmat.rows()*Gmat.cols(),1);
+    gsConstantFunction<> Gfun(Gmat,3);
+    Gs[0] = &Gfun;
+
+    gsConstantFunction<> phi;
+    phi.setValue(0,3);
+
+    Phis[0] = &phi;
+
+    gsConstantFunction<> thicks(thickness/kmax,3);
+    Ts[0] = &thicks;
 
     std::vector<gsFunction<>*> parameters;
     if (material==0) // SvK & Composites
     {
-      if (composite)
-      {
-        parameters.resize(6);
-        parameters[0] = &E11fun;
-        parameters[1] = &E22fun;
-        parameters[2] = &G12fun;
-        parameters[3] = &nu12fun;
-        parameters[4] = &nu21fun;
-        parameters[5] = &phifun;
-      }
-      else
-      {
-        parameters.resize(2);
-        parameters[0] = &E;
-        parameters[1] = &nu;
-      }
+      parameters.resize(2);
+      parameters[0] = &E;
+      parameters[1] = &nu;
     }
     else if (material==1 || material==2) // NH & NH_ext
     {
@@ -641,9 +634,7 @@ int main (int argc, char** argv)
     {
         if (composite)
         {
-            options.addInt("Material","Material model: (0): SvK | (1): NH | (2): NH_ext | (3): MR | (4): Ogden",0);
-            options.addInt("Implementation","Implementation: (0): Composites | (1): Analytical | (2): Generalized | (3): Spectral",0);
-            materialMatrix = getMaterialMatrix<3,real_t>(mp,thickfun,parameters,rho,options);
+            materialMatrix = new gsMaterialMatrixComposite<3,real_t>(mp,Ts,Gs,Phis);
         }
         else
         {
@@ -777,7 +768,7 @@ int main (int argc, char** argv)
         dLb = dLb / 2.;
         arcLength.setLength(dLb);
         arcLength.setSolution(Uold,Lold);
-        bisected = true;
+//        bisected = true;
         k -= 1;
         continue;
         // if (plot)
