@@ -201,35 +201,63 @@ int main(int argc, char *argv[])
 
     gsOptionList options;
 
-    gsFunctionExpr<> E11fun, E22fun, G12fun, nu12fun, nu21fun, phifun, thickfun;
+    std::vector<gsMatrix<> > Gmats;
+    std::vector<gsFunctionSet<> * > Gs;
+    std::vector<gsFunctionSet<> * > Ts;
+    std::vector<gsFunctionSet<> * > Phis;
+
+    std::vector<gsConstantFunction<> > Gfuns;
+    std::vector<gsConstantFunction<> > Tfuns;
+    std::vector<gsConstantFunction<> > Phifuns;
+
+
+    gsMatrix<> E11,E22,G12,nu12,nu21,alpha,thick;
+    if (composite)
+    {
+        GISMO_ENSURE(!fn4.empty(),"Layup file must be provided!");
+        fd.read(fn4);
+        GISMO_ENSURE(fd.count<gsMatrix<>>()==7,"Composites must have 7 parameters!");
+
+        fd.getId(0,E11);
+        fd.getId(1,E22);
+        fd.getId(2,G12);
+        fd.getId(3,nu12);
+        fd.getId(4,nu21);
+        fd.getId(5,alpha);
+        fd.getId(6,thick);
+
+        index_t nLayers = E11.rows();
+        Gmats.resize(nLayers);
+        Gs.resize(nLayers);
+        Ts.resize(nLayers);
+        Phis.resize(nLayers);
+
+        Gfuns.resize(nLayers);
+        Tfuns.resize(nLayers);
+        Phifuns.resize(nLayers);
+
+        for (index_t k=0; k!=nLayers; k++)
+        {
+            Gmats[k] = gsCompositeMatrix(E11(k,0),E22(k,0),G12(k,0),nu12(k,0),nu21(k,0));
+            Gmats[k].resize(Gmats[k].rows()*Gmats[k].cols(),1);
+            Gfuns[k] = gsConstantFunction<>(Gmats[k],3);
+
+            Phifuns[k] = gsConstantFunction<>(alpha(k,0),3);
+            Tfuns[k] = gsConstantFunction<>(thick(k,0),3);
+
+            Gs[k] = &Gfuns[k];
+            Ts[k] = &Tfuns[k];
+            Phis[k] = &Phifuns[k];
+        }
+
+
+    }
 
     if      (material==0 && impl==1)
     {
         if (composite)
         {
-            GISMO_ENSURE(!fn4.empty(),"Layup file must be provided!");
-            fd.read(fn4);
-            GISMO_ENSURE(fd.count<gsFunctionExpr<>>()==7,"Composites must have 1 parameters!");
-            fd.getId(0,E11fun);
-            fd.getId(1,E22fun);
-            fd.getId(2,G12fun);
-            fd.getId(3,nu12fun);
-            fd.getId(4,nu21fun);
-            fd.getId(5,phifun);
-
-            parameters.resize(6);
-            parameters[0] = &E11fun;
-            parameters[1] = &E22fun;
-            parameters[2] = &G12fun;
-            parameters[3] = &nu12fun;
-            parameters[4] = &nu21fun;
-            parameters[5] = &phifun;
-
-            fd.getId(6,thickfun);
-
-            options.addInt("Material","Material model: (0): SvK | (1): NH | (2): NH_ext | (3): MR | (4): Ogden",0);
-            options.addInt("Implementation","Implementation: (0): Composites | (1): Analytical | (2): Generalized | (3): Spectral",0);
-            materialMatrix = getMaterialMatrix<3,real_t>(mp,thickfun,parameters,rho,options);
+            materialMatrix = new gsMaterialMatrixComposite<3,real_t>(mp,Ts,Gs,Phis);
         }
         else
         {
@@ -286,6 +314,7 @@ int main(int argc, char *argv[])
 
     // Configure Structural Analsysis module
     gsStaticSolver<real_t> staticSolver(matrix,vector,Jacobian,Residual);
+    gsDebugVar(solverOptions);
     staticSolver.setOptions(solverOptions);
 
     // Solve linear problem

@@ -20,26 +20,6 @@
 
 using namespace gismo;
 
-template<class T>
-gsMatrix<T> gsCompositeMatrix(  const T Exx,
-                              const T Eyy,
-                              const T Gxy,
-                              const T nuxy,
-                              const T nuyx
-                            )
-{
-  gsMatrix<T> G(3,3);
-  G.setZero();
-
-  G(0,0) = Exx / (1-nuxy*nuyx);
-  G(1,1) = Eyy / (1-nuxy*nuyx);
-  G(2,2) = Gxy;
-  G(0,1) = nuyx*Exx / (1-nuxy*nuyx);
-  G(1,0) = nuxy*Eyy / (1-nuxy*nuyx);
-  G(2,0) = G(0,2) = G(2,1) = G(1,2) = 0.0;
-  return G;
-}
-
 template <class T>
 void initStepOutput( const std::string name, const gsMatrix<T> & points);
 
@@ -226,18 +206,14 @@ int main (int argc, char** argv)
     // Initialise solution object
     gsMultiPatch<> mp_def = mp;
 
-    gsVector<> E11, E22, G12, nu12, nu21, thick, phi;
-
-
     gsMaterialMatrixBase<real_t>* materialMatrix;
-    // if (composite)
-    // {
+
     real_t pi = math::atan(1)*4;
     index_t kmax = 3;
 
-    std::vector<gsFunctionSet<> * > Gs(3);
-    std::vector<gsFunctionSet<> * > Ts(3);
-    std::vector<gsFunctionSet<> * > Phis(3);
+    std::vector<gsFunctionSet<> * > Gs(kmax);
+    std::vector<gsFunctionSet<> * > Ts(kmax);
+    std::vector<gsFunctionSet<> * > Phis(kmax);
 
     gsMatrix<> Gmat = gsCompositeMatrix(Exx,Eyy,Gxy,PoissonRatio,PoissonRatio*Eyy/Exx);
     Gmat.resize(Gmat.rows()*Gmat.cols(),1);
@@ -255,7 +231,6 @@ int main (int argc, char** argv)
 
     gsConstantFunction<> thicks(thickness/kmax,3);
     Ts[0] = Ts[1] = Ts[2] = &thicks;
-
 
     gsConstantFunction<> force(tmp,3);
     gsFunctionExpr<> t(std::to_string(thickness), 3);
