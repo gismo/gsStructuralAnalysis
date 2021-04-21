@@ -21,14 +21,14 @@ namespace gismo
 // Miscelaneous functions
 /// sign function
 template <class T>
-int sign(T val)
+index_t sign(T val)
 {
     return (T(0) < val) - (val < T(0));
 }
 
 /// Modulus function
 template <class T>
-int mod(T x, T y)
+index_t mod(T x, T y)
 {
     T m = x - floor(x / y) * y;
     m *= sign(y);
@@ -37,13 +37,13 @@ int mod(T x, T y)
 
 /// sort vector
 template <class T>
-int countNegatives(gsVector<T> vec)
+index_t countNegatives(gsVector<T> vec)
 {
-  int count = 0;
+  index_t count = 0;
   index_t N = vec.cols();
   index_t M = vec.rows();
-  for(int i = 0; i < M; i++)
-        for(int j = 0; j < N; j++)
+  for(index_t i = 0; i < M; i++)
+        for(index_t j = 0; j < N; j++)
         {
             if( vec(i,j) < 0 )
                 count += 1;
@@ -834,6 +834,8 @@ template <class T>
 void gsArcLengthIterator<T>::iterationFinishCrisfield()
 {
   m_converged = true;
+  m_Uprev = m_U;
+  m_Lprev = m_L;
   m_U += m_DeltaU;
   m_L += m_DeltaL;
   if (m_angleDetermine == angmethod::Step)
@@ -1018,7 +1020,7 @@ template <class T>
 void gsArcLengthIterator<T>::computeLambdaMU()
 {
     T A0 = math::pow(m_phi,2)* m_forcing.dot(m_forcing); // see Lam et al. 1991
-    int dir = sign(m_DeltaUold.dot(m_deltaUt) + A0*m_DeltaLold); // Feng et al. 1995 with H = \Psi^2
+    index_t dir = sign(m_DeltaUold.dot(m_deltaUt) + A0*m_DeltaLold); // Feng et al. 1995 with H = \Psi^2
     T denum = ( math::pow( m_deltaUt.dot(m_deltaUt) + A0 ,0.5) ); // Feng et al. 1995 with H = \Psi^2
 
     T mu;
@@ -1242,19 +1244,19 @@ void gsArcLengthIterator<T>::computeStability(gsVector<T> x, bool jacobian)
 }
 
 template <class T>
-int gsArcLengthIterator<T>::stability()
+index_t gsArcLengthIterator<T>::stability()
 {
-  int tmp = 1;
+  index_t tmp = 1;
   if (m_indicator < 0)
     tmp =  -1;
   return tmp;
 }
 
 template <class T>
-int gsArcLengthIterator<T>::stability(gsVector<T> x, bool jacobian)
+index_t gsArcLengthIterator<T>::stability(gsVector<T> x, bool jacobian)
 {
   this->computeStability(x, jacobian);
-  int tmp = this->stability();
+  index_t tmp = this->stability();
   return tmp;
 }
 
@@ -1362,10 +1364,12 @@ void gsArcLengthIterator<T>::extendedSystemIteration()
 }
 
 template <class T>
-int gsArcLengthIterator<T>::bisectionObjectiveFunction(const gsVector<T> & x, bool jacobian)
+index_t gsArcLengthIterator<T>::bisectionObjectiveFunction(const gsVector<T> & x, bool jacobian)
 {
   this->computeStability(x,jacobian);
-  return countNegatives(m_stabilityVec);
+  index_t negs = countNegatives(m_stabilityVec);
+  note += "(" + std::to_string(negs) + ")";
+  return negs;
 }
 
 template <class T>
@@ -1394,12 +1398,14 @@ void gsArcLengthIterator<T>::bisectionSolve(gsVector<T> U, T L, T tol)
   gsInfo<<"Bisection iterations --- Starting with U.norm = "<<m_U.norm()<<" and L = "<<m_L<<"; Reference error = "<<referenceError<<"\n";
 
 
-  int fa, fb;
+  index_t fa, fb;
   fa = bisectionObjectiveFunction(m_U, false); // jacobian is already computed in the termination function
+
+  // m_arcLength = m_arcLength/2.0;
 
   // Store termination function value of initial solution U
   // T termU =  bisectionTerminationFunction(m_U);
-  for (int k = 1; k < m_maxIterations; ++k)
+  for (index_t k = 1; k < m_maxIterations; ++k)
   {
     if (m_verbose) gsInfo<<"\t bisection iteration "<<k<<"\t arc length = "<<m_arcLength<<"; ";
 

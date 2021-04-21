@@ -254,6 +254,18 @@ int main(int argc, char *argv[])
         thickness = 1;
         PoissonRatio = 0;
     }
+    else if (testCase==13)
+    {
+        // Unit square
+        mp.addPatch( gsNurbsCreator<>::BSplineSquare(1) ); // degree
+        mp.addAutoBoundaries();
+        mp.embed(3);
+        E_modulus = 1e6;
+        thickness = 0.005;
+        // PoissonRatio = 0.5;
+        // PoissonRatio = 0.499;
+        PoissonRatio = 0.3;
+    }
     else
     {
         // Unit square
@@ -275,7 +287,7 @@ int main(int argc, char *argv[])
             mp.degreeElevate(numElevate);
 
         // h-refine
-        for (int r =0; r < numRefine; ++r)
+        for (index_t r =0; r < numRefine; ++r)
             mp.uniformRefine();
     }
     mp_def = mp;
