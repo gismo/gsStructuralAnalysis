@@ -54,7 +54,9 @@ gsVector<T> gsStaticSolver<T>::solveNonlinear()
     {
         gsInfo<<"\t";
         gsInfo<<std::setw(4)<<std::left<<"It.";
-        gsInfo<<std::setw(17)<<std::left<<"Res. F";
+        gsInfo<<std::setw(17)<<std::left<<"|R|";
+        gsInfo<<std::setw(17)<<std::left<<"|R|/|R0|";
+        gsInfo<<std::setw(17)<<std::left<<"|dU|";
         gsInfo<<std::setw(17)<<std::left<<"|dU|/|DU|";
         gsInfo<<std::setw(17)<<std::left<<"|dU|/|U|";
         gsInfo<<std::setw(17)<<std::left<<"log(Ri/R0):";
@@ -81,7 +83,9 @@ gsVector<T> gsStaticSolver<T>::solveNonlinear()
         {
             gsInfo<<"\t";
             gsInfo<<std::setw(4)<<std::left<<m_iterations;
+            gsInfo<<std::setw(17)<<std::left<<residual;
             gsInfo<<std::setw(17)<<std::left<<residual/residual0;
+            gsInfo<<std::setw(17)<<std::left<<m_relax * deltaU.norm();
             gsInfo<<std::setw(17)<<std::left<<m_relax * deltaU.norm()/DeltaU.norm();
             gsInfo<<std::setw(17)<<std::left<<m_relax * deltaU.norm()/m_solVec.norm();
             gsInfo<<std::setw(17)<<std::left<<math::log10(residualOld/residual0);
