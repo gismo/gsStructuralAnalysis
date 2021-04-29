@@ -430,7 +430,7 @@ int main (int argc, char** argv)
     if (!sparse)
       modal.compute();
     else
-      modal.computeSparse(shift,10,2);
+      modal.computeSparse(shift,10,2,Spectra::SortRule::LargestMagn,Spectra::SortRule::SmallestMagn);
 
 
     gsMatrix<> values = modal.values();

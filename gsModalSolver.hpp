@@ -41,7 +41,6 @@ gsModalSolver<T,GEigsMode>::computeSparse_impl(T shift, index_t number, index_t 
   if (m_verbose) { gsInfo<<"Solving eigenvalue problem" ; }
   gsSparseMatrix<T> lhs = m_stiffness-shift*m_mass;
   gsSpectraGenSymSolver<gsSparseMatrix<T>,GEigsMode> solver(lhs,m_mass,number,ncvFac*number);
-  // gsSpectraGenSymShiftSolver<gsSparseMatrix<T>,Spectra::GEigsMode::ShiftInvert> solver(m_linear,m_nonlinear - m_linear,number,2*number,shift);
   if (m_verbose) { gsInfo<<"." ; }
   solver.init();
   if (m_verbose) { gsInfo<<"." ; }
@@ -75,16 +74,20 @@ typename std::enable_if<_GEigsMode==Spectra::GEigsMode::ShiftInvert ||
                         void>::type
 gsModalSolver<T,GEigsMode>::computeSparse_impl(T shift, index_t number, index_t ncvFac, Spectra::SortRule selectionRule, Spectra::SortRule sortRule)
 {
+  if (selectionRule == Spectra::SortRule::SmallestMagn )
+    gsWarn<<"Selection Rule 'SmallestMagn' is selected, but for ShiftInvert, Buckling and Cayley it is advised to use 'LargestMagn'!\n";
+  if (selectionRule == Spectra::SortRule::SmallestAlge )
+    gsWarn<<"Selection Rule 'SmallestAlge' is selected, but for ShiftInvert, Buckling and Cayley it is advised to use 'LargestMagn'!\n";
+
   if (m_verbose) { gsInfo<<"Solving eigenvalue problem" ; }
   gsSpectraGenSymShiftSolver<gsSparseMatrix<T>,GEigsMode> solver(m_stiffness,m_mass,number,ncvFac*number,shift);
-  // gsSpectraGenSymShiftSolver<gsSparseMatrix<T>,Spectra::GEigsMode::ShiftInvert> solver(m_linear,m_nonlinear - m_linear,number,2*number,shift);
   if (m_verbose) { gsInfo<<"." ; }
   solver.init();
   if (m_verbose) { gsInfo<<"." ; }
   solver.compute(selectionRule,1000,1e-10,sortRule);
 
   if (solver.info()==Spectra::CompInfo::Successful)
-    gsDebug<<"Spectra converged in "<<solver.num_iterations()<<" iterations and with "<<solver.num_operations()<<"operations. \n";
+    gsDebug<<"\nSpectra converged in "<<solver.num_iterations()<<" iterations and with "<<solver.num_operations()<<"operations. \n";
   else if (solver.info()==Spectra::CompInfo::NumericalIssue)
     GISMO_ERROR("Spectra did not converge! Error code: NumericalIssue");
   else if (solver.info()==Spectra::CompInfo::NotConverging)

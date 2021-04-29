@@ -750,7 +750,7 @@ gsMultiPatch<T> RectangularDomain(int n, int m, int p, int q, T L, T B)
   // Define a matrix with ones
   gsVector<> temp(len0);
   temp.setOnes();
-  for (index_t k = 0; k < len1; k++)
+  for (size_t k = 0; k < len1; k++)
   {
     // First column contains x-coordinates (length)
     coefs.col(0).segment(k*len0,len0) = coefvec0;
