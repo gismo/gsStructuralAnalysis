@@ -634,7 +634,7 @@ int main (int argc, char** argv)
       if (!sparse)
         buckling.compute();
       else
-        buckling.computeSparse(shift,10);
+        buckling.computeSparse(shift,10,2,Spectra::SortRule::LargestMagn,Spectra::SortRule::SmallestMagn);
 
       gsMatrix<> values = buckling.values();
       gsMatrix<> vectors = buckling.vectors();

@@ -63,7 +63,7 @@ public:
     void compute(T shift = 0.0);
     void computeSparse( T shift = 0.0,
                         index_t number = 10,
-                        index_t ncvFac = 30,
+                        index_t ncvFac = 3,
                         Spectra::SortRule selectionRule = Spectra::SortRule::SmallestMagn,
                         Spectra::SortRule sortRule = Spectra::SortRule::SmallestMagn)
     {computeSparse_impl<GEigsMode>(shift,number,ncvFac,selectionRule,sortRule);};
