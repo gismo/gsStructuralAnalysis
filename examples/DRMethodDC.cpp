@@ -16,13 +16,9 @@
 #include <gsKLShell/gsThinShellAssembler.h>
 #include <gsKLShell/getMaterialMatrix.h>
 
-#include <gsElasticity/gsWriteParaviewMultiPhysics.h>
-
 #include <gsStructuralAnalysis/gsStaticSolver.h>
 #include <gsStructuralAnalysis/gsTimeIntegrator.h>
 #include <gsStructuralAnalysis/gsDynamicRelaxationLC.h>
-
-#include <gsSpectra/gsSpectra.h>
 
 //#include <gsThinShell/gsNewtonIterator.h>
 
