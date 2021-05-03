@@ -355,8 +355,8 @@ int main(int argc, char *argv[])
         gsField<> solutionField(mp,deformation, true);
 
 
-        // gsField<> stressField = assembler->constructStress(mp_def,stress_type::membrane_strain);
 
+        #ifdef GISMO_ELASTICITY
         std::map<std::string,const gsField<> *> fields;
         fields["Deformation"] = &solutionField;
         fields["Membrane Stress"] = &membraneStress;
@@ -369,6 +369,15 @@ int main(int argc, char *argv[])
         fields["Principal Direction 3"] = &stretchDir3;
 
         gsWriteParaviewMultiPhysics(fields,"stress",5000,true);
+        #else
+        gsWriteParaview(solutionField, "Deformation");
+        gsWriteParaview(membraneStress, "MembraneStress");
+        gsWriteParaview(flexuralStress, "FlexuralStress");
+        gsWriteParaview(Stretches, "PrincipalStretch");
+        gsWriteParaview(stretchDir1, "PrincipalDirection1");
+        gsWriteParaview(stretchDir2, "PrincipalDirection2");
+        gsWriteParaview(stretchDir3, "PrincipalDirection3");
+        #endif
     }
 
     return EXIT_SUCCESS;
