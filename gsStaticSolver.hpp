@@ -96,6 +96,7 @@ void gsStaticSolver<T>::_computeStability(const gsVector<T> x) const
     gsVector<T> stabilityVec;
     gsSparseMatrix<T> jacMat = m_nonlinear(x);
 
+    #ifdef GISMO_WITH_SPECTRA
     index_t number = std::min(static_cast<index_t>(std::floor(jacMat.cols()/3.)),10);
     gsSpectraSymSolver<gsSparseMatrix<T>> es(jacMat,number,3*number);
     es.init();
@@ -103,7 +104,13 @@ void gsStaticSolver<T>::_computeStability(const gsVector<T> x) const
     GISMO_ASSERT(es.info()==Spectra::CompInfo::Successful,"Spectra did not converge!"); // Reason for not converging can be due to the value of ncv (last input in the class member), which is too low.
     stabilityVec = es.eigenvalues();
     stabilityVec = stabilityVec.reverse();
+    #else
+    Eigen::SelfAdjointEigenSolver<gsMatrix<T>> es(m_jacMat);
+    m_stabilityVec = es.eigenvalues();
+    #endif
+
     m_indicator = stabilityVec.colwise().minCoeff()[0]; // This is required since D does not necessarily have one column.
+
 }
 
 template <class T>
