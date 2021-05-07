@@ -62,7 +62,7 @@ int main (int argc, char** argv)
     real_t PoissonRatio = 0;
     real_t Density = 1e0;
 
-    real_t thickness = 2*1e-3;
+    real_t thickness = 1e-3;
     real_t aDim = 1.0;
     real_t bDim = 1.0;
 
@@ -277,8 +277,8 @@ int main (int argc, char** argv)
 
     if (testCase == 0)
     {
-        tmp << Load, 0, 0;
-        neuData.setValue(tmp,3);
+        neu << Load, 0, 0;
+        neuData.setValue(neu,3);
         // // Clamped-Clamped
         BCs.addCondition(boundary::west, condition_type::neumann, &neuData ); // unknown 0 - x
         // BCs.addCondition(boundary::west, condition_type::dirichlet, &displ1, 0 ); // unknown 0 - x
@@ -296,8 +296,8 @@ int main (int argc, char** argv)
     }
     else if (testCase == 1)
     {
-        tmp << Load, 0, 0;
-        neuData.setValue(tmp,3);
+        neu << Load, 0, 0;
+        neuData.setValue(neu,3);
         // // Clamped-Clamped
         BCs.addCondition(boundary::west, condition_type::neumann, &neuData ); // unknown 0 - x
         // BCs.addCondition(boundary::west, condition_type::dirichlet, &displ1, 0 ); // unknown 0 - x
@@ -344,35 +344,34 @@ int main (int argc, char** argv)
     }
     else if (testCase == 3)
     {
-        // PoissonRatio = 0.0;
-        Load = 1e-2;
-        tmp << Load, 0, 0;
-        neuData.setValue(tmp,3);
+        // poisson_ratio = 0.0;
+        Load = 1e8;
+        neu << Load, 0, 0;
+        neuData.setValue(neu,3);
         // // Clamped-Clamped
         BCs.addCondition(boundary::east, condition_type::neumann, &neuData ); // unknown 0 - x
-        BCs.addCondition(boundary::east, condition_type::dirichlet, 0, 0, false,1 ); // unknown 1 - y
-        BCs.addCondition(boundary::east, condition_type::dirichlet, 0, 0, false,2 ); // unknown 2 - z
 
-        // BCs.addCondition(boundary::north, condition_type::dirichlet, 0, 0 ); // unknown 0 - x
-        BCs.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false,1 ); // unknown 1 - y
-        BCs.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false,2 ); // unknown 2 - z
+        BCs.addCondition(boundary::east, condition_type::dirichlet, 0, 0, false, 1); // unknown 1 - y
+        BCs.addCondition(boundary::east, condition_type::dirichlet, 0, 0, false, 2); // unknown 2 - z
 
-        // BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0 ); // unknown 0 - x
-        BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false,1 ); // unknown 1 - y
-        BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false,2 ); // unknown 2 - z
+        // BCs.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false,0 ); // unknown 0 - x
+        BCs.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 1); // unknown 1 - y
+        BCs.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 2); // unknown 2 - z
 
+        // BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false,0 ); // unknown 0 - x
+        BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 1); // unknown 1 - y
+        BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 2); // unknown 2 - z
 
-        BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false,0 ); // unknown 0 - x
+        BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 0); // unknown 0 - x
         BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false,1 ); // unknown 1 - y
         BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false,2 ); // unknown 2 - z
-
     }
     else if (testCase == 4)
     {
         PoissonRatio = 0.0;
-        Load = 1e-2;
-        tmp << Load, 0, 0;
-        neuData.setValue(tmp,3);
+        Load = 1e5;
+        neu << Load, 0, 0;
+        neuData.setValue(neu,3);
         // // Clamped-Clamped
         BCs.addCondition(boundary::east, condition_type::neumann, &neuData ); // unknown 0 - x
         BCs.addCondition(boundary::east, condition_type::dirichlet, 0, 0, false,1 ); // unknown 1 - y
@@ -399,8 +398,8 @@ int main (int argc, char** argv)
     {
         PoissonRatio = 0.3;
         Load = 1e-2;
-        tmp << Load, 0, 0;
-        neuData.setValue(tmp,3);
+        neu << Load, 0, 0;
+        neuData.setValue(neu,3);
         // // Clamped-Clamped
         BCs.addCondition(boundary::east, condition_type::neumann, &neuData ); // unknown 0 - x
         BCs.addCondition(boundary::east, condition_type::dirichlet, 0, 0, false,1 ); // unknown 1 - y
@@ -427,10 +426,10 @@ int main (int argc, char** argv)
     {
         PoissonRatio = 0.;
         Load = 1e-8;
-        tmp << Load, 0, 0;
-        neuData.setValue(tmp,3);
-        tmp << -Load, 0, 0;
-        neuData2.setValue(tmp,3);
+        neu << Load, 0, 0;
+        neuData.setValue(neu,3);
+        neu << -Load, 0, 0;
+        neuData2.setValue(neu,3);
         // // Clamped-Clamped
         BCs.addCondition(boundary::east, condition_type::neumann, &neuData ); // unknown 0 - x
         BCs.addCondition(boundary::east, condition_type::dirichlet, 0, 0,false,2 ); // unknown 2 - z
@@ -444,7 +443,7 @@ int main (int argc, char** argv)
         BCs.addCondition(boundary::west, condition_type::neumann, &neuData2 ); // unknown 0 - x
         BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0,false,2 ); // unknown 2 - z
     }
-    else if (testCase == 8 || testCase == 10)
+    else if (testCase == 8)
     {
       BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0 ,false,0);
       BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0 ,false,1);
@@ -600,7 +599,6 @@ int main (int argc, char** argv)
     gsSparseMatrix<> K_L =  assembler->matrix();
     gsVector<> rhs = assembler->rhs();
 
-
     typedef std::function<gsSparseMatrix<real_t> (gsVector<real_t> const &)>    Jacobian_t;
     Jacobian_t K_NL = [&assembler,&mp_def](gsVector<real_t> const &x)
     {
@@ -733,7 +731,7 @@ gsMultiPatch<T> RectangularDomain(int n, int m, int p, int q, T L, T B)
   // Define a matrix with ones
   gsVector<> temp(len0);
   temp.setOnes();
-  for (size_t k = 0; k < len1; k++)
+  for (index_t k = 0; k < len1; k++)
   {
     // First column contains x-coordinates (length)
     coefs.col(0).segment(k*len0,len0) = coefvec0;
