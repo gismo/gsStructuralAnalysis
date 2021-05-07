@@ -91,7 +91,7 @@
 </Matrix>
 
 <!-- Assembler options -->
- <OptionList id="90">
+<OptionList id="90">
   <int label="Verbose" desc="Verbose for Newton iterations [0: off, 1: iterations, 2: full (matrix and vector output)" value="1"/>
   <int label="MaxIterations" desc="Maximum number of Newton iterations [integer]" value="10"/>
   <real label="ToleranceF" desc="Relative error tolerance for Newton iterations [double]" value="-1"/>

@@ -40,42 +40,65 @@ gsVector<T> gsStaticSolver<T>::solveNonlinear()
     if (m_solVec.rows()==0)
         m_solVec = this->solveLinear();
 
-    T residual = m_force.norm();
+    gsVector<T> resVec = m_residual(m_solVec);
+    T residual = resVec.norm();
+    if (residual==0) residual=1;
     T residual0 = residual;
     T residualOld = residual;
-    gsVector<T> updateVector = m_solVec;
-    gsVector<T> resVec = m_residual(m_solVec);
+    gsVector<T> DeltaU = gsVector<T>::Zero(m_solVec.rows());
+    gsVector<T> deltaU = gsVector<T>::Zero(m_solVec.rows());
     gsSparseMatrix<T> jacMat;
+
+
+    if (m_verbose>0)
+    {
+        gsInfo<<"\t";
+        gsInfo<<std::setw(4)<<std::left<<"It.";
+        gsInfo<<std::setw(17)<<std::left<<"|R|";
+        gsInfo<<std::setw(17)<<std::left<<"|R|/|R0|";
+        gsInfo<<std::setw(17)<<std::left<<"|dU|";
+        gsInfo<<std::setw(17)<<std::left<<"|dU|/|DU|";
+        gsInfo<<std::setw(17)<<std::left<<"|dU|/|U|";
+        gsInfo<<std::setw(17)<<std::left<<"log(Ri/R0):";
+        gsInfo<<std::setw(17)<<std::left<<"log(Ri+1/R0)";
+        gsInfo<<"\n";
+    }
+
     for (m_iterations = 0; m_iterations != m_maxIterations; ++m_iterations)
     {
-        jacMat = m_nonlinear(m_solVec);
+        jacMat = m_nonlinear(m_solVec+DeltaU);
         if (m_verbose==2)
         {
             gsInfo<<"Matrix: \n"<<jacMat.toDense()<<"\n";
             gsInfo<<"Vector: \n"<<resVec<<"\n";
         }
         m_solver.compute(jacMat);
-        updateVector = m_solver.solve(resVec); // this is the UPDATE
-        m_solVec += updateVector;
+        deltaU = m_solver.solve(resVec); // this is the UPDATE
+        DeltaU += m_relax * deltaU;
 
-        resVec = m_residual(m_solVec);
+        resVec = m_residual(m_solVec+DeltaU);
         residual = resVec.norm();
 
         if (m_verbose>0)
         {
-            gsInfo<<"Iteration: "<< m_iterations
-               <<", residue: "<< residual
-               <<", update norm: "<<updateVector.norm()
-               <<", log(Ri/R0): "<< math::log10(residualOld/residual0)
-               <<", log(Ri+1/R0): "<< math::log10(residual/residual0)
-               <<"\n";
+            gsInfo<<"\t";
+            gsInfo<<std::setw(4)<<std::left<<m_iterations;
+            gsInfo<<std::setw(17)<<std::left<<residual;
+            gsInfo<<std::setw(17)<<std::left<<residual/residual0;
+            gsInfo<<std::setw(17)<<std::left<<m_relax * deltaU.norm();
+            gsInfo<<std::setw(17)<<std::left<<m_relax * deltaU.norm()/DeltaU.norm();
+            gsInfo<<std::setw(17)<<std::left<<m_relax * deltaU.norm()/m_solVec.norm();
+            gsInfo<<std::setw(17)<<std::left<<math::log10(residualOld/residual0);
+            gsInfo<<std::setw(17)<<std::left<<math::log10(residual/residual0);
+            gsInfo<<"\n";
         }
 
         residualOld = residual;
 
-        if (updateVector.norm() < m_tolerance)
+        if (m_relax * deltaU.norm()/m_solVec.norm()  < m_toleranceU && residual/residual0 < m_toleranceF)
         {
             m_converged = true;
+            m_solVec+=DeltaU;
             break;
         }
         else if (m_iterations+1 == m_maxIterations)
@@ -118,15 +141,20 @@ void gsStaticSolver<T>::defaultOptions()
 {
     m_options.addInt("Verbose","Verbose output",verbose::iterations);
     m_options.addInt("MaxIterations","Maximum number of iterations",25);
-    m_options.addReal("Tolerance","Relative Tolerance",1e-6);
+    m_options.addReal("Tolerance","Relative Tolerance Force",1e-6);
+    m_options.addReal("ToleranceF","Relative Tolerance Force",-1);
+    m_options.addReal("ToleranceU","Relative Tolerance Displacements",-1);
+    m_options.addReal("Relaxation","Relaxation parameter",1);
 };
 
 template <class T>
 void gsStaticSolver<T>::getOptions() const
 {
     m_maxIterations = m_options.getInt("MaxIterations");
-    m_tolerance = m_options.getReal("Tolerance");
+    m_toleranceF = m_options.getReal("ToleranceF")!=-1 ? m_options.getReal("ToleranceF") : m_options.getReal("Tolerance");
+    m_toleranceU = m_options.getReal("ToleranceU")!=-1 ? m_options.getReal("ToleranceU") : m_options.getReal("Tolerance");
     m_verbose = m_options.getInt("Verbose");
+    m_relax = m_options.getReal("Relaxation");
 };
 
 } // namespace gismo
