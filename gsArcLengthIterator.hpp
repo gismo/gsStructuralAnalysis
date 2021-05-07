@@ -1220,6 +1220,7 @@ void gsArcLengthIterator<T>::computeStability(gsVector<T> x, bool jacobian)
   }
   else if (m_bifurcationMethod == bifmethod::Eigenvalue)
   {
+    #ifdef GISMO_WITH_SPECTRA
     index_t number = std::min(static_cast<index_t>(std::floor(m_jacMat.cols()/3.)),10);
     gsSpectraSymSolver<gsSparseMatrix<T>> es(m_jacMat,number,3*number);
     es.init();
@@ -1231,6 +1232,10 @@ void gsArcLengthIterator<T>::computeStability(gsVector<T> x, bool jacobian)
     // Eigen::SelfAdjointEigenSolver< gsMatrix<T> > es(m_jacMat);
     m_stabilityVec = es.eigenvalues();
     m_stabilityVec = m_stabilityVec.reverse();
+    #else
+    Eigen::SelfAdjointEigenSolver<gsMatrix<T>> es(m_jacMat);
+    m_stabilityVec = es.eigenvalues();
+    #endif
   }
   else
     gsInfo<<"bifurcation method unknown!";
