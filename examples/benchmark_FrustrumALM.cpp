@@ -44,7 +44,7 @@ int main (int argc, char** argv)
 
     int testCase = 0;
 
-    index_t material  = 0;
+    index_t material  = 3;
     bool composite = false;
     index_t impl = 1; // 1= analytical, 2= generalized, 3= spectral
 
@@ -144,7 +144,8 @@ int main (int argc, char** argv)
       BCs.addCondition(boundary::west, condition_type::clamped, 0, 0, false, 2 );
 
       dirname = dirname + "/" + "Frustrum_-r=" + std::to_string(numRefine) + "-e" + std::to_string(numElevate) + "-M" + std::to_string(material) + "_solution";
-      if (dL == -1) { dL = 5e-2; }
+      if (dL == -1 && material!=3) { dL = 5e-2; }
+      if (dL == -1 && material==3) { dL = 4e-2; }
     }
     else if (testCase == 1)
     {

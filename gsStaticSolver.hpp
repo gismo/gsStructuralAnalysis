@@ -128,12 +128,11 @@ void gsStaticSolver<T>::_computeStability(const gsVector<T> x) const
     stabilityVec = es.eigenvalues();
     stabilityVec = stabilityVec.reverse();
     #else
-    Eigen::SelfAdjointEigenSolver<gsMatrix<T>> es(m_jacMat);
-    m_stabilityVec = es.eigenvalues();
+    Eigen::SelfAdjointEigenSolver<gsMatrix<T>> es(jacMat);
+    stabilityVec = es.eigenvalues();
     #endif
 
     m_indicator = stabilityVec.colwise().minCoeff()[0]; // This is required since D does not necessarily have one column.
-
 }
 
 template <class T>
