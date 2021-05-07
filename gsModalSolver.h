@@ -46,7 +46,7 @@ public:
     void verbose() {m_verbose=true; };
 
     void compute();
-    void computeSparse(T shift = 0.0, index_t number = 10, index_t ncvFac = 2, Spectra::SortRule selectionRule = Spectra::SortRule::SmallestMagn, Spectra::SortRule sortRule = Spectra::SortRule::SmallestMagn)
+    void computeSparse(T shift = 0.0, index_t number = 10, index_t ncvFac = 3, Spectra::SortRule selectionRule = Spectra::SortRule::SmallestMagn, Spectra::SortRule sortRule = Spectra::SortRule::SmallestMagn)
     {computeSparse_impl<GEigsMode>(shift,number,ncvFac,selectionRule,sortRule);};
 
     gsMatrix<T> values() const { return m_values; };
