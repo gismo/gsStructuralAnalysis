@@ -71,8 +71,8 @@ public:
     bool stabilityChange();
 
     void computeStability(gsVector<T> x, bool jacobian=true);
-    int stability();
-    int stability(gsVector<T> x, bool jacobian=true);
+    index_t stability();
+    index_t stability(gsVector<T> x, bool jacobian=true);
 
     void switchBranch();
 
@@ -191,7 +191,7 @@ public:
 
       // Use quasi-newton or not
       void quasiNewton() {m_quasiNewton = true; };
-      void quasiNewton(int interval) {m_quasiNewton = true; m_quasiNewtonInterval = interval;}
+      void quasiNewton(index_t interval) {m_quasiNewton = true; m_quasiNewtonInterval = interval;}
     // Methods and procedures
       /// Set method for singular point detection
       void setBifurcationMethod(std::string method)
@@ -203,7 +203,7 @@ public:
       }
 
       /// Set AngleDetermination
-      void setAngleDeterminationMethod(int method) {m_angleDetermine = method;}
+      void setAngleDeterminationMethod(index_t method) {m_angleDetermine = method;}
 
       void setRelaxation(T relaxation) {m_relax = relaxation; }
 
@@ -237,7 +237,7 @@ protected:
 
     void extendedSystemIteration();
 
-    int bisectionObjectiveFunction(const gsVector<T> & x, bool jacobian=true);
+    index_t bisectionObjectiveFunction(const gsVector<T> & x, bool jacobian=true);
 
     T bisectionTerminationFunction(const gsVector<T> & x, bool jacobian=true);
 
@@ -393,7 +393,7 @@ protected:
     bool m_initialized;
 
     bool m_quasiNewton;
-    int m_quasiNewtonInterval;
+    index_t m_quasiNewtonInterval;
 
     std::string note;
 
@@ -430,7 +430,7 @@ protected:
 protected:
 
     // Arc length method (either "Crisfield" or "Riks")
-    int m_method;
+    index_t m_method;
 
     // Previous update
     gsVector<T> m_DeltaUold;
@@ -474,14 +474,14 @@ protected:
     gsVector<T> m_stabilityVec;
 
     // Integer if point is unstable (-1) or not (+1)
-    int m_stabilityPrev; //previous step
-    int m_stability; //current step
+    index_t m_stabilityPrev; //previous step
+    index_t m_stability; //current step
     // Method to check if a point is a bifurcation point
-    int m_bifurcationMethod;
-    int m_solverType;
+    index_t m_bifurcationMethod;
+    index_t m_solverType;
 
     // Angle determination method: 0: determine based on previous load step. 1: determine based on previous iteration
-    int m_angleDetermine;
+    index_t m_angleDetermine;
 
     // Branch switch parameter
     T m_tau;
