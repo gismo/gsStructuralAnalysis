@@ -28,17 +28,18 @@ namespace gismo
         m_t = 0;
         m_residue = 1.0;
         m_updateNorm = 1.0;
+        m_first = true;
     }
 
     template <class T>
     void gsTimeIntegrator<T>::initializeSolution()
     {
         // Defines homogenous solutions as initial solution. Can be overwritten with initialDisplacement() or initialVelocity() later
-        if (m_method=="ExplEuler" || m_method=="ImplEuler")
+        if (m_method=="ExplEuler" || m_method=="ImplEuler" || m_method=="RK4")
         {
             m_sol = gsMatrix<T>::Zero(2*m_dofs,1);
         }
-        else if ((m_method=="Newmark") || (m_method=="Bathe"))
+        else if ((m_method=="Newmark") || (m_method=="Bathe") || (m_method=="CentralDiff"))
         {
             m_uNew = gsMatrix<T>::Zero(m_dofs,1);
             m_vNew = gsMatrix<T>::Zero(m_dofs,1);
@@ -53,27 +54,27 @@ namespace gismo
     template <class T>
     void gsTimeIntegrator<T>::setDisplacement(gsMatrix<T>& displ)
     {
-        if (m_method=="ExplEuler" || m_method=="ImplEuler")
+        if (m_method=="ExplEuler" || m_method=="ImplEuler" || m_method=="RK4")
             m_sol.block(0,0,m_dofs,1) = displ;
-        else if ((m_method=="Newmark") || (m_method=="Bathe"))
+        else if ((m_method=="Newmark") || (m_method=="Bathe") || (m_method=="CentralDiff"))
             m_uNew = displ;
     }
 
     template <class T>
     void gsTimeIntegrator<T>::setVelocity(gsMatrix<T>& velo)
     {
-        if (m_method=="ExplEuler" || m_method=="ImplEuler")
+        if (m_method=="ExplEuler" || m_method=="ImplEuler" || m_method=="RK4")
             m_sol.block(m_dofs,0,m_dofs,1) = velo;
-        else if ((m_method=="Newmark") || (m_method=="Bathe"))
+        else if ((m_method=="Newmark") || (m_method=="Bathe") || (m_method=="CentralDiff"))
             m_vNew = velo;
     }
 
     template <class T>
     void gsTimeIntegrator<T>::setAcceleration(gsMatrix<T>& accel)
     {
-        if (m_method=="ExplEuler" || m_method=="ImplEuler")
+        if (m_method=="ExplEuler" || m_method=="ImplEuler" || m_method=="RK4")
             gsWarn<<"Initial acceleration not implemented for method "<<m_method<<"\n";
-        else if ((m_method=="Newmark") || (m_method=="Bathe"))
+        else if ((m_method=="Newmark") || (m_method=="Bathe") || (m_method=="CentralDiff"))
             m_aNew = accel;
     }
 
@@ -196,7 +197,9 @@ namespace gismo
         if ( (string != "ExplEuler") &&
              (string != "ImplEuler") &&
              (string != "Newmark") &&
-             (string != "Bathe") )
+             (string != "Bathe") &&
+             (string !="CentralDiff") &&
+             (string !="RK4")            )
             {
                 gsInfo<<"Method Unknown... Process terminating\n";
             }
@@ -231,6 +234,14 @@ namespace gismo
         {
             initializeSolution();
         }
+        else if (m_method=="CentralDiff")
+        {
+            initializeSolution();
+        }
+        else if (m_method=="RK4")
+        {
+            initializeSolution();
+        }
         else
         {
             gsInfo<<"Method unknown...";
@@ -246,17 +257,21 @@ namespace gismo
     void gsTimeIntegrator<T>::stepExplEuler()
     {
         // ONLY FOR LINEAR SYSTEM!
+        m_solOld = m_sol;
+        gsMatrix<T> uOld = m_solOld.topRows(m_dofs);
+        gsMatrix<T> vOld = m_solOld.bottomRows(m_dofs);
         m_forceVec = m_forceFun(m_t);
-        m_sysvec.bottomRows(m_dofs) = m_dt*m_massInv*m_forceVec;
+        m_massInv = m_mass.toDense().inverse();
 
-        m_sol += m_sysmat * m_sol + m_sysvec;
+        m_sol.topRows(m_dofs) += m_dt * vOld;
+        m_sol.bottomRows(m_dofs) += m_dt * m_massInv * ( m_forceVec - m_stif * uOld - m_damp * vOld);
+
         m_t += m_dt;
     }
 
     template <class T>
     void gsTimeIntegrator<T>::stepExplEulerNL()
     {
-        m_t += m_dt;
         m_solOld = m_sol;
         gsMatrix<T> uOld = m_solOld.topRows(m_dofs);
         gsMatrix<T> vOld = m_solOld.bottomRows(m_dofs);
@@ -265,11 +280,14 @@ namespace gismo
 
         m_sol.topRows(m_dofs) += m_dt * vOld;
         m_sol.bottomRows(m_dofs) += m_dt * m_massInv * ( m_resVec - m_damp * vOld);
+
+        m_t += m_dt;
     }
 
     template <class T>
     void gsTimeIntegrator<T>::stepImplEuler()
     {
+        this->constructSystemImplEuler();
         m_forceVec = m_forceFun(m_t);
         m_sysvec.bottomRows(m_dofs) = m_dt*m_massInv*m_forceVec;
 
@@ -307,7 +325,7 @@ namespace gismo
             m_resVec = m_residualFun(uNew,m_t);
 
             m_sysvec.topRows(m_dofs) = uNew - uOld - m_dt*vNew;
-            m_sysvec.bottomRows(m_dofs) = m_mass*(vNew - vOld) + m_dt*((-m_resVec));
+            m_sysvec.bottomRows(m_dofs) = m_mass*(vNew - vOld) + m_dt * m_damp * vNew + m_dt*((-m_resVec));
 
             gsMatrix<T> sub1 = m_dt*m_jacMat;
             gsMatrix<T> sub2 = m_dt*m_damp + m_mass*eyeN;
@@ -336,12 +354,12 @@ namespace gismo
               }
             }
 
-            m_residue= m_sysvec.norm();
+            m_residue = m_sysvec.norm();
             m_solver.compute(m_sysmat);
             m_dsol = m_solver.solve(-m_sysvec);
 
             m_sol += m_dsol;
-            m_updateNorm = m_dsol.norm();
+            m_updateNorm = m_dsol.norm() / m_sol.norm();
 
             if (m_verbose)
             {
@@ -395,9 +413,9 @@ namespace gismo
             m_resVec = m_residualFun(uNew,m_t);
 
             m_sysvec.topRows(m_dofs) = uNew - uOld - m_dt*vNew;
-            m_sysvec.bottomRows(m_dofs) = m_mass*(vNew - vOld) + m_dt*(-m_resVec);
+            m_sysvec.bottomRows(m_dofs) = m_mass*(vNew - vOld) + m_dt * m_damp * vNew + m_dt*(-m_resVec);
 
-            m_jacMat = m_jacobian(m_uNew);
+            m_jacMat = m_jacobian(uNew);
 
             Amat->addOperator(0,0,gsIdentityOp<T>::make(m_dofs) );
             Amat->addOperator(0,1,makeMatrixOp(-m_dt*eye) );
@@ -659,6 +677,132 @@ namespace gismo
     }
 
     template <class T>
+    void gsTimeIntegrator<T>::stepCentralDiff()
+    {
+        gsMatrix<T> uOld,vOld,aOld;
+        m_massInv = m_mass.toDense().inverse();
+
+        uOld = m_uNew; // u_n
+        vOld = m_vNew; // v_n+1/2
+        aOld = m_aNew; // a_n
+        m_forceVec = m_forceFun(m_t);
+
+        if (m_first)
+        {
+            aOld = m_massInv * (m_forceVec - m_stif * uOld - m_damp * vOld);
+            vOld = vOld + m_dt / 2 * aOld; // v_1/2 = v_0 + dt/2*a_0
+            m_first = false;
+        }
+
+        m_uNew = uOld + m_dt * vOld;
+        m_aNew = m_massInv * (m_forceVec - m_stif * m_uNew - m_damp * vOld);
+        m_vNew = vOld + m_dt * m_aNew; // v_n+1/2 = v_n-1/2 + dt*a_n
+
+        m_t+=m_dt;
+    }
+
+    template <class T>
+    void gsTimeIntegrator<T>::stepCentralDiffNL()
+    {
+        gsMatrix<T> uOld,vOld,aOld;
+        m_massInv = m_mass.toDense().inverse();
+
+        uOld = m_uNew; // u_n
+        vOld = m_vNew; // v_n+1/2
+        aOld = m_aNew; // a_n
+
+        if (m_first)
+        {
+            m_resVec = m_residualFun(uOld,m_t);
+            aOld = m_massInv * (m_resVec - m_damp * vOld);
+            vOld = vOld + m_dt / 2 * aOld; // v_1/2 = v_0 + dt/2*a_0
+            m_first = false;
+        }
+
+        m_uNew = uOld + m_dt * vOld;
+        m_t+=m_dt;
+        m_resVec = m_residualFun(uOld,m_t);
+        m_aNew = m_massInv * (m_resVec - m_damp * vOld);
+        m_vNew = vOld + m_dt * m_aNew; // v_n+1/2 = v_n-1/2 + dt*a_n
+
+    }
+
+    template <class T>
+    void gsTimeIntegrator<T>::stepRK4()
+    {
+        m_massInv = m_mass.toDense().inverse();
+        gsVector<T> k1(2*m_dofs), k2(2*m_dofs), k3(2*m_dofs), k4(2*m_dofs);
+        gsVector<T> uTmp, vTmp;
+        m_solOld = m_sol;
+
+        gsVector<T> uOld = m_solOld.topRows(m_dofs);
+        gsVector<T> vOld = m_solOld.bottomRows(m_dofs);
+
+        m_resVec = m_forceFun(m_t) - m_stif * uOld;
+        k1.topRows(m_dofs) = vOld;
+        k1.bottomRows(m_dofs) = m_massInv * ( m_resVec - m_damp * vOld);
+
+        uTmp = uOld + m_dt/2. * k1.topRows(m_dofs);
+        vTmp = vOld + m_dt/2. * k1.bottomRows(m_dofs);
+        m_resVec = m_forceFun(m_t + m_dt/2.) - m_stif * uTmp;
+        k2.topRows(m_dofs) = vTmp;
+        k2.bottomRows(m_dofs) = m_massInv * ( m_resVec - m_damp * vTmp);
+
+        uTmp = uOld + m_dt/2. * k2.topRows(m_dofs);
+        vTmp = vOld + m_dt/2. * k2.bottomRows(m_dofs);
+        m_resVec = m_forceFun(m_t + m_dt/2.) - m_stif * uTmp;
+        k3.topRows(m_dofs) = vTmp;
+        k3.bottomRows(m_dofs) = m_massInv * ( m_resVec - m_damp * vTmp);
+
+        uTmp = uOld + m_dt * k3.topRows(m_dofs);
+        vTmp = vOld + m_dt * k3.bottomRows(m_dofs);
+        m_resVec = m_forceFun(m_t + m_dt) - m_stif * uTmp;
+        k4.topRows(m_dofs) = vTmp;
+        k4.bottomRows(m_dofs) = m_massInv * ( m_resVec - m_damp * vTmp);
+
+        m_sol += 1./6. * m_dt *  ( k1 + 2.*k2 + 2.*k3 + k4 );
+        m_t += m_dt;
+    }
+
+    template <class T>
+    void gsTimeIntegrator<T>::stepRK4NL()
+    {
+        m_massInv = m_mass.toDense().inverse();
+        gsVector<T> k1(2*m_dofs), k2(2*m_dofs), k3(2*m_dofs), k4(2*m_dofs);
+        gsVector<T> uTmp, vTmp;
+        m_solOld = m_sol;
+
+        gsVector<T> uOld = m_solOld.topRows(m_dofs);
+        gsVector<T> vOld = m_solOld.bottomRows(m_dofs);
+
+        m_resVec = m_residualFun(uOld,m_t);
+        k1.topRows(m_dofs) = vOld;
+        k1.bottomRows(m_dofs) = m_massInv * ( m_resVec - m_damp * vOld);
+
+        uTmp = uOld + m_dt/2. * k1.topRows(m_dofs);
+        vTmp = vOld + m_dt/2. * k1.bottomRows(m_dofs);
+        m_resVec = m_residualFun(uTmp,m_t + m_dt/2.);
+        k2.topRows(m_dofs) = vTmp;
+        k2.bottomRows(m_dofs) = m_massInv * ( m_resVec - m_damp * vTmp);
+
+        uTmp = uOld + m_dt/2. * k2.topRows(m_dofs);
+        vTmp = vOld + m_dt/2. * k2.bottomRows(m_dofs);
+        m_resVec = m_residualFun(uTmp,m_t + m_dt/2.);
+        k3.topRows(m_dofs) = vTmp;
+        k3.bottomRows(m_dofs) = m_massInv * ( m_resVec - m_damp * vTmp);
+
+        uTmp = uOld + m_dt * k3.topRows(m_dofs);
+        vTmp = vOld + m_dt * k3.bottomRows(m_dofs);
+        m_resVec = m_residualFun(uTmp,m_t + m_dt);
+        k4.topRows(m_dofs) = vTmp;
+        k4.bottomRows(m_dofs) = m_massInv * ( m_resVec - m_damp * vTmp);
+
+        m_sol += 1./6. * m_dt * ( k1 + 2.*k2 + 2.*k3 + k4 );
+
+        m_t += m_dt;
+    }
+
+    template <class T>
     void gsTimeIntegrator<T>::step()
     {
         if (m_verbose)
@@ -693,6 +837,20 @@ namespace gismo
             else
                 stepBathe();
         }
+        else if (m_method=="CentralDiff")
+        {
+            if (m_NL)
+                stepCentralDiffNL();
+            else
+                stepCentralDiff();
+        }
+        else if (m_method=="RK4")
+        {
+            if (m_NL)
+                stepRK4NL();
+            else
+                stepRK4();
+        }
         else
         {
             gsInfo<<"Method unknown, terminating..\n";
@@ -703,12 +861,12 @@ namespace gismo
     template <class T>
     void gsTimeIntegrator<T>::constructSolution()
     {
-        if ((m_method=="ExplEuler") || (m_method=="ImplEuler"))
+        if ((m_method=="ExplEuler") || (m_method=="ImplEuler") || (m_method=="RK4"))
         {
             m_displacements = m_sol.topRows(m_dofs);
             m_velocities = m_sol.bottomRows(m_dofs);
         }
-        else if ((m_method=="Newmark") || (m_method=="Bathe"))
+        else if ((m_method=="Newmark") || (m_method=="Bathe") || (m_method=="CentralDiff"))
         {
             m_displacements = m_uNew;
             m_velocities = m_vNew;
