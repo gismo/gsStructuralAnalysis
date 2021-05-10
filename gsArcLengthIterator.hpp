@@ -21,14 +21,14 @@ namespace gismo
 // Miscelaneous functions
 /// sign function
 template <class T>
-int sign(T val)
+index_t sign(T val)
 {
     return (T(0) < val) - (val < T(0));
 }
 
 /// Modulus function
 template <class T>
-int mod(T x, T y)
+index_t mod(T x, T y)
 {
     T m = x - floor(x / y) * y;
     m *= sign(y);
@@ -37,13 +37,13 @@ int mod(T x, T y)
 
 /// sort vector
 template <class T>
-int countNegatives(gsVector<T> vec)
+index_t countNegatives(gsVector<T> vec)
 {
-  int count = 0;
+  index_t count = 0;
   index_t N = vec.cols();
   index_t M = vec.rows();
-  for(int i = 0; i < M; i++)
-        for(int j = 0; j < N; j++)
+  for(index_t i = 0; i < M; i++)
+        for(index_t j = 0; j < N; j++)
         {
             if( vec(i,j) < 0 )
                 count += 1;
@@ -1016,7 +1016,7 @@ template <class T>
 void gsArcLengthIterator<T>::computeLambdaMU()
 {
     T A0 = math::pow(m_phi,2)* m_forcing.dot(m_forcing); // see Lam et al. 1991
-    int dir = sign(m_DeltaUold.dot(m_deltaUt) + A0*m_DeltaLold); // Feng et al. 1995 with H = \Psi^2
+    index_t dir = sign(m_DeltaUold.dot(m_deltaUt) + A0*m_DeltaLold); // Feng et al. 1995 with H = \Psi^2
     T denum = ( math::pow( m_deltaUt.dot(m_deltaUt) + A0 ,0.5) ); // Feng et al. 1995 with H = \Psi^2
 
     T mu;
@@ -1220,6 +1220,7 @@ void gsArcLengthIterator<T>::computeStability(gsVector<T> x, bool jacobian)
   }
   else if (m_bifurcationMethod == bifmethod::Eigenvalue)
   {
+    #ifdef GISMO_WITH_SPECTRA
     index_t number = std::min(static_cast<index_t>(std::floor(m_jacMat.cols()/3.)),10);
     gsSpectraSymSolver<gsSparseMatrix<T>> es(m_jacMat,number,3*number);
     es.init();
@@ -1231,6 +1232,10 @@ void gsArcLengthIterator<T>::computeStability(gsVector<T> x, bool jacobian)
     // Eigen::SelfAdjointEigenSolver< gsMatrix<T> > es(m_jacMat);
     m_stabilityVec = es.eigenvalues();
     m_stabilityVec = m_stabilityVec.reverse();
+    #else
+    Eigen::SelfAdjointEigenSolver<gsMatrix<T>> es(m_jacMat);
+    m_stabilityVec = es.eigenvalues();
+    #endif
   }
   else
     gsInfo<<"bifurcation method unknown!";
@@ -1240,19 +1245,19 @@ void gsArcLengthIterator<T>::computeStability(gsVector<T> x, bool jacobian)
 }
 
 template <class T>
-int gsArcLengthIterator<T>::stability()
+index_t gsArcLengthIterator<T>::stability()
 {
-  int tmp = 1;
+  index_t tmp = 1;
   if (m_indicator < 0)
     tmp =  -1;
   return tmp;
 }
 
 template <class T>
-int gsArcLengthIterator<T>::stability(gsVector<T> x, bool jacobian)
+index_t gsArcLengthIterator<T>::stability(gsVector<T> x, bool jacobian)
 {
   this->computeStability(x, jacobian);
-  int tmp = this->stability();
+  index_t tmp = this->stability();
   return tmp;
 }
 
@@ -1276,7 +1281,7 @@ void gsArcLengthIterator<T>::extendedSystemSolve(gsVector<T> U, T L, T tol)
   gsInfo<<"Extended iterations --- Starting with U.norm = "<<m_U.norm()<<" and L = "<<m_L<<"\n";
 
   this->computeJacobian(m_U); // Jacobian evaluated on m_U
-  m_basisResidualKTPhi = (m_jacMat.toDense()*m_V).norm();
+  m_basisResidualKTPhi = (m_jacMat*m_V).norm();
 
   m_DeltaV = gsVector<T>::Zero(m_numDof);
   m_DeltaU.setZero();
@@ -1363,10 +1368,12 @@ void gsArcLengthIterator<T>::extendedSystemIteration()
 }
 
 template <class T>
-int gsArcLengthIterator<T>::bisectionObjectiveFunction(const gsVector<T> & x, bool jacobian)
+index_t gsArcLengthIterator<T>::bisectionObjectiveFunction(const gsVector<T> & x, bool jacobian)
 {
   this->computeStability(x,jacobian);
-  return countNegatives(m_stabilityVec);
+  index_t negs = countNegatives(m_stabilityVec);
+  note += "(" + std::to_string(negs) + ")";
+  return negs;
 }
 
 template <class T>
@@ -1498,11 +1505,13 @@ void gsArcLengthIterator<T>::initOutputLC()
   gsInfo<<"\t";
   gsInfo<<std::setw(4)<<std::left<<"It.";
   gsInfo<<std::setw(17)<<std::left<<"Res. F";
-  gsInfo<<std::setw(17)<<std::left<<"Res. U";
+  gsInfo<<std::setw(17)<<std::left<<"|dU|/|Du|";
   gsInfo<<std::setw(17)<<std::left<<"|U|";
   gsInfo<<std::setw(17)<<std::left<<"L";
-  gsInfo<<std::setw(17)<<std::left<<"|ΔU|";
-  gsInfo<<std::setw(17)<<std::left<<"ΔL";
+  gsInfo<<std::setw(17)<<std::left<<"|DU|";
+  gsInfo<<std::setw(17)<<std::left<<"DL";
+  gsInfo<<std::setw(17)<<std::left<<"|dU|";
+  gsInfo<<std::setw(17)<<std::left<<"dL";
   gsInfo<<std::setw(17)<<std::left<<"Dmin";
   gsInfo<<std::setw(17)<<std::left<<"note";
   gsInfo<<"\n";
@@ -1516,17 +1525,17 @@ void gsArcLengthIterator<T>::initOutputRiks()
   gsInfo<<"\t";
   gsInfo<<std::setw(4)<<std::left<<"It.";
   gsInfo<<std::setw(17)<<std::left<<"Res. F";
-  gsInfo<<std::setw(17)<<std::left<<"Res. U";
-  gsInfo<<std::setw(17)<<std::left<<"Res. L";
+  gsInfo<<std::setw(17)<<std::left<<"|dU|/|Du|";
+  gsInfo<<std::setw(17)<<std::left<<"dL/DL";
   gsInfo<<std::setw(17)<<std::left<<"|U|";
   gsInfo<<std::setw(17)<<std::left<<"L";
-  gsInfo<<std::setw(17)<<std::left<<"|ΔU|";
-  gsInfo<<std::setw(17)<<std::left<<"ΔL";
-  gsInfo<<std::setw(17)<<std::left<<"|δU|";
-  gsInfo<<std::setw(17)<<std::left<<"δL";
-  gsInfo<<std::setw(17)<<std::left<<"δs²";
-  gsInfo<<std::setw(17)<<std::left<<"|δU|²";
-  gsInfo<<std::setw(17)<<std::left<<"δL²";
+  gsInfo<<std::setw(17)<<std::left<<"|DU|";
+  gsInfo<<std::setw(17)<<std::left<<"DL";
+  gsInfo<<std::setw(17)<<std::left<<"|dU|";
+  gsInfo<<std::setw(17)<<std::left<<"dL";
+  gsInfo<<std::setw(17)<<std::left<<"ds²";
+  gsInfo<<std::setw(17)<<std::left<<"|dU|²";
+  gsInfo<<std::setw(17)<<std::left<<"dL²";
   gsInfo<<std::setw(17)<<std::left<<"Dmin";
   gsInfo<<std::setw(17)<<std::left<<"note";
   gsInfo<<"\n";
@@ -1540,17 +1549,17 @@ void gsArcLengthIterator<T>::initOutputCrisfield()
   gsInfo<<"\t";
   gsInfo<<std::setw(4)<<std::left<<"It.";
   gsInfo<<std::setw(17)<<std::left<<"Res. F";
-  gsInfo<<std::setw(17)<<std::left<<"Res. U";
-  gsInfo<<std::setw(17)<<std::left<<"Res. L";
+  gsInfo<<std::setw(17)<<std::left<<"|dU|/|Du|";
+  gsInfo<<std::setw(17)<<std::left<<"dL/DL";
   gsInfo<<std::setw(17)<<std::left<<"|U|";
   gsInfo<<std::setw(17)<<std::left<<"L";
-  gsInfo<<std::setw(17)<<std::left<<"|ΔU|";
-  gsInfo<<std::setw(17)<<std::left<<"ΔL";
-  gsInfo<<std::setw(17)<<std::left<<"|δU|";
-  gsInfo<<std::setw(17)<<std::left<<"δL";
-  gsInfo<<std::setw(17)<<std::left<<"δs²";
-  gsInfo<<std::setw(17)<<std::left<<"|δU|²";
-  gsInfo<<std::setw(17)<<std::left<<"δL²";
+  gsInfo<<std::setw(17)<<std::left<<"|DU|";
+  gsInfo<<std::setw(17)<<std::left<<"DL";
+  gsInfo<<std::setw(17)<<std::left<<"|dU|";
+  gsInfo<<std::setw(17)<<std::left<<"dL";
+  gsInfo<<std::setw(17)<<std::left<<"ds²";
+  gsInfo<<std::setw(17)<<std::left<<"|dU|²";
+  gsInfo<<std::setw(17)<<std::left<<"dL²";
   gsInfo<<std::setw(17)<<std::left<<"Dmin";
   gsInfo<<std::setw(17)<<std::left<<"note";
   gsInfo<<"\n";
@@ -1564,18 +1573,18 @@ void gsArcLengthIterator<T>::initOutputExtended()
   gsInfo<<"\t";
   gsInfo<<std::setw(4)<<std::left<<"It.";
   gsInfo<<std::setw(17)<<std::left<<"Res. F";
-  gsInfo<<std::setw(17)<<std::left<<"Res. U";
-  gsInfo<<std::setw(17)<<std::left<<"Res. L";
+  gsInfo<<std::setw(17)<<std::left<<"|dU|/|Du|";
+  gsInfo<<std::setw(17)<<std::left<<"dL/DL";
   gsInfo<<std::setw(17)<<std::left<<"K_T * φ";
   gsInfo<<std::setw(17)<<std::left<<"|U|";
   gsInfo<<std::setw(17)<<std::left<<"|φ|";
   gsInfo<<std::setw(17)<<std::left<<"L";
-  gsInfo<<std::setw(17)<<std::left<<"|ΔU|";
-  gsInfo<<std::setw(17)<<std::left<<"|Δφ|";
-  gsInfo<<std::setw(17)<<std::left<<"ΔL";
-  gsInfo<<std::setw(17)<<std::left<<"|δU|";
-  gsInfo<<std::setw(17)<<std::left<<"|δφ|";
-  gsInfo<<std::setw(17)<<std::left<<"δL";
+  gsInfo<<std::setw(17)<<std::left<<"|DU|";
+  gsInfo<<std::setw(17)<<std::left<<"|Dφ|";
+  gsInfo<<std::setw(17)<<std::left<<"DL";
+  gsInfo<<std::setw(17)<<std::left<<"|dU|";
+  gsInfo<<std::setw(17)<<std::left<<"|dφ|";
+  gsInfo<<std::setw(17)<<std::left<<"dL";
   gsInfo<<std::setw(17)<<std::left<<"Dmin";
   gsInfo<<std::setw(17)<<std::left<<"note";
   gsInfo<<"\n";
@@ -1609,6 +1618,8 @@ void gsArcLengthIterator<T>::stepOutputLC()
   gsInfo<<std::setw(17)<<std::left<<(m_L + m_DeltaL);
   gsInfo<<std::setw(17)<<std::left<<m_DeltaU.norm();
   gsInfo<<std::setw(17)<<std::left<<m_DeltaL;
+  gsInfo<<std::setw(17)<<std::left<<m_deltaU.norm();
+  gsInfo<<std::setw(17)<<std::left<<m_deltaL;
   gsInfo<<std::setw(17)<<std::left<<m_indicator;
   gsInfo<<std::setw(17)<<std::left<<note;
   gsInfo<<"\n";

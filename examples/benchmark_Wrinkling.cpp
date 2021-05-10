@@ -57,9 +57,10 @@ void writeSectionOutput(const gsMultiPatch<T> & mp, const std::string dirname, c
 int main (int argc, char** argv)
 {
     // Input options
-    int numElevate  = 1;
-    int numHref     = 1;
+    int numElevate  = 2;
+    int numHref     = 5;
     bool plot       = false;
+    bool mesh = false;
     bool stress       = false;
     bool SingularPoint = false;
     bool quasiNewton = false;
@@ -74,7 +75,7 @@ int main (int argc, char** argv)
     real_t tau = 1e4;
 
     index_t Compressibility = 0;
-    index_t material = 0;
+    index_t material = 3;
     index_t impl = 1; // 1= analytical, 2= generalized, 3= spectral
 
     real_t relax = 1.0;
@@ -90,7 +91,7 @@ int main (int argc, char** argv)
 
     // Arc length method options
     real_t dL = 0; // General arc length
-    real_t dLb = 0.5; // Ard length to find bifurcation
+    real_t dLb = 1e-2; // Ard length to find bifurcation
     real_t tol = 1e-6;
     real_t tolU = 1e-6;
     real_t tolF = 1e-3;
@@ -124,6 +125,7 @@ int main (int argc, char** argv)
     cmd.addSwitch("bifurcation", "Compute singular points and bifurcation paths", SingularPoint);
     cmd.addSwitch("quasi", "Use the Quasi Newton method", quasiNewton);
     cmd.addSwitch("plot", "Plot result in ParaView format", plot);
+    cmd.addSwitch("mesh", "Plot mesh?", mesh);
     cmd.addSwitch("stress", "Plot stress in ParaView format", stress);
     cmd.addSwitch("write", "Write output to file", write);
     cmd.addSwitch("writeP", "Write perturbation", writeP);
@@ -475,10 +477,10 @@ int main (int argc, char** argv)
           solField= gsField<>(mp,deformation);
 
         std::string fileName = dirname + "/" + output + util::to_string(k);
-        gsWriteParaview<>(solField, fileName, 1000,true);
+        gsWriteParaview<>(solField, fileName, 1000,mesh);
         fileName = output + util::to_string(k) + "0";
         collection.addTimestep(fileName,k,".vts");
-        collection.addTimestep(fileName,k,"_mesh.vtp");
+        if (mesh) collection.addTimestep(fileName,k,"_mesh.vtp");
       }
       if (stress)
       {

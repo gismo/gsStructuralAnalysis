@@ -254,6 +254,18 @@ int main(int argc, char *argv[])
         thickness = 1;
         PoissonRatio = 0;
     }
+    else if (testCase==13)
+    {
+        // Unit square
+        mp.addPatch( gsNurbsCreator<>::BSplineSquare(1) ); // degree
+        mp.addAutoBoundaries();
+        mp.embed(3);
+        E_modulus = 1e6;
+        thickness = 0.005;
+        // PoissonRatio = 0.5;
+        // PoissonRatio = 0.499;
+        PoissonRatio = 0.3;
+    }
     else
     {
         // Unit square
@@ -275,7 +287,7 @@ int main(int argc, char *argv[])
             mp.degreeElevate(numElevate);
 
         // h-refine
-        for (int r =0; r < numRefine; ++r)
+        for (index_t r =0; r < numRefine; ++r)
             mp.uniformRefine();
     }
     mp_def = mp;
@@ -1295,8 +1307,7 @@ int main(int argc, char *argv[])
 
         // gsField<> stressField = assembler->constructStress(mp_def,stress_type::membrane_strain);
 
-        gsWriteParaview(solutionField,"Deformation");
-
+        #ifdef GISMO_ELASTICITY
         std::map<std::string,const gsField<> *> fields;
         fields["Deformation"] = &solutionField;
         fields["Membrane Stress"] = &membraneStress;
@@ -1309,6 +1320,16 @@ int main(int argc, char *argv[])
         fields["Principal Direction 3"] = &stretchDir3;
 
         gsWriteParaviewMultiPhysics(fields,"stress",5000,true);
+        #else
+        gsWriteParaview(solutionField, "Deformation");
+        gsWriteParaview(membraneStress, "MembraneStress");
+        gsWriteParaview(flexuralStress, "FlexuralStress");
+        gsWriteParaview(Stretches, "PrincipalStretch");
+        gsWriteParaview(stretchDir1, "PrincipalDirection1");
+        gsWriteParaview(stretchDir2, "PrincipalDirection2");
+        gsWriteParaview(stretchDir3, "PrincipalDirection3");
+        #endif
+
     }
     gsInfo<<"Total ellapsed assembly time: \t\t"<<time<<" s\n";
     gsInfo<<"Total ellapsed solution time (incl. assembly): \t"<<totaltime<<" s\n";

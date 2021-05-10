@@ -16,8 +16,8 @@
 #include <gsKLShell/gsThinShellAssembler.h>
 #include <gsKLShell/getMaterialMatrix.h>
 
-// #include <gsThinShell/gsArcLengthIterator.h>
 #include <gsStructuralAnalysis/gsArcLengthIterator.h>
+#include <gsStructuralAnalysis/gsStaticSolver.h>
 
 using namespace gismo;
 
@@ -75,7 +75,7 @@ int main (int argc, char** argv)
     bool mesh       = false;
     bool stress       = false;
     bool membrane       = false;
-    bool first  = false;
+    bool mesh  = false;
     bool quasiNewton = false;
     int quasiNewtonInt = -1;
     bool adaptive = false;
@@ -169,8 +169,8 @@ int main (int argc, char** argv)
     cmd.addSwitch("adaptive", "Adaptive length ", adaptive);
     cmd.addSwitch("quasi", "Use the Quasi Newton method", quasiNewton);
     cmd.addSwitch("plot", "Plot result in ParaView format", plot);
+    cmd.addSwitch("mesh", "Plot mesh?", mesh);
     cmd.addSwitch("stress", "Plot stress in ParaView format", stress);
-    cmd.addSwitch("first", "Plot only first", first);
     cmd.addSwitch("write", "Write output to file", write);
     cmd.addSwitch("writeG", "Write refined geometry", writeG);
     cmd.addSwitch("cross", "Write cross-section to file", crosssection);
@@ -346,7 +346,7 @@ int main (int argc, char** argv)
     gsTHBSpline<2,real_t> thb;
     if (THB)
     {
-      for (index_t k=0; k!=mpBspline.nPatches(); ++k)
+      for (size_t k=0; k!=mpBspline.nPatches(); ++k)
       {
           gsTensorBSpline<2,real_t> *geo = dynamic_cast< gsTensorBSpline<2,real_t> * > (&mpBspline.patch(k));
           thb = gsTHBSpline<2,real_t>(*geo);
@@ -399,8 +399,6 @@ int main (int argc, char** argv)
 
     gsConstantFunction<> displ(0.05,3);
 
-    // Buckling coefficient
-    real_t fac = 1;
     // Unscaled load
     real_t Load = 0;
 
@@ -717,6 +715,7 @@ int main (int argc, char** argv)
     Jacobian_t Jacobian = [&time,&stopwatch,&assembler,&mp_def](gsVector<real_t> const &x)
     {
       stopwatch.restart();
+      assembler->homogenizeDirichlet();
       assembler->constructSolution(x,mp_def);
       assembler->assembleMatrix(mp_def);
       time += stopwatch.stop();
@@ -877,7 +876,7 @@ int main (int argc, char** argv)
         gsWriteParaview<>(solField, fileName, 1000,mesh);
         fileName = output + util::to_string(k) + "0";
         collection.addTimestep(fileName,k,".vts");
-        collection.addTimestep(fileName,k,"_mesh.vtp");
+        if (mesh) collection.addTimestep(fileName,k,"_mesh.vtp");
       }
       if (stress)
       {
