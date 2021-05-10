@@ -296,46 +296,31 @@ int main (int argc, char** argv)
     gsConstantFunction<> alpha3(A3,2);
     gsConstantFunction<> mu3(M3,2);
 
-    real_t pi = math::atan(1)*4;
     index_t kmax = 1;
-    gsVector<> E11(kmax), E22(kmax), G12(kmax), nu12(kmax), nu21(kmax), thick(kmax), phi(kmax);
-    E11.setZero(); E22.setZero(); G12.setZero(); nu12.setZero(); nu21.setZero(); thick.setZero(); phi.setZero();
-    for (index_t k=0; k != kmax; ++k)
-    {
-        E11.at(k) = E22.at(k) = E_modulus;
-        nu12.at(k) = nu21.at(k) = PoissonRatio;
-        G12.at(k) = 0.5 * E_modulus / (1+PoissonRatio);
-        thick.at(k) = thickness/kmax;
-        phi.at(kmax) = k / kmax * pi/2.0;
-    }
 
-    gsConstantFunction<> E11fun(E11,2);
-    gsConstantFunction<> E22fun(E22,2);
-    gsConstantFunction<> G12fun(G12,2);
-    gsConstantFunction<> nu12fun(nu12,2);
-    gsConstantFunction<> nu21fun(nu21,2);
-    gsConstantFunction<> thickfun(thick,2);
-    gsConstantFunction<> phifun(phi,2);
+    std::vector<gsFunctionSet<> * > Gs(kmax);
+    std::vector<gsFunctionSet<> * > Ts(kmax);
+    std::vector<gsFunctionSet<> * > Phis(kmax);
+
+    gsMatrix<> Gmat = gsCompositeMatrix(E_modulus,E_modulus,0.5 * E_modulus / (1+PoissonRatio),PoissonRatio,PoissonRatio);
+    Gmat.resize(Gmat.rows()*Gmat.cols(),1);
+    gsConstantFunction<> Gfun(Gmat,2);
+    Gs[0] = &Gfun;
+
+    gsConstantFunction<> phi;
+    phi.setValue(0,2);
+
+    Phis[0] = &phi;
+
+    gsConstantFunction<> thicks(thickness/kmax,2);
+    Ts[0] = &thicks;
 
     std::vector<gsFunction<>*> parameters;
     if (material==0) // SvK & Composites
     {
-      if (composite)
-      {
-        parameters.resize(6);
-        parameters[0] = &E11fun;
-        parameters[1] = &E22fun;
-        parameters[2] = &G12fun;
-        parameters[3] = &nu12fun;
-        parameters[4] = &nu21fun;
-        parameters[5] = &phifun;
-      }
-      else
-      {
-        parameters.resize(2);
-        parameters[0] = &E;
-        parameters[1] = &nu;
-      }
+      parameters.resize(2);
+      parameters[0] = &E;
+      parameters[1] = &nu;
     }
     else if (material==1 || material==2) // NH & NH_ext
     {
@@ -370,9 +355,7 @@ int main (int argc, char** argv)
     {
         if (composite)
         {
-            options.addInt("Material","Material model: (0): SvK | (1): NH | (2): NH_ext | (3): MR | (4): Ogden",0);
-            options.addInt("Implementation","Implementation: (0): Composites | (1): Analytical | (2): Generalized | (3): Spectral",0);
-            materialMatrix = getMaterialMatrix<2,real_t>(mp,t,parameters,rho,options);
+            materialMatrix = new gsMaterialMatrixComposite<2,real_t>(mp,Ts,Gs,Phis);
         }
         else
         {
@@ -457,8 +440,10 @@ int main (int argc, char** argv)
     arcLength.initialize();
 
     gsParaviewCollection collection(dirname + "/" + output);
+    gsParaviewCollection PStretch(dirname + "/" + "stretch");
+    gsParaviewCollection PStretch1dir(dirname + "/" + "stretch1dir");
+    gsParaviewCollection PStretch2dir(dirname + "/" + "stretch2dir");
     gsParaviewCollection Smembrane(dirname + "/" + "membrane");
-    gsParaviewCollection Sflexural(dirname + "/" + "flexural");
     gsParaviewCollection Smembrane_p(dirname + "/" + "membrane_p");
     gsMultiPatch<> deformation = mp;
 
@@ -496,7 +481,28 @@ int main (int argc, char** argv)
       }
       if (stress)
       {
-        gsField<> membraneStress, flexuralStress, membraneStress_p;
+        gsField<> stretch, stretch1dir, stretch2dir, membraneStress, membraneStress_p;
+
+        gsPiecewiseFunction<> stretches;
+        assembler->constructStress(mp_def,stretches,stress_type::principal_stretch);
+        if (deformed)
+          stretch = gsField<>(mp_def,stretches, true);
+        else
+          stretch = gsField<>(mp,stretches, true);
+
+        gsPiecewiseFunction<> stretch1dirs;
+        assembler->constructStress(mp_def,stretch1dirs,stress_type::principal_stretch_dir1);
+        if (deformed)
+          stretch1dir = gsField<>(mp_def,stretch1dirs, true);
+        else
+          stretch1dir = gsField<>(mp,stretch1dirs, true);
+
+        gsPiecewiseFunction<> stretch2dirs;
+        assembler->constructStress(mp_def,stretch2dirs,stress_type::principal_stretch_dir2);
+        if (deformed)
+          stretch2dir = gsField<>(mp_def,stretch2dirs, true);
+        else
+          stretch2dir = gsField<>(mp,stretch2dirs, true);
 
         gsPiecewiseFunction<> membraneStresses;
         assembler->constructStress(mp_def,membraneStresses,stress_type::membrane);
@@ -505,13 +511,6 @@ int main (int argc, char** argv)
         else
           membraneStress = gsField<>(mp,membraneStresses,true);
 
-        gsPiecewiseFunction<> flexuralStresses;
-        assembler->constructStress(mp_def,flexuralStresses,stress_type::flexural);
-        if (deformed)
-          flexuralStress = gsField<>(mp_def,flexuralStresses, true);
-        else
-          flexuralStress = gsField<>(mp,flexuralStresses, true);
-
         gsPiecewiseFunction<> membraneStresses_p;
         assembler->constructStress(mp_def,membraneStresses_p,stress_type::principal_stress_membrane);
         if (deformed)
@@ -519,21 +518,33 @@ int main (int argc, char** argv)
         else
           membraneStress_p = gsField<>(mp,membraneStresses_p, true);
 
+
         std::string fileName;
+        fileName = dirname + "/" + "stretch" + util::to_string(k);
+        gsWriteParaview( stretch, fileName, 5000);
+        fileName = "stretch" + util::to_string(k) + "0";
+        PStretch.addTimestep(fileName,k,".vts");
+
+        fileName = dirname + "/" + "stretch1dir" + util::to_string(k);
+        gsWriteParaview( stretch1dir, fileName, 5000);
+        fileName = "stretch1dir" + util::to_string(k) + "0";
+        PStretch1dir.addTimestep(fileName,k,".vts");
+
+        fileName = dirname + "/" + "stretch2dir" + util::to_string(k);
+        gsWriteParaview( stretch2dir, fileName, 5000);
+        fileName = "stretch2dir" + util::to_string(k) + "0";
+        PStretch2dir.addTimestep(fileName,k,".vts");
+
         fileName = dirname + "/" + "membrane" + util::to_string(k);
-        gsWriteParaview( membraneStress, fileName, 1000);
+        gsWriteParaview( membraneStress, fileName, 5000);
         fileName = "membrane" + util::to_string(k) + "0";
         Smembrane.addTimestep(fileName,k,".vts");
 
-        fileName = dirname + "/" + "flexural" + util::to_string(k);
-        gsWriteParaview( flexuralStress, fileName, 1000);
-        fileName = "flexural" + util::to_string(k) + "0";
-        Sflexural.addTimestep(fileName,k,".vts");
-
         fileName = dirname + "/" + "membrane_p" + util::to_string(k);
-        gsWriteParaview( membraneStress_p, fileName, 1000);
+        gsWriteParaview( membraneStress_p, fileName, 5000);
         fileName = "membrane_p" + util::to_string(k) + "0";
         Smembrane_p.addTimestep(fileName,k,".vts");
+
       }
 
       if (write)
@@ -546,8 +557,10 @@ int main (int argc, char** argv)
     }
     if (stress)
     {
+      PStretch.save();
+      PStretch1dir.save();
+      PStretch2dir.save();
       Smembrane.save();
-      Sflexural.save();
       Smembrane_p.save();
     }
 

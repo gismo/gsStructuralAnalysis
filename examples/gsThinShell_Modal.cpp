@@ -248,7 +248,7 @@ int main (int argc, char** argv)
     else if (testCase == 4)
     {
         thickness = 0.01;
-        E_modulus = 1e5;
+        E_modulus = 1e0;
         Density = 1e0;
         PoissonRatio = 0.3;
         // Plate
@@ -283,8 +283,10 @@ int main (int argc, char** argv)
     {
         thickness = 0.01;
         PoissonRatio = 0.3;
+        E_modulus = 1e0;
+        Density = 1e0;
         // Plate
-        // Pinned-Pinned-Pinned-Pinned
+        // Clamped-Clamped-Clamped-Clamped
             // Left
         BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 0 ); // unknown 0 - x
         BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 1 - y
@@ -424,13 +426,13 @@ int main (int argc, char** argv)
     assembler->assembleMass();
     gsSparseMatrix<> M =  assembler->matrix();
 
-    gsModalSolver<real_t> modal(K,M);
+    gsModalSolver<real_t,Spectra::GEigsMode::ShiftInvert> modal(K,M);
     modal.verbose();
 
     if (!sparse)
       modal.compute();
     else
-      modal.computeSparse(shift,10);
+      modal.computeSparse(shift,10,2,Spectra::SortRule::LargestMagn,Spectra::SortRule::SmallestMagn);
 
 
     gsMatrix<> values = modal.values();

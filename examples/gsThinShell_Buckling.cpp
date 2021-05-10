@@ -62,7 +62,7 @@ int main (int argc, char** argv)
     real_t PoissonRatio = 0;
     real_t Density = 1e0;
 
-    real_t thickness = 2*1e-3;
+    real_t thickness = 1e-3;
     real_t aDim = 1.0;
     real_t bDim = 1.0;
 
@@ -277,8 +277,8 @@ int main (int argc, char** argv)
 
     if (testCase == 0)
     {
-        tmp << Load, 0, 0;
-        neuData.setValue(tmp,3);
+        neu << Load, 0, 0;
+        neuData.setValue(neu,3);
         // // Clamped-Clamped
         BCs.addCondition(boundary::west, condition_type::neumann, &neuData ); // unknown 0 - x
         // BCs.addCondition(boundary::west, condition_type::dirichlet, &displ1, 0 ); // unknown 0 - x
@@ -296,8 +296,8 @@ int main (int argc, char** argv)
     }
     else if (testCase == 1)
     {
-        tmp << Load, 0, 0;
-        neuData.setValue(tmp,3);
+        neu << Load, 0, 0;
+        neuData.setValue(neu,3);
         // // Clamped-Clamped
         BCs.addCondition(boundary::west, condition_type::neumann, &neuData ); // unknown 0 - x
         // BCs.addCondition(boundary::west, condition_type::dirichlet, &displ1, 0 ); // unknown 0 - x
@@ -344,35 +344,34 @@ int main (int argc, char** argv)
     }
     else if (testCase == 3)
     {
-        // PoissonRatio = 0.0;
-        Load = 1e-2;
-        tmp << Load, 0, 0;
-        neuData.setValue(tmp,3);
+        // poisson_ratio = 0.0;
+        Load = 1e8;
+        neu << Load, 0, 0;
+        neuData.setValue(neu,3);
         // // Clamped-Clamped
         BCs.addCondition(boundary::east, condition_type::neumann, &neuData ); // unknown 0 - x
-        BCs.addCondition(boundary::east, condition_type::dirichlet, 0, 0, false,1 ); // unknown 1 - y
-        BCs.addCondition(boundary::east, condition_type::dirichlet, 0, 0, false,2 ); // unknown 2 - z
 
-        // BCs.addCondition(boundary::north, condition_type::dirichlet, 0, 0 ); // unknown 0 - x
-        BCs.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false,1 ); // unknown 1 - y
-        BCs.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false,2 ); // unknown 2 - z
+        BCs.addCondition(boundary::east, condition_type::dirichlet, 0, 0, false, 1); // unknown 1 - y
+        BCs.addCondition(boundary::east, condition_type::dirichlet, 0, 0, false, 2); // unknown 2 - z
 
-        // BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0 ); // unknown 0 - x
-        BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false,1 ); // unknown 1 - y
-        BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false,2 ); // unknown 2 - z
+        // BCs.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false,0 ); // unknown 0 - x
+        BCs.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 1); // unknown 1 - y
+        BCs.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 2); // unknown 2 - z
 
+        // BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false,0 ); // unknown 0 - x
+        BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 1); // unknown 1 - y
+        BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 2); // unknown 2 - z
 
-        BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false,0 ); // unknown 0 - x
+        BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 0); // unknown 0 - x
         BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false,1 ); // unknown 1 - y
         BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false,2 ); // unknown 2 - z
-
     }
     else if (testCase == 4)
     {
         PoissonRatio = 0.0;
-        Load = 1e-2;
-        tmp << Load, 0, 0;
-        neuData.setValue(tmp,3);
+        Load = 1e5;
+        neu << Load, 0, 0;
+        neuData.setValue(neu,3);
         // // Clamped-Clamped
         BCs.addCondition(boundary::east, condition_type::neumann, &neuData ); // unknown 0 - x
         BCs.addCondition(boundary::east, condition_type::dirichlet, 0, 0, false,1 ); // unknown 1 - y
@@ -399,8 +398,8 @@ int main (int argc, char** argv)
     {
         PoissonRatio = 0.3;
         Load = 1e-2;
-        tmp << Load, 0, 0;
-        neuData.setValue(tmp,3);
+        neu << Load, 0, 0;
+        neuData.setValue(neu,3);
         // // Clamped-Clamped
         BCs.addCondition(boundary::east, condition_type::neumann, &neuData ); // unknown 0 - x
         BCs.addCondition(boundary::east, condition_type::dirichlet, 0, 0, false,1 ); // unknown 1 - y
@@ -427,10 +426,10 @@ int main (int argc, char** argv)
     {
         PoissonRatio = 0.;
         Load = 1e-8;
-        tmp << Load, 0, 0;
-        neuData.setValue(tmp,3);
-        tmp << -Load, 0, 0;
-        neuData2.setValue(tmp,3);
+        neu << Load, 0, 0;
+        neuData.setValue(neu,3);
+        neu << -Load, 0, 0;
+        neuData2.setValue(neu,3);
         // // Clamped-Clamped
         BCs.addCondition(boundary::east, condition_type::neumann, &neuData ); // unknown 0 - x
         BCs.addCondition(boundary::east, condition_type::dirichlet, 0, 0,false,2 ); // unknown 2 - z
@@ -508,46 +507,31 @@ int main (int argc, char** argv)
     gsConstantFunction<> alpha3(-2.0,3);
     gsConstantFunction<> mu3(-0.1e5/4.225e5*mu,3);
 
-    real_t pi = math::atan(1)*4;
     index_t kmax = 1;
-    gsVector<> E11(kmax), E22(kmax), G12(kmax), nu12(kmax), nu21(kmax), thick(kmax), phi(kmax);
-    E11.setZero(); E22.setZero(); G12.setZero(); nu12.setZero(); nu21.setZero(); thick.setZero(); phi.setZero();
-    for (index_t k=0; k != kmax; ++k)
-    {
-        E11.at(k) = E22.at(k) = E_modulus;
-        nu12.at(k) = nu21.at(k) = PoissonRatio;
-        G12.at(k) = 0.5 * E_modulus / (1+PoissonRatio);
-        thick.at(k) = thickness/kmax;
-        phi.at(kmax) = k / kmax * pi/2.0;
-    }
 
-    gsConstantFunction<> E11fun(E11,3);
-    gsConstantFunction<> E22fun(E22,3);
-    gsConstantFunction<> G12fun(G12,3);
-    gsConstantFunction<> nu12fun(nu12,3);
-    gsConstantFunction<> nu21fun(nu21,3);
-    gsConstantFunction<> thickfun(thick,3);
-    gsConstantFunction<> phifun(phi,3);
+    std::vector<gsFunctionSet<> * > Gs(kmax);
+    std::vector<gsFunctionSet<> * > Ts(kmax);
+    std::vector<gsFunctionSet<> * > Phis(kmax);
+
+    gsMatrix<> Gmat = gsCompositeMatrix(E_modulus,E_modulus,0.5 * E_modulus / (1+PoissonRatio),PoissonRatio,PoissonRatio);
+    Gmat.resize(Gmat.rows()*Gmat.cols(),1);
+    gsConstantFunction<> Gfun(Gmat,3);
+    Gs[0] = &Gfun;
+
+    gsConstantFunction<> phi;
+    phi.setValue(0,3);
+
+    Phis[0] = &phi;
+
+    gsConstantFunction<> thicks(thickness/kmax,3);
+    Ts[0] = &thicks;
 
     std::vector<gsFunction<>*> parameters;
     if (material==0) // SvK & Composites
     {
-      if (composite)
-      {
-        parameters.resize(6);
-        parameters[0] = &E11fun;
-        parameters[1] = &E22fun;
-        parameters[2] = &G12fun;
-        parameters[3] = &nu12fun;
-        parameters[4] = &nu21fun;
-        parameters[5] = &phifun;
-      }
-      else
-      {
-        parameters.resize(2);
-        parameters[0] = &E;
-        parameters[1] = &nu;
-      }
+      parameters.resize(2);
+      parameters[0] = &E;
+      parameters[1] = &nu;
     }
     else if (material==1 || material==2) // NH & NH_ext
     {
@@ -582,9 +566,7 @@ int main (int argc, char** argv)
     {
         if (composite)
         {
-            options.addInt("Material","Material model: (0): SvK | (1): NH | (2): NH_ext | (3): MR | (4): Ogden",0);
-            options.addInt("Implementation","Implementation: (0): Composites | (1): Analytical | (2): Generalized | (3): Spectral",0);
-            materialMatrix = getMaterialMatrix<3,real_t>(mp,t,parameters,rho,options);
+            materialMatrix = new gsMaterialMatrixComposite<3,real_t>(mp,Ts,Gs,Phis);
         }
         else
         {
@@ -617,7 +599,6 @@ int main (int argc, char** argv)
     gsSparseMatrix<> K_L =  assembler->matrix();
     gsVector<> rhs = assembler->rhs();
 
-
     typedef std::function<gsSparseMatrix<real_t> (gsVector<real_t> const &)>    Jacobian_t;
     Jacobian_t K_NL = [&assembler,&mp_def](gsVector<real_t> const &x)
     {
@@ -627,16 +608,14 @@ int main (int argc, char** argv)
       return m;
     };
 
-
-
-      gsBucklingSolver<real_t> buckling(K_L,rhs,K_NL);
+      gsBucklingSolver<real_t,Spectra::GEigsMode::ShiftInvert> buckling(K_L,rhs,K_NL);
       buckling.verbose();
       // buckling.computePower();
 
       if (!sparse)
         buckling.compute();
       else
-        buckling.computeSparse(shift,10);
+        buckling.computeSparse(shift,10,2,Spectra::SortRule::LargestMagn,Spectra::SortRule::SmallestMagn);
 
       gsMatrix<> values = buckling.values();
       gsMatrix<> vectors = buckling.vectors();
@@ -644,11 +623,11 @@ int main (int argc, char** argv)
       gsDebugVar(buckling.vectors().cols());
 
     gsInfo<< "First 10 eigenvalues:\n";
-    for (index_t k = 0; k<2; k++)
+    for (index_t k = 0; k<10; k++)
         gsInfo<<"\t"<<std::setprecision(20)<<values.at(k)<<"\n";
     gsInfo<<"\n";
 
-    for (index_t k = 0; k<2; k++)
+    for (index_t k = 0; k<10; k++)
     {
       gsInfo<<"\t"<<values.at(k)*Load<<"\n";
     }

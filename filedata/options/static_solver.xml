@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xml>
+<!-- Static solver options -->
+ <OptionList id="1">
+  <int label="Verbose" desc="Verbose for Newton iterations [0: off, 1: iterations, 2: full (matrix and vector output)" value="1"/>
+  <int label="MaxIterations" desc="Maximum number of Newton iterations [integer]" value="10"/>
+  <real label="ToleranceF" desc="Relative error tolerance for Newton iterations [double]" value="-1"/>
+  <real label="ToleranceU" desc="Relative error tolerance for Newton iterations [double]" value="-1"/>
+  <real label="Tolerance" desc="Relative error tolerance for Newton iterations [double]" value="1e-6"/>
+  <real label="Relaxation" desc="Relative error tolerance for Newton iterations [double]" value="1.0"/>
+ </OptionList>
