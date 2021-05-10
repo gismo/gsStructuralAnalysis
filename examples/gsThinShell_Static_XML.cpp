@@ -30,6 +30,7 @@ int main(int argc, char *argv[])
     //! [Parse command line]
     bool plot  = false;
     bool stress= false;
+    bool mesh= false;
     index_t numRefine  = 1;
     index_t numElevate = 1;
 
@@ -41,7 +42,7 @@ int main(int argc, char *argv[])
     index_t testCase = -1;
     bool nonlinear = false;
     bool verbose = false;
-    std::string fn1,fn2,fn3;
+    std::string fn1,fn2,fn3,fn4;
     fn1 = "planar/unitplate.xml";
     fn2 = "pde/kirchhoff_shell1.xml";
     fn3 = "options/solver_options.xml";
@@ -61,9 +62,11 @@ int main(int argc, char *argv[])
     cmd.addInt( "t", "testCase", "Define test case",  testCase );
     cmd.addString( "f", "GEOMfile", "Input XML Geometry file", fn1 );
     cmd.addString( "F", "PDEfile", "Input XML PDE file", fn2 );
+    cmd.addString( "L", "LayupFile", "Layup file", fn4 );
     cmd.addSwitch("nl", "Solve nonlinear problem", nonlinear);
     cmd.addSwitch("verbose", "Full matrix and vector output", verbose);
     cmd.addSwitch("plot", "Create a ParaView visualization file with the solution", plot);
+    cmd.addSwitch("mesh", "Plot mesh", mesh);
     cmd.addSwitch("stress", "Create a ParaView visualization file with the stresses", stress);
     cmd.addSwitch("membrane", "Use membrane model (no bending)", membrane);
 
@@ -190,20 +193,71 @@ int main(int argc, char *argv[])
     gsInfo << dbasis.basis(0)<<"\n";
 
     if (plot)
-        gsWriteParaview<>( mp_def    , "mp", 1000, true);
+        gsWriteParaview<>( mp_def    , "mp", 1000, mesh);
 
 
     // Set MaterialMatrix
     gsMaterialMatrixBase<real_t>* materialMatrix;
 
     gsOptionList options;
+
+    std::vector<gsMatrix<> > Gmats;
+    std::vector<gsFunctionSet<> * > Gs;
+    std::vector<gsFunctionSet<> * > Ts;
+    std::vector<gsFunctionSet<> * > Phis;
+
+    std::vector<gsConstantFunction<> > Gfuns;
+    std::vector<gsConstantFunction<> > Tfuns;
+    std::vector<gsConstantFunction<> > Phifuns;
+
+
+    gsMatrix<> E11,E22,G12,nu12,nu21,alpha,thick;
+    if (composite)
+    {
+        GISMO_ENSURE(!fn4.empty(),"Layup file must be provided!");
+        fd.read(fn4);
+        GISMO_ENSURE(fd.count<gsMatrix<>>()==7,"Composites must have 7 parameters!");
+
+        fd.getId(0,E11);
+        fd.getId(1,E22);
+        fd.getId(2,G12);
+        fd.getId(3,nu12);
+        fd.getId(4,nu21);
+        fd.getId(5,alpha);
+        fd.getId(6,thick);
+
+        index_t nLayers = E11.rows();
+        Gmats.resize(nLayers);
+        Gs.resize(nLayers);
+        Ts.resize(nLayers);
+        Phis.resize(nLayers);
+
+        Gfuns.resize(nLayers);
+        Tfuns.resize(nLayers);
+        Phifuns.resize(nLayers);
+
+        for (index_t k=0; k!=nLayers; k++)
+        {
+            Gmats[k] = gsCompositeMatrix(E11(k,0),E22(k,0),G12(k,0),nu12(k,0),nu21(k,0));
+            Gmats[k].resize(Gmats[k].rows()*Gmats[k].cols(),1);
+            Gfuns[k] = gsConstantFunction<>(Gmats[k],3);
+
+            Phifuns[k] = gsConstantFunction<>(alpha(k,0),3);
+            Tfuns[k] = gsConstantFunction<>(thick(k,0),3);
+
+            Gs[k] = &Gfuns[k];
+            Ts[k] = &Tfuns[k];
+            Phis[k] = &Phifuns[k];
+        }
+
+
+    }
+
     if      (material==0 && impl==1)
     {
         if (composite)
         {
-            options.addInt("Material","Material model: (0): SvK | (1): NH | (2): NH_ext | (3): MR | (4): Ogden",0);
-            options.addInt("Implementation","Implementation: (0): Composites | (1): Analytical | (2): Generalized | (3): Spectral",0);
-            materialMatrix = getMaterialMatrix<3,real_t>(mp,t,parameters,rho,options);
+            materialMatrix = new gsMaterialMatrixComposite<3,real_t>(mp,Ts,Gs,Phis);
         }
         else
         {
@@ -260,6 +314,7 @@ int main(int argc, char *argv[])
 
     // Configure Structural Analsysis module
     gsStaticSolver<real_t> staticSolver(matrix,vector,Jacobian,Residual);
+    gsDebugVar(solverOptions);
     staticSolver.setOptions(solverOptions);
 
     // Solve linear problem
@@ -279,7 +334,7 @@ int main(int argc, char *argv[])
     {
         gsField<> solField(mp_def, deformation);
         gsInfo<<"Plotting in Paraview...\n";
-        gsWriteParaview<>( solField, "solution", 1000, true);
+        gsWriteParaview<>( solField, "solution", 1000, mesh);
         // ev.options().setSwitch("plot.elements", true);
         // ev.writeParaview( u_sol   , G, "solution");
 
@@ -329,8 +384,8 @@ int main(int argc, char *argv[])
         gsField<> solutionField(mp,deformation, true);
 
 
-        // gsField<> stressField = assembler->constructStress(mp_def,stress_type::membrane_strain);
 
+        #ifdef GISMO_ELASTICITY
         std::map<std::string,const gsField<> *> fields;
         fields["Deformation"] = &solutionField;
         fields["Membrane Stress"] = &membraneStress;
@@ -343,6 +398,15 @@ int main(int argc, char *argv[])
         fields["Principal Direction 3"] = &stretchDir3;
 
         gsWriteParaviewMultiPhysics(fields,"stress",5000,true);
+        #else
+        gsWriteParaview(solutionField, "Deformation");
+        gsWriteParaview(membraneStress, "MembraneStress");
+        gsWriteParaview(flexuralStress, "FlexuralStress");
+        gsWriteParaview(Stretches, "PrincipalStretch");
+        gsWriteParaview(stretchDir1, "PrincipalDirection1");
+        gsWriteParaview(stretchDir2, "PrincipalDirection2");
+        gsWriteParaview(stretchDir3, "PrincipalDirection3");
+        #endif
     }
 
     return EXIT_SUCCESS;

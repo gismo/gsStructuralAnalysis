@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xml>
+
+<!-- Boundary conditions and loads -->
+<!-- 1 = west, 2 = east, 3 = south, 4 = north -->
+<boundaryConditions id="20" multipatch="1">
+  <Function type="FunctionExpr" dim="3" index="0">0</Function>
+  <Function type="FunctionExpr" dim="3" index="1">
+    <c> 0 </c>
+    <c> 0 </c>
+    <c> 1e-5 </c>
+  </Function>
+  <!-- X -->
+  <bc type="Dirichlet" function="0" unknown="0">
+    0 1
+  </bc>
+  <!-- Y -->
+  <bc type="Dirichlet" function="0" unknown="1">
+    0 1
+  </bc>
+  <!-- Z -->
+  <bc type="Dirichlet" function="0" unknown="2">
+    0 1
+  </bc>
+
+  <!-- Neumann conditions (patch,side)-->
+  <bc unknown="0" type="Neumann" function="1">
+    0 2
+  </bc>
+</boundaryConditions>
+
+<!-- Distributed load function -->
+<Function type="FunctionExpr" id="21" tag="Loads" dim="3">
+  <c> 0 </c>
+  <c> 0 </c>
+  <c> 0 </c>
+</Function>
+
+<!-- Assembler options -->
+ <OptionList id="90">
+  <real label="YoungsModulus" desc="Youngs modulus of the material" value="1"/>
+  <real label="PoissonsRatio" desc="Poisson's ratio of the material" value="0.0"/>
+  <real label="ForceScaling"  desc="Force scaling parameter" value="1.0"/>
+  <int  label="MaterialLaw"   desc="Material law: 0 for St. Venant-Kirchhof, 1 for Neo-Hooke" value="material_law::saint_venant_kirchhoff"/>
+ </OptionList>
+</xml>

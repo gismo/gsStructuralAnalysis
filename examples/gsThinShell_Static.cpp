@@ -254,6 +254,18 @@ int main(int argc, char *argv[])
         thickness = 1;
         PoissonRatio = 0;
     }
+    else if (testCase==13)
+    {
+        // Unit square
+        mp.addPatch( gsNurbsCreator<>::BSplineSquare(1) ); // degree
+        mp.addAutoBoundaries();
+        mp.embed(3);
+        E_modulus = 1e6;
+        thickness = 0.005;
+        // PoissonRatio = 0.5;
+        // PoissonRatio = 0.499;
+        PoissonRatio = 0.3;
+    }
     else
     {
         // Unit square
@@ -275,7 +287,7 @@ int main(int argc, char *argv[])
             mp.degreeElevate(numElevate);
 
         // h-refine
-        for (int r =0; r < numRefine; ++r)
+        for (index_t r =0; r < numRefine; ++r)
             mp.uniformRefine();
     }
     mp_def = mp;
@@ -1073,45 +1085,33 @@ int main(int argc, char *argv[])
     gsConstantFunction<> mu3(-0.1e5/4.225e5*mu,3);
 
     real_t pi = math::atan(1)*4;
-    index_t kmax = 1;
-    gsVector<> E11(kmax), E22(kmax), G12(kmax), nu12(kmax), nu21(kmax), thick(kmax), phi(kmax);
-    E11.setZero(); E22.setZero(); G12.setZero(); nu12.setZero(); nu21.setZero(); thick.setZero(); phi.setZero();
-    for (index_t k=0; k != kmax; ++k)
-    {
-        E11.at(k) = E22.at(k) = E_modulus;
-        nu12.at(k) = nu21.at(k) = PoissonRatio;
-        G12.at(k) = 0.5 * E_modulus / (1+PoissonRatio);
-        thick.at(k) = thickness/kmax;
-        phi.at(kmax) = k / kmax * pi/2.0;
-    }
+    index_t kmax = 2;
 
-    gsConstantFunction<> E11fun(E11,3);
-    gsConstantFunction<> E22fun(E22,3);
-    gsConstantFunction<> G12fun(G12,3);
-    gsConstantFunction<> nu12fun(nu12,3);
-    gsConstantFunction<> nu21fun(nu21,3);
-    gsConstantFunction<> thickfun(thick,3);
-    gsConstantFunction<> phifun(phi,3);
+    std::vector<gsFunctionSet<> * > Gs(kmax);
+    std::vector<gsFunctionSet<> * > Ts(kmax);
+    std::vector<gsFunctionSet<> * > Phis(kmax);
+
+    gsMatrix<> Gmat = gsCompositeMatrix(E_modulus,E_modulus,0.5 * E_modulus / (1+PoissonRatio),PoissonRatio,PoissonRatio);
+    Gmat.resize(Gmat.rows()*Gmat.cols(),1);
+    gsConstantFunction<> Gfun(Gmat,3);
+    Gs[0] = Gs[1] = &Gfun;
+
+    gsConstantFunction<> phi1, phi2;
+    phi1.setValue(0,3);
+    phi2.setValue(pi/2.0,3);
+
+    Phis[0] = &phi1;
+    Phis[1] = &phi2;
+
+    gsConstantFunction<> thicks(thickness/kmax,3);
+    Ts[0] = Ts[1] = &thicks;
 
     std::vector<gsFunction<>*> parameters;
     if (material==0) // SvK & Composites
     {
-      if (composite)
-      {
-        parameters.resize(6);
-        parameters[0] = &E11fun;
-        parameters[1] = &E22fun;
-        parameters[2] = &G12fun;
-        parameters[3] = &nu12fun;
-        parameters[4] = &nu21fun;
-        parameters[5] = &phifun;
-      }
-      else
-      {
-        parameters.resize(2);
-        parameters[0] = &E;
-        parameters[1] = &nu;
-      }
+      parameters.resize(2);
+      parameters[0] = &E;
+      parameters[1] = &nu;
     }
     else if (material==1 || material==2) // NH & NH_ext
     {
@@ -1146,9 +1146,7 @@ int main(int argc, char *argv[])
     {
         if (composite)
         {
-            options.addInt("Material","Material model: (0): SvK | (1): NH | (2): NH_ext | (3): MR | (4): Ogden",0);
-            options.addInt("Implementation","Implementation: (0): Composites | (1): Analytical | (2): Generalized | (3): Spectral",0);
-            materialMatrix = getMaterialMatrix<3,real_t>(mp,t,parameters,rho,options);
+            materialMatrix = new gsMaterialMatrixComposite<3,real_t>(mp,Ts,Gs,Phis);
         }
         else
         {
@@ -1309,8 +1307,7 @@ int main(int argc, char *argv[])
 
         // gsField<> stressField = assembler->constructStress(mp_def,stress_type::membrane_strain);
 
-        gsWriteParaview(solutionField,"Deformation");
-
+        #ifdef GISMO_ELASTICITY
         std::map<std::string,const gsField<> *> fields;
         fields["Deformation"] = &solutionField;
         fields["Membrane Stress"] = &membraneStress;
@@ -1323,6 +1320,16 @@ int main(int argc, char *argv[])
         fields["Principal Direction 3"] = &stretchDir3;
 
         gsWriteParaviewMultiPhysics(fields,"stress",5000,true);
+        #else
+        gsWriteParaview(solutionField, "Deformation");
+        gsWriteParaview(membraneStress, "MembraneStress");
+        gsWriteParaview(flexuralStress, "FlexuralStress");
+        gsWriteParaview(Stretches, "PrincipalStretch");
+        gsWriteParaview(stretchDir1, "PrincipalDirection1");
+        gsWriteParaview(stretchDir2, "PrincipalDirection2");
+        gsWriteParaview(stretchDir3, "PrincipalDirection3");
+        #endif
+
     }
     gsInfo<<"Total ellapsed assembly time: \t\t"<<time<<" s\n";
     gsInfo<<"Total ellapsed solution time (incl. assembly): \t"<<totaltime<<" s\n";

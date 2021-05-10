@@ -86,6 +86,7 @@ int main (int argc, char** argv)
     try { cmd.getValues(argc,argv); } catch (int rv) { return rv; }
 
     real_t L,B,H;
+    gsMultiBasis<> dbasis;
     if (testCase==0)
     {
       std::string fn;
@@ -99,9 +100,23 @@ int main (int argc, char** argv)
         PoissonRatio = 0.0;
         L = 1.0;
         B = 0.01;
-        mp = BrickDomain(numHref, 0, 0, numElevate, 1, 1, L, B,H);
+        mp = BrickDomain(numHref, 0, 0, 1, 1, 1, L, B,H);
+        dbasis = gsMultiBasis<>(mp);
+        dbasis.degreeIncrease(numElevate,0);
     }
     else if (testCase==3)
+    {
+        E_modulus = 1e6;
+        H = 0.005;
+        PoissonRatio = 0.3;
+        L = 1.0;
+        B = 1.0;
+        mp = BrickDomain(numHref, numHref, 0, 1, 1, 1, L, B,H);
+        dbasis = gsMultiBasis<>(mp);
+        dbasis.degreeIncrease(numElevate,0);
+        dbasis.degreeIncrease(numElevate,1);
+    }
+    else if (testCase==4)
     {
         E_modulus = 1.;
         H = 0.14;
@@ -109,23 +124,13 @@ int main (int argc, char** argv)
         L = 140;
         B = 70;
         mp = BrickDomain(numHref, numHref, 0, numElevate, numElevate, 2, L, B,H);
+        dbasis = gsMultiBasis<>(mp);
+        dbasis.degreeIncrease(numElevate,0);
+        dbasis.degreeIncrease(numElevate,1);
     }
     else
     {
         gsInfo<<"No geometry found\n";
-    }
-
-    gsMultiBasis<> dbasis(mp);
-
-    if (testCase!=1 && testCase!=2 && testCase!=3)
-    {
-        for (index_t i = 0; i < numElevate; ++i)
-        {
-            dbasis.degreeElevate();
-            dbasis.uniformRefine();
-        }
-        for (index_t i = 0; i < numHref; ++i)
-            dbasis.uniformRefine();
     }
 
     gsInfo<<"Basis (patch 0): "<< dbasis.basis(0) << "\n";
@@ -140,6 +145,9 @@ int main (int argc, char** argv)
     tmp << 0, 0, 0;
     gsConstantFunction<> neuData(tmp,3);
     gsConstantFunction<> neuData2(tmp,3);
+
+    gsVector<> bodyforce(3);
+    bodyforce << 0, 0, 0;
 
     std::string dirname = "ArcLengthResults";
     std::string output = "solutionElasticity";
@@ -210,6 +218,34 @@ int main (int argc, char** argv)
     }
     else if (testCase == 3)
     {
+        // tmp << 0, 0, -1;
+        // gsInfo<<"Applied "<<tmp.transpose()<<" as load vector\n";
+        // neuData.setValue(tmp,3);
+
+        BCs.addCondition(0,boundary::north,condition_type::dirichlet,nullptr,0);
+        BCs.addCondition(0,boundary::north,condition_type::dirichlet,nullptr,1);
+        BCs.addCondition(0,boundary::north,condition_type::dirichlet,nullptr,2);
+
+        BCs.addCondition(0,boundary::east,condition_type::dirichlet,nullptr,0);
+        BCs.addCondition(0,boundary::east,condition_type::dirichlet,nullptr,1);
+        BCs.addCondition(0,boundary::east,condition_type::dirichlet,nullptr,2);
+
+        BCs.addCondition(0,boundary::south,condition_type::dirichlet,nullptr,0);
+        BCs.addCondition(0,boundary::south,condition_type::dirichlet,nullptr,1);
+        BCs.addCondition(0,boundary::south,condition_type::dirichlet,nullptr,2);
+
+        BCs.addCondition(0,boundary::west,condition_type::dirichlet,nullptr,0);
+        BCs.addCondition(0,boundary::west,condition_type::dirichlet,nullptr,1);
+        BCs.addCondition(0,boundary::west,condition_type::dirichlet,nullptr,2);
+
+        // BCs.addCondition(0,boundary::front,condition_type::neumann,&neuData);
+
+        bodyforce<<0,0,-1/H;
+
+        wn = output + "data.txt";
+    }
+    else if (testCase == 4)
+    {
         real_t Load = 1e0;
         tmp << Load/(B*H), 0, 0;
         neuData.setValue(tmp,3);
@@ -232,7 +268,7 @@ int main (int argc, char** argv)
     if (plot)
       gsWriteParaview(mp,"mp",1000,true);
 
-    gsFunctionExpr<> g("0","0","0",3);
+    gsConstantFunction<> g(bodyforce,3);
 
 
     // -----------------------------------------------------------------------------------------------
@@ -350,74 +386,6 @@ int main (int argc, char** argv)
       fields["von Mises"] = &stressField;
       gsWriteParaviewMultiPhysics(fields,"solution",1000,true);
     }
-
-
-    // if (!nonlinear)
-    // {
-    //   assembler.assemble();
-    //   gsInfo<<"System matrix with size "<<assembler.matrix().rows()<<" x "<< assembler.matrix().cols()<<" :\n"<<assembler.matrix()<<"\n";
-    //   gsInfo<<"System vector with size "<<assembler.rhs().rows()<<" x "<< assembler.rhs().cols()<<" (transposed):\n"<<assembler.rhs().transpose()<<"\n";
-    //   // make the first iteration by hand to get the linear solution
-    //   newton.computeUpdate();
-    //   gsInfo << newton.status() << std::endl;
-    //   gsMultiPatch<> solutionLinear;
-    //   assembler.constructSolution(newton.solution(),solutionLinear);
-    //   gsInfo << "Solved the system in " << clock.stop() <<"s.\n";
-
-    //   gsField<> solutionFieldLin(assembler.patches(),solutionLinear);
-    //   gsPiecewiseFunction<> stresses;
-    //   assembler.constructCauchyStresses(solutionLinear,stresses,stress_type::von_mises);
-    //   gsField<> stressField(assembler.patches(),stresses,true);
-
-    //   if (numPlotPoints > 0)
-    //   {
-    //     // creating a container to plot all fields to one Paraview file
-    //     std::map<std::string,const gsField<> *> fields;
-    //     fields["DeformationLin"] = &solutionFieldLin;
-    //     fields["Stress"] = &stressField;
-    //     gsWriteParaviewMultiPhysics(fields,"fullBeam",numPlotPoints,plotMesh);
-    //   }
-    // }
-    // else
-    // {
-    //   // make the first iteration by hand to get the linear solution
-    //   newton.computeUpdate();
-    //   gsInfo << newton.status() << std::endl;
-    //   gsMultiPatch<> solutionLinear;
-    //   assembler.constructSolution(newton.solution(),solutionLinear);
-    //   // continue iterations till convergence
-    //   newton.solve();
-    //   gsInfo << "Solved the system in " << clock.stop() <<"s.\n";
-
-    //   // solution to the nonlinear problem as an isogeometric displacement field
-    //   gsMultiPatch<> solutionNonlinear;
-    //   assembler.constructSolution(newton.solution(),solutionNonlinear);
-
-
-    // }
-
-
-
-
-    //=============================================//
-                  // Visualization //
-    //=============================================//
-
-
-
-    // /// Estimate element-wise error
-    // gsExprEvaluator<> ev;
-    // ev.setIntegrationElements(basis);
-    // gsExprEvaluator<>::geometryMap Gm = ev.getMap(geometry);
-    // gsExprEvaluator<>::variable f1 = ev.getVariable(solutionNonlinear);
-    // gsExprEvaluator<>::variable ff = ev.getVariable(g, Gm);
-
-
-    // auto
-    // ev.integralElWise( (ilapl(f1,Gm) + ff).sqNorm() * meas(Gm) );
-    // const std::vector<real_t> & elErrEst = ev.elementwise();
-
-
 
     return 1;
 }
