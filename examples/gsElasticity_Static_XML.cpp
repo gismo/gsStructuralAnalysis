@@ -122,8 +122,6 @@ int main (int argc, char** argv)
     fd.getFirst<gsOptionList>(solverOptions);
 
 
-    std::string output = "solutionElasticity";
-
     // plot geometry
     if (plot)
       gsWriteParaview(mp,"mp",1000,true);
@@ -216,7 +214,7 @@ int main (int argc, char** argv)
       std::map<std::string,const gsField<> *> fields;
       fields["Displacement"] = &displacementField;
       fields["von Mises"] = &stressField;
-      gsWriteParaviewMultiPhysics(fields,"solution",1000,true);
+      gsWriteParaviewMultiPhysics(fields,"solutionElasticity",1000,false);
     }
 
     return 1;
