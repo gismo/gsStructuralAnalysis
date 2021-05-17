@@ -105,7 +105,19 @@ int main(int argc, char *argv[])
 
     gsMultiPatch<> mp;
     gsMultiPatch<> mp_def;
-    if (testCase == 1 )
+
+    real_t aDim = 0;
+    real_t bDim = 0;
+    if (testCase == -1)
+    {
+        aDim = 10.0;
+        bDim = 1.0;
+        mp = Rectangle(aDim, bDim);
+        E_modulus = 210e9;
+        thickness = 1.0;
+        PoissonRatio = 0.0;
+    }
+    else if (testCase == 1 )
     {
         thickness = 0.25;
         E_modulus = 4.32E8;
@@ -129,8 +141,8 @@ int main(int argc, char *argv[])
     }
     else if (testCase == 4)
     {
-        real_t L = 1.0;
-        real_t B = 1.0;
+        aDim = 1.0;
+        bDim = 1.0;
         real_t mu = 1.5e6;
         thickness = 0.001;
         if (!Compressibility)
@@ -139,7 +151,7 @@ int main(int argc, char *argv[])
           PoissonRatio = 0.45;
         E_modulus = 2*mu*(1+PoissonRatio);
         // PoissonRatio = 0;
-        mp = Rectangle(L, B);
+        mp = Rectangle(aDim, bDim);
 
         gsInfo<<"mu = "<<E_modulus / (2 * (1 + PoissonRatio))<<"\n";
     }
@@ -204,8 +216,8 @@ int main(int argc, char *argv[])
         // real_t bDim = thickness / 1.9e-3;
         // real_t aDim = 2*bDim;
 
-        real_t bDim = 1;
-        real_t aDim = 1;
+        bDim = 1;
+        aDim = 1;
 
 
         // Ratio = 2.5442834138486314;
@@ -303,8 +315,10 @@ int main(int argc, char *argv[])
 
     gsBoundaryConditions<> bc;
     bc.setGeoMap(mp);
-    gsVector<> tmp(3);
-    tmp << 0, 0, 0;
+
+    std::string fx = "0";
+    std::string fy = "0";
+    std::string fz = "0";
 
     gsVector<> neu(3);
     neu << 0, 0, 0;
@@ -323,7 +337,50 @@ int main(int argc, char *argv[])
     gsConstantFunction<> weak_drch(weak_D,3);
     gsConstantFunction<> weak_clmp(weak_C,3);
     real_t pressure = 0.0;
-    if (testCase == 0)
+    if (testCase == -1)
+    {
+        // Pinned-Pinned beam with Manufactured Solution
+        real_t A  = bDim * thickness;
+        real_t EA = E_modulus * A;
+        real_t EI = E_modulus * bDim * math::pow(thickness,3) / 12.0;
+        real_t q = 1e6;
+
+        gsDebugVar(EI);
+        gsDebugVar(EA);
+
+        std::string uinix("0");
+        std::string uiniz("0");
+        char buffer_u_inix[200];
+        sprintf(buffer_u_inix,"%e*%e^2*(%e^3 - 6*%e*x^2 + 4*x^3)*x*(%e - x)/(48*%e^2)",EA,q,aDim,aDim,aDim,EI);
+        fx = buffer_u_inix;
+
+        fy = "0";
+
+        char buffer_u_iniz[200];
+        sprintf(buffer_u_iniz,"((x*%e*(%e - x)*(%e - 2*x)^2*(%e^2 + 2*%e*x - 2*x^2)^2*%e^2 + 768*%e^3)*%e)/(768*%e^3)",EA,aDim,aDim,aDim,aDim,q,EI,q,EI);
+        fz = buffer_u_iniz;
+
+        bc.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false,0 ); // unknown 0 - x
+        bc.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 1 - y
+        bc.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z
+
+        bc.addCondition(boundary::east, condition_type::dirichlet, 0, 0, false, 0 ); // unknown 0 - x
+        bc.addCondition(boundary::east, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 1 - y
+        bc.addCondition(boundary::east, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z
+
+        char buffer_ex[200];
+        std::string ex_x, ex_y, ex_z;
+        ex_x = "0";
+        ex_y = "0";
+        sprintf(buffer_ex,"%e * x * (%e^3 - 2*%e*x^2 + x^3) / (24 * %e)",q,aDim,aDim,EI);
+        ex_z = buffer_ex;
+
+        gsFunctionExpr<> ex(ex_x,ex_y,ex_z,3);
+        gsField<> exf(mp,ex);
+        gsWriteParaview<>(exf,"exact",1000);
+
+    }
+    else if (testCase == 0)
     {
         if (weak)
         {
@@ -344,7 +401,8 @@ int main(int argc, char *argv[])
             }
         }
 
-        tmp << 0,0,-1;
+        fx = fy = "0";
+        fz = "-1";
     }
     else if (testCase == 1)
     {
@@ -372,7 +430,8 @@ int main(int argc, char *argv[])
         bc.addCornerValue(boundary::southwest, 0.0, 0, 0); // (corner,value, patch, unknown)
 
         // Surface forces
-        tmp << 0, 0, -90;
+        fx = fy = "0";
+        fz = "-90";
     }
     else if (testCase == 2)
     {
@@ -413,8 +472,7 @@ int main(int argc, char *argv[])
         }
 
         // Surface forces
-        tmp.setZero();
-
+        fx = fy = fz = "0";
         // Point loads
         gsVector<> point(2);
         gsVector<> load (3);
@@ -471,7 +529,7 @@ int main(int argc, char *argv[])
         }
 
         // Surface forces
-        tmp.setZero();
+        fx = fy = fz = "0";
 
         // Point loads
         gsVector<> point(2); point<< 1.0, 1.0 ;
@@ -514,6 +572,10 @@ int main(int argc, char *argv[])
 
         bc.addCondition(boundary::east, condition_type::neumann, &neuData ); // unknown 1 - y
 
+        // Surface forces
+        fx = fy = fz = "0";
+
+        // Point loads
         gsVector<> point(2);
         gsVector<> load (3);
         point<< 1.0, 0.5 ;
@@ -539,6 +601,9 @@ int main(int argc, char *argv[])
                 bc.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, i );
             }
         }
+
+        // Surface forces
+        fx = fy = fz = "0";
 
         // Point loads
         gsVector<> point(2); point<< 0.5,0.5 ;
@@ -799,7 +864,9 @@ int main(int argc, char *argv[])
             bc.addCondition(boundary::west, condition_type::clamped, 0, 0 ,false,2);
         }
 
-        tmp<<0,0,-1;
+        // Surface forces
+        fx = fy = "0";
+        fz = "-1";
     }
     else if (testCase == 12)
     {
@@ -862,7 +929,8 @@ int main(int argc, char *argv[])
             bc.addCondition(boundary::west, condition_type::clamped, 0, 0 ,false,2);
         }
 
-        tmp << 0,0,-1;
+        fx = fy = "0";
+        fz = "-1";
     }
     else if (testCase == 14)
     {
@@ -886,7 +954,8 @@ int main(int argc, char *argv[])
             bc.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z
             bc.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z
         }
-        tmp << 0,0,-1;
+        fx = fy = "0";
+        fz = "-1";
 
         bc.addCondition(boundary::east, condition_type::collapsed, 0, 0 ,false,0);
         bc.addCondition(boundary::east, condition_type::collapsed, 0, 0, false, 2 );
@@ -914,7 +983,8 @@ int main(int argc, char *argv[])
             bc.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z
         }
 
-        tmp << 0,0,-1;
+        fx = fy = "0";
+        fz = "-1";
 
         bc.addCondition(boundary::east, condition_type::collapsed, 0, 0 ,false,0);
         bc.addCondition(boundary::east, condition_type::collapsed, 0, 0, false, 2 );
@@ -1020,7 +1090,7 @@ int main(int argc, char *argv[])
         std::string nz = "0";
         neuDataFun1 = gsFunctionExpr<>(nx,ny,nz,3);
 
-        // for (index_t p=0; p!=mp.nPatches(); p++)
+        // for (index_t p=0; p!=mp.nPatches p++)
         // {
         //     // bc.addCondition(p,boundary::west, condition_type::neumann, &neuDataFun1 ); // unknown 0 - x
         //     bc.addCondition(p,boundary::west, condition_type::neumann, &neuData ); // unknown 0 - x
@@ -1062,14 +1132,15 @@ int main(int argc, char *argv[])
         bc.addCondition(3,boundary::north, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 0 - x
 
 
-        tmp << 0,0,-1e-6;
+        fx = fy = "0";
+        fz = "-1e-6";
     }
 
     gsDebugVar(bc);
     //! [Refinement]
 
     // Linear isotropic material model
-    gsConstantFunction<> force(tmp,3);
+    gsFunctionExpr<> force(fx,fy,fz,3);
     gsFunctionExpr<> t(std::to_string(thickness), 3);
     gsFunctionExpr<> E(std::to_string(E_modulus),3);
     gsFunctionExpr<> nu(std::to_string(PoissonRatio),3);

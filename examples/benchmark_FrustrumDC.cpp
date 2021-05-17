@@ -41,7 +41,7 @@ int main (int argc, char** argv)
 
     int testCase = 0;
 
-    index_t material  = 0;
+    index_t material  = 3;
     bool composite = false;
     index_t impl = 1; // 1= analytical, 2= generalized, 3= spectral
 
