@@ -582,6 +582,7 @@ int main (int argc, char** argv)
     arcLength.options().setInt("MaxIter",maxit);
     arcLength.options().setSwitch("Verbose",true);
     arcLength.options().setReal("Relaxation",relax);
+    arcLength.options().setInt("SingularPointFailure",0);
     if (quasiNewtonInt>0)
     {
       quasiNewton = true;
