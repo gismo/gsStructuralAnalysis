@@ -64,9 +64,9 @@ public:
 
     bool testSingularPoint(T tol, index_t kmax, bool jacobian=false);
 
-    void computeSingularPoint(T singTol, index_t kmax, gsVector<T> U, T L, T tolE, T tolB=0, bool switchBranch=false);
-    void computeSingularPoint(T singTol, index_t kmax, T tolE, T tolB=0, bool switchBranch=false);
-    void computeSingularPoint(gsVector<T> U, T L, T tolE, T tolB=0, bool switchBranch=false);
+    void computeSingularPoint(T singTol, index_t kmax, gsVector<T> U, T L, T tolE, T tolB=0, bool switchBranch=false, bool jacobian=false);
+    void computeSingularPoint(T singTol, index_t kmax, T tolE, T tolB=0, bool switchBranch=false, bool jacobian=false);
+    void computeSingularPoint(gsVector<T> U, T L, T tolE, T tolB=0, bool switchBranch=false, bool jacobian=false);
 
     bool stabilityChange();
 
@@ -359,6 +359,15 @@ protected:
         };
     };
 
+    struct SPfail
+    {
+        enum type
+        {
+            Without  = 0,
+            With     = 1,
+        };
+    };
+
 
   protected:
 
@@ -483,6 +492,9 @@ protected:
 
     // Angle determination method: 0: determine based on previous load step. 1: determine based on previous iteration
     index_t m_angleDetermine;
+
+    // What to do after computeSingularPoint fails?
+    index_t m_SPfail;
 
     // Branch switch parameter
     T m_tau;

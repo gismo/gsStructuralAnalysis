@@ -73,6 +73,8 @@ void gsArcLengthIterator<T>::defaultOptions()
     m_options.addInt ("BifurcationMethod","Bifurcation Identification based on: 0: Determinant;  1: Eigenvalue",bifmethod::Eigenvalue);
     m_options.addInt ("AngleMethod","Angle determination method: 0 = Previous step; 1 = Previous iteration",angmethod::Step);
 
+    m_options.addInt ("SingularPointFailure","What to do wne a singular point determination fails?: 0 = Apply solution anyways; 1 = Proceed without singular point",SPfail::With);
+
     m_options.addInt ("Solver","Linear solver: 0 = LDLT; 1 = CG",solver::CG); // The CG solver is robust for membrane models, where zero-blocks in the matrix might occur.
 
     m_options.addSwitch ("Verbose","Verbose output",false);
@@ -114,6 +116,8 @@ void gsArcLengthIterator<T>::getOptions()
     m_relax               = m_options.getReal("Relaxation");
 
     m_arcLength = m_arcLength_prev = m_options.getReal("Length");
+
+    m_SPfail = m_options.getInt ("SingularPointFailure");
 
     this->initMethods();
 }
@@ -1111,10 +1115,10 @@ void gsArcLengthIterator<T>::computeLambdaDOT()
 // ---------------------------------------Singular point methods-----------------------------------------------
 // ------------------------------------------------------------------------------------------------------------
 template <class T>
-void gsArcLengthIterator<T>::computeSingularPoint(T singTol, index_t kmax, gsVector<T> U, T L, T tolE, T tolB, bool switchBranch)
+void gsArcLengthIterator<T>::computeSingularPoint(T singTol, index_t kmax, gsVector<T> U, T L, T tolE, T tolB, bool switchBranch, bool jacobian)
 {
   // Controls the singular point test with the first two arguments
-  bool test = this->testSingularPoint(singTol, kmax);
+  bool test = this->testSingularPoint(singTol, kmax,jacobian);
   // if (m_verbose)
   // {
   //  T value = this->bisectionTerminationFunction(m_U,false);
@@ -1135,7 +1139,7 @@ void gsArcLengthIterator<T>::computeSingularPoint(T singTol, index_t kmax, gsVec
     else
       this->extendedSystemSolve(U, L, tolE);
 
-    if (switchBranch)
+    if (switchBranch && (m_converged || m_SPfail==1))
       this->switchBranch();
 
     // here we assume that the stability of the singular point is
@@ -1149,8 +1153,8 @@ void gsArcLengthIterator<T>::computeSingularPoint(T singTol, index_t kmax, gsVec
 
 // tolB and switchBranch will be defaulted
 template <class T>
-void gsArcLengthIterator<T>::computeSingularPoint(gsVector<T> U, T L, T tolE, T tolB, bool switchBranch)
-{ this->computeSingularPoint(1e-6, 5, U, L, tolE, tolB, switchBranch); }
+void gsArcLengthIterator<T>::computeSingularPoint(gsVector<T> U, T L, T tolE, T tolB, bool switchBranch, bool jacobian)
+{ this->computeSingularPoint(1e-6, 5, U, L, tolE, tolB, switchBranch,jacobian); }
 
 // template <class T>
 // void gsArcLengthIterator<T>::computeSingularPoint(gsVector<T> U, T L, T tolE, bool switchBranch)
@@ -1161,8 +1165,8 @@ void gsArcLengthIterator<T>::computeSingularPoint(gsVector<T> U, T L, T tolE, T 
 // { this->computeSingularPoint(singTol, kmax, U, L, tolE, 0, switchBranch); }
 
 template <class T>
-void gsArcLengthIterator<T>::computeSingularPoint(T singTol, index_t kmax, T tolE, T tolB, bool switchBranch)
-{ this->computeSingularPoint(singTol, kmax, m_U, m_L, tolE, tolB, switchBranch); }
+void gsArcLengthIterator<T>::computeSingularPoint(T singTol, index_t kmax, T tolE, T tolB, bool switchBranch, bool jacobian)
+{ this->computeSingularPoint(singTol, kmax, m_U, m_L, tolE, tolB, switchBranch,jacobian); }
 
 // template <class T>
 // void gsArcLengthIterator<T>::computeSingularPoint(T singTol, index_t kmax, T tolE, bool switchBranch)
@@ -1224,17 +1228,23 @@ void gsArcLengthIterator<T>::computeStability(gsVector<T> x, bool jacobian)
   }
   else if (m_bifurcationMethod == bifmethod::Eigenvalue)
   {
+    #ifdef GISMO_WITH_SPECTRA
     index_t number = std::min(static_cast<index_t>(std::floor(m_jacMat.cols()/3.)),10);
-    gsSpectraSymSolver<gsSparseMatrix<T>> es(m_jacMat,number,3*number);
+    gsSpectraSymSolver<gsSparseMatrix<T>> es(m_jacMat,number,5*number);
     es.init();
-    es.compute(Spectra::SortRule::LargestMagn,1000,1e-6);
+    es.compute(Spectra::SortRule::SmallestAlge,1000,1e-6,Spectra::SortRule::SmallestAlge);
     GISMO_ASSERT(es.info()==Spectra::CompInfo::Successful,"Spectra did not converge!"); // Reason for not converging can be due to the value of ncv (last input in the class member), which is too low.
+    // TODO: improve! For small eigenvalues it could not converge.
+
     // if (es.info()==Spectra::CompInfo::NotComputed)
     // if (es.info()==Spectra::CompInfo::NotConverging)
     // if (es.info()==Spectra::CompInfo::NumericalIssue)
     // Eigen::SelfAdjointEigenSolver< gsMatrix<T> > es(m_jacMat);
     m_stabilityVec = es.eigenvalues();
-    m_stabilityVec = m_stabilityVec.reverse();
+    #else
+    Eigen::SelfAdjointEigenSolver<gsMatrix<T>> es2(m_jacMat);
+    m_stabilityVec = es2.eigenvalues();
+    #endif
   }
   else
     gsInfo<<"bifurcation method unknown!";
@@ -1323,10 +1333,24 @@ void gsArcLengthIterator<T>::extendedSystemSolve(gsVector<T> U, T L, T tol)
     }
     if ( (m_numIterations == m_maxIterations-1) && (!m_converged) )
     {
-      m_U += m_DeltaU;
-      m_L += m_DeltaL;
       gsInfo<<"Warning: Extended iterations did not converge! \n";
-      gsInfo<<"Iterations finished. U.norm() = "<<m_U.norm()<<"\t L = "<<m_L<<"\n";
+      if (m_SPfail==1)
+      {
+        m_U += m_DeltaU;
+        m_L += m_DeltaL;
+        gsInfo<<"Iterations finished; continuing with last solution U.norm() = "<<m_U.norm()<<"\t L = "<<m_L<<"\n";
+      }
+      else
+      {
+        m_DeltaV = gsVector<T>::Zero(m_numDof);
+        m_DeltaU.setZero();
+        m_DeltaL = 0.0;
+
+        m_deltaV = gsVector<T>::Zero(m_numDof);
+        m_deltaU.setZero();
+        m_deltaL = 0.0;
+        gsInfo<<"Iterations finished. continuing with original solution U.norm() = "<<m_U.norm()<<"\t L = "<<m_L<<"\n";
+      }
     }
 
   }
@@ -1392,6 +1416,7 @@ void gsArcLengthIterator<T>::bisectionSolve(gsVector<T> U, T L, T tol)
   real_t dL = m_arcLength;
   bool adaptiveBool = m_adaptiveLength;
   m_adaptiveLength = false;
+  m_converged = false;
 
   T referenceError = bisectionTerminationFunction(U, true);
 
