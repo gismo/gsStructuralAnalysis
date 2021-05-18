@@ -345,7 +345,7 @@ int main (int argc, char** argv)
     else if (testCase == 3)
     {
         // poisson_ratio = 0.0;
-        Load = 1e8;
+        Load = 1e2;
         neu << Load, 0, 0;
         neuData.setValue(neu,3);
         // // Clamped-Clamped
