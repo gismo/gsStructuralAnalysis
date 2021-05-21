@@ -41,6 +41,9 @@ public:
     m_force(force)
   {
    m_NL = false;
+   m_bifurcationMethod = 0;
+   m_solverType = 0;
+   m_solVec.setZero(force.rows());
    defaultOptions();
   }
 
@@ -55,7 +58,11 @@ public:
     m_residual(residual)
   {
     m_NL = true;
+    m_bifurcationMethod = 0;
+    m_solverType = 0;
     m_converged = false;
+    m_headstart = false;
+    // m_solVec.setZero(force.rows());
     defaultOptions();
   }
 
@@ -65,13 +72,17 @@ public:
     gsVector<T> solveNonlinear();
 
     gsOptionList & options() {return m_options;}
-    void setOptions(gsOptionList opt) { m_options = opt; } // gsOptionList opt
+    void setOptions(gsOptionList opt) { m_options.update(opt,gsOptionList::addIfUnknown); } // gsOptionList opt
     void defaultOptions();
     void getOptions() const;
 
+    void factorizeMatrix(const gsSparseMatrix<T> & M) const;
+    gsVector<T> solveSystem(const gsVector<T> & F);
+
     int iterations() {return m_iterations;}
 
-    gsVector<T> solution() {return m_solVec ;}
+    gsVector<T> solution()  { return m_solVec; }
+    gsVector<T> increment() { return m_DeltaU; }
 
     bool converged() { return m_converged; }
 
@@ -80,6 +91,25 @@ public:
         _computeStability(m_solVec);
         return m_indicator;
     }
+
+    void setSolution(const gsVector<T> & solution)
+    {
+        m_solVec = solution;
+    }
+
+    void setSolutionStep(const gsVector<T> & step)
+    {
+        m_DeltaU = step;
+        m_headstart = true;
+    }
+
+    void setSolutionStep(const gsVector<T> & step, const gsVector<T> & solution)
+    {
+        m_DeltaU = step;
+        m_solVec = solution;
+        m_headstart = true;
+    }
+
 
 protected:
     void _computeStability(const gsVector<T> x) const;
@@ -91,7 +121,8 @@ protected:
     const std::function < gsSparseMatrix<T> ( gsVector<T> const & ) > m_nonlinear;
     const std::function < gsVector<T> ( gsVector<T> const & ) > m_residual;
 
-    gsVector<T> m_solVec;
+    mutable gsVector<T> m_solVec;
+    mutable gsVector<T> m_DeltaU, m_deltaU;
 
     mutable index_t m_verbose;
     bool m_NL;
@@ -104,9 +135,14 @@ protected:
     index_t m_iterations;
 
     bool m_converged;
+    bool m_headstart;
 
     /// Linear solver employed
-    gsSparseSolver<>::CGDiagonal m_solver;
+    mutable gsSparseSolver<>::SimplicialLDLT  m_LDLTsolver;   // Cholesky
+    mutable gsSparseSolver<>::CGDiagonal      m_CGsolver;     // CG
+
+    mutable index_t m_bifurcationMethod;
+    mutable index_t m_solverType;
 
     /// Indicator for bifurcation
     mutable T m_indicator;
@@ -120,6 +156,24 @@ protected:
             off = 0,
             iterations = 1,
             full = 2
+        };
+    };
+
+    struct solver
+    {
+        enum type
+        {
+            LDLT = 0,
+            CG  = 1, // The CG solver is robust for membrane models, where zero-blocks in the matrix might occur.
+        };
+    };
+
+    struct bifmethod
+    {
+        enum type
+        {
+            Determinant = 0,
+            Eigenvalue  = 1,
         };
     };
 
