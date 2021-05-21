@@ -102,8 +102,9 @@ public:
             if ((m_c==0 && m_Ek_prev > m_Ek))// || (m_Ek/m_Ek_prev > 1/m_tolE && m_Ek_prev!=0))
                 peak();
 
-            if (m_iterations % m_verbose == 0 || m_verbose==-1 ) stepInfo(m_iterations);
-            m_Eks.push_back(m_Ek);
+            if (m_verbose!=0)
+                if (m_iterations % m_verbose == 0 || m_verbose==-1 ) stepInfo(m_iterations);
+                    m_Eks.push_back(m_Ek);
 
             if (m_R.norm()/m_R0.norm() < m_tolF && m_Ek/m_Ek0 < m_tolE)
             {
