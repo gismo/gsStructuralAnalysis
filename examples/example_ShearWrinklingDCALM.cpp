@@ -22,6 +22,12 @@
 using namespace gismo;
 
 template <class T>
+int sign(T val)
+{
+    return (T(0) < val) - (val < T(0));
+}
+
+template <class T>
 gsMultiPatch<T> RectangularDomain(int n, int m, int p, int q, T L, T B, bool clamped = false, T offset = 0.1);
 template <class T>
 gsMultiPatch<T> RectangularDomain(int n, int p, T L, T B, bool clamped = false, T offset = 0.1);
@@ -57,7 +63,7 @@ template <class T>
 void initStepOutput( const std::string name, const gsMatrix<T> & points);
 
 template <class T>
-void writeStepOutput(const gsArcLengthIterator<T> & arcLength, const gsMultiPatch<T> & deformation, const std::string name, const gsMatrix<T> & points, const index_t extreme=-1, const index_t kmax=100);
+void writeStepOutput(const gsMultiPatch<T> & deformation, const gsMatrix<T> solVector, const T indicator, const T load, const std::string name, const gsMatrix<T> & points, const index_t extreme=-1, const index_t kmax=100); // extreme: the column of point indices to compute the extreme over (default -1);
 
 void initSectionOutput( const std::string dirname, bool undeformed=false);
 
@@ -74,10 +80,7 @@ int main (int argc, char** argv)
     bool plot       = false;
     bool stress       = false;
     bool membrane       = false;
-    bool mesh  = false;
-    bool quasiNewton = false;
-    int quasiNewtonInt = -1;
-    bool adaptive = false;
+    bool mesh = false;
     int step = 10;
     int method = 2; // (0: Load control; 1: Riks' method; 2: Crisfield's method; 3: consistent crisfield method; 4: extended iterations)
     bool deformed = false;
@@ -88,7 +91,6 @@ int main (int argc, char** argv)
     real_t PoissonRatio = 0;
     real_t Density = 1e0;
     gsMultiPatch<> mp, mpBspline;
-    real_t tau = 1e4;
 
     index_t Compressibility = 0;
     index_t material = 0;
@@ -99,30 +101,22 @@ int main (int argc, char** argv)
     real_t aDim = 2.5;
     real_t bDim = 1.0;
 
-    real_t relax = 1.0;
-
     int testCase = 1;
 
     int result = 0;
 
     bool write = false;
     bool writeG = false;
-    bool writeP = false;
-
-
     bool crosssection = false;
 
     bool THB = false;
 
-
     index_t maxit = 20;
 
     // Arc length method options
-    real_t dL = 0; // General arc length
-    real_t dLb = 1e-2; // Ard length to find bifurcation
-    real_t tol = 1e-6;
+    real_t dL = 1e-2; // General arc length
+    real_t tolF = 1e-6;
     real_t tolU = 1e-6;
-    real_t tolF = 1e-3;
 
     std::string wn("data.csv");
 
@@ -150,25 +144,18 @@ int main (int argc, char** argv)
     cmd.addReal("b","bdim", "dimension b", bDim);
 
     cmd.addInt("m","Method", "Arc length method; 1: Crisfield's method; 2: RIks' method.", method);
-    cmd.addReal("L","dLb", "arc length", dLb);
-    cmd.addReal("l","dL", "arc length after bifurcation", dL);
-    cmd.addReal("A","relaxation", "Relaxation factor for arc length method", relax);
+    cmd.addReal("L","dLb", "arc length", dL);
 
     cmd.addReal("P","perturbation", "perturbation factor", perturbation);
 
-    cmd.addReal("F","factor", "factor for bifurcation perturbation", tau);
-    cmd.addInt("q","QuasiNewtonInt","Use the Quasi Newton method every INT iterations",quasiNewtonInt);
     cmd.addInt("N", "maxsteps", "Maximum number of steps", step);
 
     cmd.addReal("U","tolU","displacement tolerance",tolU);
 
-    cmd.addSwitch("adaptive", "Adaptive length ", adaptive);
-    cmd.addSwitch("quasi", "Use the Quasi Newton method", quasiNewton);
     cmd.addSwitch("plot", "Plot result in ParaView format", plot);
     cmd.addSwitch("mesh", "Plot mesh?", mesh);
     cmd.addSwitch("stress", "Plot stress in ParaView format", stress);
     cmd.addSwitch("write", "Write output to file", write);
-    cmd.addSwitch("writeP", "Write perturbation", writeP);
     cmd.addSwitch("writeG", "Write refined geometry", writeG);
     cmd.addSwitch("cross", "Write cross-section to file", crosssection);
     cmd.addSwitch("membrane", "Use membrane model (no bending)", membrane);
@@ -184,11 +171,6 @@ int main (int argc, char** argv)
     gsOptionList opts;
     fd.getFirst<gsOptionList>(opts);
 
-    if (dL==0)
-    {
-      dL = dLb;
-    }
-
     if (numHrefL==-1)
       numHrefL = numHref;
     if (numElevateL==-1)
@@ -200,7 +182,6 @@ int main (int argc, char** argv)
       PoissonRatio = 0.499;
 
     // ![Material data]
-
     E_modulus = 3500;
     PoissonRatio = 0.31;
     gsDebug<<"E = "<<E_modulus<<"; nu = "<<PoissonRatio<<"\n";
@@ -231,9 +212,24 @@ int main (int argc, char** argv)
 
     index_t N = mpBspline.patch(0).coefs().rows();
     mpBspline.patch(0).coefs().col(2) = gsMatrix<>::Random(N,1);
-
-
     mpBspline.patch(0).coefs().col(2) *= perturbation;
+
+      // std::vector<boxSide> sides;
+      // sides.push_back(boundary::west);
+      // sides.push_back(boundary::east);
+      // if (symmetry && (testCase==4 || testCase==5 || testCase==6 || testCase==7))
+      //   sides.push_back(boundary::south);
+
+      // if        (testCase==2 || testCase==3)
+      //   mpBspline = Rectangle(aDim/2., bDim/2.);
+      // else if   (testCase==4 || testCase==5)
+      //   mpBspline = Rectangle(aDim   , bDim/2.);
+      // else if   (testCase==6 || testCase==7)
+      //   mpBspline = Rectangle(aDim   , bDim   );
+
+      // addClamping(mpBspline,0,sides, 1e-2);
+
+    // ![Read Geometry files]
 
     // Cast all patches of the mp object to THB splines
     gsTHBSpline<2,real_t> thb;
@@ -274,8 +270,9 @@ int main (int argc, char** argv)
     gsInfo<<"Basis (patch 0): "<< mp.patch(0).basis() << "\n";
 
     // Boundary conditions
-    gsBoundaryConditions<> BCs,BCs_ini;
+    gsBoundaryConditions<> BCs, BCs_ALM;
     BCs.setGeoMap(mp);
+    BCs_ALM.setGeoMap(mp);
 
     // Initiate Surface forces
     std::string tx("0");
@@ -288,19 +285,18 @@ int main (int argc, char** argv)
     neu << 0, 0, 0;
     gsConstantFunction<> neuData(neu,3);
 
-    gsConstantFunction<> displ(0.05,3);
-
-    // Buckling coefficient
-    real_t Load = 0;
+    gsConstantFunction<> displ(0.0,3);
+    gsConstantFunction<> displ_const(0.05,3);
 
     std::string output = "solution";
-    std::string dirname = "ArcLengthResults";
+    std::string dirname = "DisplacementControl";
 
     gsMatrix<> writePoints(2,1);
     writePoints.col(0)<< 1.0,1.0;
-    index_t cross_coordinate = 0;
+    index_t cross_coordinate = 1;
     real_t cross_val = 0.5;
 
+    std::vector<real_t> Dtarget{ 0.1,0.2,0.5,0.6,1.4,2.6,3.0 };
     if (testCase == 1)
     {
       displ.setValue(0.05,3);
@@ -308,17 +304,18 @@ int main (int argc, char** argv)
       BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0 ,false,1);
       BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0 ,false,2);
 
-      BCs.addCondition(boundary::north, condition_type::dirichlet, &displ, 0 ,false,1);
+      BCs.addCondition(boundary::north, condition_type::dirichlet, &displ_const, 0 ,false,1);
       BCs.addCondition(boundary::north, condition_type::dirichlet, 0, 0 ,false,2);
 
-      BCs_ini = BCs;
-      BCs_ini.addCondition(boundary::north, condition_type::dirichlet, 0, 0 ,false,0);
+      BCs_ALM = BCs;
 
-      BCs.addCondition(boundary::north, condition_type::collapsed, 0, 0 ,false,0);
+      BCs.addCondition(boundary::north, condition_type::dirichlet, &displ, 0 ,false,0);
+
+      BCs_ALM.addCondition(boundary::north, condition_type::collapsed, 0, 0 ,false,0);
 
       neu<<1/aDim,0,0;
       neuData.setValue(neu,3);
-      BCs.addCondition(boundary::north, condition_type::neumann, &neuData);
+      BCs_ALM.addCondition(boundary::north, condition_type::neumann, &neuData);
 
       std::stringstream ss;
       ss<<perturbation;
@@ -333,20 +330,22 @@ int main (int argc, char** argv)
       BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0 ,false,1);
       BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0 ,false,2);
 
-      BCs.addCondition(boundary::north, condition_type::dirichlet, &displ, 0 ,false,1);
+      BCs.addCondition(boundary::north, condition_type::dirichlet, &displ_const, 0 ,false,1);
       BCs.addCondition(boundary::north, condition_type::dirichlet, 0, 0 ,false,2);
 
       BCs.addCondition(boundary::east, condition_type::clamped, 0, 0 ,false,2);
       BCs.addCondition(boundary::west, condition_type::clamped, 0, 0 ,false,2);
 
-      BCs_ini = BCs;
-      BCs_ini.addCondition(boundary::north, condition_type::dirichlet, 0, 0 ,false,0);
+      //
+      BCs_ALM = BCs;
 
-      BCs.addCondition(boundary::north, condition_type::collapsed, 0, 0 ,false,0);
+      BCs.addCondition(boundary::north, condition_type::dirichlet, &displ, 0 ,false,0);
+
+      BCs_ALM.addCondition(boundary::north, condition_type::collapsed, 0, 0 ,false,0);
 
       neu<<1/aDim,0,0;
       neuData.setValue(neu,3);
-      BCs.addCondition(boundary::north, condition_type::neumann, &neuData);
+      BCs_ALM.addCondition(boundary::north, condition_type::neumann, &neuData);
 
       std::stringstream ss;
       ss<<perturbation;
@@ -358,7 +357,7 @@ int main (int argc, char** argv)
     if (THB)
       dirname = dirname + "_THB";
 
-    if (plot || writeG || writeP || write)
+    if (plot || writeG || write)
     {
       std::string commands = "mkdir -p " + dirname;
       const char *command = commands.c_str();
@@ -498,315 +497,245 @@ int main (int argc, char** argv)
     // Construct assembler object
     assembler->setOptions(opts);
 
-    gsStopwatch stopwatch;
-    real_t time = 0.0;
-
     typedef std::function<gsSparseMatrix<real_t> (gsVector<real_t> const &)>                                Jacobian_t;
     typedef std::function<gsVector<real_t> (gsVector<real_t> const &, real_t, gsVector<real_t> const &) >   ALResidual_t;
     typedef std::function<gsVector<real_t> (gsVector<real_t> const &) >                                     Residual_t;
     // Function for the Jacobian
-    Jacobian_t Jacobian = [&time,&stopwatch,&assembler,&mp_def](gsVector<real_t> const &x)
+    Jacobian_t Jacobian = [&assembler](gsVector<real_t> const &x)
     {
-      stopwatch.restart();
+      gsMultiPatch<> tmp;
       assembler->homogenizeDirichlet();
-      assembler->constructSolution(x,mp_def);
-      assembler->assembleMatrix(mp_def);
-      time += stopwatch.stop();
+      assembler->constructSolution(x,tmp);
+      assembler->assembleMatrix(tmp);
 
       gsSparseMatrix<real_t> m = assembler->matrix();
       // gsInfo<<"matrix = \n"<<m.toDense()<<"\n";
       return m;
     };
+
     // Function for the Residual
-    ALResidual_t ALResidual = [&time,&stopwatch,&assembler,&mp_def](gsVector<real_t> const &x, real_t lam, gsVector<real_t> const &force)
+    Residual_t Residual = [&assembler](gsVector<real_t> const &x)
     {
-      stopwatch.restart();
-      assembler->constructSolution(x,mp_def);
-      assembler->assembleVector(mp_def);
+      gsMultiPatch<> tmp;
+      assembler->constructSolution(x,tmp);
+      assembler->assembleVector(tmp);
+      return assembler->rhs(); // - lam * force;
+    };
+
+        // Function for the Residual
+    ALResidual_t ALResidual = [&assembler](gsVector<real_t> const &x, real_t lam, gsVector<real_t> const &force)
+    {
+      gsMultiPatch<> tmp;
+      assembler->constructSolution(x,tmp);
+      assembler->assembleVector(tmp);
       gsVector<real_t> Fint = -(assembler->rhs() - force);
       gsVector<real_t> result = Fint - lam * force;
-      time += stopwatch.stop();
       return result; // - lam * force;
     };
 
-    // Function for the Residual
-    Residual_t Residual = [&assembler,&mp_def](gsVector<real_t> const &x)
-    {
-        assembler->homogenizeDirichlet();
-        assembler->constructSolution(x,mp_def);
-        assembler->assembleVector(mp_def);
-        return assembler->rhs(); // - lam * force;
-    };
-
-
     // Assemble vector and matrix for first step static solve
-    assembler->updateBCs(BCs_ini);
+    assembler->updateBCs(BCs);
     assembler->assemble();
     gsVector<> vector = assembler->rhs();
     gsSparseMatrix<> matrix = assembler->matrix();
 
-    // Run first static solve
-    gsStaticSolver<real_t> staticSolver(matrix,vector,Jacobian,Residual);
-    gsVector<> Uini = staticSolver.solveNonlinear();
-    assembler->constructDisplacement(Uini,mp_def);
-
-
     // Assemble vector and matrix for ALM
-    assembler->updateBCs(BCs);
+    assembler->updateBCs(BCs_ALM);
     // Force vector excl Dirichlet contributions
     assembler->homogenizeDirichlet();
     assembler->assemble();
     gsVector<> Force = assembler->rhs();
-    Uini = assembler->constructSolutionVector(mp_def);
+
+    gsStaticSolver<real_t> staticSolver(matrix,vector,Jacobian,Residual);
+    gsOptionList solverOptions = staticSolver.options();
+    solverOptions.setInt("Verbose",true);
+    solverOptions.setInt("MaxIterations",maxit);
+    solverOptions.setReal("ToleranceF",tolF);
+    solverOptions.setReal("ToleranceU",tolU);
+    staticSolver.setOptions(solverOptions);
 
     gsArcLengthIterator<real_t> arcLength(Jacobian, ALResidual, Force);
-
-    if (!membrane)
-    {
-      arcLength.options().setInt("Solver",0); // LDLT solver
-      arcLength.options().setInt("BifurcationMethod",0); // 0: determinant, 1: eigenvalue
-    }
-    else
-    {
-      arcLength.options().setInt("Solver",1); // CG solver
-      arcLength.options().setInt("BifurcationMethod",1); // 0: determinant, 1: eigenvalue
-    }
-
-    arcLength.options().setInt("Method",method);
-    arcLength.options().setReal("Length",dLb);
-    arcLength.options().setInt("AngleMethod",2); // 0: step, 1: iteration, 2: predictor
-    arcLength.options().setSwitch("AdaptiveLength",adaptive);
-    arcLength.options().setInt("AdaptiveIterations",5);
-    arcLength.options().setReal("Perturbation",tau);
-    arcLength.options().setReal("Scaling",0.0);
-    arcLength.options().setReal("Tol",tol);
     arcLength.options().setReal("TolU",tolU);
     arcLength.options().setReal("TolF",tolF);
     arcLength.options().setInt("MaxIter",maxit);
     arcLength.options().setSwitch("Verbose",true);
-    arcLength.options().setReal("Relaxation",relax);
     arcLength.options().setInt("SingularPointFailure",0);
-    if (quasiNewtonInt>0)
-    {
-      quasiNewton = true;
-      arcLength.options().setInt("QuasiIterations",quasiNewtonInt);
-    }
-    arcLength.options().setSwitch("Quasi",quasiNewton);
-
-
-    gsDebug<<arcLength.options();
+    arcLength.options().setInt("Solver",0); // LDLT solver
+    arcLength.options().setInt("BifurcationMethod",0); // 0: determinant, 1: eigenvalue
+    arcLength.options().setReal("Perturbation",1e4);
     arcLength.applyOptions();
-    arcLength.initialize();
-
 
     gsParaviewCollection collection(dirname + "/" + output);
-    gsParaviewCollection Smembrane(dirname + "/" + "membrane");
-    gsParaviewCollection Sflexural(dirname + "/" + "flexural");
-    gsParaviewCollection Smembrane_p(dirname + "/" + "membrane_p");
     gsMultiPatch<> deformation = mp;
+    gsMultiPatch<> deformationOld = mp;
 
-    // Make objects for previous solutions
-    real_t Lold = 0;
-    gsMatrix<> Uold = Uini;
-    // gsMatrix<> Uold = Force;
-    // Uold.setZero();
-    arcLength.setSolution(Uold,Lold);
+    gsMatrix<> updateVector, solVector;
 
-    gsMatrix<> solVector;
+    patchSide ps(0,boundary::north);
+
+    real_t dL0 = dL;
+    gsMultiPatch<> mp_def0 = mp_def;
     real_t indicator = 0.0;
-    real_t indicatorOld = 0.0;
+    real_t indicatorOld = 1.0;
     arcLength.setIndicator(indicator); // RESET INDICATOR
-    bool bisected = false;
-    real_t dLb0 = dLb;
+    real_t D = 0;
+    real_t Dold = 0;
+    // int reset = 0;
+    index_t k = 0;
+    index_t tIdx = 0;
+    std::sort(Dtarget.begin(), Dtarget.end());
 
-    real_t e = 1, eold = 1, eold2 = 1;
-    real_t kp = 1;
-    real_t ki = 0.1;
-    real_t kd = 0.1;
-
-    for (index_t k=0; k<step; k++)
+    gsMatrix<> Uold;
+    Uold.setZero(Force.rows(),1);
+    real_t Lold = 0;
+    while (D-dL < Dtarget.back())
     {
-      gsInfo<<"Load step "<< k<<"\n";
-      // assembler->constructSolution(solVector,solution);
-      arcLength.step();
+      displ.setValue(D,3);
+      gsInfo<<"Load step "<< k<<"; D = "<<D<<"; dD = "<<dL<<"\n";
 
+      assembler->updateBCs(BCs);
+      assembler->assemble();
 
-      // gsInfo<<"m_U = "<<arcLength.solutionU()<<"\n";
-      if (!(arcLength.converged()))
+      matrix = assembler->matrix();
+      vector = assembler->rhs();
+      solVector = staticSolver.solveNonlinear();
+
+      if (!staticSolver.converged())
       {
-        gsInfo<<"Error: Loop terminated, arc length method did not converge.\n";
-        dLb = dLb / 2.;
-        GISMO_ASSERT(dLb / dLb0 > 1e-6,"Step size is becoming very small...");
-        arcLength.setLength(dLb);
-        arcLength.setSolution(Uold,Lold);
-        bisected = true;
-        k -= 1;
+        dL = dL/2;
+        GISMO_ASSERT(dL / dL0 > 1e-6,"Step size is becoming very small...");
+        D = Dold+dL;
+        mp_def = mp_def0;
+        gsInfo<<"Iterations did not converge\n";
+        // reset = 1;
         continue;
-        // if (plot)
-        // {
-        //   solVector = arcLength.solutionU();
-        //   Uold = solVector;
-        //   Lold = arcLength.solutionL();
-        //   assembler->constructSolution(solVector,mp_def);
-
-        //   deformation = mp_def;
-        //   deformation.patch(0).coefs() -= mp.patch(0).coefs();// assuming 1 patch here
-
-        //   gsField<> solField(mp,deformation);
-        //   std::string fileName = dirname + "/" + output + util::to_string(k);
-        //   gsWriteParaview<>(solField, fileName, 5000);
-        //   fileName = output + util::to_string(k) + "0";
-        //   collection.addTimestep(fileName,k,".vts");
-        // }
-        // break;
       }
+
+      indicator = staticSolver.indicator();
+      gsInfo<<"\t\tIndicator =  "<<indicator<<"\n";
+      gsInfo<<"\t\tIndicator Old =  "<<indicatorOld<<"\n";
+
+      assembler->constructDisplacement(solVector,deformation);
+
       if (perturbation==0)
-      {
-        arcLength.computeStability(arcLength.solutionU(),quasiNewton);
-        if (arcLength.stabilityChange())
+        if (sign(indicator) != sign(indicatorOld))
         {
           gsInfo<<"Bifurcation spotted!"<<"\n";
-          arcLength.computeSingularPoint(1e-4, 5, Uold, Lold, 1e-7, 1e-2, false);
+          D -= dL;
+
+          assembler->constructSolution(solVector,mp_def);
+          assembler->constructDisplacement(solVector,deformation);
+
+          assembler->updateBCs(BCs_ALM);
+
+          arcLength.setLength(dL);
+          arcLength.initialize();
+          solVector = assembler->constructSolutionVector(deformation);
+          Uold      = assembler->constructSolutionVector(deformationOld);
+          assembler->constructSolution(solVector,mp_def);
+
+          // =======================================================
+
+          arcLength.setSolution(solVector,-assembler->boundaryForce(mp_def,ps)(0,0));
+          arcLength.computeStability(solVector,true);
+
+          indicator = arcLength.indicator();
+          gsInfo<<"\t\tAL Indicator =  "<<indicator<<"\n";
+
+          arcLength.computeSingularPoint(1e-4, 5, Uold, Lold, 1e-7, 0.5, false,true);
           arcLength.switchBranch();
-          dLb0 = dLb = dL;
-          arcLength.setLength(dLb);
 
-          if (writeP)
-          {
-            gsMultiPatch<> mp_perturbation;
-            assembler->constructSolution(arcLength.solutionV(),mp_perturbation);
-            gsWrite(mp_perturbation,dirname + "/" +"perturbation");
-            gsInfo<<"Perturbation written in: " + dirname + "/" + "perturbation.xml\n";
-          }
+          assembler->constructSolution(arcLength.solutionU(),mp_def);
+          assembler->constructDisplacement(arcLength.solutionU(),deformation);
+
+          /// EXTRACT D
+          gsVector<> pt(2);
+          pt<<0.5,1;
+          gsMatrix<> displacement = deformation.patch(0).eval(pt);
+          dL = displacement(0,0) - D;
+          D += dL;
+
+          /// Make solVector s.t. the BCs of the DC
+          displ.setValue(D,3);
+          assembler->updateBCs(BCs);
+
+          arcLength.initialize();
+          solVector = assembler->constructSolutionVector(deformation);
+          // assembler->constructDisplacement(solVector,deformation);
+          staticSolver.setSolution(solVector);
+
+          indicator = staticSolver.indicator();
+
+
         }
-      }
+
       indicatorOld = indicator;
-      indicator = arcLength.indicator();
 
-      gsDebugVar(indicator);
-      gsDebugVar(indicatorOld);
-
-      solVector = arcLength.solutionU();
-
-      /*
-      ///// PID control
-      real_t tol = 1;
-      if (Uold.rows()!=0)
-      {
-        gsDebugVar((solVector - Uold).norm() / solVector.norm());
-        e   = ( (solVector - Uold).norm() / solVector.norm() ) / tol;
-
-        gsDebugVar(math::pow( eold / e, kp ) );
-        gsDebugVar(math::pow( 1 / e, ki ));
-        gsDebugVar(math::pow( eold*eold / ( e*eold2 ), kd ));
-
-
-        dLb0 *= math::pow( eold / e, kp ) * math::pow( 1 / e, ki ) * math::pow( eold*eold / ( e*eold2 ), kd );
-      }
-      ///// !PID control
-      */
-
-
-
-      Uold = solVector;
-      Lold = arcLength.solutionL();
       assembler->constructSolution(solVector,mp_def);
+      real_t Load = 0;
 
       deformation = mp_def;
       deformation.patch(0).coefs() -= mp.patch(0).coefs();// assuming 1 patch here
 
-      /// EXTRACT D
-      gsVector<> pt(2);
-      pt<<0.5,1;
-      gsMatrix<> displ = deformation.patch(0).eval(pt);
-      gsDebugVar(displ);
-      // gsDebugVar(mp_def.patch(0).coefs());
-
-      gsInfo<<"Total ellapsed assembly time: "<<time<<" s\n";
+      if (stress)
+      {
+        gsPiecewiseFunction<> stresses;
+        assembler->constructStress(mp_def,stresses,stress_type::principal_stretch);
+        gsField<> stressField(mp,stresses, true);
+        gsWriteParaview( stressField, "stress", 5000);
+      }
 
       if (plot)
       {
-        gsField<> solField;
-        if (deformed)
-          solField= gsField<>(mp_def,deformation);
-        else
-          solField= gsField<>(mp,deformation);
-
+        gsField<> solField(mp,deformation);
         std::string fileName = dirname + "/" + output + util::to_string(k);
-        gsWriteParaview<>(solField, fileName, 10000,mesh);
+
+        // gsWrite(deformation,dirname + "/" + output + util::to_string(k)+".xml");
+
+        gsWriteParaview<>(solField, fileName, 10000, mesh);
         fileName = output + util::to_string(k) + "0";
         collection.addTimestep(fileName,k,".vts");
         if (mesh) collection.addTimestep(fileName,k,"_mesh.vtp");
       }
-      if (stress)
-      {
-        gsField<> membraneStress, flexuralStress, membraneStress_p;
-
-        gsPiecewiseFunction<> membraneStresses;
-        assembler->constructStress(mp_def,membraneStresses,stress_type::membrane);
-        if (deformed)
-          membraneStress = gsField<>(mp_def,membraneStresses,true);
-        else
-          membraneStress = gsField<>(mp,membraneStresses,true);
-
-        gsPiecewiseFunction<> flexuralStresses;
-        assembler->constructStress(mp_def,flexuralStresses,stress_type::flexural);
-        if (deformed)
-          flexuralStress = gsField<>(mp_def,flexuralStresses, true);
-        else
-          flexuralStress = gsField<>(mp,flexuralStresses, true);
-
-        gsPiecewiseFunction<> membraneStresses_p;
-        assembler->constructStress(mp_def,membraneStresses_p,stress_type::principal_stress_membrane);
-        if (deformed)
-          membraneStress_p = gsField<>(mp_def,membraneStresses_p, true);
-        else
-          membraneStress_p = gsField<>(mp,membraneStresses_p, true);
-
-        std::string fileName;
-        fileName = dirname + "/" + "membrane" + util::to_string(k);
-        gsWriteParaview( membraneStress, fileName, 1000);
-        fileName = "membrane" + util::to_string(k) + "0";
-        Smembrane.addTimestep(fileName,k,".vts");
-
-        fileName = dirname + "/" + "flexural" + util::to_string(k);
-        gsWriteParaview( flexuralStress, fileName, 1000);
-        fileName = "flexural" + util::to_string(k) + "0";
-        Sflexural.addTimestep(fileName,k,".vts");
-
-        fileName = dirname + "/" + "membrane_p" + util::to_string(k);
-        gsWriteParaview( membraneStress_p, fileName, 1000);
-        fileName = "membrane_p" + util::to_string(k) + "0";
-        Smembrane_p.addTimestep(fileName,k,".vts");
-      }
-
-
 
       if (write)
-        writeStepOutput(arcLength,deformation, dirname + "/" + wn, writePoints,1, 201);
+        writeStepOutput(deformation,solVector,indicator,Load, dirname + "/" + wn, writePoints,1, 201);
 
       if (crosssection && cross_coordinate!=-1)
         writeSectionOutput(deformation,dirname,cross_coordinate,cross_val,201,false);
 
-      if (!bisected)
-      {
-        dLb = dLb0;
-        arcLength.setLength(dLb);
-      }
-      bisected = false;
+      // if (reset!=1)
+        dL = dL0;
 
+      // reset = 0;
+      mp_def0 = mp_def;
+      Dold = D;
+      // last step
+      //
+      // if (Dtarget.at(t)-D < dL)
+      // for (std::vector<real_t>::iterator it=Dtarget.begin(); it!=Dtarget.end(); it++)
+      // {
+      //   if ()
+      //   dL = (*it-D) < dL && (*it-D) > dL*1e-12 ? (*it-D) : dL;
+      // }
+
+      if ( abs(D - Dtarget.front()) < 1e-15)
+        Dtarget.erase(Dtarget.begin());
+      if (Dtarget.front() - D < dL)        // The next target is larger than D, but within one step
+        dL = Dtarget.front() - D;
+
+      Uold = solVector;
+      assembler->constructDisplacement(Uold,deformationOld);
+
+      Lold = -assembler->boundaryForce(mp_def,ps)(0,0);
+
+      D += dL;
+      k++;
+
+      gsInfo<<"--------------------------------------------------------------------------------------------------------------\n";
     }
-
     if (plot)
-    {
       collection.save();
-    }
-    if (stress)
-    {
-      Smembrane.save();
-      Sflexural.save();
-      Smembrane_p.save();
-    }
 
   return result;
 }
@@ -1047,8 +976,6 @@ gsMultiPatch<T> FrustrumDomain(int n, int p, T R1, T R2, T h)
   for(index_t i = 0; i< n; ++i)
       kv1.uniformRefine();
 
-  gsDebug<<kv1;
-
   // Make basis
   // gsTensorNurbsBasis<2,T> basis(kv0,kv1);
 
@@ -1108,14 +1035,16 @@ void initStepOutput(const std::string name, const gsMatrix<T> & points)
         }
 
   file  << "Lambda" << ","
-        << "Indicator" << "\n";
+        << "Indicator"
+        << "\n";
   file.close();
 
   gsInfo<<"Step results will be written in file: "<<name<<"\n";
 }
 
+
 template <class T>
-void writeStepOutput(const gsArcLengthIterator<T> & arcLength, const gsMultiPatch<T> & deformation, const std::string name, const gsMatrix<T> & points, const index_t extreme, const index_t kmax) // extreme: the column of point indices to compute the extreme over (default -1)
+void writeStepOutput(const gsMultiPatch<T> & deformation, const gsMatrix<T> solVector, const T indicator, const T load, const std::string name, const gsMatrix<T> & points, const index_t extreme, const index_t kmax) // extreme: the column of point indices to compute the extreme over (default -1)
 {
   gsMatrix<T> P(2,1), Q(2,1);
   gsMatrix<T> out(3,points.cols());
@@ -1133,7 +1062,7 @@ void writeStepOutput(const gsArcLengthIterator<T> & arcLength, const gsMultiPatc
   if (extreme==-1)
   {
     file  << std::setprecision(6)
-          << arcLength.solutionU().norm() << ",";
+          << solVector.norm() << ",";
           for (index_t p=0; p!=points.cols(); p++)
           {
             file<< out(0,p) << ","
@@ -1141,9 +1070,8 @@ void writeStepOutput(const gsArcLengthIterator<T> & arcLength, const gsMultiPatc
                 << out(2,p) << ",";
           }
 
-    file  << arcLength.solutionL() << ","
-          << arcLength.indicator() << ","
-          << "\n";
+    file  << load << ","
+          << indicator << "\n";
   }
   else if (extreme==0 || extreme==1)
   {
@@ -1160,7 +1088,7 @@ void writeStepOutput(const gsArcLengthIterator<T> & arcLength, const gsMultiPatc
     }
 
     file  << std::setprecision(6)
-          << arcLength.solutionU().norm() << ",";
+          << solVector.norm() << ",";
           for (index_t p=0; p!=points.cols(); p++)
           {
             file<< out(0,p) << ","
@@ -1168,8 +1096,8 @@ void writeStepOutput(const gsArcLengthIterator<T> & arcLength, const gsMultiPatc
                 << std::max(abs(out2.col(p).maxCoeff()),abs(out2.col(p).minCoeff())) << ",";
           }
 
-    file  << arcLength.solutionL() << ","
-          << arcLength.indicator() << "\n";
+    file  << load << ","
+          << indicator << "\n";
   }
   else
     GISMO_ERROR("Extremes setting unknown");
