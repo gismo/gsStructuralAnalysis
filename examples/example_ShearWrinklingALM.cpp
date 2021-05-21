@@ -72,6 +72,7 @@ int main (int argc, char** argv)
     int numElevateL = -1;
     int numHrefL    = -1;
     bool plot       = false;
+    bool plotfiles  = false;
     bool stress       = false;
     bool membrane       = false;
     bool mesh  = false;
@@ -165,6 +166,7 @@ int main (int argc, char** argv)
     cmd.addSwitch("adaptive", "Adaptive length ", adaptive);
     cmd.addSwitch("quasi", "Use the Quasi Newton method", quasiNewton);
     cmd.addSwitch("plot", "Plot result in ParaView format", plot);
+    cmd.addSwitch("plotfiles", "Write files for prostprocessing", plotfiles);
     cmd.addSwitch("mesh", "Plot mesh?", mesh);
     cmd.addSwitch("stress", "Plot stress in ParaView format", stress);
     cmd.addSwitch("write", "Write output to file", write);
@@ -358,7 +360,7 @@ int main (int argc, char** argv)
     if (THB)
       dirname = dirname + "_THB";
 
-    if (plot || writeG || writeP || write)
+    if (plot || writeG || writeP || write || plotfiles)
     {
       std::string commands = "mkdir -p " + dirname;
       const char *command = commands.c_str();
@@ -369,7 +371,7 @@ int main (int argc, char** argv)
     if (plot)
       gsWriteParaview(mp,dirname + "/" + "mp",1000,true);
 
-    if (writeG)
+    if (writeG || plotfiles)
     {
       gsWrite(mp,dirname + "/" + "geometry");
       gsInfo<<"Geometry written in: " + dirname + "/" + "geometry.xml\n";
@@ -578,7 +580,7 @@ int main (int argc, char** argv)
     arcLength.options().setSwitch("AdaptiveLength",adaptive);
     arcLength.options().setInt("AdaptiveIterations",5);
     arcLength.options().setReal("Perturbation",tau);
-    arcLength.options().setReal("Scaling",0.0);
+    arcLength.options().setReal("Scaling",-1);
     arcLength.options().setReal("Tol",tol);
     arcLength.options().setReal("TolU",tolU);
     arcLength.options().setReal("TolF",tolF);
@@ -730,11 +732,13 @@ int main (int argc, char** argv)
           solField= gsField<>(mp,deformation);
 
         std::string fileName = dirname + "/" + output + util::to_string(k);
-        gsWriteParaview<>(solField, fileName, 10000,mesh);
+        gsWriteParaview<>(solField, fileName, 1000,mesh);
         fileName = output + util::to_string(k) + "0";
         collection.addTimestep(fileName,k,".vts");
         if (mesh) collection.addTimestep(fileName,k,"_mesh.vtp");
       }
+      if (plotfiles)
+        gsWrite(deformation,dirname + "/" + output + util::to_string(k)+".xml");
       if (stress)
       {
         gsField<> membraneStress, flexuralStress, membraneStress_p;

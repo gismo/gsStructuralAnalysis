@@ -72,6 +72,7 @@ int main (int argc, char** argv)
     int numElevateL = -1;
     int numHrefL    = -1;
     bool plot       = false;
+    bool plotfiles  = false;
     bool energyPlot = false;
     bool stress       = false;
     bool membrane       = false;
@@ -148,6 +149,7 @@ int main (int argc, char** argv)
     cmd.addInt("v","verbose", "Verbose", verbose);
 
     cmd.addSwitch("plot", "Plot result in ParaView format", plot);
+    cmd.addSwitch("plotfiles", "Write files for prostprocessing", plotfiles);
     cmd.addSwitch("mesh", "Plot mesh?", mesh);
     cmd.addSwitch("eplot", "Plot the energies", energyPlot);
     cmd.addSwitch("stress", "Plot stress in ParaView format", stress);
@@ -315,7 +317,7 @@ int main (int argc, char** argv)
     if (plot)
       gsWriteParaview(mp,dirname + "/" + "mp",1000,true);
 
-    if (writeG)
+    if (writeG || plotfiles)
     {
       gsWrite(mp,dirname + "/" + "geometry");
       gsInfo<<"Geometry written in: " + dirname + "/" + "geometry.xml\n";
@@ -549,11 +551,13 @@ int main (int argc, char** argv)
       {
         gsField<> solField(mp,deformation);
         std::string fileName = dirname + "/" + output + util::to_string(k);
-        gsWriteParaview<>(solField, fileName, 10000, mesh);
+        gsWriteParaview<>(solField, fileName, 1000, mesh);
         fileName = output + util::to_string(k) + "0";
         collection.addTimestep(fileName,k,".vts");
         if (mesh) collection.addTimestep(fileName,k,"_mesh.vtp");
       }
+      if (plotfiles)
+        gsWrite(deformation,dirname + "/" + output + util::to_string(k)+".xml");
 
       if (write)
         writeStepOutput(deformation,solVector,indicator,Load, dirname + "/" + wn, writePoints,1, 201);

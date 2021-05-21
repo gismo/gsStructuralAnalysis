@@ -78,6 +78,7 @@ int main (int argc, char** argv)
     int numElevateL = -1;
     int numHrefL    = -1;
     bool plot       = false;
+    bool plotfiles  = false;
     bool stress       = false;
     bool membrane       = false;
     bool mesh = false;
@@ -153,6 +154,7 @@ int main (int argc, char** argv)
     cmd.addReal("U","tolU","displacement tolerance",tolU);
 
     cmd.addSwitch("plot", "Plot result in ParaView format", plot);
+    cmd.addSwitch("plotfiles", "Write files for prostprocessing", plotfiles);
     cmd.addSwitch("mesh", "Plot mesh?", mesh);
     cmd.addSwitch("stress", "Plot stress in ParaView format", stress);
     cmd.addSwitch("write", "Write output to file", write);
@@ -319,7 +321,7 @@ int main (int argc, char** argv)
 
       std::stringstream ss;
       ss<<perturbation;
-      dirname = dirname + "/ShearSheet_Perturbed=" + ss.str() + "_r=" + std::to_string(numHref) + "_e=" + std::to_string(numElevate) + "_M=" + std::to_string(material) + "_c=" + std::to_string(Compressibility);
+      dirname = dirname + "/ShearSheet_Perturbed_DCALM=" + ss.str() + "_r=" + std::to_string(numHref) + "_e=" + std::to_string(numElevate) + "_M=" + std::to_string(material) + "_c=" + std::to_string(Compressibility);
       output =  "solution";
       wn = output + "data.txt";
     }
@@ -349,7 +351,7 @@ int main (int argc, char** argv)
 
       std::stringstream ss;
       ss<<perturbation;
-      dirname = dirname + "/ShearSheetRestrained_Perturbed=" + ss.str() + "_r=" + std::to_string(numHref) + "_e=" + std::to_string(numElevate) + "_M=" + std::to_string(material) + "_c=" + std::to_string(Compressibility);
+      dirname = dirname + "/ShearSheetRestrained_DCALM_Perturbed=" + ss.str() + "_r=" + std::to_string(numHref) + "_e=" + std::to_string(numElevate) + "_M=" + std::to_string(material) + "_c=" + std::to_string(Compressibility);
       output =  "solution";
       wn = output + "data.txt";
     }
@@ -357,7 +359,7 @@ int main (int argc, char** argv)
     if (THB)
       dirname = dirname + "_THB";
 
-    if (plot || writeG || write)
+    if (plot || writeG || write || plotfiles)
     {
       std::string commands = "mkdir -p " + dirname;
       const char *command = commands.c_str();
@@ -368,7 +370,7 @@ int main (int argc, char** argv)
     if (plot)
       gsWriteParaview(mp,dirname + "/" + "mp",1000,true);
 
-    if (writeG)
+    if (writeG || plotfiles)
     {
       gsWrite(mp,dirname + "/" + "geometry");
       gsInfo<<"Geometry written in: " + dirname + "/" + "geometry.xml\n";
@@ -710,13 +712,13 @@ int main (int argc, char** argv)
         gsField<> solField(mp,deformation);
         std::string fileName = dirname + "/" + output + util::to_string(k);
 
-        // gsWrite(deformation,dirname + "/" + output + util::to_string(k)+".xml");
-
-        gsWriteParaview<>(solField, fileName, 10000, mesh);
+        gsWriteParaview<>(solField, fileName, 1000, mesh);
         fileName = output + util::to_string(k) + "0";
         collection.addTimestep(fileName,k,".vts");
         if (mesh) collection.addTimestep(fileName,k,"_mesh.vtp");
       }
+      if (plotfiles)
+        gsWrite(deformation,dirname + "/" + output + util::to_string(k)+".xml");
 
       if (write)
         writeStepOutput(deformation,solVectorDC,indicator,Load, dirname + "/" + wn, writePoints,1, 201);

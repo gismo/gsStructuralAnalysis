@@ -17,6 +17,7 @@
 #include <gsKLShell/getMaterialMatrix.h>
 
 // #include <gsThinShell/gsArcLengthIterator.h>
+#include <gsStructuralAnalysis/gsDynamicRelaxationLC.h>
 #include <gsStructuralAnalysis/gsStaticSolver.h>
 
 using namespace gismo;
@@ -76,6 +77,7 @@ int main (int argc, char** argv)
     bool stress       = false;
     bool membrane       = false;
     bool mesh = false;
+    bool verbose = false;
     int step = 10;
     int method = 2; // (0: Load control; 1: Riks' method; 2: Crisfield's method; 3: consistent crisfield method; 4: extended iterations)
     bool deformed = false;
@@ -106,7 +108,11 @@ int main (int argc, char** argv)
 
     bool THB = false;
 
-    index_t maxit = 20;
+    index_t maxitDR = 20000;
+    index_t maxitDC = 20;
+
+    real_t alpha = 2.0;
+    real_t damping = 1.0;
 
     // Arc length method options
     real_t dL = 1e-2; // General arc length
@@ -134,13 +140,11 @@ int main (int argc, char** argv)
     cmd.addInt( "I", "Implementation", "Implementation: 1= analytical, 2= generalized, 3= spectral",  impl );
     cmd.addSwitch("composite", "Composite material", composite);
 
-    cmd.addReal("T","hdim", "thickness of the plate", thickness);
-    cmd.addReal("a","adim", "dimension a", aDim);
-    cmd.addReal("b","bdim", "dimension b", bDim);
-
     cmd.addInt("m","Method", "Arc length method; 1: Crisfield's method; 2: RIks' method.", method);
     cmd.addReal("L","dLb", "arc length", dL);
 
+    cmd.addReal( "a", "alpha", "alpha",  alpha );
+    cmd.addReal( "D", "damping", "damping",  damping );
     cmd.addReal("P","perturbation", "perturbation factor", perturbation);
 
     cmd.addInt("N", "maxsteps", "Maximum number of steps", step);
@@ -148,6 +152,7 @@ int main (int argc, char** argv)
     cmd.addReal("U","tolU","displacement tolerance",tolU);
     cmd.addReal("F","tolF","displacement tolerance",tolF);
 
+    cmd.addSwitch("verbose", "Verbose", verbose);
     cmd.addSwitch("plot", "Plot result in ParaView format", plot);
     cmd.addSwitch("plotfiles", "Write files for prostprocessing", plotfiles);
     cmd.addSwitch("mesh", "Plot mesh?", mesh);
@@ -497,13 +502,42 @@ int main (int argc, char** argv)
         return assembler->rhs(); // - lam * force;
     };
 
+    typedef std::function<gsVector<real_t> (gsVector<real_t> const &, real_t, gsVector<real_t> const &) >   DCResidual_t;
+    // Function for the Residual
+    DCResidual_t DCResidual = [&displ,&BCs,&assembler,&mp_def](gsVector<real_t> const &x, real_t lam, gsVector<real_t> const &force)
+    {
+        displ.setValue(lam,3);
+        assembler->updateBCs(BCs);
+        assembler->constructSolution(x,mp_def);
+        assembler->assembleVector(mp_def);
+        return assembler->rhs(); // - lam * force;
+    };
+
+    // Assemble linear system to obtain the force vector
+    assembler->assemble();
+    gsVector<> F = assembler->rhs();
+
+    assembler->assembleMass(true);
+    gsVector<> M = assembler->rhs();
+
     gsSparseMatrix<> matrix;
     gsVector<> vector;
+
+    gsDynamicRelaxationLC<real_t> DRM(M,F,DCResidual);
+    gsOptionList DROptions = DRM.options();
+    DROptions.setReal("damping",damping);
+    DROptions.setReal("alpha",alpha);
+    DROptions.setInt("maxIt",maxitDR);
+    DROptions.setReal("tolF",1e-3);
+    DROptions.setReal("tolE",1e-3);
+    DROptions.setInt("Verbose",verbose);
+    DRM.setOptions(DROptions);
+    DRM.init();
 
     gsStaticSolver<real_t> staticSolver(matrix,vector,Jacobian,Residual);
     gsOptionList solverOptions = staticSolver.options();
     solverOptions.setInt("Verbose",true);
-    solverOptions.setInt("MaxIterations",maxit);
+    solverOptions.setInt("MaxIterations",maxitDC);
     solverOptions.setReal("ToleranceF",tolF);
     solverOptions.setReal("ToleranceU",tolU);
     solverOptions.setReal("Relaxation",0.8);
@@ -512,12 +546,13 @@ int main (int argc, char** argv)
     gsParaviewCollection collection(dirname + "/" + output);
     gsMultiPatch<> deformation = mp;
 
-    gsMatrix<> updateVector, solVector, solVectorOld;
+    gsMatrix<> solVector;
+    gsVector<> updateVector, solVectorOld;
 
     real_t dL0 = dL;
     gsMultiPatch<> mp_def0 = mp_def;
     real_t indicator;
-    real_t D = 0;
+    real_t D = dL;
     real_t Dold = 0;
     // int reset = 0;
     index_t k = 0;
@@ -527,6 +562,10 @@ int main (int argc, char** argv)
     real_t ki = 0.1;
     real_t kd = 0.1;
     std::sort(Dtarget.begin(), Dtarget.end());
+
+    displ.setValue(D,3);
+
+    solVector = solVectorOld = DRM.displacements();
     while (D-dL < Dtarget.back())
     {
       displ.setValue(D,3);
@@ -537,7 +576,33 @@ int main (int argc, char** argv)
 
       matrix = assembler->matrix();
       vector = assembler->rhs();
-      solVector = staticSolver.solveNonlinear();
+
+      if (k==0)
+      {
+        solVectorOld = staticSolver.solveLinear();
+      }
+      if (true)
+      {
+        gsInfo<<"Stage 1:\n";
+        DRM.setDisplacement(solVector);
+        DRM.step(dL);
+        solVector = DRM.displacements();
+        gsInfo<<"Step finished in "<<DRM.iterations()<<" iterations\n";
+        updateVector = DRM.increment();
+
+        gsDebugVar(Residual(solVector + updateVector).norm());
+
+        gsInfo<<"Stage 2:\n";
+        staticSolver.setSolutionStep(updateVector,solVectorOld);
+        solVector = staticSolver.solveNonlinear();
+        gsInfo<<"Step finished in "<<staticSolver.iterations()<<" iterations\n";
+      }
+      else
+      {
+        gsInfo<<"Stage 2:\n";
+        solVector = staticSolver.solveNonlinear();
+        gsInfo<<"Step finished in "<<staticSolver.iterations()<<" iterations\n";
+      }
 
       if (!staticSolver.converged())
       {
@@ -545,6 +610,10 @@ int main (int argc, char** argv)
         GISMO_ASSERT(dL / dL0 > 1e-6,"Step size is becoming very small...");
         D = Dold+dL;
         mp_def = mp_def0;
+
+        solVector = solVectorOld;
+
+        DRM.stepBack();
         gsInfo<<"Iterations did not converge\n";
         // reset = 1;
         continue;
@@ -571,7 +640,7 @@ int main (int argc, char** argv)
       {
         gsField<> solField(mp,deformation);
         std::string fileName = dirname + "/" + output + util::to_string(k);
-        gsWriteParaview<>(solField, fileName, 1000, mesh);
+        gsWriteParaview<>(solField, fileName, 10000, mesh);
         fileName = output + util::to_string(k) + "0";
         collection.addTimestep(fileName,k,".vts");
         if (mesh) collection.addTimestep(fileName,k,"_mesh.vtp");
@@ -589,11 +658,11 @@ int main (int argc, char** argv)
         dL = dL0;
 
       real_t tol = 1;
-      if (solVectorOld.rows()!=0)
-      {
-        e   = ( (solVector - solVectorOld).norm() / solVector.norm() ) / tol;
-        dL *= math::pow( eold / e, kp ) * math::pow( 1 / e, ki ) * math::pow( eold*eold / ( e*eold2 ), kd );
-      }
+      // if (solVectorOld.rows()!=0)
+      // {
+      //   e   = ( (solVector - solVectorOld).norm() / solVector.norm() ) / tol;
+      //   dL *= math::pow( eold / e, kp ) * math::pow( 1 / e, ki ) * math::pow( eold*eold / ( e*eold2 ), kd );
+      // }
 
       // reset = 0;
       mp_def0 = mp_def;
@@ -616,8 +685,8 @@ int main (int argc, char** argv)
       D += dL;
       k++;
       solVectorOld = solVector;
-      eold2 = eold;
-      eold = e;
+      // eold2 = eold;
+      // eold = e;
 
       gsInfo<<"--------------------------------------------------------------------------------------------------------------\n";
     }
