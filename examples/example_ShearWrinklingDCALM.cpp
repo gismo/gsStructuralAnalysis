@@ -195,8 +195,8 @@ int main (int argc, char** argv)
     std::vector<boxSide> sides;
     if (testCase==2)
     {
-    	sides.push_back(boundary::west);
-    	sides.push_back(boundary::east);
+      sides.push_back(boundary::west);
+      sides.push_back(boundary::east);
     }
 
     mpBspline = Rectangle(aDim,    bDim   );
@@ -487,66 +487,85 @@ int main (int argc, char** argv)
         materialMatrix = getMaterialMatrix<3,real_t>(mp,t,parameters,rho,options);
     }
 
-    gsThinShellAssemblerBase<real_t>* assembler;
+    gsThinShellAssemblerBase<real_t>* assemblerDC;
+    gsThinShellAssemblerBase<real_t>* assemblerALM;
     if(membrane)
-        assembler = new gsThinShellAssembler<3, real_t, false>(mp,dbasis,BCs,force,materialMatrix);
+    {
+      assemblerDC  = new gsThinShellAssembler<3, real_t, false>(mp,dbasis,BCs,force,materialMatrix);
+      assemblerALM = new gsThinShellAssembler<3, real_t, false>(mp,dbasis,BCs_ALM,force,materialMatrix);
+    }
     else
-        assembler = new gsThinShellAssembler<3, real_t, true >(mp,dbasis,BCs,force,materialMatrix);
+    {
+      assemblerDC  = new gsThinShellAssembler<3, real_t, true >(mp,dbasis,BCs,force,materialMatrix);
+      assemblerALM = new gsThinShellAssembler<3, real_t, true >(mp,dbasis,BCs_ALM,force,materialMatrix);
+    }
 
 
     // Construct assembler object
-    assembler->setOptions(opts);
+    assemblerDC ->setOptions(opts);
+    assemblerALM->setOptions(opts);
 
     typedef std::function<gsSparseMatrix<real_t> (gsVector<real_t> const &)>                                Jacobian_t;
     typedef std::function<gsVector<real_t> (gsVector<real_t> const &, real_t, gsVector<real_t> const &) >   ALResidual_t;
     typedef std::function<gsVector<real_t> (gsVector<real_t> const &) >                                     Residual_t;
     // Function for the Jacobian
-    Jacobian_t Jacobian = [&assembler](gsVector<real_t> const &x)
+    Jacobian_t JacobianDC = [&assemblerDC](gsVector<real_t> const &x)
     {
       gsMultiPatch<> tmp;
-      assembler->homogenizeDirichlet();
-      assembler->constructSolution(x,tmp);
-      assembler->assembleMatrix(tmp);
+      assemblerDC->homogenizeDirichlet();
+      assemblerDC->constructSolution(x,tmp);
+      assemblerDC->assembleMatrix(tmp);
 
-      gsSparseMatrix<real_t> m = assembler->matrix();
+      gsSparseMatrix<real_t> m = assemblerDC->matrix();
+      // gsInfo<<"matrix = \n"<<m.toDense()<<"\n";
+      return m;
+    };
+
+    // Function for the Jacobian
+    Jacobian_t JacobianALM = [&assemblerALM](gsVector<real_t> const &x)
+    {
+      gsMultiPatch<> tmp;
+      assemblerALM->homogenizeDirichlet();
+      assemblerALM->constructSolution(x,tmp);
+      assemblerALM->assembleMatrix(tmp);
+
+      gsSparseMatrix<real_t> m = assemblerALM->matrix();
       // gsInfo<<"matrix = \n"<<m.toDense()<<"\n";
       return m;
     };
 
     // Function for the Residual
-    Residual_t Residual = [&assembler](gsVector<real_t> const &x)
+    Residual_t ResidualDC = [&assemblerDC](gsVector<real_t> const &x)
     {
       gsMultiPatch<> tmp;
-      assembler->constructSolution(x,tmp);
-      assembler->assembleVector(tmp);
-      return assembler->rhs(); // - lam * force;
+      assemblerDC->constructSolution(x,tmp);
+      assemblerDC->assembleVector(tmp);
+      return assemblerDC->rhs(); // - lam * force;
     };
 
         // Function for the Residual
-    ALResidual_t ALResidual = [&assembler](gsVector<real_t> const &x, real_t lam, gsVector<real_t> const &force)
+    ALResidual_t ResidualALM = [&assemblerALM](gsVector<real_t> const &x, real_t lam, gsVector<real_t> const &force)
     {
       gsMultiPatch<> tmp;
-      assembler->constructSolution(x,tmp);
-      assembler->assembleVector(tmp);
-      gsVector<real_t> Fint = -(assembler->rhs() - force);
+      assemblerALM->constructSolution(x,tmp);
+      assemblerALM->assembleVector(tmp);
+      gsVector<real_t> Fint = -(assemblerALM->rhs() - force);
       gsVector<real_t> result = Fint - lam * force;
       return result; // - lam * force;
     };
 
     // Assemble vector and matrix for first step static solve
-    assembler->updateBCs(BCs);
-    assembler->assemble();
-    gsVector<> vector = assembler->rhs();
-    gsSparseMatrix<> matrix = assembler->matrix();
+    assemblerDC->assemble();
+    gsVector<> vector = assemblerDC->rhs();
+    gsSparseMatrix<> matrix = assemblerDC->matrix();
 
     // Assemble vector and matrix for ALM
-    assembler->updateBCs(BCs_ALM);
     // Force vector excl Dirichlet contributions
-    assembler->homogenizeDirichlet();
-    assembler->assemble();
-    gsVector<> Force = assembler->rhs();
+    assemblerALM->homogenizeDirichlet();
+    assemblerALM->assemble();
+    gsVector<> Force = assemblerALM->rhs();
 
-    gsStaticSolver<real_t> staticSolver(matrix,vector,Jacobian,Residual);
+    gsStaticSolver<real_t> staticSolver(matrix,vector,JacobianDC,ResidualDC);
     gsOptionList solverOptions = staticSolver.options();
     solverOptions.setInt("Verbose",true);
     solverOptions.setInt("MaxIterations",maxit);
@@ -554,7 +573,7 @@ int main (int argc, char** argv)
     solverOptions.setReal("ToleranceU",tolU);
     staticSolver.setOptions(solverOptions);
 
-    gsArcLengthIterator<real_t> arcLength(Jacobian, ALResidual, Force);
+    gsArcLengthIterator<real_t> arcLength(JacobianALM, ResidualALM, Force);
     arcLength.options().setReal("TolU",tolU);
     arcLength.options().setReal("TolF",tolF);
     arcLength.options().setInt("MaxIter",maxit);
@@ -569,7 +588,7 @@ int main (int argc, char** argv)
     gsMultiPatch<> deformation = mp;
     gsMultiPatch<> deformationOld = mp;
 
-    gsMatrix<> updateVector, solVector;
+    gsMatrix<> updateVector, solVectorDC, solVectorALM;
 
     patchSide ps(0,boundary::north);
 
@@ -585,20 +604,23 @@ int main (int argc, char** argv)
     index_t tIdx = 0;
     std::sort(Dtarget.begin(), Dtarget.end());
 
-    gsMatrix<> Uold;
-    Uold.setZero(Force.rows(),1);
+    gsMatrix<> solVectorALMold, solVectorDCold;
+    solVectorDCold.setZero(Force.rows(),1);
+    solVectorALMold.setZero(Force.rows(),1);
     real_t Lold = 0;
+    bool Bifurcation = false;
+    // index_t reset = 1;
     while (D-dL < Dtarget.back())
     {
       displ.setValue(D,3);
       gsInfo<<"Load step "<< k<<"; D = "<<D<<"; dD = "<<dL<<"\n";
 
-      assembler->updateBCs(BCs);
-      assembler->assemble();
+      assemblerDC->updateBCs(BCs);
+      assemblerDC->assemble();
 
-      matrix = assembler->matrix();
-      vector = assembler->rhs();
-      solVector = staticSolver.solveNonlinear();
+      matrix = assemblerDC->matrix();
+      vector = assemblerDC->rhs();
+      solVectorDC = staticSolver.solveNonlinear();
 
       if (!staticSolver.converged())
       {
@@ -615,38 +637,47 @@ int main (int argc, char** argv)
       gsInfo<<"\t\tIndicator =  "<<indicator<<"\n";
       gsInfo<<"\t\tIndicator Old =  "<<indicatorOld<<"\n";
 
-      assembler->constructDisplacement(solVector,deformation);
+      assemblerDC->constructDisplacement(solVectorDC,deformation);
+      assemblerDC->constructSolution(solVectorDC,mp_def);
+
+      ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+      solVectorALM    = assemblerALM->constructSolutionVector(deformation);
+      arcLength.setSolution(solVectorALM,-assemblerALM->boundaryForce(mp_def,ps)(0,0));
+      arcLength.computeStability(solVectorALM,true);
+
+      indicator = arcLength.indicator();
+      gsInfo<<"\t\tAL Indicator =  "<<indicator<<"\n";
+      ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
       if (perturbation==0)
-        if (sign(indicator) != sign(indicatorOld))
+        if ((sign(indicator) != sign(indicatorOld)) && (!Bifurcation))
         {
           gsInfo<<"Bifurcation spotted!"<<"\n";
           D -= dL;
 
-          assembler->constructSolution(solVector,mp_def);
-          assembler->constructDisplacement(solVector,deformation);
-
-          assembler->updateBCs(BCs_ALM);
-
           arcLength.setLength(dL);
           arcLength.initialize();
-          solVector = assembler->constructSolutionVector(deformation);
-          Uold      = assembler->constructSolutionVector(deformationOld);
-          assembler->constructSolution(solVector,mp_def);
+          solVectorALM    = assemblerALM->constructSolutionVector(deformation);
+          solVectorALMold = assemblerALM->constructSolutionVector(deformationOld);
+          assemblerALM->constructSolution(solVectorALMold,mp_def);
 
           // =======================================================
 
-          arcLength.setSolution(solVector,-assembler->boundaryForce(mp_def,ps)(0,0));
-          arcLength.computeStability(solVector,true);
+          arcLength.setSolution(solVectorALM,-assemblerALM->boundaryForce(mp_def,ps)(0,0));
+          arcLength.computeStability(solVectorALM,true);
 
           indicator = arcLength.indicator();
           gsInfo<<"\t\tAL Indicator =  "<<indicator<<"\n";
 
-          arcLength.computeSingularPoint(1e-4, 5, Uold, Lold, 1e-7, 0.5, false,true);
+          arcLength.computeSingularPoint(1e-4, 25, solVectorALMold, Lold, 1e-7, 0.5, false,true);
           arcLength.switchBranch();
 
-          assembler->constructSolution(arcLength.solutionU(),mp_def);
-          assembler->constructDisplacement(arcLength.solutionU(),deformation);
+          solVectorALM = arcLength.solutionU();
+          assemblerALM->constructSolution(arcLength.solutionU(),mp_def);
+          assemblerALM->constructDisplacement(arcLength.solutionU(),deformation);
+
+          gsDebugVar(solVectorALM.transpose());
 
           /// EXTRACT D
           gsVector<> pt(2);
@@ -657,21 +688,21 @@ int main (int argc, char** argv)
 
           /// Make solVector s.t. the BCs of the DC
           displ.setValue(D,3);
-          assembler->updateBCs(BCs);
-
-          arcLength.initialize();
-          solVector = assembler->constructSolutionVector(deformation);
-          // assembler->constructDisplacement(solVector,deformation);
-          staticSolver.setSolution(solVector);
+          assemblerDC->updateBCs(BCs);
+          solVectorDC = assemblerDC->constructSolutionVector(deformation);
+          // assemblerDC->constructDisplacement(solVector,deformation);
+          staticSolver.setSolution(solVectorDC);
 
           indicator = staticSolver.indicator();
+          // indicator = indicatorOld;
 
-
+          Bifurcation = true;
         }
+
+
 
       indicatorOld = indicator;
 
-      assembler->constructSolution(solVector,mp_def);
       real_t Load = 0;
 
       deformation = mp_def;
@@ -680,7 +711,7 @@ int main (int argc, char** argv)
       if (stress)
       {
         gsPiecewiseFunction<> stresses;
-        assembler->constructStress(mp_def,stresses,stress_type::principal_stretch);
+        assemblerDC->constructStress(mp_def,stresses,stress_type::principal_stretch);
         gsField<> stressField(mp,stresses, true);
         gsWriteParaview( stressField, "stress", 5000);
       }
@@ -699,13 +730,20 @@ int main (int argc, char** argv)
       }
 
       if (write)
-        writeStepOutput(deformation,solVector,indicator,Load, dirname + "/" + wn, writePoints,1, 201);
+        writeStepOutput(deformation,solVectorDC,indicator,Load, dirname + "/" + wn, writePoints,1, 201);
 
       if (crosssection && cross_coordinate!=-1)
         writeSectionOutput(deformation,dirname,cross_coordinate,cross_val,201,false);
 
       // if (reset!=1)
-        dL = dL0;
+      // {
+        // dL = dL0;
+      // }
+      // else
+      // {
+      //   gsDebugVar("not reset");
+      //   reset = 0;
+      // }
 
       // reset = 0;
       mp_def0 = mp_def;
@@ -724,10 +762,10 @@ int main (int argc, char** argv)
       if (Dtarget.front() - D < dL)        // The next target is larger than D, but within one step
         dL = Dtarget.front() - D;
 
-      Uold = solVector;
-      assembler->constructDisplacement(Uold,deformationOld);
+      solVectorDCold = solVectorDC;
+      assemblerDC->constructDisplacement(solVectorDCold,deformationOld);
 
-      Lold = -assembler->boundaryForce(mp_def,ps)(0,0);
+      Lold = -assemblerDC->boundaryForce(mp_def,ps)(0,0);
 
       D += dL;
       k++;
