@@ -44,6 +44,7 @@ public:
     }
 
     gsVector<T> displacements() const {return m_U;}
+    gsVector<T> increment() const {return m_DeltaU;}
     T load() const {return m_L;}
     gsVector<T> velocities() const {return m_v;}
 
@@ -103,21 +104,21 @@ public:
         m_Eks.clear();
         m_Eks.reserve(m_maxIt);
 
-        printHeader();
+        if (m_verbose) printHeader();
         m_DeltaL = loadStep;
         predictor();
         m_Ek0 = m_Ek;
         m_Eks.push_back(m_Ek);
 
         m_R0 = m_R;
-        stepInfo(0);
+        if (m_verbose) stepInfo(0);
         for (m_iterations=1; m_iterations!=m_maxIt; m_iterations++)
         {
             iteration();
             if ((m_c==0 && m_Ek_prev > m_Ek))// || (m_Ek/m_Ek_prev > 1/m_tolE && m_Ek_prev!=0))
                 peak();
 
-            stepInfo(m_iterations);
+            if (m_verbose) stepInfo(m_iterations);
             m_Eks.push_back(m_Ek);
 
             if (m_R.norm()/m_R0.norm() < m_tolF && m_Ek/m_Ek0 < m_tolE)
@@ -134,6 +135,12 @@ public:
             }
         }
         gsInfo<<"\n";
+    }
+
+    void stepBack()
+    {
+        m_L -= m_DeltaL;
+        m_U -= m_DeltaU;
     }
 
     void reset()
@@ -183,6 +190,7 @@ public:
         m_options.addInt("maxIt","maximum number of iterations",1e2);
         m_options.addReal("tolF","(Force) Residual tolerance",1e-6);
         m_options.addReal("tolE","Kinetic energy tolerance",1e-12);
+        m_options.addInt("Verbose","Verbose output",0);
     }
 
     gsOptionList options() const {return m_options;}
@@ -194,6 +202,7 @@ public:
         m_maxIt = m_options.getInt("maxIt");
         m_tolF = m_options.getReal("tolF");
         m_tolE = m_options.getReal("tolE");
+        m_verbose = m_options.getInt("Verbose");
     }
 
     void setOptions(gsOptionList & options) {m_options.update(options,gsOptionList::addIfUnknown); }
@@ -202,7 +211,7 @@ public:
 
     void printHeader()
     {
-        gsInfo  <<std::setw(4)<<"It."
+        gsInfo  <<std::setw(8)<<"It."
                 <<std::setw(16)<<"|R|"
                 <<std::setw(16)<<"Ek"
                 <<std::setw(16)<<"|u|"
@@ -217,7 +226,7 @@ public:
 
     void stepInfo(index_t k)
     {
-        gsInfo  <<std::setw(4)<<k
+        gsInfo  <<std::setw(8)<<k
                 <<std::setw(16)<<m_R.norm()/m_R0.norm()
                 <<std::setw(16)<<m_Ek/m_Ek0
                 <<std::setw(16)<<(m_U+m_DeltaU).norm()
@@ -239,6 +248,9 @@ protected:
     gsVector<T> m_R, m_R0;
     gsVector<T> m_massInv, m_damp;
     index_t m_dofs;
+
+    bool m_verbose;
+
     T m_dt, m_alpha, m_c;
     gsOptionList m_options;
     T m_Ek, m_Ek_prev, m_Ek0;
