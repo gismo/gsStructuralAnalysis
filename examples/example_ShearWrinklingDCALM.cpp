@@ -608,7 +608,7 @@ int main (int argc, char** argv)
     solVectorDCold.setZero(Force.rows(),1);
     solVectorALMold.setZero(Force.rows(),1);
     real_t Lold = 0;
-    bool Bifurcation = false;
+    bool bif = false;
     // index_t reset = 1;
     while (D-dL < Dtarget.back())
     {
@@ -640,18 +640,8 @@ int main (int argc, char** argv)
       assemblerDC->constructDisplacement(solVectorDC,deformation);
       assemblerDC->constructSolution(solVectorDC,mp_def);
 
-      ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-      solVectorALM    = assemblerALM->constructSolutionVector(deformation);
-      arcLength.setSolution(solVectorALM,-assemblerALM->boundaryForce(mp_def,ps)(0,0));
-      arcLength.computeStability(solVectorALM,true);
-
-      indicator = arcLength.indicator();
-      gsInfo<<"\t\tAL Indicator =  "<<indicator<<"\n";
-      ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
       if (perturbation==0)
-        if ((sign(indicator) != sign(indicatorOld)) && (!Bifurcation))
+        if ((sign(indicator) != sign(indicatorOld)) && !bif)
         {
           gsInfo<<"Bifurcation spotted!"<<"\n";
           D -= dL;
@@ -677,8 +667,6 @@ int main (int argc, char** argv)
           assemblerALM->constructSolution(arcLength.solutionU(),mp_def);
           assemblerALM->constructDisplacement(arcLength.solutionU(),deformation);
 
-          gsDebugVar(solVectorALM.transpose());
-
           /// EXTRACT D
           gsVector<> pt(2);
           pt<<0.5,1;
@@ -696,7 +684,8 @@ int main (int argc, char** argv)
           indicator = staticSolver.indicator();
           // indicator = indicatorOld;
 
-          Bifurcation = true;
+          bif = true;
+
         }
 
 
