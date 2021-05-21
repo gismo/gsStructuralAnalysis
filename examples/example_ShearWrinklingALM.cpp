@@ -683,9 +683,6 @@ int main (int argc, char** argv)
       indicatorOld = indicator;
       indicator = arcLength.indicator();
 
-      gsDebugVar(indicator);
-      gsDebugVar(indicatorOld);
-
       solVector = arcLength.solutionU();
 
       /*
@@ -714,13 +711,6 @@ int main (int argc, char** argv)
 
       deformation = mp_def;
       deformation.patch(0).coefs() -= mp.patch(0).coefs();// assuming 1 patch here
-
-      /// EXTRACT D
-      gsVector<> pt(2);
-      pt<<0.5,1;
-      gsMatrix<> displ = deformation.patch(0).eval(pt);
-      gsDebugVar(displ);
-      // gsDebugVar(mp_def.patch(0).coefs());
 
       gsInfo<<"Total ellapsed assembly time: "<<time<<" s\n";
 

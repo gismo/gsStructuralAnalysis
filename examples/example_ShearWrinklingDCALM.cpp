@@ -726,7 +726,7 @@ int main (int argc, char** argv)
 
       // if (reset!=1)
       // {
-        // dL = dL0;
+        dL = dL0;
       // }
       // else
       // {
