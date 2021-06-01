@@ -92,6 +92,12 @@ public:
         return m_indicator;
     }
 
+    gsVector<T> stabilityVec()
+    {
+        _computeStability(m_solVec);
+        return m_stabilityVec;
+    }
+
     void setSolution(const gsVector<T> & solution)
     {
         m_solVec = solution;
@@ -123,6 +129,9 @@ protected:
 
     mutable gsVector<T> m_solVec;
     mutable gsVector<T> m_DeltaU, m_deltaU;
+
+    mutable gsVector<T> m_stabilityVec;
+
 
     mutable index_t m_verbose;
     bool m_NL;

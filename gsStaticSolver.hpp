@@ -134,13 +134,12 @@ gsVector<T> gsStaticSolver<T>::solveNonlinear()
 template <class T>
 void gsStaticSolver<T>::_computeStability(const gsVector<T> x) const
 {
-    gsVector<T> stabilityVec;
     gsSparseMatrix<T> jacMat = m_nonlinear(x);
     // gsInfo<<"x = \n"<<x.transpose()<<"\n";
     if (m_bifurcationMethod == bifmethod::Determinant)
     {
       factorizeMatrix(jacMat);
-      stabilityVec = m_LDLTsolver.vectorD();
+      m_stabilityVec = m_LDLTsolver.vectorD();
     }
     else if (m_bifurcationMethod == bifmethod::Eigenvalue)
     {
@@ -154,16 +153,16 @@ void gsStaticSolver<T>::_computeStability(const gsVector<T> x) const
       // if (es.info()==Spectra::CompInfo::NotConverging)
       // if (es.info()==Spectra::CompInfo::NumericalIssue)
       // Eigen::SelfAdjointEigenSolver< gsMatrix<T> > es(m_jacMat);
-      stabilityVec = es.eigenvalues();
+      m_stabilityVec = es.eigenvalues();
       #else
       Eigen::SelfAdjointEigenSolver<gsMatrix<T>> es2(jacMat);
-      stabilityVec = es2.eigenvalues();
+      m_stabilityVec = es2.eigenvalues();
       #endif
     }
     else
       gsInfo<<"bifurcation method unknown!";
 
-    m_indicator = stabilityVec.colwise().minCoeff()[0]; // This is required since D does not necessarily have one column
+    m_indicator = m_stabilityVec.colwise().minCoeff()[0]; // This is required since D does not necessarily have one column
 }
 
 template <class T>
