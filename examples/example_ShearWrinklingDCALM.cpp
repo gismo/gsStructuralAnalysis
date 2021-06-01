@@ -132,7 +132,7 @@ int main (int argc, char** argv)
 
     // Arc length method options
     real_t dL = 1e-2; // General arc length
-    real_t tolF = 1e-6;
+    real_t tolF = 1e-3;
     real_t tolU = 1e-6;
 
     std::string wn("data.csv");
@@ -589,6 +589,8 @@ int main (int argc, char** argv)
     solverOptions.setInt("MaxIterations",maxit);
     solverOptions.setReal("ToleranceF",tolF);
     solverOptions.setReal("ToleranceU",tolU);
+    solverOptions.setInt("Solver",0);
+    solverOptions.setInt("BifurcationMethod",0);
     staticSolver.setOptions(solverOptions);
 
     gsArcLengthIterator<real_t> arcLength(JacobianALM, ResidualALM, Force);
