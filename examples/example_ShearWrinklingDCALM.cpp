@@ -27,6 +27,22 @@ int sign(T val)
     return (T(0) < val) - (val < T(0));
 }
 
+/// sort vector
+template <class T>
+index_t countNegatives(gsVector<T> vec)
+{
+  index_t count = 0;
+  index_t N = vec.cols();
+  index_t M = vec.rows();
+  for(index_t i = 0; i < M; i++)
+        for(index_t j = 0; j < N; j++)
+        {
+            if( vec(i,j) < 0 )
+                count += 1;
+        }
+    return count;
+}
+
 template <class T>
 gsMultiPatch<T> RectangularDomain(int n, int m, int p, int q, T L, T B, bool clamped = false, T offset = 0.1);
 template <class T>
@@ -647,6 +663,55 @@ int main (int argc, char** argv)
         {
           gsInfo<<"Bifurcation spotted!"<<"\n";
           D -= dL;
+          displ.setValue(D,3);
+          assemblerDC->updateBCs(BCs);
+
+          real_t dLtmp = dL/2;
+          real_t Dtmp = D;
+
+          staticSolver.setSolution(solVectorDCold);
+          real_t goal = countNegatives(staticSolver.stabilityVec());
+          real_t goalOld = goal;
+          real_t indicatorRef = staticSolver.indicator();
+
+          for (index_t b = 0; b!=20; b++)
+          {
+            Dtmp = D + dLtmp;
+            //////////////// Bisection iterations with DC method
+            displ.setValue(Dtmp,3);
+            gsInfo<<"Bisection step "<< b<<"; D = "<<D<<"; dD = "<<dLtmp<<"\n";
+
+            assemblerDC->updateBCs(BCs);
+            assemblerDC->assemble();
+
+            matrix = assemblerDC->matrix();
+            vector = assemblerDC->rhs();
+            solVectorDC = staticSolver.solveNonlinear();
+
+            indicator = staticSolver.indicator();
+            goal = countNegatives(staticSolver.stabilityVec());
+
+            gsInfo<<"\t\tIndicator =  "<<indicator<<"\n";
+
+            if (goalOld==goal)
+            {
+              D += dLtmp;
+              goalOld = goal;
+            }
+            else
+              dLtmp *= 0.5;
+
+            if (abs(indicator/indicatorRef) < 1e-2)
+            {
+              break;
+            }
+          }
+          //////////////// ! Bisection iterations with DC method
+
+
+          assemblerDC->constructDisplacement(solVectorDC,deformation);
+          assemblerDC->constructSolution(solVectorDC,mp_def);
+
 
           arcLength.setLength(dL);
           arcLength.initialize();
@@ -662,7 +727,7 @@ int main (int argc, char** argv)
           indicator = arcLength.indicator();
           gsInfo<<"\t\tAL Indicator =  "<<indicator<<"\n";
 
-          arcLength.computeSingularPoint(1e-4, 25, solVectorALMold, Lold, 1e-7, 0.5, false,true);
+          arcLength.computeSingularPoint(1e-4, 25, solVectorALMold, Lold, 1e-7, 0, false,true);
           arcLength.switchBranch();
 
           solVectorALM = arcLength.solutionU();
@@ -694,10 +759,10 @@ int main (int argc, char** argv)
 
       indicatorOld = indicator;
 
-      real_t Load = 0;
-
       deformation = mp_def;
       deformation.patch(0).coefs() -= mp.patch(0).coefs();// assuming 1 patch here
+
+      Lold = -assemblerDC->boundaryForce(mp_def,ps)(0,0);
 
       if (stress)
       {
@@ -721,7 +786,7 @@ int main (int argc, char** argv)
         gsWrite(deformation,dirname + "/" + output + util::to_string(k)+".xml");
 
       if (write)
-        writeStepOutput(deformation,solVectorDC,indicator,Load, dirname + "/" + wn, writePoints,1, 201);
+        writeStepOutput(deformation,solVectorDC,indicator,Lold, dirname + "/" + wn, writePoints,1, 201);
 
       if (crosssection && cross_coordinate!=-1)
         writeSectionOutput(deformation,dirname,cross_coordinate,cross_val,201,false);
@@ -756,7 +821,6 @@ int main (int argc, char** argv)
       solVectorDCold = solVectorDC;
       assemblerDC->constructDisplacement(solVectorDCold,deformationOld);
 
-      Lold = -assemblerDC->boundaryForce(mp_def,ps)(0,0);
 
       D += dL;
       k++;

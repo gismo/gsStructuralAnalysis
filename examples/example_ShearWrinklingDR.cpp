@@ -492,6 +492,7 @@ int main (int argc, char** argv)
 
     gsMatrix<> updateVector, solVector, solVectorOld;
 
+    patchSide ps(0,boundary::north);
     real_t dL0 = dL;
     gsMultiPatch<> mp_def0 = mp_def;
     real_t indicator = 0.0;
@@ -538,6 +539,7 @@ int main (int argc, char** argv)
       deformation = mp_def;
       deformation.patch(0).coefs() -= mp.patch(0).coefs();// assuming 1 patch here
 
+      Load = -assemblerDC->boundaryForce(mp_def,ps)(0,0);
 
       if (stress)
       {

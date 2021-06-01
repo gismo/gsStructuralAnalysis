@@ -133,8 +133,8 @@ template <class T>
 void gsArcLengthIterator<T>::initMethods()
 {
   m_numDof = m_forcing.size();
-  m_U = gsVector<T>::Zero(m_numDof);
-  m_L = 0.0;
+  m_DeltaU = m_U = gsVector<T>::Zero(m_numDof);
+  m_DeltaL = m_L = 0.0;
 
   if ((m_method == method::Crisfield))
   {
