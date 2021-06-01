@@ -556,7 +556,7 @@ int main (int argc, char** argv)
 
       assembler->constructSolution(solVector,mp_def);
 
-      Load = -assemblerDC->boundaryForce(mp_def,ps)(0,0);
+      real_t Load = -assemblerDC->boundaryForce(mp_def,ps)(0,0);
 
       deformation = mp_def;
       deformation.patch(0).coefs() -= mp.patch(0).coefs();// assuming 1 patch here
