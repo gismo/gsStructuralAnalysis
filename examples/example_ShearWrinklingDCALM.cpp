@@ -694,6 +694,7 @@ int main (int argc, char** argv)
             goal = countNegatives(staticSolver.stabilityVec());
 
             gsInfo<<"\t\tIndicator =  "<<indicator<<"\n";
+            gsInfo<<"\t\tRef. Error =  "<<indicator/indicatorRef<<"\n";
 
             if (goalOld==goal)
             {
@@ -742,6 +743,7 @@ int main (int argc, char** argv)
           gsMatrix<> displacement = deformation.patch(0).eval(pt);
           dL = displacement(0,0) - D;
           D += dL;
+          gsInfo<<"D = "<<D<<"\n";
 
           /// Make solVector s.t. the BCs of the DC
           displ.setValue(D,3);

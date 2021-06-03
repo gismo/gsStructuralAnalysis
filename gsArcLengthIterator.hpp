@@ -1125,7 +1125,6 @@ void gsArcLengthIterator<T>::computeSingularPoint(T singTol, index_t kmax, gsVec
   //  gsInfo<<"\t Singular point details:";
   //  gsInfo<<"\tvalue: "<<value<<"\n";
   // }
-
   if (test)
   {
     if (m_verbose) {gsInfo<<"\t Bifurcation point\n";}
@@ -1302,7 +1301,7 @@ void gsArcLengthIterator<T>::extendedSystemSolve(gsVector<T> U, T L, T tol)
   m_converged = false;
   if (m_verbose)
       initOutputExtended();
-  for (m_numIterations = 1; m_numIterations < m_maxIterations; ++m_numIterations)
+  for (m_numIterations = 0; m_numIterations < m_maxIterations; ++m_numIterations)
   {
     extendedSystemIteration();
     m_DeltaU += m_deltaU;
