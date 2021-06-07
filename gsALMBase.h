@@ -41,8 +41,7 @@ public:
     {
         // initialize variables
         m_numIterations = 0;
-        m_arcLength = 1e-2;
-        m_arcLength_prev = 1e-2;
+        m_arcLength = m_arcLength_prev = 1e-2;
         m_converged = false;
 
         // initialize errors
@@ -50,15 +49,14 @@ public:
         m_basisResidualU = 0.0;
     }
 
-// Purely virtual functions
-public:
-
-    virtual void step() = 0;
-
-    virtual void initialize() = 0;
-
 // General functions
 public:
+    virtual void step();
+
+    virtual void initialize()
+    {m_initialized = true; this -> initMethods(); this -> init();}
+
+
 
     /// Set arc length
     virtual void setLength(T length)
@@ -172,11 +170,10 @@ protected:
 // ------------------------------------------------------------------------------------------------------------
 protected:
 
-    virtual void init() = 0;
-    virtual void initMethods() = 0;
-
     virtual void defaultOptions();
     virtual void getOptions();
+
+    virtual void init();
 
     virtual void factorizeMatrix(const gsSparseMatrix<T> & M);
     virtual gsVector<T> solveSystem(const gsVector<T> & F);
@@ -189,19 +186,20 @@ protected:
     virtual void computeUt();
     virtual void computeUbar();
 
+// Purely virtual functions
+protected:
+    virtual void initMethods() = 0;
+    virtual void initiateStep() = 0;
+    virtual void iterationFinish() = 0;
 
+    virtual void quasiNewtonPredictor() = 0;
+    virtual void quasiNewtonIteration() = 0;
 
-    // virtual void initOutput() = 0;
+    virtual void predictor() = 0;
+    virtual void iteration() = 0;
 
-    // virtual void stepOutput() = 0;
-
-    // virtual void iteration() = 0;
-
-    // virtual void initiateStep() = 0;
-
-    // virtual void predictor() = 0;
-
-    // virtual void iterationFinish() = 0;
+    virtual void initOutput() = 0;
+    virtual void stepOutput() = 0;
 
 protected:
 
@@ -230,16 +228,6 @@ protected:
         };
     };
 
-    struct angmethod
-    {
-        enum type
-        {
-            Step = 0,
-            Iteration  = 1,
-            Predictor  = 2,
-        };
-    };
-
     struct solver
     {
         enum type
@@ -258,7 +246,6 @@ protected:
         };
     };
 
-
   protected:
 
 
@@ -275,10 +262,6 @@ protected:
     T m_arcLength;
     T m_arcLength_prev;
     bool m_adaptiveLength;
-
-    /// Scaling parameter
-    T m_phi;
-    bool m_phi_user;
 
     /// Tolerance value to decide convergence
     T m_tolerance;
@@ -380,31 +363,11 @@ protected:
     index_t m_bifurcationMethod;
     index_t m_solverType;
 
-    // Angle determination method: 0: determine based on previous load step. 1: determine based on previous iteration
-    index_t m_angleDetermine;
-
     // What to do after computeSingularPoint fails?
     index_t m_SPfail;
 
     // Branch switch parameter
     T m_tau;
-
-    // MODIFIED ARC LENGTH METHOD
-    /// factor (modified arc length method)
-    T m_eta;
-
-    // discriminant
-    T m_discriminant;
-
-    T m_alpha1;
-    T m_alpha2;
-    T m_alpha3;
-
-    T m_a0;
-    T m_b0,m_b1;
-    T m_c0,m_c1,m_c2;
-
-    T m_tangentLength;
 };
 
 

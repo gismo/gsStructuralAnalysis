@@ -30,12 +30,13 @@ class gsALMCrisfield : public gsALMBase<T>
 {
 
     typedef gsALMBase<T> Base;
+
 public:
 
     using Base::setLength;
 
-
 protected:
+
     using Base::computeJacobian;
     using Base::computeResidual;
     using Base::computeResidualNorms;
@@ -43,8 +44,6 @@ protected:
     using Base::computeUbar;
     using Base::computeStability;
     using Base::computeLength;
-
-
 
 public:
 
@@ -60,18 +59,23 @@ public:
         initMethods();
     }
 
-
-public:
-
-    void initialize() {m_initialized = true; this -> initMethods(); this -> init();}
-
-    void step();
-
 protected:
 
-    void init();
+// Implementations for virtual functions
     void initMethods();
+    void initiateStep();
+    void iterationFinish();
 
+    void quasiNewtonPredictor();
+    void quasiNewtonIteration();
+
+    void predictor();
+    void iteration();
+
+    void initOutput();
+    void stepOutput();
+
+// Additional internal functions
     void defaultOptions();
     void getOptions();
 
@@ -87,18 +91,6 @@ protected:
 
     void computeLambdaMU();
 
-    void initOutput();
-
-    void stepOutput();
-
-    void iteration();
-
-    void initiateStep();
-
-    void predictor();
-
-    void iterationFinish();
-
 protected:
 
     // Number of degrees of freedom
@@ -106,67 +98,9 @@ protected:
 
     using Base::m_jacobian;
     using Base::m_residualFun;
-    using Base::m_residualFunMod;
     using Base::m_forcing;
 
-    /// Linear solver employed
-    using Base::m_LDLTsolver;   // Cholesky
-    using Base::m_CGsolver;     // CG
-
-protected:
-
-/// @brief Specifies the material law to use
-    struct method
-    {
-        enum type
-        {
-            LoadControl  = 0,
-            Riks  = 1,
-            Crisfield = 2,
-            ConsistentCrisfield = 3,
-            ExplicitIterations = 4,
-        };
-    };
-
-    struct bifmethod
-    {
-        enum type
-        {
-            Determinant = 0,
-            Eigenvalue  = 1,
-        };
-    };
-
-    struct angmethod
-    {
-        enum type
-        {
-            Step = 0,
-            Iteration  = 1,
-            Predictor  = 2,
-        };
-    };
-
-    struct solver
-    {
-        enum type
-        {
-            LDLT = 0,
-            CG  = 1, // The CG solver is robust for membrane models, where zero-blocks in the matrix might occur.
-        };
-    };
-
-    struct SPfail
-    {
-        enum type
-        {
-            Without  = 0,
-            With     = 1,
-        };
-    };
-
-
-  protected:
+    /// Solver options
     using Base::m_options;
 
     /// Number of Arc Length iterations performed
@@ -175,55 +109,26 @@ protected:
     /// Maximum number of Arc Length iterations allowed
     using Base::m_maxIterations;
 
-    /// Number of desired iterations
-    using Base::m_desiredIterations;
-
     /// Length of the step in the u,f plane
     using Base::m_arcLength;
-    using Base::m_arcLength_prev;
-    using Base::m_adaptiveLength;
 
-    /// Scaling parameter
-    T m_phi;
-    bool m_phi_user;
-
-    /// Tolerance value to decide convergence
-    using Base::m_tolerance;
-
-    /// Tolerance value to decide convergence - Force criterion
-    using Base::m_toleranceF;
-
-    /// Tolerance value to decide convergence - Displacement criterion
-    using Base::m_toleranceU;
-
+    /// Output verbosity
     using Base::m_verbose;
-    using Base::m_initialized;
 
-    using Base::m_quasiNewton;
-    using Base::m_quasiNewtonInterval;
-
+    /// Note
     using Base::m_note;
 
     /// Convergence result
     using Base::m_converged;
 
     /// Force residuum
-    using Base::m_residue;
-
-    /// Force residuum
     using Base::m_residueF;
-    using Base::m_basisResidualF;
 
     /// Displacement residuum
     using Base::m_residueU;
-    using Base::m_basisResidualU;
 
     /// Load residuum
     using Base::m_residueL;
-
-    /// Singular point
-    using Base::m_residueKTPhi;
-    using Base::m_basisResidualKTPhi;
 
     /// Indicator for bifurcation
     using Base::m_indicator;
@@ -261,35 +166,12 @@ protected:
     using Base::m_jacMat;
     using Base::m_detKT;
 
-    /// Value of residual function
-    using Base::m_resVec;
-
-    // eigenvector
-    using Base::m_V;
-    // step eigenvector
-    using Base::m_deltaV;
-    using Base::m_deltaVbar;
-    using Base::m_deltaVt;
-    using Base::m_DeltaV;
-
-    // Stability indicator
-    using Base::m_stabilityVec;
-
-    // Integer if point is unstable (-1) or not (+1)
-    using Base::m_stabilityPrev; //previous step
-    using Base::m_stability; //current step
-    // Method to check if a point is a bifurcation point
-    using Base::m_bifurcationMethod;
-    using Base::m_solverType;
-
     // Angle determination method: 0: determine based on previous load step. 1: determine based on previous iteration
-    using Base::m_angleDetermine;
+    index_t m_angleDetermine;
 
-    // What to do after computeSingularPoint fails?
-    using Base::m_SPfail;
-
-    // Branch switch parameter
-    using Base::m_tau;
+    /// Scaling parameter
+    T m_phi;
+    bool m_phi_user;
 
     // MODIFIED ARC LENGTH METHOD
     /// factor (modified arc length method)
@@ -306,7 +188,18 @@ protected:
     T m_b0,m_b1;
     T m_c0,m_c1,m_c2;
 
-    T m_tangentLength;
+protected:
+    /// Angle determination method option
+    struct angmethod
+    {
+        enum type
+        {
+            Step = 0,
+            Iteration  = 1,
+            Predictor  = 2,
+        };
+    };
+
 };
 
 

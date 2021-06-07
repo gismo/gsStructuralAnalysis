@@ -25,15 +25,6 @@ index_t sign(T val)
     return (T(0) < val) - (val < T(0));
 }
 
-/// Modulus function
-template <class T>
-index_t mod(T x, T y)
-{
-    T m = x - floor(x / y) * y;
-    m *= sign(y);
-    return m;
-}
-
 /// sort vector
 template <class T>
 index_t countNegatives(gsVector<T> vec)
