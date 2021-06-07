@@ -11,10 +11,9 @@
     Author(s): H.M. Verhelst (2019-..., TU Delft)
 */
 
-#include <typeinfo>
-#include <gsSpectra/gsSpectra.h>
-#pragma once
+#include <gsStructuralAnalysis/gsEigenProblemBase.h>
 
+#pragma once
 
 namespace gismo
 {
@@ -27,103 +26,66 @@ namespace gismo
     \ingroup ThinShell
 */
 template <class T, Spectra::GEigsMode GEigsMode = Spectra::GEigsMode::Cholesky>
-class gsBucklingSolver
+class gsBucklingSolver : public gsEigenProblemBase<T,GEigsMode>
 {
 protected:
-    // typedef typename std::vector<std::pair<T,gsMatrix<T>> > modes_t;
+
+    typedef gsEigenProblemBase<T,GEigsMode> Base;
 
 public:
 
-  /// Constructor giving access to the gsShellAssembler object to create a linear system per iteration
-  gsBucklingSolver(     gsSparseMatrix<T> &linear,
+    /// Constructor giving access to the gsShellAssembler object to create a linear system per iteration
+    gsBucklingSolver(     gsSparseMatrix<T> &linear,
                         gsVector<T> &rhs,
                         std::function < gsSparseMatrix<T> ( gsVector<T> const & ) > &nonlinear,
                         T scaling = 1.0) :
-    m_A(linear),
-    m_rhs(rhs),
-    m_nonlinearFun(nonlinear),
-    m_scaling(scaling)
-  {
-    m_verbose = false;
-    this->initializeMatrix();
-  }
+        m_rhs(rhs),
+        m_nonlinearFun(nonlinear),
+        m_scaling(scaling)
+    {
+        m_A = linear;
+        m_verbose = false;
+        this->initializeMatrix();
+    }
 
-  /// Constructor giving access to the gsShellAssembler object to create a linear system per iteration
-  gsBucklingSolver(     gsSparseMatrix<T> &linear,
-                        gsSparseMatrix<T> &nonlinear ) :
-    m_A(linear)
-  {
-    m_verbose = false;
-    m_B = nonlinear-m_A;
-  }
-public:
-
-    void verbose() {m_verbose=true; };
-
-    void compute(T shift = 0.0);
-    void computeSparse( T shift = 0.0,
-                        index_t number = 10,
-                        index_t ncvFac = 3,
-                        Spectra::SortRule selectionRule = Spectra::SortRule::SmallestMagn,
-                        Spectra::SortRule sortRule = Spectra::SortRule::SmallestMagn)
-    {computeSparse_impl<GEigsMode>(shift,number,ncvFac,selectionRule,sortRule);};
-
-    void computePower();
-
-    gsMatrix<T> values() const { return m_values; };
-    T value(int k) const { return m_values.at(k); };
-
-    gsMatrix<T> vectors() const { return m_vectors; };
-    gsMatrix<T> vector(int k) const { return m_vectors.col(k); };
-
-    std::vector<std::pair<T,gsMatrix<T>> > mode(int k) const {return makeMode(k); }
-
-private:
-    template<Spectra::GEigsMode _GEigsMode>
-    typename std::enable_if<_GEigsMode==Spectra::GEigsMode::Cholesky ||
-                            _GEigsMode==Spectra::GEigsMode::RegularInverse
-                            ,
-                            void>::type computeSparse_impl(T shift, index_t number, index_t ncvFac, Spectra::SortRule selectionRule, Spectra::SortRule sortRule);
-
-    template<Spectra::GEigsMode _GEigsMode>
-    typename std::enable_if<_GEigsMode==Spectra::GEigsMode::ShiftInvert ||
-                            _GEigsMode==Spectra::GEigsMode::Buckling ||
-                            _GEigsMode==Spectra::GEigsMode::Cayley
-                            ,
-                            void>::type computeSparse_impl(T shift, index_t number, index_t ncvFac, Spectra::SortRule selectionRule, Spectra::SortRule sortRule);
-
+    /// Constructor giving access to the gsShellAssembler object to create a linear system per iteration
+    gsBucklingSolver(   gsSparseMatrix<T> &linear,
+                        gsSparseMatrix<T> &nonlinear )
+    {
+        m_A = linear;
+        m_verbose = false;
+        m_B = nonlinear-m_A;
+    }
 
 protected:
 
-    const gsSparseMatrix<T> m_A;
-    gsSparseMatrix<T> m_B;
+    void initializeMatrix()
+    {
+        if (m_verbose) { gsInfo<<"Computing matrices" ; }
+        m_solver.compute(m_A);
+        if (m_verbose) { gsInfo<<"." ; }
+        m_solVec = m_solver.solve(m_scaling*m_rhs);
+        if (m_verbose) { gsInfo<<"." ; }
+        m_B = m_nonlinearFun(m_solVec)-m_A;
+        if (m_verbose) { gsInfo<<"." ; }
+        if (m_verbose) { gsInfo<<"Finished\n" ; }
+    }
+
+protected:
+
+    using Base::m_A;
     const gsVector<T> m_rhs;
     const std::function < gsSparseMatrix<T> ( gsVector<T> const & ) > m_nonlinearFun;
     T m_scaling;
+    using Base::m_B;
+
 
     /// Linear solver employed
     gsSparseSolver<>::SimplicialLDLT  m_solver;
-    Eigen::GeneralizedSelfAdjointEigenSolver< gsMatrix<real_t>::Base >  m_eigSolver;
+    gsVector<> m_solVec;
 
-    gsSparseMatrix<T> m_diff;
-    gsVector<T> m_solVec;
-    gsMatrix<T> m_values,m_vectors;
-
-    bool m_verbose;
-
-    index_t m_num;
-
-protected:
-
-    void initializeMatrix();
-    std::vector<std::pair<T,gsMatrix<T>> > makeMode(int k) const;
+    using Base::m_verbose;
 
 };
 
-
 } // namespace gismo
-
-
-#ifndef GISMO_BUILD_LIB
-#include GISMO_HPP_HEADER(gsBucklingSolver.hpp)
-#endif
