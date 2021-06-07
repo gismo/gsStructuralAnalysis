@@ -20,55 +20,109 @@
 namespace gismo
 {
 
-template <class T>
-void gsBucklingSolver<T>::initializeMatrix()
+template <class T, Spectra::GEigsMode GEigsMode>
+void gsBucklingSolver<T,GEigsMode>::initializeMatrix()
 {
   if (m_verbose) { gsInfo<<"Computing matrices" ; }
-  m_solver.compute(m_linear);
+  m_solver.compute(m_A);
   if (m_verbose) { gsInfo<<"." ; }
   m_solVec = m_solver.solve(m_scaling*m_rhs);
   if (m_verbose) { gsInfo<<"." ; }
-  m_nonlinear = m_nonlinearFun(m_solVec);
+  m_B = m_nonlinearFun(m_solVec)-m_A;
   if (m_verbose) { gsInfo<<"." ; }
   if (m_verbose) { gsInfo<<"Finished\n" ; }
 };
 
-template <class T>
-void gsBucklingSolver<T>::compute()
+template <class T, Spectra::GEigsMode GEigsMode>
+void gsBucklingSolver<T,GEigsMode>::compute(T shift)
 {
     if (m_verbose) { gsInfo<<"Solving eigenvalue problem" ; }
-    m_eigSolver.compute(m_linear,m_nonlinear - m_linear);
+    m_eigSolver.compute(m_A-shift*m_B,m_B);
     if (m_verbose) { gsInfo<<"." ; }
     m_values  = m_eigSolver.eigenvalues();
+    m_values.array() += shift;
     if (m_verbose) { gsInfo<<"." ; }
     m_vectors = m_eigSolver.eigenvectors();
     if (m_verbose) { gsInfo<<"." ; }
     if (m_verbose) { gsInfo<<"Finished\n" ; }
 };
 
-template <class T>
-void gsBucklingSolver<T>::computeSparse(T shift, index_t number)
+template <class T, Spectra::GEigsMode GEigsMode>
+template< Spectra::GEigsMode _GEigsMode>
+typename std::enable_if<_GEigsMode==Spectra::GEigsMode::Cholesky ||
+                        _GEigsMode==Spectra::GEigsMode::RegularInverse
+                        ,
+                        void>::type
+gsBucklingSolver<T,GEigsMode>::computeSparse_impl(T shift, index_t number, index_t ncvFac, Spectra::SortRule selectionRule, Spectra::SortRule sortRule)
 {
-    if (m_verbose) { gsInfo<<"Solving eigenvalue problem" ; }
-    gsSparseMatrix<T> lhs = m_linear-shift*(m_nonlinear - m_linear);
-    gsSpectraGenSymSolver<gsSparseMatrix<T>,Spectra::GEigsMode::Cholesky> solver(lhs,m_nonlinear - m_linear,number,2*number);
-    if (m_verbose) { gsInfo<<"." ; }
-    solver.init();
-    if (m_verbose) { gsInfo<<"." ; }
-    solver.compute(Spectra::SortRule::SmallestMagn,1000,1e-10,Spectra::SortRule::SmallestAlge);
-    if (m_verbose) { gsInfo<<"." ; }
-    m_values  = solver.eigenvalues();
-    m_values.array() += shift;
-    if (m_verbose) { gsInfo<<"." ; }
-    m_vectors = solver.eigenvectors();
-    if (m_verbose) { gsInfo<<"Finished\n" ; }
+#ifdef GISMO_WITH_SPECTRA
+  if (m_verbose) { gsInfo<<"Solving eigenvalue problem" ; }
+  gsSpectraGenSymSolver<gsSparseMatrix<T>,GEigsMode> solver(m_A-shift*m_B,m_B,number,2*number);
+  if (m_verbose) { gsInfo<<"." ; }
+  solver.init();
+  if (m_verbose) { gsInfo<<"." ; }
+  solver.compute(selectionRule,1000,1e-6,sortRule);
+
+  if (solver.info()==Spectra::CompInfo::Successful)         { gsDebug<<"Spectra converged in "<<solver.num_iterations()<<" iterations and with "<<solver.num_operations()<<"operations. \n"; }
+  else if (solver.info()==Spectra::CompInfo::NumericalIssue){ GISMO_ERROR("Spectra did not converge! Error code: NumericalIssue"); }
+  else if (solver.info()==Spectra::CompInfo::NotConverging) { GISMO_ERROR("Spectra did not converge! Error code: NotConverging"); }
+  else if (solver.info()==Spectra::CompInfo::NotComputed)   { GISMO_ERROR("Spectra did not converge! Error code: NotComputed");   }
+  else                                                      { GISMO_ERROR("No error code known"); }
+
+  if (m_verbose) { gsInfo<<"." ; }
+  m_values  = solver.eigenvalues();
+  m_values.array() += shift;
+  if (m_verbose) { gsInfo<<"." ; }
+  m_vectors = solver.eigenvectors();
+  if (m_verbose) { gsInfo<<"Finished\n" ; }
+#else
+    GISMO_ERROR("Spectra not available. Tun CMake with -DGISMO_WITH_SPECTRA=ON");
+#endif
+}
+
+template <class T, Spectra::GEigsMode GEigsMode>
+template< Spectra::GEigsMode _GEigsMode>
+typename std::enable_if<_GEigsMode==Spectra::GEigsMode::ShiftInvert ||
+                        _GEigsMode==Spectra::GEigsMode::Buckling ||
+                        _GEigsMode==Spectra::GEigsMode::Cayley
+                        ,
+                        void>::type
+gsBucklingSolver<T,GEigsMode>::computeSparse_impl(T shift, index_t number, index_t ncvFac, Spectra::SortRule selectionRule, Spectra::SortRule sortRule)
+{
+#ifdef GISMO_WITH_SPECTRA
+  if (selectionRule == Spectra::SortRule::SmallestMagn )
+    gsWarn<<"Selection Rule 'SmallestMagn' is selected, but for ShiftInvert, Buckling and Cayley it is advised to use 'LargestMagn'!\n";
+  if (selectionRule == Spectra::SortRule::SmallestAlge )
+    gsWarn<<"Selection Rule 'SmallestAlge' is selected, but for ShiftInvert, Buckling and Cayley it is advised to use 'LargestMagn'!\n";
+
+  if (m_verbose) { gsInfo<<"Solving eigenvalue problem" ; }
+  gsSpectraGenSymShiftSolver<gsSparseMatrix<T>,GEigsMode> solver(m_A,m_B,math::floor(m_A.cols()/2),m_A.cols(),shift);
+  if (m_verbose) { gsInfo<<"." ; }
+  solver.init();
+  if (m_verbose) { gsInfo<<"." ; }
+  solver.compute(selectionRule,1000,1e-6,sortRule);
+
+  if (solver.info()==Spectra::CompInfo::Successful)         { gsDebug<<"Spectra converged in "<<solver.num_iterations()<<" iterations and with "<<solver.num_operations()<<"operations. \n"; }
+  else if (solver.info()==Spectra::CompInfo::NumericalIssue){ GISMO_ERROR("Spectra did not converge! Error code: NumericalIssue"); }
+  else if (solver.info()==Spectra::CompInfo::NotConverging) { GISMO_ERROR("Spectra did not converge! Error code: NotConverging"); }
+  else if (solver.info()==Spectra::CompInfo::NotComputed)   { GISMO_ERROR("Spectra did not converge! Error code: NotComputed");   }
+  else                                                      { GISMO_ERROR("No error code known"); }
+
+  if (m_verbose) { gsInfo<<"." ; }
+  m_values  = solver.eigenvalues();
+  if (m_verbose) { gsInfo<<"." ; }
+  m_vectors = solver.eigenvectors();
+  if (m_verbose) { gsInfo<<"Finished\n" ; }
+#else
+    GISMO_ERROR("Spectra not available. Tun CMake with -DGISMO_WITH_SPECTRA=ON");
+#endif
 };
 
-template <class T>
-void gsBucklingSolver<T>::computePower()
+template <class T, Spectra::GEigsMode GEigsMode>
+void gsBucklingSolver<T,GEigsMode>::computePower()
 {
     if (m_verbose) { gsInfo<<"Solving eigenvalue problem" ; }
-    gsMatrix<T> D = m_linear.toDense().inverse() * (m_nonlinear.toDense() - m_linear.toDense());
+    gsMatrix<T> D = m_A.toDense().inverse() * (m_B);
 
     gsVector<T> v(D.cols());
     v.setOnes();
@@ -97,8 +151,8 @@ void gsBucklingSolver<T>::computePower()
 };
 
 
-template <class T>
-std::vector<std::pair<T,gsMatrix<T>> > gsBucklingSolver<T>::makeMode(int k) const
+template <class T, Spectra::GEigsMode GEigsMode>
+std::vector<std::pair<T,gsMatrix<T>> > gsBucklingSolver<T,GEigsMode>::makeMode(int k) const
 {
     std::vector<std::pair<T,gsMatrix<T>> > mode;
     mode.push_back( std::make_pair( m_values.at(k), m_vectors.col(k) ) );

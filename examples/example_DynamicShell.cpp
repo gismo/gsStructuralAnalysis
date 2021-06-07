@@ -110,6 +110,10 @@ int main (int argc, char** argv)
       methodName = "Newmark";
     else if (method==4)
       methodName = "Bathe";
+    else if (method==5)
+      methodName = "CentralDiff";
+    else if (method==6)
+      methodName = "RK4";
 
 
     if (write)

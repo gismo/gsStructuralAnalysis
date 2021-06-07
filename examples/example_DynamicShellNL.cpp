@@ -109,7 +109,10 @@ int main (int argc, char** argv)
       methodName = "Newmark";
     else if (method==4)
       methodName = "Bathe";
-
+    else if (method==5)
+      methodName = "CentralDiff";
+    else if (method==6)
+      methodName = "RK4";
 
     if (write)
     {
@@ -156,6 +159,8 @@ int main (int argc, char** argv)
     BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 1 - y
     BCs.addCondition(boundary::south, condition_type::clamped,0,0,false,2);
 
+    BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 0 ); // unknown 1 - y
+    BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 1 - y
     BCs.addCondition(boundary::west, condition_type::clamped,0,0,false,2);
     BCs.addCondition(boundary::west, condition_type::collapsed,0,0,false,2);
 

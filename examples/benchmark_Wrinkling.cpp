@@ -57,8 +57,8 @@ void writeSectionOutput(const gsMultiPatch<T> & mp, const std::string dirname, c
 int main (int argc, char** argv)
 {
     // Input options
-    int numElevate  = 1;
-    int numHref     = 1;
+    int numElevate  = 2;
+    int numHref     = 5;
     bool plot       = false;
     bool mesh = false;
     bool stress       = false;
@@ -75,7 +75,7 @@ int main (int argc, char** argv)
     real_t tau = 1e4;
 
     index_t Compressibility = 0;
-    index_t material = 0;
+    index_t material = 3;
     index_t impl = 1; // 1= analytical, 2= generalized, 3= spectral
 
     real_t relax = 1.0;
@@ -91,7 +91,7 @@ int main (int argc, char** argv)
 
     // Arc length method options
     real_t dL = 0; // General arc length
-    real_t dLb = 0.5; // Ard length to find bifurcation
+    real_t dLb = 1e-2; // Ard length to find bifurcation
     real_t tol = 1e-6;
     real_t tolU = 1e-6;
     real_t tolF = 1e-3;
