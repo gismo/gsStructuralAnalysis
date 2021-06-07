@@ -14,42 +14,10 @@
 #pragma once
 
 #include <typeinfo>
+#include <gsStructuralAnalysis/gsALMHelper.h>
 
 namespace gismo
 {
-
-// Miscelaneous functions
-/// sign function
-template <class T>
-index_t sign(T val)
-{
-    return (T(0) < val) - (val < T(0));
-}
-
-/// Modulus function
-template <class T>
-index_t mod(T x, T y)
-{
-    T m = x - floor(x / y) * y;
-    m *= sign(y);
-    return m;
-}
-
-/// sort vector
-template <class T>
-index_t countNegatives(gsVector<T> vec)
-{
-  index_t count = 0;
-  index_t N = vec.cols();
-  index_t M = vec.rows();
-  for(index_t i = 0; i < M; i++)
-        for(index_t j = 0; j < N; j++)
-        {
-            if( vec(i,j) < 0 )
-                count += 1;
-        }
-    return count;
-}
 
 template <class T>
 void gsArcLengthIterator<T>::defaultOptions()

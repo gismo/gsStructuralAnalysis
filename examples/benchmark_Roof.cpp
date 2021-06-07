@@ -15,8 +15,8 @@
 
 #include <gsKLShell/gsThinShellAssembler.h>
 #include <gsKLShell/getMaterialMatrix.h>
-// #include <gsThinShell/gsArcLengthIterator.h>
-#include <gsStructuralAnalysis/gsArcLengthIterator.h>
+// #include <gsThinShell/gsALMCrisfield.h>
+#include <gsStructuralAnalysis/gsALMCrisfield.h>
 
 using namespace gismo;
 
@@ -24,7 +24,7 @@ template <class T>
 void initStepOutput( const std::string name, const gsMatrix<T> & points);
 
 template <class T>
-void writeStepOutput(const gsArcLengthIterator<T> & arcLength, const gsMultiPatch<T> & deformation, const std::string name, const gsMatrix<T> & points, const index_t extreme=-1, const index_t kmax=100);
+void writeStepOutput(const gsALMCrisfield<T> & arcLength, const gsMultiPatch<T> & deformation, const std::string name, const gsMatrix<T> & points, const index_t extreme=-1, const index_t kmax=100);
 
 int main (int argc, char** argv)
 {
@@ -293,11 +293,10 @@ int main (int argc, char** argv)
     assembler->assemble();
     gsVector<> Force = assembler->rhs();
 
-    gsArcLengthIterator<real_t> arcLength(Jacobian, ALResidual, Force);
+    gsALMCrisfield<real_t> arcLength(Jacobian, ALResidual, Force);
 
     arcLength.options().setInt("Solver",0); // LDLT solver
     arcLength.options().setInt("BifurcationMethod",0); // 0: determinant, 1: eigenvalue
-    arcLength.options().setInt("Method",method);
     arcLength.options().setReal("Length",dL);
     arcLength.options().setInt("AngleMethod",0); // 0: step, 1: iteration
     arcLength.options().setSwitch("AdaptiveLength",adaptive);
@@ -754,7 +753,7 @@ void initStepOutput(const std::string name, const gsMatrix<T> & points)
 }
 
 template <class T>
-void writeStepOutput(const gsArcLengthIterator<T> & arcLength, const gsMultiPatch<T> & deformation, const std::string name, const gsMatrix<T> & points, const index_t extreme, const index_t kmax) // extreme: the column of point indices to compute the extreme over (default -1)
+void writeStepOutput(const gsALMCrisfield<T> & arcLength, const gsMultiPatch<T> & deformation, const std::string name, const gsMatrix<T> & points, const index_t extreme, const index_t kmax) // extreme: the column of point indices to compute the extreme over (default -1)
 {
   gsMatrix<T> P(2,1), Q(2,1);
   gsMatrix<T> out(3,points.cols());
