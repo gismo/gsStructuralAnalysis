@@ -1,4 +1,4 @@
- /** @file gsEigenSolverBase.h
+ /** @file gsEigenProblemBase.h
 
     @brief Performs linear buckling analysis given a matrix or functions of a matrix
 
@@ -20,62 +20,73 @@ namespace gismo
 {
 
 /**
-    @brief Performs the arc length method to solve a nonlinear equation system.
+    @brief Performs linear buckling analysis given a matrix or functions of a matrix
 
     \tparam T coefficient type
 
-    \ingroup ThinShell
+    \ingroup StructuralAnalysis
 */
-template <class T>
-class gsEigenSolverBase
+template <class T, Spectra::GEigsMode GEigsMode>
+class gsEigenProblemBase
 {
-protected:
-    // typedef typename std::vector<std::pair<T,gsMatrix<T>> > modes_t;
 
 public:
 
-    virtual ~gsEigenSolverBase() {};
+    ~gsEigenProblemBase() {};
 
 public:
 
-    void verbose() {m_verbose=true; };
+    virtual void verbose() {m_verbose=true; };
 
-    void compute();
-    void computeSparse(T shift = 0.0, index_t number = 10);
-    void computePower();
+    virtual void compute();
+    virtual void compute(T shift);
 
-    gsMatrix<T> values() const { return m_values; };
-    T value(int k) const { return m_values.at(k); };
+    virtual void computeSparse(T shift = 0.0, index_t number = 10, index_t ncvFac = 3, Spectra::SortRule selectionRule = Spectra::SortRule::SmallestMagn, Spectra::SortRule sortRule = Spectra::SortRule::SmallestMagn)
+    {computeSparse_impl<GEigsMode>(shift,number,ncvFac,selectionRule,sortRule);};
 
-    gsMatrix<T> vectors() const { return m_vectors; };
-    gsMatrix<T> vector(int k) const { return m_vectors.col(k); };
+    virtual void computePower();
 
-    std::vector<std::pair<T,gsMatrix<T>> > mode(int k) const {return makeMode(k); }
+    virtual gsMatrix<T> values() const { return m_values; };
+    virtual T value(int k) const { return m_values.at(k); };
+
+    virtual gsMatrix<T> vectors() const { return m_vectors; };
+    virtual gsMatrix<T> vector(int k) const { return m_vectors.col(k); };
+
+    virtual std::vector<std::pair<T,gsMatrix<T>> > mode(int k) const {return makeMode(k); }
+
+
 
 protected:
 
-    const gsSparseMatrix<T> m_linear;
-    gsSparseMatrix<T> m_nonlinear;
-    const gsVector<T> m_rhs;
-    const std::function < gsSparseMatrix<T> ( gsVector<T> const & ) > m_nonlinearFun;
-    T m_scaling;
+    virtual std::vector<std::pair<T,gsMatrix<T>> > makeMode(int k) const;
 
-    /// Linear solver employed
-    gsSparseSolver<>::SimplicialLDLT  m_solver;
+private:
+    template<Spectra::GEigsMode _GEigsMode>
+    typename std::enable_if<_GEigsMode==Spectra::GEigsMode::Cholesky ||
+                            _GEigsMode==Spectra::GEigsMode::RegularInverse
+                            ,
+                            void>::type computeSparse_impl(T shift, index_t number, index_t ncvFac, Spectra::SortRule selectionRule, Spectra::SortRule sortRule);
+
+    template<Spectra::GEigsMode _GEigsMode>
+    typename std::enable_if<_GEigsMode==Spectra::GEigsMode::ShiftInvert ||
+                            _GEigsMode==Spectra::GEigsMode::Buckling ||
+                            _GEigsMode==Spectra::GEigsMode::Cayley
+                            ,
+                            void>::type computeSparse_impl(T shift, index_t number, index_t ncvFac, Spectra::SortRule selectionRule, Spectra::SortRule sortRule);
+
+
+protected:
+
+    gsSparseMatrix<T> m_A;
+    gsSparseMatrix<T> m_B;
+
     Eigen::GeneralizedSelfAdjointEigenSolver< gsMatrix<real_t>::Base >  m_eigSolver;
 
-    gsSparseMatrix<T> m_diff;
-    gsVector<T> m_solVec;
     gsMatrix<T> m_values,m_vectors;
 
     bool m_verbose;
 
     index_t m_num;
-
-protected:
-
-    void initializeMatrix();
-    std::vector<std::pair<T,gsMatrix<T>> > makeMode(int k) const;
 
 };
 
@@ -84,5 +95,5 @@ protected:
 
 
 #ifndef GISMO_BUILD_LIB
-#include GISMO_HPP_HEADER(gsEigenSolverBase.hpp)
+#include GISMO_HPP_HEADER(gsEigenProblemBase.hpp)
 #endif
