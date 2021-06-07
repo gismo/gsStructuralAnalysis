@@ -38,13 +38,6 @@ void gsALMCrisfield<T>::getOptions()
 }
 
 template <class T>
-void gsALMCrisfield<T>::init()
-{
-  this->computeStability(m_U,true);
-  m_stability = this->stability(); // requires Jabobian!!
-}
-
-template <class T>
 void gsALMCrisfield<T>::initMethods()
 {
   m_numDof = m_forcing.size();
@@ -55,71 +48,32 @@ void gsALMCrisfield<T>::initMethods()
   m_DeltaLold = 0.0;
 }
 
-template <class T>
-void gsALMCrisfield<T>::step()
-{
-  GISMO_ASSERT(m_initialized,"Arc-Length Method is not initialized! Call initialize()");
-  initiateStep();
-  computeJacobian();
-  predictor();
-  computeResidual();
-  computeResidualNorms();
-
-  if (m_verbose)
-     stepOutput();
-
-  if (m_quasiNewton)
-  {
-    computeJacobian();
-    computeUt(); // rhs does not depend on solution
-    computeUbar(); // rhs contains residual and should be computed every time
-  }
-
-  for (m_numIterations = 1; m_numIterations < m_maxIterations; ++m_numIterations)
-  {
-    if ( (!m_quasiNewton) || ( ( m_quasiNewtonInterval>0 ) && ( mod(m_numIterations,m_quasiNewtonInterval) < 1e-10 ) ) )
-    {
-      computeJacobian();
-      computeUt(); // rhs does not depend on solution
-    }
-
-    computeUbar(); // rhs contains residual and should be computed every time
-    iteration();
-    computeResidual();
-    computeResidualNorms();
-
-    if (m_verbose)
-       stepOutput();
-    else
-    {
-      gsInfo<<"Residual: "<<m_residue<<"\n";
-    }
-      // gsInfo<<"residual F = "<<m_residueF<<"\t tol F"<<m_toleranceF<<"\t residual U = "<<m_residueU<<"\t tol U"<<m_toleranceU<<"\n";
-    // Termination criteria
-    if ( m_residueF < m_toleranceF && m_residueU < m_toleranceU )
-    // if ( m_residue < m_tolerance )
-    {
-      iterationFinish();
-      // Change arc length
-      if (m_adaptiveLength)
-        computeLength();
-      else
-        m_arcLength_prev = m_arcLength;
-      break;
-    }
-    else if (m_numIterations == m_maxIterations-1)
-      gsInfo<<"maximum iterations reached. Solution did not converge\n";
-
-      // GISMO_ERROR("maximum iterations reached. Solution did not converge");
-  }
-}
-
 // ------------------------------------------------------------------------------------------------------------
 // ---------------------------------------Crisfield's method---------------------------------------------------
 // ------------------------------------------------------------------------------------------------------------
+
+template <class T>
+void gsALMCrisfield<T>::quasiNewtonPredictor()
+{
+  computeJacobian();
+  computeUt(); // rhs does not depend on solution
+  computeUbar(); // rhs contains residual and should be computed every time
+
+}
+
+template <class T>
+void gsALMCrisfield<T>::quasiNewtonIteration()
+{
+  computeJacobian();
+  computeUt(); // rhs does not depend on solution
+}
+
 template <class T>
 void gsALMCrisfield<T>::iteration()
 {
+  computeUbar(); // rhs contains residual and should be computed every time
+
+  // Compute next solution
   m_eta = 1.0;
 
   T lamold = m_deltaL;
@@ -146,9 +100,6 @@ void gsALMCrisfield<T>::iteration()
 template <class T>
 void gsALMCrisfield<T>::initiateStep()
 {
-  if (m_verbose)
-    initOutput();
-
   m_DeltaU = m_deltaUbar = m_deltaUt = gsVector<T>::Zero(m_numDof);
   m_DeltaL = m_deltaL = 0.0;
   m_eta = 1.0;
@@ -157,6 +108,8 @@ void gsALMCrisfield<T>::initiateStep()
 template <class T>
 void gsALMCrisfield<T>::predictor()
 {
+  computeJacobian();
+
   m_deltaUt = this->solveSystem(m_forcing);
 
   // Choose Solution
@@ -215,6 +168,10 @@ void gsALMCrisfield<T>::iterationFinish()
     m_DeltaLold = m_DeltaL;
   }
 }
+
+// ------------------------------------------------------------------------------------------------------------
+// ---------------------------------------Lambda computations--------------------------------------------------
+// ------------------------------------------------------------------------------------------------------------
 
 template <class T>
 void gsALMCrisfield<T>::computeLambdasSimple() //Ritto-Corrêa et al. 2008

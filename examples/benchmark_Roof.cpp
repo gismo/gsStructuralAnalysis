@@ -15,8 +15,13 @@
 
 #include <gsKLShell/gsThinShellAssembler.h>
 #include <gsKLShell/getMaterialMatrix.h>
-// #include <gsThinShell/gsALMCrisfield.h>
+
+#include <gsStructuralAnalysis/gsALMBase.h>
+#include <gsStructuralAnalysis/gsALMRiks.h>
+#include <gsStructuralAnalysis/gsALMLoadControl.h>
 #include <gsStructuralAnalysis/gsALMCrisfield.h>
+#include <gsStructuralAnalysis/gsALMConsistentCrisfield.h>
+#include <gsStructuralAnalysis/gsALMExplicitIterations.h>
 
 using namespace gismo;
 
@@ -24,7 +29,7 @@ template <class T>
 void initStepOutput( const std::string name, const gsMatrix<T> & points);
 
 template <class T>
-void writeStepOutput(const gsALMCrisfield<T> & arcLength, const gsMultiPatch<T> & deformation, const std::string name, const gsMatrix<T> & points, const index_t extreme=-1, const index_t kmax=100);
+void writeStepOutput(const gsALMBase<T> * arcLength, const gsMultiPatch<T> & deformation, const std::string name, const gsMatrix<T> & points, const index_t extreme=-1, const index_t kmax=100);
 
 int main (int argc, char** argv)
 {
@@ -293,32 +298,45 @@ int main (int argc, char** argv)
     assembler->assemble();
     gsVector<> Force = assembler->rhs();
 
-    gsALMCrisfield<real_t> arcLength(Jacobian, ALResidual, Force);
+    // (0: Load control; 1: Riks' method; 2: Crisfield's method; 3: consistent crisfield method; 4: extended iterations)
+    gsALMBase<real_t> * arcLength;
+    if (method==0)
+      arcLength = new gsALMLoadControl<real_t>(Jacobian, ALResidual, Force);
+    else if (method==1)
+      arcLength = new gsALMRiks<real_t>(Jacobian, ALResidual, Force);
+    else if (method==2)
+      arcLength = new gsALMCrisfield<real_t>(Jacobian, ALResidual, Force);
+    else if (method==3)
+      arcLength = new gsALMConsistentCrisfield<real_t>(Jacobian, ALResidual, Force);
+    else if (method==4)
+      arcLength = new gsALMExplicitIterations<real_t>(Jacobian, ALResidual, Force);
+    else
+      GISMO_ERROR("Method unknown");
 
-    arcLength.options().setInt("Solver",0); // LDLT solver
-    arcLength.options().setInt("BifurcationMethod",0); // 0: determinant, 1: eigenvalue
-    arcLength.options().setReal("Length",dL);
-    arcLength.options().setInt("AngleMethod",0); // 0: step, 1: iteration
-    arcLength.options().setSwitch("AdaptiveLength",adaptive);
-    arcLength.options().setInt("AdaptiveIterations",5);
-    // arcLength.options().setReal("Scaling",0.0);
-    arcLength.options().setReal("Tol",tol);
-    arcLength.options().setReal("TolU",tolU);
-    arcLength.options().setReal("TolF",tolF);
-    arcLength.options().setInt("MaxIter",maxit);
-    arcLength.options().setSwitch("Verbose",true);
-    arcLength.options().setReal("Relaxation",relax);
+    arcLength->options().setInt("Solver",0); // LDLT solver
+    arcLength->options().setInt("BifurcationMethod",0); // 0: determinant, 1: eigenvalue
+    arcLength->options().setReal("Length",dL);
+    // arcLength->options().setInt("AngleMethod",0); // 0: step, 1: iteration
+    arcLength->options().setSwitch("AdaptiveLength",adaptive);
+    arcLength->options().setInt("AdaptiveIterations",5);
+    // arcLength->options().setReal("Scaling",0.0);
+    arcLength->options().setReal("Tol",tol);
+    arcLength->options().setReal("TolU",tolU);
+    arcLength->options().setReal("TolF",tolF);
+    arcLength->options().setInt("MaxIter",maxit);
+    arcLength->options().setSwitch("Verbose",true);
+    arcLength->options().setReal("Relaxation",relax);
     if (quasiNewtonInt>0)
     {
       quasiNewton = true;
-      arcLength.options().setInt("QuasiIterations",quasiNewtonInt);
+      arcLength->options().setInt("QuasiIterations",quasiNewtonInt);
     }
-    arcLength.options().setSwitch("Quasi",quasiNewton);
+    arcLength->options().setSwitch("Quasi",quasiNewton);
 
 
-    gsInfo<<arcLength.options();
-    arcLength.applyOptions();
-    arcLength.initialize();
+    gsInfo<<arcLength->options();
+    arcLength->applyOptions();
+    arcLength->initialize();
 
 
     gsParaviewCollection collection(dirname + "/" + output);
@@ -334,22 +352,22 @@ int main (int argc, char** argv)
 
     gsMatrix<> solVector;
     real_t indicator = 0.0;
-    arcLength.setIndicator(indicator); // RESET INDICATOR
+    arcLength->setIndicator(indicator); // RESET INDICATOR
     bool bisected = false;
     real_t dL0 = dL;
     for (index_t k=0; k<step; k++)
     {
       gsInfo<<"Load step "<< k<<"\n";
       // assembler->constructSolution(solVector,solution);
-      arcLength.step();
+      arcLength->step();
 
-      // gsInfo<<"m_U = "<<arcLength.solutionU()<<"\n";
-      if (!(arcLength.converged()))
+      // gsInfo<<"m_U = "<<arcLength->solutionU()<<"\n";
+      if (!(arcLength->converged()))
       {
         gsInfo<<"Error: Loop terminated, arc length method did not converge.\n";
         dL = dL / 2.;
-        arcLength.setLength(dL);
-        arcLength.setSolution(Uold,Lold);
+        arcLength->setLength(dL);
+        arcLength->setSolution(Uold,Lold);
         bisected = true;
         k -= 1;
         continue;
@@ -357,22 +375,22 @@ int main (int argc, char** argv)
 
       // if (SingularPoint)
       // {
-      //   arcLength.computeStability(arcLength.solutionU(),quasiNewton);
-      //   if (arcLength.stabilityChange())
+      //   arcLength->computeStability(arcLength->solutionU(),quasiNewton);
+      //   if (arcLength->stabilityChange())
       //   {
       //     gsInfo<<"Bifurcation spotted!"<<"\n";
-      //     arcLength.computeSingularPoint(1e-4, 5, Uold, Lold, 1e-10, 0, false);
-      //     arcLength.switchBranch();
+      //     arcLength->computeSingularPoint(1e-4, 5, Uold, Lold, 1e-10, 0, false);
+      //     arcLength->switchBranch();
       //     dL0 = dL = dL;
-      //     arcLength.setLength(dL);
+      //     arcLength->setLength(dL);
       //   }
       // }
 
-      indicator = arcLength.indicator();
+      indicator = arcLength->indicator();
 
-      solVector = arcLength.solutionU();
+      solVector = arcLength->solutionU();
       Uold = solVector;
-      Lold = arcLength.solutionL();
+      Lold = arcLength->solutionL();
       assembler->constructSolution(solVector,mp_def);
 
       deformation = mp_def;
@@ -431,7 +449,7 @@ int main (int argc, char** argv)
       if (!bisected)
       {
         dL = dL0;
-        arcLength.setLength(dL);
+        arcLength->setLength(dL);
       }
       bisected = false;
 
@@ -445,289 +463,9 @@ int main (int argc, char** argv)
       Smembrane_p.save();
     }
 
+    delete arcLength;
+
   return result;
-}
-
-template <class T>
-gsMultiPatch<T> RectangularDomain(int n, int p, T L, T B, bool clamped, T clampoffset)
-{
-  gsMultiPatch<T> mp = RectangularDomain(n, n, p, p, L, B, clamped, clampoffset);
-  return mp;
-}
-
-template <class T>
-gsMultiPatch<T> RectangularDomain(int n, int m, int p, int q, T L, T B, bool clamped, T clampoffset)
-{
-  // -------------------------------------------------------------------------
-  // --------------------------Make beam geometry-----------------------------
-  // -------------------------------------------------------------------------
-  int dim = 3; //physical dimension
-  gsKnotVector<> kv0;
-  kv0.initUniform(0,1,0,p+1,1);
-  gsKnotVector<> kv1;
-  kv1.initUniform(0,1,0,q+1,1);
-
-  for(index_t i = 0; i< n; ++i)
-      kv0.uniformRefine();
-  for(index_t i = 0; i< m; ++i)
-      kv1.uniformRefine();
-
-  if (clamped)
-  {
-    T knotval;
-    knotval = kv0.uValue(1);
-    kv0.insert(std::min(clampoffset,knotval/2.));
-
-    knotval = kv0.uValue(kv0.uSize()-2);
-    kv0.insert(std::max(1-clampoffset,knotval/2.));
-  }
-
-  // Make basis
-  gsTensorBSplineBasis<2,T> basis(kv0,kv1);
-
-  // Initiate coefficient matrix
-  gsMatrix<> coefs(basis.size(),dim);
-  // Number of control points needed per component
-  size_t len0 = basis.component(0).size();
-  size_t len1 = basis.component(1).size();
-  gsVector<> coefvec0(len0);
-  // Uniformly distribute control points per component
-  coefvec0.setLinSpaced(len0,0.0,L);
-  gsVector<> coefvec1(basis.component(1).size());
-  coefvec1.setLinSpaced(len1,0.0,B);
-
-  // Z coordinate is zero
-  coefs.col(2).setZero();
-
-  // Define a matrix with ones
-  gsVector<> temp(len0);
-  temp.setOnes();
-  for (index_t k = 0; k < len1; k++)
-  {
-    // First column contains x-coordinates (length)
-    coefs.col(0).segment(k*len0,len0) = coefvec0;
-    // Second column contains y-coordinates (width)
-    coefs.col(1).segment(k*len0,len0) = temp*coefvec1.at(k);
-  }
-  // Create gsGeometry-derived object for the patch
-  gsTensorBSpline<2,real_t> shape(basis,coefs);
-
-  gsMultiPatch<T> mp;
-  mp.addPatch(shape);
-  mp.addAutoBoundaries();
-
-  return mp;
-}
-
-template <class T>
-void addClamping(gsMultiPatch<T>& mp, index_t patch, std::vector<boxSide> sides, T offset) //, std::vector<boxSide> sides, T offset)
-{
-
-    gsTensorBSpline<2,T> *geo = dynamic_cast< gsTensorBSpline<2,real_t> * > (&mp.patch(patch));
-
-    T dknot0 = geo->basis().component(0).knots().minIntervalLength();
-    T dknot1 = geo->basis().component(1).knots().minIntervalLength();
-
-    gsInfo<<"sides.size() = "<<sides.size()<<"\n";
-
-    index_t k =0;
-
-
-    for (std::vector<boxSide>::iterator it = sides.begin(); it != sides.end(); it++)
-    {
-        gsInfo<<"side = "<<(*it)<<"\n";
-
-      if (*it==boundary::west || *it==boundary::east) // west or east
-      {
-        if (*it==boundary::east) // east, val = 1
-          geo->insertKnot(1 - std::min(offset, dknot0 / 2),0);
-        else if (*it==boundary::west) // west
-          geo->insertKnot(std::min(offset, dknot0 / 2),0);
-      }
-      else if (*it==boundary::south || *it==boundary::north) // west or east
-      {
-       if (*it==boundary::north) // north
-         geo->insertKnot(1 - std::min(offset, dknot0 / 2),1);
-       else if (*it==boundary::south) // south
-         geo->insertKnot(std::min(offset, dknot0 / 2),1);
-      }
-      else if (*it==boundary::none)
-        gsWarn<<*it<<"\n";
-      else
-        GISMO_ERROR("Side unknown, side = " <<*it);
-
-        k++;
-gsInfo<<"k = "<<k<<"\n";
-    }
-}
-
-template <class T>
-gsMultiPatch<T> Rectangle(T L, T B) //, int n, int m, std::vector<boxSide> sides, T offset)
-{
-  // -------------------------------------------------------------------------
-  // --------------------------Make beam geometry-----------------------------
-  // -------------------------------------------------------------------------
-  int dim = 3; //physical dimension
-  gsKnotVector<> kv0;
-  kv0.initUniform(0,1,0,2,1);
-  gsKnotVector<> kv1;
-  kv1.initUniform(0,1,0,2,1);
-
-  // Make basis
-  gsTensorBSplineBasis<2,T> basis(kv0,kv1);
-
-  // Initiate coefficient matrix
-  gsMatrix<> coefs(basis.size(),dim);
-  // Number of control points needed per component
-  size_t len0 = basis.component(0).size();
-  size_t len1 = basis.component(1).size();
-  gsVector<> coefvec0(len0);
-  // Uniformly distribute control points per component
-  coefvec0.setLinSpaced(len0,0.0,L);
-  gsVector<> coefvec1(basis.component(1).size());
-  coefvec1.setLinSpaced(len1,0.0,B);
-
-  // Z coordinate is zero
-  coefs.col(2).setZero();
-
-  // Define a matrix with ones
-  gsVector<> temp(len0);
-  temp.setOnes();
-  for (size_t k = 0; k < len1; k++)
-  {
-    // First column contains x-coordinates (length)
-    coefs.col(0).segment(k*len0,len0) = coefvec0;
-    // Second column contains y-coordinates (width)
-    coefs.col(1).segment(k*len0,len0) = temp*coefvec1.at(k);
-  }
-  // Create gsGeometry-derived object for the patch
-  gsTensorBSpline<2,real_t> shape(basis,coefs);
-
-  gsMultiPatch<T> mp;
-  mp.addPatch(shape);
-  mp.addAutoBoundaries();
-
-  return mp;
-}
-
-
-template <class T>
-gsMultiPatch<T> AnnularDomain(int n, int p, T R1, T R2)
-{
-  // -------------------------------------------------------------------------
-  // --------------------------Make beam geometry-----------------------------
-  // -------------------------------------------------------------------------
-  int dim = 3; //physical dimension
-  gsKnotVector<> kv0;
-  kv0.initUniform(0,1,0,3,1);
-  gsKnotVector<> kv1;
-  kv1.initUniform(0,1,0,3,1);
-
-  // Make basis
-  // gsTensorNurbsBasis<2,T> basis(kv0,kv1);
-
-  // Initiate coefficient matrix
-  gsMatrix<> coefs(9,dim);
-
-  coefs<<R1,0,0,
-  (R1+R2)/2,0,0,
-  R2,0,0,
-  R1,R1,0,
-  (R1+R2)/2,(R1+R2)/2,0,
-  R2,R2,0,
-  0,R1,0,
-  0,(R1+R2)/2,0,
-  0,R2,0;
-
-  gsMatrix<> weights(9,1);
-  weights<<1,1,1,
-  0.707106781186548,0.707106781186548,0.707106781186548,
-  1,1,1;
-
-  // Create gsGeometry-derived object for the patch
-  gsTensorNurbs<2,real_t> shape(kv0,kv1,coefs,weights);
-
-
-  gsMultiPatch<T> mp;
-  mp.addPatch(shape);
-  mp.addAutoBoundaries();
-
-  // Elevate up to order p
-  if (p>2)
-  {
-    for(index_t i = 2; i< p; ++i)
-        mp.patch(0).degreeElevate();    // Elevate the degree
-  }
-
-  // Refine n times
-  for(index_t i = 0; i< n; ++i)
-      mp.patch(0).uniformRefine();
-
-  return mp;
-}
-
-template <class T>
-gsMultiPatch<T> FrustrumDomain(int n, int p, T R1, T R2, T h)
-{
-  // -------------------------------------------------------------------------
-  // --------------------------Make beam geometry-----------------------------
-  // -------------------------------------------------------------------------
-  // n = number of uniform refinements over the height; n = 0, only top and bottom part
-
-  int dim = 3; //physical dimension
-  gsKnotVector<> kv0;
-  kv0.initUniform(0,1,0,3,1);
-  gsKnotVector<> kv1;
-  kv1.initUniform(0,1,0,3,1);
-
-  // Refine n times
-  for(index_t i = 0; i< n; ++i)
-      kv1.uniformRefine();
-
-  gsDebug<<kv1;
-
-  // Make basis
-  // gsTensorNurbsBasis<2,T> basis(kv0,kv1);
-
-  // Initiate coefficient matrix
-  index_t N = math::pow(2,n)+2;
-  gsMatrix<> coefs(3*N,dim);
-  gsMatrix<> tmp(3,3);
-  T R,H;
-
-  gsMatrix<> weights(3*N,1);
-  for (index_t k=0; k!= N; k++)
-  {
-    R = k*(R2-R1)/(N-1) + R1;
-    H = k*h/(N-1);
-    tmp<< R,0,H,
-          R,R,H,
-          0,R,H;
-
-    coefs.block(3*k,0,3,3) = tmp;
-
-    weights.block(3*k,0,3,1) << 1,0.70711,1;
-  }
-
-  // Create gsGeometry-derived object for the patch
-  gsTensorNurbs<2,real_t> shape(kv0,kv1,coefs,weights);
-
-  gsMultiPatch<T> mp;
-  mp.addPatch(shape);
-  mp.addAutoBoundaries();
-
-  // Elevate up to order p
-  if (p>2)
-  {
-    for(index_t i = 2; i< p; ++i)
-        mp.patch(0).degreeElevate();    // Elevate the degree
-  }
-
-  // // Refine n times
-  // for(index_t i = 0; i< n; ++i)
-  //     mp.patch(0).uniformRefine();
-
-  return mp;
 }
 
 template <class T>
@@ -753,7 +491,7 @@ void initStepOutput(const std::string name, const gsMatrix<T> & points)
 }
 
 template <class T>
-void writeStepOutput(const gsALMCrisfield<T> & arcLength, const gsMultiPatch<T> & deformation, const std::string name, const gsMatrix<T> & points, const index_t extreme, const index_t kmax) // extreme: the column of point indices to compute the extreme over (default -1)
+void writeStepOutput(const gsALMBase<T> * arcLength, const gsMultiPatch<T> & deformation, const std::string name, const gsMatrix<T> & points, const index_t extreme, const index_t kmax) // extreme: the column of point indices to compute the extreme over (default -1)
 {
   gsMatrix<T> P(2,1), Q(2,1);
   gsMatrix<T> out(3,points.cols());
@@ -771,7 +509,7 @@ void writeStepOutput(const gsALMCrisfield<T> & arcLength, const gsMultiPatch<T> 
   if (extreme==-1)
   {
     file  << std::setprecision(6)
-          << arcLength.solutionU().norm() << ",";
+          << arcLength->solutionU().norm() << ",";
           for (index_t p=0; p!=points.cols(); p++)
           {
             file<< out(0,p) << ","
@@ -779,8 +517,8 @@ void writeStepOutput(const gsALMCrisfield<T> & arcLength, const gsMultiPatch<T> 
                 << out(2,p) << ",";
           }
 
-    file  << arcLength.solutionL() << ","
-          << arcLength.indicator() << ","
+    file  << arcLength->solutionL() << ","
+          << arcLength->indicator() << ","
           << "\n";
   }
   else if (extreme==0 || extreme==1)
@@ -798,7 +536,7 @@ void writeStepOutput(const gsALMCrisfield<T> & arcLength, const gsMultiPatch<T> 
     }
 
     file  << std::setprecision(6)
-          << arcLength.solutionU().norm() << ",";
+          << arcLength->solutionU().norm() << ",";
           for (index_t p=0; p!=points.cols(); p++)
           {
             file<< out(0,p) << ","
@@ -806,8 +544,8 @@ void writeStepOutput(const gsALMCrisfield<T> & arcLength, const gsMultiPatch<T> 
                 << std::max(abs(out2.col(p).maxCoeff()),abs(out2.col(p).minCoeff())) << ",";
           }
 
-    file  << arcLength.solutionL() << ","
-          << arcLength.indicator() << ","
+    file  << arcLength->solutionL() << ","
+          << arcLength->indicator() << ","
           << "\n";
   }
   else

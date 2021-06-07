@@ -27,7 +27,6 @@ void gsALMBase<T>::defaultOptions()
     m_options.addReal("TolF","Tolerance",1e-3);
     m_options.addReal("TolU","Tolerance",1e-6);
     m_options.addReal("Perturbation","Set Perturbation factor Tau",1e3);
-    m_options.addReal("Scaling","Set Scaling factor Phi",-1);
 
     m_options.addReal("Length","Arclength",1e-2);
 
@@ -38,7 +37,6 @@ void gsALMBase<T>::defaultOptions()
     m_options.addInt ("QuasiIterations","Number of iterations for quasi newton method",-1);
 
     m_options.addInt ("BifurcationMethod","Bifurcation Identification based on: 0: Determinant;  1: Eigenvalue",bifmethod::Eigenvalue);
-    m_options.addInt ("AngleMethod","Angle determination method: 0 = Previous step; 1 = Previous iteration",angmethod::Step);
 
     m_options.addInt ("SingularPointFailure","What to do wne a singular point determination fails?: 0 = Apply solution anyways; 1 = Proceed without singular point",SPfail::With);
 
@@ -59,8 +57,6 @@ void gsALMBase<T>::getOptions()
     m_toleranceU          = m_options.getReal("TolU");
 
     m_tau                 = m_options.getReal("Perturbation");
-    m_phi                 = m_options.getReal("Scaling");
-    m_phi_user = m_phi == -1 ? false : true;
 
     m_adaptiveLength      = m_options.getSwitch("AdaptiveLength");
     m_desiredIterations   = m_options.getInt ("AdaptiveIterations");
@@ -76,14 +72,19 @@ void gsALMBase<T>::getOptions()
       m_bifurcationMethod = bifmethod::Eigenvalue;
     }
 
-    m_angleDetermine      = m_options.getInt ("AngleMethod");
-
     m_verbose             = m_options.getSwitch ("Verbose");
     m_relax               = m_options.getReal("Relaxation");
 
     m_arcLength = m_arcLength_prev = m_options.getReal("Length");
 
     m_SPfail = m_options.getInt ("SingularPointFailure");
+}
+
+template <class T>
+void gsALMBase<T>::init()
+{
+  this->computeStability(m_U,true);
+  m_stability = this->stability(); // requires Jabobian!!
 }
 
 template <class T>
@@ -263,66 +264,61 @@ template <class T> void gsALMBase<T>::computeUt()   { m_deltaUt = this->solveSys
 //   }
 // }
 
-// template <class T>
-// void gsALMBase<T>::step()
-// {
-//   GISMO_ASSERT(m_initialized,"Arc-Length Method is not initialized! Call initialize()");
-//   initiateStep();
-//   computeJacobian();
-//   predictor();
-//   computeResidual();
-//   computeResidualNorms();
+template <class T>
+void gsALMBase<T>::step()
+{
+  GISMO_ASSERT(m_initialized,"Arc-Length Method is not initialized! Call initialize()");
 
-//   if (m_verbose)
-//      stepOutput();
+  if (m_verbose)
+    initOutput();
 
-//   if (m_quasiNewton)
-//   {
-//     computeJacobian();
-//     if (!m_method==method::LoadControl)
-//       computeUt(); // rhs does not depend on solution
-//     computeUbar(); // rhs contains residual and should be computed every time
-//   }
+  m_converged = false;
+  m_numIterations = 0;
+  initiateStep();
+  predictor();
 
-//   for (m_numIterations = 1; m_numIterations < m_maxIterations; ++m_numIterations)
-//   {
-//     if ( (!m_quasiNewton) || ( ( m_quasiNewtonInterval>0 ) && ( mod(m_numIterations,m_quasiNewtonInterval) < 1e-10 ) ) )
-//     {
-//       computeJacobian();
-//       if (!m_method==method::LoadControl)
-//         computeUt(); // rhs does not depend on solution
-//     }
+  computeResidual();
+  computeResidualNorms();
 
-//     computeUbar(); // rhs contains residual and should be computed every time
-//     iteration();
-//     computeResidual();
-//     computeResidualNorms();
+  if (m_verbose)
+     stepOutput();
 
-//     if (m_verbose)
-//        stepOutput();
-//     else
-//     {
-//       gsInfo<<"Residual: "<<m_residue<<"\n";
-//     }
-//       // gsInfo<<"residual F = "<<m_residueF<<"\t tol F"<<m_toleranceF<<"\t residual U = "<<m_residueU<<"\t tol U"<<m_toleranceU<<"\n";
-//     // Termination criteria
-//     if ( m_residueF < m_toleranceF && m_residueU < m_toleranceU )
-//     // if ( m_residue < m_tolerance )
-//     {
-//       iterationFinish();
-//       // Change arc length
-//       if (m_adaptiveLength)
-//         computeLength();
-//       else
-//         m_arcLength_prev = m_arcLength;
-//       break;
-//     }
-//     else if (m_numIterations == m_maxIterations-1)
-//       gsInfo<<"maximum iterations reached. Solution did not converge\n";
+  if (m_quasiNewton)
+  {
+    quasiNewtonPredictor();
+  }
 
-//       // GISMO_ERROR("maximum iterations reached. Solution did not converge");
-//   }
-// }
+  for (m_numIterations = 1; m_numIterations < m_maxIterations; ++m_numIterations)
+  {
+    if ( (!m_quasiNewton) || ( ( m_quasiNewtonInterval>0 ) && ( m_numIterations % m_quasiNewtonInterval) < 1e-10 ) )
+    {
+      quasiNewtonIteration();
+    }
+
+    iteration();
+
+    computeResidual();
+    computeResidualNorms();
+
+    if (m_verbose)
+       stepOutput();
+
+    if ( m_residueF < m_toleranceF && m_residueU < m_toleranceU )
+    {
+      iterationFinish();
+      // Change arc length
+      if (m_adaptiveLength)
+        computeLength();
+      else
+        m_arcLength_prev = m_arcLength;
+      break;
+    }
+    else if (m_numIterations == m_maxIterations-1)
+      gsInfo<<"maximum iterations reached. Solution did not converge\n";
+
+      // GISMO_ERROR("maximum iterations reached. Solution did not converge");
+  }
+}
 
 // // ------------------------------------------------------------------------------------------------------------
 // // ---------------------------------------Load Control method--------------------------------------------------------

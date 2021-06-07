@@ -1,3 +1,13 @@
+# To Do
+- Remove gsArcLengthIterator
+
+# Changelog
+- v1.0:
+  - Initial version!
+- v2.0:
+  - Provided base class for ALMs. All ALMs have a separate class now, and the singular point approach method is implemented in the base class.
+  - Eigenvalue problems (Buckling, Modal) have a base class as well, and `gsBucklingSolver` and `gsModalSolver` only provide a top-layer assigning the right matrices.
+
 # gsStructuralAnalysis
 
 Module for structural analysis with solids ([`gsElasticity`](https://github.com/gismo/gsElasticity/)) or Kirchhoff-Love shells ([`gsKLShell`](https://github.com/gismo/gsKLShell/)).

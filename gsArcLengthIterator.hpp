@@ -336,7 +336,7 @@ void gsArcLengthIterator<T>::step()
 
   for (m_numIterations = 1; m_numIterations < m_maxIterations; ++m_numIterations)
   {
-    if ( (!m_quasiNewton) || ( ( m_quasiNewtonInterval>0 ) && ( mod(m_numIterations,m_quasiNewtonInterval) < 1e-10 ) ) )
+    if ( (!m_quasiNewton) || ( ( m_quasiNewtonInterval>0 ) && ( m_numIterations %m_quasiNewtonInterval) < 1e-10 ) )
     {
       computeJacobian();
       if (!m_method==method::LoadControl)
