@@ -21,7 +21,6 @@
 #include <gsStructuralAnalysis/gsALMLoadControl.h>
 #include <gsStructuralAnalysis/gsALMCrisfield.h>
 #include <gsStructuralAnalysis/gsALMConsistentCrisfield.h>
-#include <gsStructuralAnalysis/gsALMExplicitIterations.h>
 
 using namespace gismo;
 
@@ -44,7 +43,7 @@ int main (int argc, char** argv)
     int quasiNewtonInt= -1;
     bool adaptive     = false;
     int step          = 10;
-    int method        = 2; // (0: Load control; 1: Riks' method; 2: Crisfield's method; 3: consistent crisfield method; 4: extended iterations)
+    int method        = 2; // (0: Load control; 1: Riks' method; 2: Crisfield's method; 3: consistent crisfield method)
     bool deformed     = false;
 
     bool composite = false;
@@ -298,7 +297,7 @@ int main (int argc, char** argv)
     assembler->assemble();
     gsVector<> Force = assembler->rhs();
 
-    // (0: Load control; 1: Riks' method; 2: Crisfield's method; 3: consistent crisfield method; 4: extended iterations)
+    // (0: Load control; 1: Riks' method; 2: Crisfield's method; 3: consistent crisfield method)
     gsALMBase<real_t> * arcLength;
     if (method==0)
       arcLength = new gsALMLoadControl<real_t>(Jacobian, ALResidual, Force);
@@ -308,8 +307,6 @@ int main (int argc, char** argv)
       arcLength = new gsALMCrisfield<real_t>(Jacobian, ALResidual, Force);
     else if (method==3)
       arcLength = new gsALMConsistentCrisfield<real_t>(Jacobian, ALResidual, Force);
-    else if (method==4)
-      arcLength = new gsALMExplicitIterations<real_t>(Jacobian, ALResidual, Force);
     else
       GISMO_ERROR("Method unknown");
 
