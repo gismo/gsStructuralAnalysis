@@ -108,6 +108,7 @@ int main (int argc, char** argv)
     real_t PoissonRatio = 0;
     real_t Density = 1e0;
     gsMultiPatch<> mp, mpBspline;
+    real_t tau = 1e2;
 
     index_t Compressibility = 0;
     index_t material = 0;
@@ -132,8 +133,8 @@ int main (int argc, char** argv)
 
     // Arc length method options
     real_t dL = 1e-2; // General arc length
-    real_t tolF = 1e-3;
-    real_t tolU = 1e-6;
+    real_t tolF = 1e-2;
+    real_t tolU = 1e-2;
 
     std::string wn("data.csv");
 
@@ -164,6 +165,7 @@ int main (int argc, char** argv)
     cmd.addReal("L","dLb", "arc length", dL);
 
     cmd.addReal("P","perturbation", "perturbation factor", perturbation);
+    cmd.addReal("F","factor", "factor for bifurcation perturbation", tau);
 
     cmd.addInt("N", "maxsteps", "Maximum number of steps", step);
 
@@ -601,7 +603,7 @@ int main (int argc, char** argv)
     arcLength.options().setInt("SingularPointFailure",0);
     arcLength.options().setInt("Solver",0); // LDLT solver
     arcLength.options().setInt("BifurcationMethod",0); // 0: determinant, 1: eigenvalue
-    arcLength.options().setReal("Perturbation",1e4);
+    arcLength.options().setReal("Perturbation",tau);
     arcLength.applyOptions();
 
     gsParaviewCollection collection(dirname + "/" + output);
@@ -755,7 +757,7 @@ int main (int argc, char** argv)
           indicator = staticSolver.indicator();
           // indicator = indicatorOld;
 
-          bif = true;
+          //bif = true;
 
         }
 

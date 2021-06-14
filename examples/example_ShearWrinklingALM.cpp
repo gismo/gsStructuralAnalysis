@@ -89,7 +89,7 @@ int main (int argc, char** argv)
     real_t PoissonRatio = 0;
     real_t Density = 1e0;
     gsMultiPatch<> mp, mpBspline;
-    real_t tau = 1e4;
+    real_t tau = 1e2;
 
     index_t Compressibility = 0;
     index_t material = 0;
@@ -121,9 +121,9 @@ int main (int argc, char** argv)
     // Arc length method options
     real_t dL = 0; // General arc length
     real_t dLb = 1e-2; // Ard length to find bifurcation
-    real_t tol = 1e-6;
-    real_t tolU = 1e-6;
-    real_t tolF = 1e-3;
+    real_t tol = 1e-2;
+    real_t tolU = 1e-2;
+    real_t tolF = 1e-2;
 
     std::string wn("data.csv");
 

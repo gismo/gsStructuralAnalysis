@@ -185,9 +185,10 @@ void gsArcLengthIterator<T>::computeResidualNorms()
   }
   else
   {
-    // m_residueF = m_resVec.norm() / (((m_L+m_DeltaL) * m_forcing).norm());
-    m_residueF = m_resVec.norm() / m_basisResidualF;
-    m_residueU = m_deltaU.norm() / m_basisResidualU;
+    //m_residueF = m_resVec.norm() / m_basisResidualF;
+    m_residueF = m_resVec.norm() / (((m_L+m_DeltaL) * m_forcing).norm()); 
+    //m_residueU = m_deltaU.norm() / m_basisResidualU;
+    m_residueU = m_deltaU.norm() / m_DeltaU.norm();
     m_residueL = m_deltaL / m_DeltaL;
   }
   // gsInfo<<"m_DeltaU = "<<m_DeltaU.norm()
