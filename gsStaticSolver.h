@@ -91,7 +91,7 @@ protected:
     const std::function < gsSparseMatrix<T> ( gsVector<T> const & ) > m_nonlinear;
     const std::function < gsVector<T> ( gsVector<T> const & ) > m_residual;
 
-    gsVector<T> m_solVec;
+    gsVector<T> m_solVec, m_DeltaU, m_deltaU;
 
     mutable index_t m_verbose;
     bool m_NL;

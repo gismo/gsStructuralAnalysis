@@ -45,8 +45,8 @@ gsVector<T> gsStaticSolver<T>::solveNonlinear()
     if (residual==0) residual=1;
     T residual0 = residual;
     T residualOld = residual;
-    gsVector<T> DeltaU = gsVector<T>::Zero(m_solVec.rows());
-    gsVector<T> deltaU = gsVector<T>::Zero(m_solVec.rows());
+    m_DeltaU = gsVector<T>::Zero(m_solVec.rows());
+    m_deltaU = gsVector<T>::Zero(m_solVec.rows());
     gsSparseMatrix<T> jacMat;
 
 
@@ -66,17 +66,17 @@ gsVector<T> gsStaticSolver<T>::solveNonlinear()
 
     for (m_iterations = 0; m_iterations != m_maxIterations; ++m_iterations)
     {
-        jacMat = m_nonlinear(m_solVec+DeltaU);
+        jacMat = m_nonlinear(m_solVec+m_DeltaU);
         if (m_verbose==2)
         {
             gsInfo<<"Matrix: \n"<<jacMat.toDense()<<"\n";
             gsInfo<<"Vector: \n"<<resVec<<"\n";
         }
         m_solver.compute(jacMat);
-        deltaU = m_solver.solve(resVec); // this is the UPDATE
-        DeltaU += m_relax * deltaU;
+        m_deltaU = m_solver.solve(resVec); // this is the UPDATE
+        m_DeltaU += m_relax * m_deltaU;
 
-        resVec = m_residual(m_solVec+DeltaU);
+        resVec = m_residual(m_solVec+m_DeltaU);
         residual = resVec.norm();
 
         if (m_verbose>0)
@@ -85,9 +85,9 @@ gsVector<T> gsStaticSolver<T>::solveNonlinear()
             gsInfo<<std::setw(4)<<std::left<<m_iterations;
             gsInfo<<std::setw(17)<<std::left<<residual;
             gsInfo<<std::setw(17)<<std::left<<residual/residual0;
-            gsInfo<<std::setw(17)<<std::left<<m_relax * deltaU.norm();
-            gsInfo<<std::setw(17)<<std::left<<m_relax * deltaU.norm()/DeltaU.norm();
-            gsInfo<<std::setw(17)<<std::left<<m_relax * deltaU.norm()/m_solVec.norm();
+            gsInfo<<std::setw(17)<<std::left<<m_relax * m_deltaU.norm();
+            gsInfo<<std::setw(17)<<std::left<<m_relax * m_deltaU.norm()/m_DeltaU.norm();
+            gsInfo<<std::setw(17)<<std::left<<m_relax * m_deltaU.norm()/m_solVec.norm();
             gsInfo<<std::setw(17)<<std::left<<math::log10(residualOld/residual0);
             gsInfo<<std::setw(17)<<std::left<<math::log10(residual/residual0);
             gsInfo<<"\n";
@@ -95,10 +95,10 @@ gsVector<T> gsStaticSolver<T>::solveNonlinear()
 
         residualOld = residual;
 
-        if (m_relax * deltaU.norm()/m_solVec.norm()  < m_toleranceU && residual/residual0 < m_toleranceF)
+        if (m_relax * m_deltaU.norm()/m_solVec.norm()  < m_toleranceU && residual/residual0 < m_toleranceF)
         {
             m_converged = true;
-            m_solVec+=DeltaU;
+            m_solVec+=m_DeltaU;
             break;
         }
         else if (m_iterations+1 == m_maxIterations)

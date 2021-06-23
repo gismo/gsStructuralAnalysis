@@ -46,10 +46,11 @@ int main (int argc, char** argv)
     index_t impl = 1; // 1= analytical, 2= generalized, 3= spectral
 
     int result        = 0;
-    index_t maxit     = 50;
+    index_t maxit     = 20;
     // Arc length method options
-    real_t dL         = 2e-2; // General arc length
-    real_t tol        = 1e-6;
+    real_t dL         = -1; // General arc length
+    real_t tolU        = 1e-3;
+    real_t tolF        = 1e-3;
 
     std::string wn("data.csv");
 
@@ -112,6 +113,7 @@ int main (int argc, char** argv)
     */
     if (testCase == 0)
     {
+        if (dL==-1) dL = 5e-2;
         displ.setValue(-dL,3);
         BCs.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 0 ); // unknown 2 - z
         BCs.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 2 - z
@@ -136,6 +138,7 @@ int main (int argc, char** argv)
     }
     else if (testCase == 1)
     {
+        if (dL==-1) dL = 4e-2;
         displ.setValue(-dL,3);
 
         BCs.addCondition(boundary::north, condition_type::dirichlet, &displ, 0, false, 2 ); // unknown 1 - y
@@ -298,40 +301,44 @@ int main (int argc, char** argv)
       return assembler->rhs();
     };
 
-    gsSparseMatrix<> matrix;
-    gsVector<> vector;
+    assembler = new gsThinShellAssembler<3, real_t, true >(mp_def,dbasis,BCs,force,materialMatrix);
+    assembler->assemble();
+    gsSparseMatrix<> matrix = assembler->matrix();
+    gsVector<> vector = assembler->rhs();
 
     gsStaticSolver<real_t> staticSolver(matrix,vector,Jacobian,Residual);
     gsOptionList solverOptions = staticSolver.options();
     solverOptions.setInt("Verbose",true);
     solverOptions.setInt("MaxIterations",maxit);
-    solverOptions.setReal("Tolerance",tol);
+    solverOptions.setReal("ToleranceU",tolU);
+    solverOptions.setReal("ToleranceF",tolF);
     staticSolver.setOptions(solverOptions);
 
     real_t dL0 = dL;
     int reset = 0;
     gsMultiPatch<> mp_def0 = mp_def;
     real_t indicator;
+
+    real_t D = 0;
+
     for (index_t k=0; k<step; k++)
     {
       gsInfo<<"Load step "<< k<<"\n";
 
-      assembler = new gsThinShellAssembler<3, real_t, true >(mp_def,dbasis,BCs,force,materialMatrix);
-
       stopwatch.restart();
       stopwatch2.restart();
-      assembler->assemble();
+      displ.setValue(D - dL,3);
+      assembler->updateBCs(BCs);
+
       time += stopwatch.stop();
 
-      matrix = assembler->matrix();
-      vector = assembler->rhs();
       solVector = staticSolver.solveNonlinear();
       totaltime += stopwatch2.stop();
 
       if (!staticSolver.converged())
       {
         dL = dL/2;
-        displ.setValue(-dL,3);
+        displ.setValue(D -dL,3);
         reset = 1;
         mp_def = mp_def0;
         gsInfo<<"Iterations did not converge\n";
@@ -382,11 +389,12 @@ int main (int argc, char** argv)
       if (reset!=1)
       {
         dL = dL0;
-        displ.setValue(-dL,3);
+        displ.setValue(D - dL,3);
       }
       reset = 0;
 
       mp_def0 = mp_def;
+      D -= dL;
 
       gsInfo<<"--------------------------------------------------------------------------------------------------------------\n";
     }
@@ -395,6 +403,9 @@ int main (int argc, char** argv)
 
     gsInfo<<"Total ellapsed assembly time: \t\t"<<time<<" s\n";
     gsInfo<<"Total ellapsed solution time (incl. assembly): \t"<<totaltime<<" s\n";
+
+  delete assembler;
+  delete materialMatrix;
 
   return result;
 }
