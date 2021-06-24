@@ -314,7 +314,7 @@ int main (int argc, char** argv)
     gsMultiPatch<> deformation = mp;
 
     // Make objects for previous solutions
-    real_t Lold = 0;
+    //real_t Lold = 0;
     gsMatrix<> Uold = Force;
     Uold.setZero();
 
@@ -332,7 +332,7 @@ int main (int argc, char** argv)
 
       solVector = arcLength.solutionU();
       Uold = solVector;
-      Lold = arcLength.solutionL();
+      //Lold = arcLength.solutionL();
 
       assembler->constructSolution(solVector,mp_def);
 
