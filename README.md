@@ -1,12 +1,16 @@
 # To Do
 - Remove gsArcLengthIterator
+- ALResidual(x,lambda,force) --> ALResidual(x,lambda)
 
 # Changelog
-- v1.0:
-  - Initial version!
-- v2.0:
+
+## v21.X:
   - Provided base class for ALMs. All ALMs have a separate class now, and the singular point approach method is implemented in the base class.
   - Eigenvalue problems (Buckling, Modal) have a base class as well, and `gsBucklingSolver` and `gsModalSolver` only provide a top-layer assigning the right matrices.
+  - Output splines instead of paraview!! (--plotfiles & postprocess.cpp)
+  - Dynamic relaxation method added!
+## v21.6:
+  - Initial version!
 
 # gsStructuralAnalysis
 
