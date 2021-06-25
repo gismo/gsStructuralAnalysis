@@ -17,6 +17,8 @@
 #include <gsKLShell/getMaterialMatrix.h>
 
 #include <gsStructuralAnalysis/gsStaticSolver.h>
+#include <gsStructuralAnalysis/gsStaticNewton.h>
+#include <gsStructuralAnalysis/gsControlDisplacement.h>
 
 using namespace gismo;
 
@@ -46,10 +48,11 @@ int main (int argc, char** argv)
     index_t impl = 1; // 1= analytical, 2= generalized, 3= spectral
 
     int result        = 0;
-    index_t maxit     = 50;
+    index_t maxit     = 25;
     // Arc length method options
-    real_t dL         = 2e-2; // General arc length
-    real_t tol        = 1e-6;
+    real_t dL         = -1; // General arc length
+    real_t tolU        = 1e-3;
+    real_t tolF        = 1e-3;
 
     std::string wn("data.csv");
 
@@ -112,6 +115,7 @@ int main (int argc, char** argv)
     */
     if (testCase == 0)
     {
+        if (dL==-1) dL = 5e-2;
         displ.setValue(-dL,3);
         BCs.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 0 ); // unknown 2 - z
         BCs.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 2 - z
@@ -136,6 +140,7 @@ int main (int argc, char** argv)
     }
     else if (testCase == 1)
     {
+        if (dL==-1) dL = 4e-2;
         displ.setValue(-dL,3);
 
         BCs.addCondition(boundary::north, condition_type::dirichlet, &displ, 0, false, 2 ); // unknown 1 - y
@@ -276,9 +281,13 @@ int main (int argc, char** argv)
     real_t time = 0.0;
     real_t totaltime = 0.0;
 
+    real_t D = 0;
+
+
     // Function for the Jacobian
     typedef std::function<gsSparseMatrix<real_t> (gsVector<real_t> const &)>    Jacobian_t;
     typedef std::function<gsVector<real_t> (gsVector<real_t> const &) >         Residual_t;
+    typedef std::function<gsVector<real_t> (gsVector<real_t> const &, real_t) > ALResidual_t;
     Jacobian_t Jacobian = [&time,&stopwatch,&assembler,&mp_def](gsVector<real_t> const &x)
     {
       stopwatch.restart();
@@ -298,40 +307,70 @@ int main (int argc, char** argv)
       return assembler->rhs();
     };
 
-    gsSparseMatrix<> matrix;
-    gsVector<> vector;
+    // Function for the Residual
+    ALResidual_t ALResidual = [&displ,&BCs,&time,&stopwatch,&assembler,&mp_def](gsVector<real_t> const &x, real_t lambda)
+    {
+      stopwatch.restart();
+      displ.setValue(lambda,3);
+      assembler->updateBCs(BCs);
+      assembler->constructSolution(x,mp_def);
+      assembler->assembleVector(mp_def);
+      time += stopwatch.stop();
+      return assembler->rhs();
+    };
 
-    gsStaticSolver<real_t> staticSolver(matrix,vector,Jacobian,Residual);
+    assembler = new gsThinShellAssembler<3, real_t, true >(mp,dbasis,BCs,force,materialMatrix);
+    assembler->assemble();
+    gsSparseMatrix<> matrix = assembler->matrix();
+    gsVector<> vector = assembler->rhs();
+
+    gsStaticNewton<real_t> staticSolver(matrix,vector,Jacobian,ALResidual);
     gsOptionList solverOptions = staticSolver.options();
-    solverOptions.setInt("Verbose",true);
-    solverOptions.setInt("MaxIterations",maxit);
-    solverOptions.setReal("Tolerance",tol);
+    solverOptions.setInt("verbose",true);
+    solverOptions.setInt("maxIt",maxit);
+    solverOptions.setReal("tolU",tolU);
+    solverOptions.setReal("tolF",tolF);
     staticSolver.setOptions(solverOptions);
+
+    gsControlDisplacement<real_t> control(&staticSolver);
+
 
     real_t dL0 = dL;
     int reset = 0;
     gsMultiPatch<> mp_def0 = mp_def;
     real_t indicator;
+
+    displ.setValue(D - dL,3);
+    assembler->updateBCs(BCs);
     for (index_t k=0; k<step; k++)
     {
       gsInfo<<"Load step "<< k<<"\n";
 
-      assembler = new gsThinShellAssembler<3, real_t, true >(mp_def,dbasis,BCs,force,materialMatrix);
-
       stopwatch.restart();
       stopwatch2.restart();
-      assembler->assemble();
+
       time += stopwatch.stop();
 
-      matrix = assembler->matrix();
-      vector = assembler->rhs();
-      solVector = staticSolver.solveNonlinear();
+      // staticSolver.setLoad(D-dL);
+      // if (k!=0) staticSolver.setDisplacement(solVector);
+      // staticSolver.solve();
+      // solVector = staticSolver.solution();
+      //
+      control.step(-dL);
+      solVector = control.solutionU();
+
+      gsDebugVar(staticSolver.update());
+      gsDebugVar(solVector);
+
+      time += stopwatch.stop();
+
+
       totaltime += stopwatch2.stop();
 
       if (!staticSolver.converged())
       {
         dL = dL/2;
-        displ.setValue(-dL,3);
+        displ.setValue(D -dL,3);
         reset = 1;
         mp_def = mp_def0;
         gsInfo<<"Iterations did not converge\n";
@@ -382,11 +421,12 @@ int main (int argc, char** argv)
       if (reset!=1)
       {
         dL = dL0;
-        displ.setValue(-dL,3);
+        displ.setValue(D - dL,3);
       }
       reset = 0;
 
       mp_def0 = mp_def;
+      D -= dL;
 
       gsInfo<<"--------------------------------------------------------------------------------------------------------------\n";
     }
@@ -396,6 +436,8 @@ int main (int argc, char** argv)
     gsInfo<<"Total ellapsed assembly time: \t\t"<<time<<" s\n";
     gsInfo<<"Total ellapsed solution time (incl. assembly): \t"<<totaltime<<" s\n";
 
+  delete assembler;
+  delete materialMatrix;
   return result;
 }
 
