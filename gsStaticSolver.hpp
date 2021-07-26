@@ -37,18 +37,17 @@ gsVector<T> gsStaticSolver<T>::solveNonlinear()
 {
     m_converged = false;
     this->getOptions();
+    gsVector<T> DeltaU = gsVector<T>::Zero(m_solVec.rows());
+    gsVector<T> deltaU = gsVector<T>::Zero(m_solVec.rows());
     if (m_solVec.rows()==0)
-        m_solVec = this->solveLinear();
+        DeltaU = this->solveLinear();
 
-    gsVector<T> resVec = m_residual(m_solVec);
+    gsVector<T> resVec = m_residual(m_solVec+DeltaU);
     T residual = resVec.norm();
     if (residual==0) residual=1;
     T residual0 = residual;
     T residualOld = residual;
-    gsVector<T> DeltaU = gsVector<T>::Zero(m_solVec.rows());
-    gsVector<T> deltaU = gsVector<T>::Zero(m_solVec.rows());
     gsSparseMatrix<T> jacMat;
-
 
     if (m_verbose>0)
     {
@@ -87,7 +86,7 @@ gsVector<T> gsStaticSolver<T>::solveNonlinear()
             gsInfo<<std::setw(17)<<std::left<<residual/residual0;
             gsInfo<<std::setw(17)<<std::left<<m_relax * deltaU.norm();
             gsInfo<<std::setw(17)<<std::left<<m_relax * deltaU.norm()/DeltaU.norm();
-            gsInfo<<std::setw(17)<<std::left<<m_relax * deltaU.norm()/m_solVec.norm();
+            gsInfo<<std::setw(17)<<std::left<<m_relax * deltaU.norm()/(m_solVec+DeltaU).norm();
             gsInfo<<std::setw(17)<<std::left<<math::log10(residualOld/residual0);
             gsInfo<<std::setw(17)<<std::left<<math::log10(residual/residual0);
             gsInfo<<"\n";
@@ -95,7 +94,7 @@ gsVector<T> gsStaticSolver<T>::solveNonlinear()
 
         residualOld = residual;
 
-        if (m_relax * deltaU.norm()/m_solVec.norm()  < m_toleranceU && residual/residual0 < m_toleranceF)
+        if (m_relax * deltaU.norm()/(m_solVec+DeltaU).norm()  < m_toleranceU && residual/residual0 < m_toleranceF)
         {
             m_converged = true;
             m_solVec+=DeltaU;

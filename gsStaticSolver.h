@@ -56,6 +56,7 @@ public:
   {
     m_NL = true;
     m_converged = false;
+    m_solVec = gsVector<T>::Zero(m_force.rows());
     defaultOptions();
   }
 

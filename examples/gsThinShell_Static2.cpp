@@ -1188,6 +1188,8 @@ int main(int argc, char *argv[])
     real_t time = 0.0;
     real_t totaltime = 0.0;
 
+    gsMatrix<> upvec;
+
     // Function for the Jacobian
     typedef std::function<gsSparseMatrix<real_t> (gsVector<real_t> const &)>    Jacobian_t;
     typedef std::function<gsSparseMatrix<real_t> (gsVector<real_t> const &, gsVector<real_t> const &)>    dJacobian_t;
@@ -1197,12 +1199,30 @@ int main(int argc, char *argv[])
         stopwatch.restart();
         assembler->constructSolution(x,mp_def);
         assembler->assembleMatrix(mp_def);
-        assembler->assembleMatrix(mp_def);
         time += stopwatch.stop();
         gsSparseMatrix<real_t> m = assembler->matrix();
         return m;
     };
 
+    dJacobian_t dJacobian = [&MIP,&time,&stopwatch,&assembler,&mp_def](gsVector<real_t> const &x, gsVector<real_t> const &dx)
+    {
+      stopwatch.restart();
+      assembler->constructSolution(x,mp_def);
+
+      // this also works
+      // assembler->constructSolution(x-upVec,mp_prev);
+      // if (MIP)
+          // assembler->assembleMatrix(mp_def,mp_prev,upVec);
+      if (MIP)
+          assembler->assembleMatrix(x,x-dx);
+      else
+          assembler->assembleMatrix(mp_def);
+
+      assembler->assembleMatrix(mp_def);
+      time += stopwatch.stop();
+      gsSparseMatrix<real_t> m = assembler->matrix();
+      return m;
+    };
     // Function for the Residual
     Residual_t Residual = [&time,&stopwatch,&assembler,&mp_def](gsVector<real_t> const &x)
     {
@@ -1222,19 +1242,82 @@ int main(int argc, char *argv[])
     gsSparseMatrix<> matrix = assembler->matrix();
     gsVector<> vector = assembler->rhs();
 
-    // Configure Structural Analsysis module
-    gsStaticSolver<real_t> staticSolver(matrix,vector,Jacobian,Residual);
-    gsOptionList solverOptions = staticSolver.options();
-    solverOptions.setInt("Verbose",verbose);
-    solverOptions.setInt("MaxIterations",10);
-    solverOptions.setReal("Tolerance",1e-6);
-    staticSolver.setOptions(solverOptions);
+    // // Configure Structural Analsysis module
+    // gsStaticSolver<real_t> staticSolver(matrix,vector,Jacobian,Residual);
+    // gsOptionList solverOptions = staticSolver.options();
+    // solverOptions.setInt("Verbose",verbose);
+    // solverOptions.setInt("MaxIterations",10);
+    // solverOptions.setReal("Tolerance",1e-6);
+    // staticSolver.setOptions(solverOptions);
 
-    // Solve linear problem
-    gsVector<> solVector;
-    solVector = staticSolver.solveLinear();
-    if (nonlinear)
-        solVector = staticSolver.solveNonlinear();
+    // // Solve linear problem
+    // gsVector<> solVector;
+    // solVector = staticSolver.solveLinear();
+    // if (nonlinear)
+    //     solVector = staticSolver.solveNonlinear();
+
+    gsSparseSolver<>::CGDiagonal solver;
+    gsVector<> solVec, deltaU, DeltaU, resVec;
+    gsSparseMatrix<> jacMat;
+    /// Linear solve
+    solver.compute( matrix );
+    DeltaU = solver.solve( vector );
+
+    /// Nonlinear solve
+
+    gsInfo<<"\t";
+    gsInfo<<std::setw(4)<<std::left<<"It.";
+    gsInfo<<std::setw(17)<<std::left<<"|R|";
+    gsInfo<<std::setw(17)<<std::left<<"|R|/|R0|";
+    gsInfo<<std::setw(17)<<std::left<<"|dU|";
+    gsInfo<<std::setw(17)<<std::left<<"|dU|/|DU|";
+    gsInfo<<std::setw(17)<<std::left<<"|dU|/|U|";
+    gsInfo<<std::setw(17)<<std::left<<"log(Ri/R0):";
+    gsInfo<<std::setw(17)<<std::left<<"log(Ri+1/R0)";
+    gsInfo<<"\n";
+
+    index_t maxit = 10;
+    real_t res, res0, resOld;
+
+    solVec = gsVector<>::Zero(DeltaU.size());
+
+    resVec = Residual(solVec + DeltaU);
+    res = res0 = resOld = resVec.norm();
+
+    for (index_t it = 0; it!=maxit; ++it)
+    {
+        jacMat = dJacobian(solVec+DeltaU,DeltaU);
+        solver.compute(jacMat);
+        deltaU = solver.solve(resVec); // this is the UPDATE
+        DeltaU += deltaU;
+
+        resVec = Residual(solVec+DeltaU);
+        res = resVec.norm();
+
+        gsInfo<<"\t";
+        gsInfo<<std::setw(4)<<std::left<<it;
+        gsInfo<<std::setw(17)<<std::left<<res;
+        gsInfo<<std::setw(17)<<std::left<<res/res0;
+        gsInfo<<std::setw(17)<<std::left<<deltaU.norm();
+        gsInfo<<std::setw(17)<<std::left<<deltaU.norm()/DeltaU.norm();
+        gsInfo<<std::setw(17)<<std::left<<deltaU.norm()/(solVec+DeltaU).norm();
+        gsInfo<<std::setw(17)<<std::left<<math::log10(resOld/res0);
+        gsInfo<<std::setw(17)<<std::left<<math::log10(res/res0);
+        gsInfo<<"\n";
+
+        resOld = res;
+
+        if (deltaU.norm()/(solVec+DeltaU).norm()  < 1e-6 && res/res0 < 1e-3)
+        {
+            solVec+=DeltaU;
+            break;
+        }
+        else if (it+1 == maxit)
+        {
+            gsWarn<<"Maximum iterations reached!\n";
+        }
+
+    }
 
 /*
     // We need this because we need to (manually) get the update from the newton solver each iteration.
@@ -1257,7 +1340,7 @@ int main(int argc, char *argv[])
 
     totaltime += stopwatch2.stop();
 
-    mp_def = assembler->constructSolution(solVector);
+    mp_def = assembler->constructSolution(solVec);
 
     gsMultiPatch<> deformation = mp_def;
     for (size_t k = 0; k != mp_def.nPatches(); ++k)
