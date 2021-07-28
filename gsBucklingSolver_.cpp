@@ -1,6 +1,3 @@
-
-#include <gismo.h>
-
 #include <gsCore/gsTemplateTools.h>
 #include <gsStructuralAnalysis/gsBucklingSolver.h>
 #include <gsStructuralAnalysis/gsBucklingSolver.hpp>

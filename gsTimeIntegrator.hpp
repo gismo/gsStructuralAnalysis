@@ -13,6 +13,9 @@
 
 #pragma once
 
+#include <gsSolver/gsGMRes.h>
+#include <gsSolver/gsMatrixOp.h>
+
 namespace gismo
 {
 

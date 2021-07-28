@@ -13,8 +13,6 @@
 
 #pragma once
 
-#include <typeinfo>
-
 namespace gismo
 {
 

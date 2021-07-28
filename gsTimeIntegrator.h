@@ -22,9 +22,7 @@
 
 #pragma once
 
-
 #include <gsSolver/gsBlockOp.h>
-#include <gsSolver/gsMatrixOp.h>
 
 namespace gismo
 {
@@ -265,8 +263,6 @@ protected:
 
     // gsFunction<T> m_dini;
     // gsFunction<T> m_vini;
-
-    gsMultiPatch<T> m_solution;
 
     std::string m_method;
 

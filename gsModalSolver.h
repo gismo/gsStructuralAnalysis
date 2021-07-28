@@ -11,10 +11,10 @@
     Author(s): H.M. Verhelst (2019-..., TU Delft)
 */
 
-#include <typeinfo>
-#include <gsSpectra/gsSpectra.h>
 #pragma once
 
+#include <gsSpectra/gsSpectra.h>
+#include <gsIO/gsOptionList.h>
 
 namespace gismo
 {

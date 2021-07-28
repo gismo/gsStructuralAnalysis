@@ -13,6 +13,7 @@
 
 #pragma once
 #include <gsSpectra/gsSpectra.h>
+#include <gsIO/gsOptionList.h>
 
 namespace gismo
 {
