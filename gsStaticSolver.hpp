@@ -11,7 +11,6 @@
     Author(s): H.M. Verhelst (2019-..., TU Delft)
 */
 
-#include <typeinfo>
 #pragma once
 
 namespace gismo
@@ -65,7 +64,7 @@ gsVector<T> gsStaticSolver<T>::solveNonlinear()
 
     for (m_iterations = 0; m_iterations != m_maxIterations; ++m_iterations)
     {
-        jacMat = m_nonlinear(m_solVec+DeltaU);
+        jacMat = m_dnonlinear(m_solVec+DeltaU,deltaU);
         if (m_verbose==2)
         {
             gsInfo<<"Matrix: \n"<<jacMat.toDense()<<"\n";
@@ -116,7 +115,8 @@ template <class T>
 void gsStaticSolver<T>::_computeStability(const gsVector<T> x) const
 {
     gsVector<T> stabilityVec;
-    gsSparseMatrix<T> jacMat = m_nonlinear(x);
+    gsVector<T> dx = gsVector<T>::Zero(x.size());
+    gsSparseMatrix<T> jacMat = m_dnonlinear(x,dx);
 
     #ifdef GISMO_WITH_SPECTRA
     index_t number = std::min(static_cast<index_t>(std::floor(jacMat.cols()/3.)),10);
