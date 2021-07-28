@@ -1206,22 +1206,21 @@ int main(int argc, char *argv[])
 
     dJacobian_t dJacobian = [&MIP,&time,&stopwatch,&assembler,&mp_def](gsVector<real_t> const &x, gsVector<real_t> const &dx)
     {
-      stopwatch.restart();
-      assembler->constructSolution(x,mp_def);
+        stopwatch.restart();
+        assembler->constructSolution(x,mp_def);
 
-      // this also works
-      // assembler->constructSolution(x-upVec,mp_prev);
-      // if (MIP)
+        // this also works
+        // assembler->constructSolution(x-upVec,mp_prev);
+        // if (MIP)
           // assembler->assembleMatrix(mp_def,mp_prev,upVec);
-      if (MIP)
-          assembler->assembleMatrix(x,x-dx);
-      else
-          assembler->assembleMatrix(mp_def);
+        if (MIP)
+            assembler->assembleMatrix(x,x-dx);
+        else
+            assembler->assembleMatrix(mp_def);
 
-      assembler->assembleMatrix(mp_def);
-      time += stopwatch.stop();
-      gsSparseMatrix<real_t> m = assembler->matrix();
-      return m;
+        time += stopwatch.stop();
+        gsSparseMatrix<real_t> m = assembler->matrix();
+        return m;
     };
     // Function for the Residual
     Residual_t Residual = [&time,&stopwatch,&assembler,&mp_def](gsVector<real_t> const &x)
@@ -1261,7 +1260,7 @@ int main(int argc, char *argv[])
     gsSparseMatrix<> jacMat;
     /// Linear solve
     solver.compute( matrix );
-    DeltaU = solver.solve( vector );
+    DeltaU = deltaU = solver.solve( vector );
 
     /// Nonlinear solve
 
@@ -1286,7 +1285,7 @@ int main(int argc, char *argv[])
 
     for (index_t it = 0; it!=maxit; ++it)
     {
-        jacMat = dJacobian(solVec+DeltaU,DeltaU);
+        jacMat = dJacobian(solVec+DeltaU,deltaU);
         solver.compute(jacMat);
         deltaU = solver.solve(resVec); // this is the UPDATE
         DeltaU += deltaU;
@@ -1307,7 +1306,7 @@ int main(int argc, char *argv[])
 
         resOld = res;
 
-        if (deltaU.norm()/(solVec+DeltaU).norm()  < 1e-6 && res/res0 < 1e-3)
+        if (deltaU.norm()/(solVec+DeltaU).norm()  < 1e-3 && res/res0 < 1e-3)
         {
             solVec+=DeltaU;
             break;
