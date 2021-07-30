@@ -19,8 +19,7 @@
 #include <gsKLShell/gsThinShellAssembler.h>
 #include <gsKLShell/getMaterialMatrix.h>
 
-// #include <gsThinShell/gsArcLengthIterator.h>
-#include <gsStructuralAnalysis/gsStaticSolver.h>
+#include <gsStructuralAnalysis/gsStaticNewton.h>
 
 using namespace gismo;
 
@@ -295,11 +294,11 @@ int main (int argc, char** argv)
       matrix = assembler->matrix();
       vector = assembler->rhs();
       // Configure Structural Analsysis module
-      gsStaticSolver<real_t> staticSolver(matrix,vector,Jacobian,Residual);
+      gsStaticNewton<real_t> staticSolver(matrix,vector,Jacobian,Residual);
       gsOptionList solverOptions = staticSolver.options();
-      solverOptions.setInt("Verbose",true);
-      solverOptions.setInt("MaxIterations",maxit);
-      solverOptions.setReal("Tolerance",tol);
+      solverOptions.setInt("verbose",true);
+      solverOptions.setInt("maxIt",maxit);
+      solverOptions.setReal("tol",tol);
       staticSolver.setOptions(solverOptions);
       solVector = staticSolver.solveNonlinear();
 

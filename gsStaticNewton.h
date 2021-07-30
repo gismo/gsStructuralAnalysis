@@ -94,7 +94,7 @@ public:
     gsVector<T> solveLinear();
     gsVector<T> solveNonlinear();
 
-    void initialize();
+    void initialize() {_init(); };
 
     void initOutput();
     void stepOutput(index_t k);

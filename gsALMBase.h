@@ -117,7 +117,7 @@ public:
     virtual T determinant() const {return m_jacobian(m_U).toDense().determinant();}
 
     // Miscelaneous
-    virtual void resetStep() {m_DeltaUold.setZero();}
+    virtual void resetStep() {m_DeltaUold.setZero(); m_DeltaLold = 0;}
 
     // Set initial guess for solution
     virtual void setInitialGuess(const gsVector<T> guess) {m_U = guess;}

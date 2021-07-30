@@ -20,8 +20,11 @@
 
 #include <gsKLShell/gsThinShellAssembler.h>
 #include <gsKLShell/getMaterialMatrix.h>
-// #include <gsThinShell/gsArcLengthIterator.h>
-#include <gsStructuralAnalysis/gsArcLengthIterator.h>
+
+#include <gsStructuralAnalysis/gsALMBase.h>
+#include <gsStructuralAnalysis/gsALMLoadControl.h>
+#include <gsStructuralAnalysis/gsALMRiks.h>
+#include <gsStructuralAnalysis/gsALMCrisfield.h>
 
 using namespace gismo;
 
@@ -279,33 +282,40 @@ int main (int argc, char** argv)
     assembler->assemble();
     gsVector<> Force = assembler->rhs();
 
-    gsArcLengthIterator<real_t> arcLength(Jacobian, ALResidual, Force);
+    gsALMBase<real_t> * arcLength;
+    if (method==0)
+      arcLength = new gsALMLoadControl<real_t>(Jacobian, ALResidual, Force);
+    else if (method==1)
+      arcLength = new gsALMRiks<real_t>(Jacobian, ALResidual, Force);
+    else if (method==2)
+      arcLength = new gsALMCrisfield<real_t>(Jacobian, ALResidual, Force);
+    else
+      GISMO_ERROR("Method "<<method<<" unknown");
 
-    arcLength.options().setInt("Solver",1); // CG solver
-    arcLength.options().setInt("BifurcationMethod",1); // 0: determinant, 1: eigenvalue
-    arcLength.options().setInt("Method",method);
-    arcLength.options().setReal("Length",dL);
-    arcLength.options().setInt("AngleMethod",0); // 0: step, 1: iteration
-    arcLength.options().setSwitch("AdaptiveLength",adaptive);
-    arcLength.options().setInt("AdaptiveIterations",5);
-    arcLength.options().setReal("Scaling",0.0);
-    arcLength.options().setReal("Tol",tol);
-    arcLength.options().setReal("TolU",tolU);
-    arcLength.options().setReal("TolF",tolF);
-    arcLength.options().setInt("MaxIter",maxit);
-    arcLength.options().setSwitch("Verbose",true);
-    arcLength.options().setReal("Relaxation",relax);
+    arcLength->options().setInt("Solver",1); // CG solver
+    arcLength->options().setInt("BifurcationMethod",1); // 0: determinant, 1: eigenvalue
+    arcLength->options().setReal("Length",dL);
+    arcLength->options().setInt("AngleMethod",0); // 0: step, 1: iteration
+    arcLength->options().setSwitch("AdaptiveLength",adaptive);
+    arcLength->options().setInt("AdaptiveIterations",5);
+    arcLength->options().setReal("Scaling",0.0);
+    arcLength->options().setReal("Tol",tol);
+    arcLength->options().setReal("TolU",tolU);
+    arcLength->options().setReal("TolF",tolF);
+    arcLength->options().setInt("MaxIter",maxit);
+    arcLength->options().setSwitch("Verbose",true);
+    arcLength->options().setReal("Relaxation",relax);
     if (quasiNewtonInt>0)
     {
       quasiNewton = true;
-      arcLength.options().setInt("QuasiIterations",quasiNewtonInt);
+      arcLength->options().setInt("QuasiIterations",quasiNewtonInt);
     }
-    arcLength.options().setSwitch("Quasi",quasiNewton);
+    arcLength->options().setSwitch("Quasi",quasiNewton);
 
 
-    gsDebug<<arcLength.options();
-    arcLength.applyOptions();
-    arcLength.initialize();
+    gsDebug<<arcLength->options();
+    arcLength->applyOptions();
+    arcLength->initialize();
 
 
     gsParaviewCollection collection(dirname + "/" + output);
@@ -321,21 +331,21 @@ int main (int argc, char** argv)
 
     gsMatrix<> solVector;
     real_t indicator = 0.0;
-    arcLength.setIndicator(indicator); // RESET INDICATOR
+    arcLength->setIndicator(indicator); // RESET INDICATOR
 
     gsMatrix<> lambdas(3,step);
     gsMatrix<> pressures(2,step);
     for (index_t k=0; k<step; k++)
     {
       gsInfo<<"Load step "<< k<<"\n";
-      arcLength.step();
+      arcLength->step();
 
-      if (!(arcLength.converged()))
+      if (!(arcLength->converged()))
         GISMO_ERROR("Loop terminated, arc length method did not converge.\n");
 
-      solVector = arcLength.solutionU();
+      solVector = arcLength->solutionU();
       Uold = solVector;
-      Lold = arcLength.solutionL();
+      Lold = arcLength->solutionL();
 
       assembler->constructSolution(solVector,mp_def);
 
@@ -343,7 +353,7 @@ int main (int argc, char** argv)
       pts<<0.0,1.0;
 
       lambdas.col(k) = assembler->computePrincipalStretches(pts,mp_def,0);
-      pressures.col(k) << pressure*arcLength.solutionL(), pressure*arcLength.solutionL() * assembler->getArea(mp) / assembler->getArea(mp_def);
+      pressures.col(k) << pressure*arcLength->solutionL(), pressure*arcLength->solutionL() * assembler->getArea(mp) / assembler->getArea(mp_def);
 
       deformation = mp_def;
       deformation.patch(0).coefs() -= mp.patch(0).coefs();// assuming 1 patch here

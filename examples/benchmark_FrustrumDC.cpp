@@ -16,7 +16,6 @@
 #include <gsKLShell/gsThinShellAssembler.h>
 #include <gsKLShell/getMaterialMatrix.h>
 
-#include <gsStructuralAnalysis/gsStaticSolver.h>
 #include <gsStructuralAnalysis/gsStaticNewton.h>
 #include <gsStructuralAnalysis/gsControlDisplacement.h>
 
@@ -344,7 +343,7 @@ int main (int argc, char** argv)
     assembler->updateBCs(BCs);
     for (index_t k=0; k<step; k++)
     {
-      gsInfo<<"Load step "<< k<<"\n";
+      gsInfo<<"Load step "<<k<<"; D = "<<D<<"; dL = "<<dL<<"\n";
 
       stopwatch.restart();
       stopwatch2.restart();
@@ -359,11 +358,7 @@ int main (int argc, char** argv)
       control.step(-dL);
       solVector = control.solutionU();
 
-      gsDebugVar(staticSolver.update());
-      gsDebugVar(solVector);
-
       time += stopwatch.stop();
-
 
       totaltime += stopwatch2.stop();
 
@@ -421,7 +416,6 @@ int main (int argc, char** argv)
       if (reset!=1)
       {
         dL = dL0;
-        displ.setValue(D - dL,3);
       }
       reset = 0;
 

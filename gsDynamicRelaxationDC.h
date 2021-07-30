@@ -166,7 +166,7 @@ public:
         m_options.addInt("maxIt","maximum number of iterations",1e2);
         m_options.addReal("tolF","(Force) Residual tolerance",1e-6);
         m_options.addReal("tolE","Kinetic energy tolerance",1e-12);
-        m_options.addInt("Verbose","Verbose output",0);
+        m_options.addInt("verbose","Verbose output",0);
     }
 
     gsOptionList options() const {return m_options;}
@@ -178,7 +178,7 @@ public:
         m_maxIt = m_options.getInt("maxIt");
         m_tolF = m_options.getReal("tolF");
         m_tolE = m_options.getReal("tolE");
-        m_verbose = m_options.getInt("Verbose");
+        m_verbose = m_options.getInt("verbose");
     }
 
     void setOptions(gsOptionList & options) {m_options.update(options,gsOptionList::addIfUnknown); }

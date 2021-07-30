@@ -91,7 +91,7 @@ To use the `gsStaticAnalysis` class for a structural assembler (`gsElasticityAss
 ```
 gsSparseMatrix<T>   matrix = any_assembler.function_for_StiffnessMatrix();
 gsVector<T>         vector = any_assembler.function_for_rhs();
-gsStaticSolver<T>   staticSolver(matrix,vector);
+gsStaticNewton<T>   staticSolver(matrix,vector);
 
 ```
 ##### Initialization of nonlinear solver
@@ -100,7 +100,7 @@ gsSparseMatrix<T>   matrix = any_assembler.function_for_StiffnessMatrix();
 gsVector<T>         vector = any_assembler.function_for_rhs();
 Jacobian_t<T>       Jacobian = { your_jacobian };
 Residual_t<T>       Residual = { your_residual };
-gsStaticSolver<T>   staticSolver(matrix,vector,Jacobian,Residual); // see above documentation for definitions of Jacobian_t and Residual_t
+gsStaticNewton<T>   staticSolver(matrix,vector,Jacobian,Residual); // see above documentation for definitions of Jacobian_t and Residual_t
 ```
 ##### General use
 ```

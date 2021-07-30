@@ -17,7 +17,7 @@
 #include <gsElasticity/gsElasticityAssembler.h>
 #include <gsElasticity/gsWriteParaviewMultiPhysics.h>
 
-#include <gsStructuralAnalysis/gsStaticSolver.h>
+#include <gsStructuralAnalysis/gsStaticNewton.h>
 
 
 using namespace gismo;
@@ -187,7 +187,7 @@ int main (int argc, char** argv)
     gsVector<> vector = assembler.rhs();
 
     // Configure Structural Analsysis module
-    gsStaticSolver<real_t> staticSolver(matrix,vector,Jacobian,Residual);
+    gsStaticNewton<real_t> staticSolver(matrix,vector,Jacobian,Residual);
     staticSolver.setOptions(solverOptions);
 
     gsInfo << "Solving...\n";
