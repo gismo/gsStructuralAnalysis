@@ -28,13 +28,11 @@ namespace gismo
 template <class T>
 class gsArcLengthIterator
 {
-public:
-
+private:
     /// Constructor giving access to the gsShellAssembler object to create a linear system per iteration
-    gsArcLengthIterator(  std::function < gsSparseMatrix<T> ( gsVector<T> const & ) > &Jacobian,
-                          std::function < gsVector<T> ( gsVector<T> const &, T, gsVector<T> const & ) > &Residual,
+    gsArcLengthIterator(  std::function < gsVector<T> ( gsVector<T> const &, T, gsVector<T> const & ) > &Residual,
                           gsVector<T> &Force )
-    : m_jacobian(Jacobian),
+    : m_jacobian(nullptr),
       m_residualFun(Residual),
       m_forcing(Force)
     {
@@ -55,6 +53,30 @@ public:
 
       // m_deltaLs = gsMatrix<T>::Zero(2,1);
     }
+
+public:
+    /// Constructor giving access to the gsShellAssembler object to create a linear system per iteration
+    gsArcLengthIterator(  std::function < gsSparseMatrix<T> ( gsVector<T> const & ) > &Jacobian,
+                          std::function < gsVector<T> ( gsVector<T> const &, T, gsVector<T> const & ) > &Residual,
+                          gsVector<T> &Force )
+    :   gsArcLengthIterator(Residual,Force)
+    {
+        m_jacobian  = Jacobian;
+        m_djacobian = [this](gsVector<T> const & x, gsVector<T> const & dx)
+        {
+            return m_jacobian(x);
+        };
+    }
+
+    /// Constructor giving access to the gsShellAssembler object to create a linear system per iteration
+    gsArcLengthIterator(  std::function < gsSparseMatrix<T> ( gsVector<T> const &, gsVector<T> const & ) > &dJacobian,
+                          std::function < gsVector<T> ( gsVector<T> const &, T, gsVector<T> const & ) > &Residual,
+                          gsVector<T> &Force )
+    :   gsArcLengthIterator(Residual,Force)
+    {
+        m_djacobian  = dJacobian;
+    }
+
 
 
 public:
@@ -113,7 +135,11 @@ public:
       // Returns if solution passed a bifurcation point
       bool isStable() const {return m_stability;}
 
-      T determinant() const {return m_jacobian(m_U).toDense().determinant();}
+      T determinant() const
+      {
+        gsVector<T> dU = gsVector<T>::Zero(m_U.size());
+        return m_djacobian(m_U,dU).toDense().determinant();
+      }
 
     // Miscelaneous
       void resetStep() {m_DeltaUold.setZero();}
@@ -244,7 +270,8 @@ protected:
 
     void computeResidual();
     void computeResidualNorms();
-    void computeJacobian(gsVector<T> U);
+    gsSparseMatrix<T> _computeJacobian(const gsVector<T> U, const gsVector<T> dU);
+    void computeJacobian(const gsVector<T> U, const gsVector<T> dU);
     void computeJacobian();
     void computeLength();
     void computeUt();
@@ -307,6 +334,7 @@ protected:
     index_t m_numDof;
 
     std::function < gsSparseMatrix<T> ( gsVector<T> const & ) > m_jacobian;
+    std::function < gsSparseMatrix<T> ( gsVector<T> const &, gsVector<T> const & ) > m_djacobian;
     std::function < gsMatrix<T> ( gsVector<T> const &, T, gsVector<T> const & ) > m_residualFun;
     std::function < gsMatrix<T> ( gsVector<T> const &, T, gsVector<T> const & ) > m_residualFunMod;
     gsVector<T> m_forcing;

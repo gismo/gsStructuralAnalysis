@@ -28,7 +28,7 @@ void gsBucklingSolver<T,GEigsMode>::initializeMatrix()
   if (m_verbose) { gsInfo<<"." ; }
   m_solVec = m_solver.solve(m_scaling*m_rhs);
   if (m_verbose) { gsInfo<<"." ; }
-  m_B = m_nonlinearFun(m_solVec)-m_A;
+  m_B = m_dnonlinear(m_solVec,gsVector<T>::Zero(m_solVec.rows()))-m_A;
   if (m_verbose) { gsInfo<<"." ; }
   if (m_verbose) { gsInfo<<"Finished\n" ; }
 };
