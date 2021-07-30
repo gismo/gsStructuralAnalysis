@@ -35,10 +35,34 @@ public:
     gsALMBase(  std::function < gsSparseMatrix<T> ( gsVector<T> const & ) > &Jacobian,
                 std::function < gsVector<T> ( gsVector<T> const &, T, gsVector<T> const & ) > &Residual,
                 gsVector<T> &Force )
-    : m_jacobian(Jacobian),
-      m_residualFun(Residual),
+    : m_residualFun(Residual),
       m_forcing(Force)
     {
+        m_jacobian  = Jacobian;
+        m_djacobian = [this](gsVector<T> const & x, gsVector<T> const & dx)
+        {
+            return m_jacobian(x);
+        };
+
+        // initialize variables
+        m_numIterations = 0;
+        m_arcLength = m_arcLength_prev = 1e-2;
+        m_converged = false;
+
+        // initialize errors
+        m_basisResidualF = 0.0;
+        m_basisResidualU = 0.0;
+    }
+
+    /// Constructor giving access to the gsShellAssembler object to create a linear system per iteration
+    gsALMBase(  std::function < gsSparseMatrix<T> ( gsVector<T> const &, gsVector<T> const & ) > &dJacobian,
+                std::function < gsVector<T> ( gsVector<T> const &, T, gsVector<T> const & ) > &Residual,
+                gsVector<T> &Force )
+    : m_residualFun(Residual),
+      m_forcing(Force)
+    {
+        m_djacobian  = dJacobian;
+
         // initialize variables
         m_numIterations = 0;
         m_arcLength = m_arcLength_prev = 1e-2;
@@ -190,7 +214,8 @@ protected:
 
     virtual void computeResidual();
     virtual void computeResidualNorms();
-    virtual void computeJacobian(gsVector<T> U);
+    virtual gsSparseMatrix<T> _computeJacobian(const gsVector<T> U, const gsVector<T> dU);
+    virtual void computeJacobian(const gsVector<T> U, const gsVector<T> dU);
     virtual void computeJacobian();
     virtual void computeLength();
     virtual void computeUt();
@@ -217,8 +242,8 @@ protected:
     index_t m_numDof;
 
     std::function < gsSparseMatrix<T> ( gsVector<T> const & ) > m_jacobian;
+    std::function < gsSparseMatrix<T> ( gsVector<T> const &, gsVector<T> const & ) > m_djacobian;
     std::function < gsMatrix<T> ( gsVector<T> const &, T, gsVector<T> const & ) > m_residualFun;
-    std::function < gsMatrix<T> ( gsVector<T> const &, T, gsVector<T> const & ) > m_residualFunMod;
     gsVector<T> m_forcing;
 
     /// Linear solver employed

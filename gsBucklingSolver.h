@@ -11,6 +11,7 @@
     Author(s): H.M. Verhelst (2019-..., TU Delft)
 */
 
+#include <gsSpectra/gsSpectra.h>
 #include <gsStructuralAnalysis/gsEigenProblemBase.h>
 
 #pragma once
@@ -35,27 +36,48 @@ protected:
 public:
 
     /// Constructor giving access to the gsShellAssembler object to create a linear system per iteration
-    gsBucklingSolver(     gsSparseMatrix<T> &linear,
+    gsBucklingSolver(   gsSparseMatrix<T> &linear,
                         gsVector<T> &rhs,
                         std::function < gsSparseMatrix<T> ( gsVector<T> const & ) > &nonlinear,
                         T scaling = 1.0) :
-        m_rhs(rhs),
-        m_nonlinearFun(nonlinear),
-        m_scaling(scaling)
-    {
-        m_A = linear;
-        m_verbose = false;
-        this->initializeMatrix();
-    }
+    m_rhs(rhs),
+    m_nonlinear(nonlinear),
+    m_scaling(scaling)
+  {
+    m_A = linear;
+    m_verbose = false;
 
-    /// Constructor giving access to the gsShellAssembler object to create a linear system per iteration
-    gsBucklingSolver(   gsSparseMatrix<T> &linear,
-                        gsSparseMatrix<T> &nonlinear )
+    m_dnonlinear = [this](gsVector<T> const & x, gsVector<T> const & dx)
     {
-        m_A = linear;
-        m_verbose = false;
-        m_B = nonlinear-m_A;
-    }
+        return m_nonlinear(x);
+    };
+    this->initializeMatrix();
+  }
+
+  /// Constructor giving access to the gsShellAssembler object to create a linear system per iteration
+  gsBucklingSolver(     gsSparseMatrix<T> &linear,
+                        gsVector<T> &rhs,
+                        std::function < gsSparseMatrix<T> ( gsVector<T> const &, gsVector<T> const & ) > &dnonlinear,
+                        T scaling = 1.0) :
+    m_rhs(rhs),
+    m_dnonlinear(dnonlinear),
+    m_scaling(scaling)
+  {
+    m_A = linear;
+    m_verbose = false;
+
+    this->initializeMatrix();
+  }
+
+
+  /// Constructor giving access to the gsShellAssembler object to create a linear system per iteration
+  gsBucklingSolver(     gsSparseMatrix<T> &linear,
+                        gsSparseMatrix<T> &nonlinear )
+  {
+    m_A = linear;
+    m_B = nonlinear-m_A;
+    m_verbose = false;
+  }
 
 protected:
 
@@ -66,7 +88,7 @@ protected:
         if (m_verbose) { gsInfo<<"." ; }
         m_solVec = m_solver.solve(m_scaling*m_rhs);
         if (m_verbose) { gsInfo<<"." ; }
-        m_B = m_nonlinearFun(m_solVec)-m_A;
+        m_B = m_dnonlinear(m_solVec,gsVector<T>::Zero(m_solVec.rows()))-m_A;
         if (m_verbose) { gsInfo<<"." ; }
         if (m_verbose) { gsInfo<<"Finished\n" ; }
     }
@@ -75,7 +97,8 @@ protected:
 
     using Base::m_A;
     const gsVector<T> m_rhs;
-    const std::function < gsSparseMatrix<T> ( gsVector<T> const & ) > m_nonlinearFun;
+    const std::function < gsSparseMatrix<T> ( gsVector<T> const & ) > m_nonlinear;
+    std::function < gsSparseMatrix<T> ( gsVector<T> const &, gsVector<T> const & ) > m_dnonlinear;
     T m_scaling;
     using Base::m_B;
 

@@ -187,19 +187,29 @@ gsVector<T> gsALMBase<T>::solveSystem(const gsVector<T> & F)
 }
 
 template <class T>
-void gsALMBase<T>::computeJacobian(gsVector<T> U)
+gsSparseMatrix<T> gsALMBase<T>::_computeJacobian(const gsVector<T> U, const gsVector<T> deltaU)
 {
   // Compute Jacobian
-  m_jacMat = m_jacobian(U);
-  this->factorizeMatrix(m_jacMat);
+  gsSparseMatrix<T> m;
+  m = m_djacobian(U,deltaU);
+  this->factorizeMatrix(m);
   m_note += "J";
+  return m;
+}
+
+template <class T>
+void gsALMBase<T>::computeJacobian(const gsVector<T> U, const gsVector<T> deltaU)
+{
+  m_jacMat = _computeJacobian(U,deltaU);
 }
 
 template <class T>
 void gsALMBase<T>::computeJacobian()
 {
   // Compute Jacobian
-  this->computeJacobian(m_U + m_DeltaU);
+  if (m_deltaU.rows() == 0)
+    m_deltaU = gsVector<T>::Zero(m_DeltaU.rows());
+  this->computeJacobian(m_U + m_DeltaU, m_deltaU);
 }
 
 template <class T> void gsALMBase<T>::computeUbar() { m_deltaUbar = this->solveSystem(-m_resVec); }
@@ -1070,7 +1080,11 @@ void gsALMBase<T>::computeSingularPoint(T singTol, index_t kmax, gsVector<T> U, 
 template <class T>
 gsMatrix<T> gsALMBase<T>::computeModes(gsVector<T> x, bool jacobian, T shift)
 {
-  if (jacobian) { this->computeJacobian(x);} // otherwise the jacobian is already computed (on m_U+m_DeltaU)
+  if (jacobian)
+  {
+    gsVector<T> dx = gsVector<T>::Zero(x.size());
+    this->computeJacobian(x,dx);
+  } // otherwise the jacobian is already computed (on m_U+m_DeltaU)
 
   gsMatrix<T> result;
 #ifdef GISMO_WITH_SPECTRA
@@ -1167,7 +1181,7 @@ bool gsALMBase<T>::testSingularPoint(gsVector<T> U, T L, T tol, index_t kmax, bo
   // Initiate m_V and m_DeltaVDET
 
   if (jacobian)
-    this->computeJacobian(U);
+    this->computeJacobian(m_U,m_deltaU);
 
   m_V = gsVector<T>::Ones(m_numDof);
   m_V.normalize();
@@ -1200,7 +1214,11 @@ bool gsALMBase<T>::testSingularPoint(T tol, index_t kmax, bool jacobian)
 template <class T>
 void gsALMBase<T>::computeStability(gsVector<T> x, bool jacobian, T shift)
 {
-  if (jacobian) { this->computeJacobian(x);} // otherwise the jacobian is already computed (on m_U+m_DeltaU)
+  if (jacobian)
+  {
+    gsVector<T> dx = gsVector<T>::Zero(x.size());
+    this->computeJacobian(x,dx);
+  } // otherwise the jacobian is already computed (on m_U+m_DeltaU)
 
   // gsInfo<<"x = \n"<<x.transpose()<<"\n";
   if (m_bifurcationMethod == bifmethod::Determinant)
@@ -1281,7 +1299,7 @@ void gsALMBase<T>::extendedSystemSolve(gsVector<T> U, T L, T tol)
   m_L = L;
   gsInfo<<"Extended iterations --- Starting with U.norm = "<<m_U.norm()<<" and L = "<<m_L<<"\n";
 
-  this->computeJacobian(m_U); // Jacobian evaluated on m_U
+  this->computeJacobian(m_U,m_deltaU); // Jacobian evaluated on m_U
   m_basisResidualKTPhi = (m_jacMat*m_V).norm();
 
   m_DeltaV = gsVector<T>::Zero(m_numDof);
@@ -1305,7 +1323,7 @@ void gsALMBase<T>::extendedSystemSolve(gsVector<T> U, T L, T tol)
     // m_resVec = m_residualFun(m_U, m_L, m_forcing);
     // m_residue = m_resVec.norm() / ( m_L * m_forcing.norm() );
     // m_residue = (m_jacobian(m_U).toDense()*m_V).norm() / refError;
-    this->computeJacobian(m_U+m_DeltaU);
+    this->computeJacobian(m_U+m_DeltaU,m_deltaU);
     m_residueKTPhi = (m_jacMat*(m_V+m_DeltaV)).norm(); // /m_basisResidualKTPhi;
     m_resVec = m_residualFun(m_U+m_DeltaU,m_L+m_DeltaL,m_forcing);
     computeResidualNorms();
@@ -1353,7 +1371,7 @@ template <class T>
 void gsALMBase<T>::extendedSystemIteration()
 {
   m_resVec = m_residualFun(m_U+m_DeltaU, m_L+m_DeltaL, m_forcing);
-  this->computeJacobian(m_U+m_DeltaU);
+  this->computeJacobian(m_U+m_DeltaU,m_deltaU);
   // m_jacMat = m_jacobian(m_U);
 
   m_deltaUt = this->solveSystem(m_forcing); // DeltaV1

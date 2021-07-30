@@ -51,9 +51,21 @@ public:
 
     /// Constructor giving access to the gsShellAssembler object to create a linear system per iteration
     gsALMRiks(  std::function < gsSparseMatrix<T> ( gsVector<T> const & ) > &Jacobian,
-                          std::function < gsVector<T> ( gsVector<T> const &, T, gsVector<T> const & ) > &Residual,
-                          gsVector<T> &Force )
+                std::function < gsVector<T> ( gsVector<T> const &, T, gsVector<T> const & ) > &Residual,
+                gsVector<T> &Force )
     : Base(Jacobian,Residual,Force)
+    {
+        defaultOptions();
+        getOptions();
+
+        initMethods();
+    }
+
+    /// Constructor giving access to the gsShellAssembler object to create a linear system per iteration
+    gsALMRiks(  std::function < gsSparseMatrix<T> ( gsVector<T> const &, gsVector<T> const & ) > &dJacobian,
+                std::function < gsVector<T> ( gsVector<T> const &, T, gsVector<T> const & ) > &Residual,
+                gsVector<T> &Force )
+    : Base(dJacobian,Residual,Force)
     {
         defaultOptions();
         getOptions();
@@ -83,6 +95,7 @@ protected:
     using Base::m_numDof;
 
     using Base::m_jacobian;
+    using Base::m_djacobian;
     using Base::m_residualFun;
     using Base::m_forcing;
 
