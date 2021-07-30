@@ -1203,6 +1203,27 @@ int main(int argc, char *argv[])
         return m;
     };
 
+    dJacobian_t dJacobian = [&MIP,&time,&stopwatch,&assembler,&mp_def](gsVector<real_t> const &x, gsVector<real_t> const &dx)
+    {
+        stopwatch.restart();
+
+        // this also works
+        // assembler->constructSolution(x-upVec,mp_prev);
+        // if (MIP)
+          // assembler->assembleMatrix(mp_def,mp_prev,upVec);
+        if (MIP)
+            assembler->assembleMatrix(x,x-dx);
+        else
+        {
+            assembler->constructSolution(x,mp_def);
+            assembler->assembleMatrix(mp_def);
+        }
+
+        time += stopwatch.stop();
+        gsSparseMatrix<real_t> m = assembler->matrix();
+        return m;
+    };
+
     // Function for the Residual
     Residual_t Residual = [&time,&stopwatch,&assembler,&mp_def](gsVector<real_t> const &x)
     {
@@ -1223,18 +1244,33 @@ int main(int argc, char *argv[])
     gsVector<> vector = assembler->rhs();
 
     // Configure Structural Analsysis module
-    gsStaticSolver<real_t> staticSolver(matrix,vector,Jacobian,Residual);
+    gsStaticSolver<real_t> staticSolver(matrix,vector,dJacobian,Residual);
     gsOptionList solverOptions = staticSolver.options();
     solverOptions.setInt("Verbose",verbose);
     solverOptions.setInt("MaxIterations",10);
     solverOptions.setReal("Tolerance",1e-6);
     staticSolver.setOptions(solverOptions);
 
-    // Solve linear problem
+    real_t OMPtime = omp_get_wtime();
+
+    // Solve (non-) linear problem
+    /*
+        NOTE: Performs solveLinear inside. It can also be done differently (below). Inside the gsStaticSolver, the solVector is initialized slightly different, hence something different is fed into the nonlinear iterations.
+
+        solVector = staticSolver.solveLinear();
+        if (nonlinear)
+            solVector = staticSolver.solveNonlinear(); // NOTE: Performs solveLinear inside.
+    */
     gsVector<> solVector;
-    solVector = staticSolver.solveLinear();
-    if (nonlinear)
+    if (!nonlinear)
+        solVector = staticSolver.solveLinear();
+    else
         solVector = staticSolver.solveNonlinear();
+
+
+#ifdef _OPENMP
+    gsInfo<<"OMP wall time: "<<omp_get_wtime() - OMPtime<<"\n";
+#endif
 
 /*
     // We need this because we need to (manually) get the update from the newton solver each iteration.

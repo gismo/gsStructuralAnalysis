@@ -82,6 +82,8 @@ int main (int argc, char** argv)
 
     bool write = false;
 
+    bool MIP = false;
+
     std::string assemberOptionsFile("options/solver_options.xml");
 
     gsCmdLine cmd("Buckling analysis for thin shells.");
@@ -116,6 +118,7 @@ int main (int argc, char** argv)
     cmd.addSwitch("first", "Plot only first", first);
     cmd.addSwitch("write", "Write convergence data to file", write);
     cmd.addSwitch("sparse", "Use sparse solver", sparse);
+    cmd.addSwitch("MIP", "Use mixed integration point method", MIP);
 
     try { cmd.getValues(argc,argv); } catch (int rv) { return rv; }
 
@@ -599,7 +602,8 @@ int main (int argc, char** argv)
     gsSparseMatrix<> K_L =  assembler->matrix();
     gsVector<> rhs = assembler->rhs();
 
-    typedef std::function<gsSparseMatrix<real_t> (gsVector<real_t> const &)>    Jacobian_t;
+    typedef std::function<gsSparseMatrix<real_t> (gsVector<real_t> const &)>                            Jacobian_t;
+    typedef std::function<gsSparseMatrix<real_t> (gsVector<real_t> const &, gsVector<real_t> const &)>  dJacobian_t;
     Jacobian_t K_NL = [&assembler,&mp_def](gsVector<real_t> const &x)
     {
       assembler->constructSolution(x,mp_def);
@@ -607,8 +611,21 @@ int main (int argc, char** argv)
       gsSparseMatrix<real_t> m = assembler->matrix();
       return m;
     };
+    dJacobian_t dK_NL = [&assembler,&mp_def,&MIP](gsVector<real_t> const &x, gsVector<real_t> const &dx)
+    {
+      if (MIP)
+        assembler->assembleMatrix(x,x-dx);
+      else
+      {
+        assembler->constructSolution(x,mp_def);
+        assembler->assembleMatrix(mp_def);
+      }
 
-      gsBucklingSolver<real_t,Spectra::GEigsMode::ShiftInvert> buckling(K_L,rhs,K_NL);
+      gsSparseMatrix<real_t> m = assembler->matrix();
+      return m;
+    };
+
+      gsBucklingSolver<real_t,Spectra::GEigsMode::ShiftInvert> buckling(K_L,rhs,dK_NL);
       buckling.verbose();
       // buckling.computePower();
 

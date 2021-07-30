@@ -237,19 +237,29 @@ gsVector<T> gsArcLengthIterator<T>::solveSystem(const gsVector<T> & F)
 }
 
 template <class T>
-void gsArcLengthIterator<T>::computeJacobian(gsVector<T> U)
+gsSparseMatrix<T> gsArcLengthIterator<T>::_computeJacobian(const gsVector<T> U, const gsVector<T> deltaU)
 {
   // Compute Jacobian
-  m_jacMat = m_jacobian(U);
-  this->factorizeMatrix(m_jacMat);
+  gsSparseMatrix<T> m;
+  m = m_djacobian(U,deltaU);
+  this->factorizeMatrix(m);
   note += "J";
+  return m;
+}
+
+template <class T>
+void gsArcLengthIterator<T>::computeJacobian(const gsVector<T> U, const gsVector<T> deltaU)
+{
+  m_jacMat = _computeJacobian(U,deltaU);
 }
 
 template <class T>
 void gsArcLengthIterator<T>::computeJacobian()
 {
   // Compute Jacobian
-  this->computeJacobian(m_U + m_DeltaU);
+  if (m_deltaU.rows() == 0)
+    m_deltaU = gsVector<T>::Zero(m_DeltaU.rows());
+  this->computeJacobian(m_U + m_DeltaU, m_deltaU);
 }
 
 template <class T>
@@ -1178,7 +1188,7 @@ bool gsArcLengthIterator<T>::testSingularPoint(T tol, index_t kmax, bool jacobia
   // Initiate m_V and m_DeltaVDET
 
   if (jacobian)
-    this->computeJacobian(m_U);
+    this->computeJacobian(m_U,m_deltaU);
 
   m_V = gsVector<T>::Ones(m_numDof);
   m_V.normalize();
@@ -1208,7 +1218,12 @@ bool gsArcLengthIterator<T>::testSingularPoint(T tol, index_t kmax, bool jacobia
 template <class T>
 void gsArcLengthIterator<T>::computeStability(gsVector<T> x, bool jacobian)
 {
-  if (jacobian) { this->computeJacobian(x);} // otherwise the jacobian is already computed (on m_U+m_DeltaU)
+
+  if (jacobian)
+  {
+    gsVector<T> dx = gsVector<T>::Zero(x.size());
+    this->computeJacobian(x,dx);
+  } // otherwise the jacobian is already computed (on m_U+m_DeltaU)
 
   // gsInfo<<"x = \n"<<x.transpose()<<"\n";
   if (m_bifurcationMethod == bifmethod::Determinant)
@@ -1278,7 +1293,7 @@ void gsArcLengthIterator<T>::extendedSystemSolve(gsVector<T> U, T L, T tol)
   m_L = L;
   gsInfo<<"Extended iterations --- Starting with U.norm = "<<m_U.norm()<<" and L = "<<m_L<<"\n";
 
-  this->computeJacobian(m_U); // Jacobian evaluated on m_U
+  this->computeJacobian(m_U,m_deltaU); // Jacobian evaluated on m_U
   m_basisResidualKTPhi = (m_jacMat*m_V).norm();
 
   m_DeltaV = gsVector<T>::Zero(m_numDof);
@@ -1302,7 +1317,7 @@ void gsArcLengthIterator<T>::extendedSystemSolve(gsVector<T> U, T L, T tol)
     // m_resVec = m_residualFun(m_U, m_L, m_forcing);
     // m_residue = m_resVec.norm() / ( m_L * m_forcing.norm() );
     // m_residue = (m_jacobian(m_U).toDense()*m_V).norm() / refError;
-    this->computeJacobian(m_U+m_DeltaU);
+    this->computeJacobian(m_U+m_DeltaU,m_deltaU);
     m_residueKTPhi = (m_jacMat*(m_V+m_DeltaV)).norm(); // /m_basisResidualKTPhi;
     m_resVec = m_residualFun(m_U+m_DeltaU,m_L+m_DeltaL,m_forcing);
     m_residueF = m_resVec.norm();
@@ -1339,14 +1354,14 @@ template <class T>
 void gsArcLengthIterator<T>::extendedSystemIteration()
 {
   m_resVec = m_residualFun(m_U+m_DeltaU, m_L+m_DeltaL, m_forcing);
-  this->computeJacobian(m_U+m_DeltaU);
+  this->computeJacobian(m_U+m_DeltaU,m_deltaU);
   // m_jacMat = m_jacobian(m_U);
 
   m_deltaUt = this->solveSystem(m_forcing); // DeltaV1
   m_deltaUbar = this->solveSystem(-m_resVec); // DeltaV2
 
   real_t eps = 1e-8;
-  gsSparseMatrix<T> jacMatEps = m_jacobian((m_U+m_DeltaU) + eps*(m_V+m_DeltaV));
+  gsSparseMatrix<T> jacMatEps = _computeJacobian((m_U+m_DeltaU) + eps*(m_V+m_DeltaV), m_deltaU + eps*m_deltaV);
   note += "J"; // mark jacobian computation
   gsVector<T> h1 = 1/eps * ( jacMatEps * m_deltaUt ) - 1/eps * m_forcing;
   gsVector<T> h2 = m_jacMat * (m_V+m_DeltaV) + 1/eps * ( jacMatEps * m_deltaUbar + m_resVec );

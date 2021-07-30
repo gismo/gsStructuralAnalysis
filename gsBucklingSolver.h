@@ -41,20 +41,40 @@ public:
                         T scaling = 1.0) :
     m_A(linear),
     m_rhs(rhs),
-    m_nonlinearFun(nonlinear),
-    m_scaling(scaling)
+    m_nonlinear(nonlinear),
+    m_scaling(scaling),
+    m_verbose(false)
   {
-    m_verbose = false;
+    m_dnonlinear = [this](gsVector<T> const & x, gsVector<T> const & dx)
+    {
+        return m_nonlinear(x);
+    };
     this->initializeMatrix();
   }
 
   /// Constructor giving access to the gsShellAssembler object to create a linear system per iteration
   gsBucklingSolver(     gsSparseMatrix<T> &linear,
-                        gsSparseMatrix<T> &nonlinear ) :
-    m_A(linear)
+                        gsVector<T> &rhs,
+                        std::function < gsSparseMatrix<T> ( gsVector<T> const &, gsVector<T> const & ) > &dnonlinear,
+                        T scaling = 1.0) :
+    m_A(linear),
+    m_rhs(rhs),
+    m_dnonlinear(dnonlinear),
+    m_scaling(scaling),
+    m_verbose(false)
   {
-    m_verbose = false;
-    m_B = nonlinear-m_A;
+    this->initializeMatrix();
+  }
+
+
+  /// Constructor giving access to the gsShellAssembler object to create a linear system per iteration
+  gsBucklingSolver(     gsSparseMatrix<T> &linear,
+                        gsSparseMatrix<T> &nonlinear ) :
+    m_A(linear),
+    m_B(nonlinear-linear),
+    m_verbose(false)
+  {
+    // m_B = nonlinear-m_A;
   }
 public:
 
@@ -98,7 +118,8 @@ protected:
     const gsSparseMatrix<T> m_A;
     gsSparseMatrix<T> m_B;
     const gsVector<T> m_rhs;
-    const std::function < gsSparseMatrix<T> ( gsVector<T> const & ) > m_nonlinearFun;
+    const std::function < gsSparseMatrix<T> ( gsVector<T> const & ) > m_nonlinear;
+    std::function < gsSparseMatrix<T> ( gsVector<T> const &, gsVector<T> const & ) > m_dnonlinear;
     T m_scaling;
 
     /// Linear solver employed

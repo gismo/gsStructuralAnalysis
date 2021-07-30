@@ -39,7 +39,10 @@ gsVector<T> gsStaticSolver<T>::solveNonlinear()
     gsVector<T> DeltaU = gsVector<T>::Zero(m_solVec.rows());
     gsVector<T> deltaU = gsVector<T>::Zero(m_solVec.rows());
     if (m_solVec.rows()==0)
-        DeltaU = this->solveLinear();
+    {
+        deltaU = DeltaU = this->solveLinear();
+        m_solVec.setZero();
+    }
 
     gsVector<T> resVec = m_residual(m_solVec+DeltaU);
     T residual = resVec.norm();

@@ -306,6 +306,7 @@ namespace gismo
         gsMatrix<T> uOld = solOld.topRows(m_dofs);
         gsMatrix<T> vOld = solOld.bottomRows(m_dofs);
         gsMatrix<T> uNew,vNew;
+        gsMatrix<T> du = gsMatrix<T>::Zero(m_dofs,1);
 
         m_sysmat = gsSparseMatrix<T>(2*m_dofs,2*m_dofs);
         m_sysmat.setZero();
@@ -319,11 +320,14 @@ namespace gismo
 
         while ( (m_updateNorm>m_tolerance || m_residue>m_tolerance) && m_numIterations<=m_maxIterations )
         {
-            uNew = m_sol.topRows(m_dofs);
-            vNew = m_sol.bottomRows(m_dofs);
+            uNew    = m_sol.topRows(m_dofs);
+            vNew    = m_sol.bottomRows(m_dofs);
 
             if ( (!m_quasiNewton) || (m_numIterations==0) )
-                m_jacMat = m_jacobian(uNew);
+            {
+                du      = m_dsol.topRows(m_dofs);
+                m_jacMat = m_djacobian(uNew,du);
+            }
 
             m_resVec = m_residualFun(uNew,m_t);
 
@@ -393,6 +397,8 @@ namespace gismo
         gsMatrix<T> uOld = solOld.topRows(m_dofs);
         gsMatrix<T> vOld = solOld.bottomRows(m_dofs);
         gsMatrix<T> uNew,vNew;
+        gsMatrix<T> du;
+        m_dsol = gsMatrix<T>::Zero(2*m_dofs,1);
 
         gsBlockOp<>::Ptr Amat=gsBlockOp<>::make(2,2);
 
@@ -411,14 +417,17 @@ namespace gismo
             vNew = m_sol.bottomRows(m_dofs);
 
             if ( (!m_quasiNewton) || (m_numIterations==0) )
-                m_jacMat = m_jacobian(uNew);
+            {
+                du = m_dsol.topRows(m_dofs);
+                m_jacMat = m_djacobian(uNew,du);
+            }
 
             m_resVec = m_residualFun(uNew,m_t);
 
             m_sysvec.topRows(m_dofs) = uNew - uOld - m_dt*vNew;
             m_sysvec.bottomRows(m_dofs) = m_mass*(vNew - vOld) + m_dt * m_damp * vNew + m_dt*(-m_resVec);
 
-            m_jacMat = m_jacobian(uNew);
+            // m_jacMat = m_djacobian(uNew,du);
 
             Amat->addOperator(0,0,gsIdentityOp<T>::make(m_dofs) );
             Amat->addOperator(0,1,makeMatrixOp(-m_dt*eye) );
@@ -452,8 +461,6 @@ namespace gismo
 
         resetIteration();
     }
-
-
 
     template <class T>
     void gsTimeIntegrator<T>::stepNewmark()
@@ -490,6 +497,8 @@ namespace gismo
         uOld = m_uNew;
         vOld = m_vNew;
         aOld = m_aNew;
+        gsMatrix<T> du;
+        m_dsol = gsMatrix<T>::Zero(m_dofs,1);
 
 
         gsMatrix<> rhs;
@@ -502,7 +511,10 @@ namespace gismo
         while ( (m_updateNorm>m_tolerance || m_residue/res0>m_tolerance) && m_numIterations<=m_maxIterations )
         {
             if ( (!m_quasiNewton) || (m_numIterations==0) )
-                m_jacMat = m_jacobian(m_uNew);
+            {
+                du = m_dsol.topRows(m_dofs);
+                m_jacMat = m_djacobian(m_uNew,du);
+            }
 
             lhs = m_jacMat + 4/(math::pow(gamma*m_dt,2))*m_mass + 2/(gamma*m_dt)*m_damp;
             m_solver.compute(lhs);
@@ -593,6 +605,8 @@ namespace gismo
         uOld = m_uNew;
         vOld = m_vNew;
         aOld = m_aNew;
+        gsMatrix<T> du;
+        m_dsol = gsMatrix<T>::Zero(m_dofs,1);
 
         if (m_verbose)
         {
@@ -601,7 +615,10 @@ namespace gismo
         while ( (m_updateNorm>m_tolerance || m_residue>m_tolerance) && m_numIterations<=m_maxIterations )
         {
             if ( (!m_quasiNewton) || (m_numIterations==0) )
-                m_jacMat = m_jacobian(m_uNew);
+            {
+                du = m_dsol.topRows(m_dofs);
+                m_jacMat = m_djacobian(m_uNew,du);
+            }
 
             m_resVec = m_residualFun(m_uNew,m_t);
 
@@ -644,7 +661,10 @@ namespace gismo
         while ( (m_updateNorm>m_tolerance || m_residue>m_tolerance) && m_numIterations<=m_maxIterations )
         {
             if ( (!m_quasiNewton) || (m_numIterations==0) )
-                m_jacMat = m_jacobian(m_uNew);
+            {
+                du = m_dsol.topRows(m_dofs);
+                m_jacMat = m_djacobian(m_uNew,du);
+            }
 
             m_resVec = m_residualFun(m_uNew,m_t);
 
