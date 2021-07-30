@@ -16,8 +16,7 @@
 #include <gsKLShell/gsThinShellAssembler.h>
 #include <gsKLShell/getMaterialMatrix.h>
 
-// #include <gsThinShell/gsArcLengthIterator.h>
-#include <gsStructuralAnalysis/gsStaticSolver.h>
+#include <gsStructuralAnalysis/gsStaticNewton.h>
 
 using namespace gismo;
 
@@ -111,7 +110,7 @@ int main (int argc, char** argv)
     index_t maxit = 20;
 
     // Arc length method options
-    real_t dL = 0; // General arc length
+    real_t dL = 1e-2; // General arc length
     real_t tol = 1e-6;
 
     std::string wn("data.csv");
@@ -534,7 +533,7 @@ int main (int argc, char** argv)
         nu12.at(k) = nu21.at(k) = PoissonRatio;
         G12.at(k) = 0.5 * E_modulus / (1+PoissonRatio);
         thick.at(k) = thickness/kmax;
-        phi.at(kmax) = k / kmax * pi/2.0;
+        phi.at(k) = k / kmax * pi/2.0;
     }
 
     gsConstantFunction<> E11fun(E11,3);
@@ -648,8 +647,6 @@ int main (int argc, char** argv)
         assembler->homogenizeDirichlet();
         assembler->constructSolution(x,mp_def);
         assembler->assembleVector(mp_def);
-        gsDebugVar(assembler->rhs());
-        gsDebugVar(x);
         return assembler->rhs(); // - lam * force;
     };
 
@@ -657,11 +654,11 @@ int main (int argc, char** argv)
     gsSparseMatrix<> matrix;
     gsVector<> vector;
 
-    gsStaticSolver<real_t> staticSolver(matrix,vector,Jacobian,Residual);
+    gsStaticNewton<real_t> staticSolver(matrix,vector,Jacobian,Residual);
     gsOptionList solverOptions = staticSolver.options();
-    solverOptions.setInt("Verbose",true);
-    solverOptions.setInt("MaxIterations",maxit);
-    solverOptions.setReal("Tolerance",tol);
+    solverOptions.setInt("verbose",true);
+    solverOptions.setInt("maxIt",maxit);
+    solverOptions.setReal("tol",tol);
     staticSolver.setOptions(solverOptions);
 
     gsParaviewCollection collection(dirname + "/" + output);
@@ -673,7 +670,7 @@ int main (int argc, char** argv)
     real_t dL0 = dL;
     gsMultiPatch<> mp_def0 = mp_def;
     real_t indicator;
-    real_t D = 0;
+    real_t D = dL;
     real_t Dold = 0;
     int reset = 0;
     index_t k = 0;
@@ -688,7 +685,6 @@ int main (int argc, char** argv)
 
       matrix = assembler->matrix();
       vector = assembler->rhs();
-    gsDebugVar(vector);
 
       solVector = staticSolver.solveNonlinear();
 

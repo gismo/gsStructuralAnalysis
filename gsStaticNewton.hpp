@@ -95,26 +95,18 @@ gsVector<T> gsStaticNewton<T>::solveLinear()
 template <class T>
 gsVector<T> gsStaticNewton<T>::solveNonlinear()
 {
-
-    gsDebugVar(m_U.norm());
-    gsDebugVar(m_DeltaU.norm());
-
     this->getOptions();
     // m_start: true -> m_U given
     // m_headstart: true -> m_DeltaU given
 
-    if (m_DeltaU.norm()==0) ///
+    if (m_DeltaU.norm()==0 || m_DeltaU.rows()==0) ///
     {
-        gsDebugVar("linear solve");
         m_DeltaU = this->solveLinear();
-        m_U.setZero();
-        m_headstart = true;
+        m_U.setZero(); // Needed because linear solve modifies m_U.
+        m_headstart = true; // due to this, the relative residual is based on the solution of the linear solve
     }
 
     _start();
-
-    gsDebugVar(m_U.norm());
-    gsDebugVar(m_DeltaU.norm());
 
     gsSparseMatrix<T> jacMat;
 
@@ -234,6 +226,7 @@ void gsStaticNewton<T>::_start()
     if (!m_headstart) // no headstart
     {
         // We can reset the update to ensure we properly restart
+        if (m_dofs==0) gsWarn<<"The number of degrees of freedom is equal to zero. This can lead to bad initialization.\n";
         m_DeltaU.setZero(m_dofs);
         // Compute current residual and its norm
         m_R = m_residualFun(m_U);

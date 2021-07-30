@@ -17,7 +17,7 @@
 #include <gsElasticity/gsElasticityAssembler.h>
 #include <gsElasticity/gsWriteParaviewMultiPhysics.h>
 
-#include <gsStructuralAnalysis/gsStaticSolver.h>
+#include <gsStructuralAnalysis/gsStaticNewton.h>
 
 
 using namespace gismo;
@@ -179,8 +179,8 @@ int main (int argc, char** argv)
     }
     else if (testCase == 1)
     {
-        real_t Load = 1e1;
-        tmp << 0, 0, Load/(B*H);
+        real_t Load = 1e-1;
+        tmp << 0, 0, Load;
         neuData.setValue(tmp,3);
 
         BCs.addCondition(0,boundary::west,condition_type::dirichlet,nullptr,0); // last number is a component (coordinate) number
@@ -197,8 +197,8 @@ int main (int argc, char** argv)
     }
     else if (testCase == 2)
     {
-        real_t Load = 1e1;
-        tmp << -Load/(B*H), 0, 0;
+        real_t Load = 1e-1;
+        tmp << -Load, 0, 0;
         gsInfo<<"Applied "<<tmp.transpose()<<" as load vector\n";
         neuData.setValue(tmp,3);
 
@@ -353,18 +353,19 @@ int main (int argc, char** argv)
     gsVector<> vector = assembler.rhs();
 
     // Configure Structural Analsysis module
-    gsStaticSolver<real_t> staticSolver(matrix,vector,Jacobian,Residual);
+    gsStaticNewton<real_t> staticSolver(matrix,vector,Jacobian,Residual);
     gsOptionList solverOptions = staticSolver.options();
-    solverOptions.setInt("Verbose",1);
-    solverOptions.setInt("MaxIterations",10);
-    solverOptions.setReal("Tolerance",1e-6);
+    solverOptions.setInt("verbose",1);
+    solverOptions.setInt("maxIt",20);
+    solverOptions.setReal("tol",1e-6);
     staticSolver.setOptions(solverOptions);
 
     gsInfo << "Solving...\n";
     // Solve linear problem
     gsVector<> solVector;
-    solVector = staticSolver.solveLinear();
-    if (nonlinear)
+    if (!nonlinear)
+        solVector = staticSolver.solveLinear();
+    else
         solVector = staticSolver.solveNonlinear();
 
     totaltime += stopwatch2.stop();

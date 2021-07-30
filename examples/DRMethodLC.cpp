@@ -16,8 +16,6 @@
 #include <gsKLShell/gsThinShellAssembler.h>
 #include <gsKLShell/getMaterialMatrix.h>
 
-#include <gsStructuralAnalysis/gsStaticSolver.h>
-#include <gsStructuralAnalysis/gsTimeIntegrator.h>
 #include <gsStructuralAnalysis/gsDynamicRelaxationLC.h>
 
 //#include <gsThinShell/gsNewtonIterator.h>
@@ -335,14 +333,17 @@ int main(int argc, char *argv[])
     assembler->assemble();
     gsSparseMatrix<> K = assembler->matrix();
     gsVector<> F = assembler->rhs();
+    assembler->assembleMass(true);
+    gsVector<> M = assembler->rhs();
 
     gsParaviewCollection collection("incr_solution");
 
-    gsDynamicRelaxationLC<real_t> DRM(K,F,LCResidual);
+    gsDynamicRelaxationLC<real_t> DRM(M,F,LCResidual);
     gsOptionList DROptions = DRM.options();
     DROptions.setReal("damping",damping);
     DROptions.setReal("alpha",alpha);
     DROptions.setInt("maxIt",1e3);
+    DROptions.setInt("verbose",verbose);
     DRM.setOptions(DROptions);
 
     index_t count = 0;

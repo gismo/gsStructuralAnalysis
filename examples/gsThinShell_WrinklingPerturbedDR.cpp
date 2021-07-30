@@ -16,7 +16,6 @@
 #include <gsKLShell/gsThinShellAssembler.h>
 #include <gsKLShell/getMaterialMatrix.h>
 
-// #include <gsThinShell/gsArcLengthIterator.h>
 #include <gsStructuralAnalysis/gsDynamicRelaxationLC.h>
 
 using namespace gismo;

@@ -16,7 +16,6 @@
 #include <gsKLShell/gsThinShellAssembler.h>
 #include <gsKLShell/getMaterialMatrix.h>
 
-// #include <gsThinShell/gsArcLengthIterator.h>
 #include <gsStructuralAnalysis/gsDynamicRelaxationDC.h>
 
 using namespace gismo;
@@ -470,7 +469,7 @@ int main (int argc, char** argv)
     DROptions.setInt("maxIt",maxit);
     DROptions.setReal("tolF",tolF);
     DROptions.setReal("tolE",tolE);
-    DROptions.setInt("Verbose",verbose);
+    DROptions.setInt("verbose",verbose);
     DRM.setOptions(DROptions);
 
     gsParaviewCollection collection(dirname + "/" + output);

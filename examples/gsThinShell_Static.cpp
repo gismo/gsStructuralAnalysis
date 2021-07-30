@@ -18,7 +18,7 @@
 
 #include <gsElasticity/gsWriteParaviewMultiPhysics.h>
 
-#include <gsStructuralAnalysis/gsStaticSolver.h>
+#include <gsStructuralAnalysis/gsStaticNewton.h>
 
 //#include <gsThinShell/gsNewtonIterator.h>
 
@@ -1288,18 +1288,25 @@ int main(int argc, char *argv[])
     gsVector<> vector = assembler->rhs();
 
     // Configure Structural Analsysis module
-    gsStaticSolver<real_t> staticSolver(matrix,vector,Jacobian,Residual);
+    gsStaticNewton<real_t> staticSolver(matrix,vector,Jacobian,Residual);
     gsOptionList solverOptions = staticSolver.options();
-    solverOptions.setInt("Verbose",verbose);
-    solverOptions.setInt("MaxIterations",10);
-    solverOptions.setReal("Tolerance",1e-6);
+    solverOptions.setInt("verbose",verbose);
+    solverOptions.setInt("maxIt",10);
+    solverOptions.setReal("tol",1e-6);
     staticSolver.setOptions(solverOptions);
 
     // Solve linear problem
     gsVector<> solVector;
-    solVector = staticSolver.solveLinear();
-    if (nonlinear)
+    if (!nonlinear)
+        solVector = staticSolver.solveLinear();
+    else
         solVector = staticSolver.solveNonlinear();
+
+    // OR, also possible:
+    // solVector = staticSolver.solveLinear();
+    // if (nonlinear)
+    //     solVector = staticSolver.solveNonlinear();
+
 
     totaltime += stopwatch2.stop();
 

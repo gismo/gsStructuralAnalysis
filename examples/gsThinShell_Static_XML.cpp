@@ -18,7 +18,7 @@
 
 #include <gsElasticity/gsWriteParaviewMultiPhysics.h>
 
-#include <gsStructuralAnalysis/gsStaticSolver.h>
+#include <gsStructuralAnalysis/gsStaticNewton.h>
 
 //#include <gsThinShell/gsNewtonIterator.h>
 
@@ -313,10 +313,8 @@ int main(int argc, char *argv[])
     };
 
     // Configure Structural Analsysis module
-    gsStaticSolver<real_t> staticSolver(matrix,vector,Jacobian,Residual);
-    gsDebugVar(solverOptions);
+    gsStaticNewton<real_t> staticSolver(matrix,vector,Jacobian,Residual);
     staticSolver.setOptions(solverOptions);
-    gsDebugVar(solverOptions);
 
     // Solve linear problem
     gsVector<> solVector;

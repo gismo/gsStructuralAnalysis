@@ -44,7 +44,6 @@ public:
 
     void step(T dL)
     {
-        gsDebugVar(m_U.norm());
         m_solver->setLoad(m_L + dL);
         if (!first)
             m_solver->setDisplacement(m_U);
@@ -55,8 +54,6 @@ public:
         {
             m_L += dL;
             m_U += m_solver->update();
-            gsDebugVar(m_solver->update().norm());
-            gsDebugVar(m_solver->solution().norm());
         }
     }
 

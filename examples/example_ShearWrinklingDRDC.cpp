@@ -16,9 +16,10 @@
 #include <gsKLShell/gsThinShellAssembler.h>
 #include <gsKLShell/getMaterialMatrix.h>
 
-// #include <gsThinShell/gsArcLengthIterator.h>
 #include <gsStructuralAnalysis/gsDynamicRelaxationLC.h>
-#include <gsStructuralAnalysis/gsStaticSolver.h>
+#include <gsStructuralAnalysis/gsStaticDR.h>
+#include <gsStructuralAnalysis/gsStaticNewton.h>
+#include <gsStructuralAnalysis/gsControlDisplacement.h>
 
 using namespace gismo;
 
@@ -502,9 +503,9 @@ int main (int argc, char** argv)
         return assembler->rhs(); // - lam * force;
     };
 
-    typedef std::function<gsVector<real_t> (gsVector<real_t> const &, real_t, gsVector<real_t> const &) >   DCResidual_t;
+    typedef std::function<gsVector<real_t> (gsVector<real_t> const &, real_t) >   DCResidual_t;
     // Function for the Residual
-    DCResidual_t DCResidual = [&displ,&BCs,&assembler,&mp_def](gsVector<real_t> const &x, real_t lam, gsVector<real_t> const &force)
+    DCResidual_t DCResidual = [&displ,&BCs,&assembler,&mp_def](gsVector<real_t> const &x, real_t lam)
     {
         displ.setValue(lam,3);
         assembler->updateBCs(BCs);
@@ -516,32 +517,33 @@ int main (int argc, char** argv)
     // Assemble linear system to obtain the force vector
     assembler->assemble();
     gsVector<> F = assembler->rhs();
+    gsSparseMatrix<> K = assembler->matrix();
 
     assembler->assembleMass(true);
     gsVector<> M = assembler->rhs();
 
-    gsSparseMatrix<> matrix;
-    gsVector<> vector;
-
-    gsDynamicRelaxationLC<real_t> DRM(M,F,DCResidual);
+    gsStaticDR<real_t> DRM(M,F,DCResidual);
     gsOptionList DROptions = DRM.options();
     DROptions.setReal("damping",damping);
     DROptions.setReal("alpha",alpha);
     DROptions.setInt("maxIt",maxitDR);
-    DROptions.setReal("tolF",1e-3);
-    DROptions.setReal("tolE",1e-3);
-    DROptions.setInt("Verbose",verbose);
+    DROptions.setReal("tolF",1e-2);
+    DROptions.setReal("tolE",1e-2);
+    DROptions.setInt("verbose",verbose);
     DRM.setOptions(DROptions);
-    DRM.init();
+    DRM.initialize();
 
-    gsStaticSolver<real_t> staticSolver(matrix,vector,Jacobian,Residual);
-    gsOptionList solverOptions = staticSolver.options();
-    solverOptions.setInt("Verbose",true);
-    solverOptions.setInt("MaxIterations",maxitDC);
-    solverOptions.setReal("ToleranceF",tolF);
-    solverOptions.setReal("ToleranceU",tolU);
-    solverOptions.setReal("Relaxation",0.8);
-    staticSolver.setOptions(solverOptions);
+    gsStaticNewton<real_t> NWT(K,F,Jacobian,Residual);
+    gsOptionList NWTOptions = NWT.options();
+    NWTOptions.setInt("verbose",true);
+    NWTOptions.setInt("maxIt",maxitDC);
+    NWTOptions.setReal("tolF",tolF);
+    NWTOptions.setReal("tolU",tolU);
+    NWTOptions.setReal("Relaxation",0.8);
+    NWT.setOptions(NWTOptions);
+
+    gsControlDisplacement<real_t> controlDR(&DRM);
+    gsControlDisplacement<real_t> controlDC(&NWT);
 
     gsParaviewCollection collection(dirname + "/" + output);
     gsMultiPatch<> deformation = mp;
@@ -566,7 +568,7 @@ int main (int argc, char** argv)
 
     displ.setValue(D,3);
 
-    solVector = solVectorOld = DRM.displacements();
+    solVector = solVectorOld = DRM.solution();
     while (D-dL < Dtarget.back())
     {
       displ.setValue(D,3);
@@ -575,35 +577,40 @@ int main (int argc, char** argv)
       assembler->updateBCs(BCs);
       assembler->assemble();
 
-      matrix = assembler->matrix();
-      vector = assembler->rhs();
+      K = assembler->matrix();
+      F = assembler->rhs();
 
-      if (k==0)
-      {
-        solVectorOld = staticSolver.solveLinear();
-      }
+      // if (k==0)
+      // {
+      //   solVectorOld = NWT.solveLinear();
+      // }
       if (true)
       {
         gsInfo<<"Stage 1:\n";
-        DRM.setDisplacement(solVector);
-        DRM.step(dL);
-        solVector = DRM.displacements();
+
+        DRM.setDisplacement(solVectorOld);
+        controlDR.step(dL);
+        solVector = DRM.solution();
         gsInfo<<"Step finished in "<<DRM.iterations()<<" iterations\n";
-        updateVector = DRM.increment();
+        updateVector = DRM.update();
 
         gsInfo<<"Stage 2:\n";
-        staticSolver.setSolutionStep(updateVector,solVectorOld);
-        solVector = staticSolver.solveNonlinear();
-        gsInfo<<"Step finished in "<<staticSolver.iterations()<<" iterations\n";
+        NWT.reset();
+        NWT.setDisplacement(solVectorOld);
+        NWT.setUpdate(updateVector);
+        controlDC.step(dL);
+
+        solVector = NWT.solution();
+        gsInfo<<"Step finished in "<<NWT.iterations()<<" iterations\n";
       }
       else
       {
         gsInfo<<"Stage 2:\n";
-        solVector = staticSolver.solveNonlinear();
-        gsInfo<<"Step finished in "<<staticSolver.iterations()<<" iterations\n";
+        controlDC.step(dL);
+        gsInfo<<"Step finished in "<<NWT.iterations()<<" iterations\n";
       }
 
-      if (!staticSolver.converged())
+      if (!NWT.converged())
       {
         dL = dL/2;
         GISMO_ASSERT(dL / dL0 > 1e-6,"Step size is becoming very small...");
@@ -612,13 +619,13 @@ int main (int argc, char** argv)
 
         solVector = solVectorOld;
 
-        DRM.stepBack();
+        DRM.setDisplacement(solVectorOld);
         gsInfo<<"Iterations did not converge\n";
         // reset = 1;
         continue;
       }
 
-      indicator = staticSolver.indicator();
+      indicator = NWT.indicator();
       gsInfo<<"\t\tIndicator =  "<<indicator<<"\n";
 
       assembler->constructSolution(solVector,mp_def);
@@ -676,7 +683,8 @@ int main (int argc, char** argv)
       //   dL = (*it-D) < dL && (*it-D) > dL*1e-12 ? (*it-D) : dL;
       // }
 
-      if (D >= Dtarget.front())
+      // if (D >= Dtarget.front())
+      if (std::abs(D - Dtarget.front())/D < 1e-16)
         Dtarget.erase(Dtarget.begin());
       if (Dtarget.front() - D < dL)        // The next target is larger than D, but within one step
         dL = Dtarget.front() - D;

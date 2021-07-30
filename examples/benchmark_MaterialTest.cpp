@@ -19,8 +19,10 @@
 #include <gsKLShell/gsThinShellAssembler.h>
 #include <gsKLShell/getMaterialMatrix.h>
 
-// #include <gsThinShell/gsArcLengthIterator.h>
-#include <gsStructuralAnalysis/gsArcLengthIterator.h>
+#include <gsStructuralAnalysis/gsALMBase.h>
+#include <gsStructuralAnalysis/gsALMLoadControl.h>
+#include <gsStructuralAnalysis/gsALMRiks.h>
+#include <gsStructuralAnalysis/gsALMCrisfield.h>
 
 using namespace gismo;
 
@@ -31,7 +33,7 @@ template <class T>
 void initStepOutput( const std::string name, const gsMatrix<T> & points);
 
 template <class T>
-void writeStepOutput(const gsArcLengthIterator<T> & arcLength, const gsMultiPatch<T> & deformation, const std::string name, const gsMatrix<T> & points);
+void writeStepOutput(const gsALMBase<T> * arcLength, const gsMultiPatch<T> & deformation, const std::string name, const gsMatrix<T> & points);
 
 int main (int argc, char** argv)
 {
@@ -411,33 +413,40 @@ int main (int argc, char** argv)
     gsVector<> Force = assembler->rhs();
 
 
-    gsArcLengthIterator<real_t> arcLength(Jacobian, ALResidual, Force);
+    gsALMBase<real_t> * arcLength;
+    if (method==0)
+      arcLength = new gsALMLoadControl<real_t>(Jacobian, ALResidual, Force);
+    else if (method==1)
+      arcLength = new gsALMRiks<real_t>(Jacobian, ALResidual, Force);
+    else if (method==2)
+      arcLength = new gsALMCrisfield<real_t>(Jacobian, ALResidual, Force);
+    else
+      GISMO_ERROR("Method "<<method<<" unknown");
 
-    arcLength.options().setInt("Solver",0); // LDLT solver
-    arcLength.options().setInt("BifurcationMethod",0); // 0: determinant, 1: eigenvalue
-    arcLength.options().setInt("Method",method);
-    arcLength.options().setReal("Length",dL);
-    arcLength.options().setInt("AngleMethod",0); // 0: step, 1: iteration
-    arcLength.options().setSwitch("AdaptiveLength",adaptive);
-    arcLength.options().setInt("AdaptiveIterations",5);
-    arcLength.options().setReal("Scaling",0.0);
-    arcLength.options().setReal("Tol",tol);
-    arcLength.options().setReal("TolU",tolU);
-    arcLength.options().setReal("TolF",tolF);
-    arcLength.options().setInt("MaxIter",maxit);
-    arcLength.options().setSwitch("Verbose",true);
-    arcLength.options().setReal("Relaxation",relax);
+    arcLength->options().setInt("Solver",0); // LDLT solver
+    arcLength->options().setInt("BifurcationMethod",0); // 0: determinant, 1: eigenvalue
+    arcLength->options().setReal("Length",dL);
+    arcLength->options().setInt("AngleMethod",0); // 0: step, 1: iteration
+    arcLength->options().setSwitch("AdaptiveLength",adaptive);
+    arcLength->options().setInt("AdaptiveIterations",5);
+    arcLength->options().setReal("Scaling",0.0);
+    arcLength->options().setReal("Tol",tol);
+    arcLength->options().setReal("TolU",tolU);
+    arcLength->options().setReal("TolF",tolF);
+    arcLength->options().setInt("MaxIter",maxit);
+    arcLength->options().setSwitch("Verbose",true);
+    arcLength->options().setReal("Relaxation",relax);
     if (quasiNewtonInt>0)
     {
       quasiNewton = true;
-      arcLength.options().setInt("QuasiIterations",quasiNewtonInt);
+      arcLength->options().setInt("QuasiIterations",quasiNewtonInt);
     }
-    arcLength.options().setSwitch("Quasi",quasiNewton);
+    arcLength->options().setSwitch("Quasi",quasiNewton);
 
 
-    gsInfo<<arcLength.options();
-    arcLength.applyOptions();
-    arcLength.initialize();
+    gsInfo<<arcLength->options();
+    arcLength->applyOptions();
+    arcLength->initialize();
 
     gsParaviewCollection collection(dirname + "/" + output);
     gsParaviewCollection PStretch(dirname + "/" + "stretch");
@@ -451,12 +460,12 @@ int main (int argc, char** argv)
     for (index_t k=0; k<step; k++)
     {
       gsInfo<<"Load step "<< k<<"\n";
-      arcLength.step();
+      arcLength->step();
 
-      if (!(arcLength.converged()))
+      if (!(arcLength->converged()))
         GISMO_ERROR("Error: Loop terminated, arc length method did not converge.\n");
 
-      solVector = arcLength.solutionU();
+      solVector = arcLength->solutionU();
 
       assembler->constructSolution(solVector,mp_def);
 
@@ -637,7 +646,7 @@ void initStepOutput(const std::string name, const gsMatrix<T> & points)
 }
 
 template <class T>
-void writeStepOutput(const gsArcLengthIterator<T> & arcLength, const gsMultiPatch<T> & deformation, const std::string name, const gsMatrix<T> & points)
+void writeStepOutput(const gsALMBase<T> * arcLength, const gsMultiPatch<T> & deformation, const std::string name, const gsMatrix<T> & points)
 {
   gsMatrix<T> P(2,1), Q(2,1);
   gsMatrix<T> out(2,points.cols());
@@ -653,15 +662,15 @@ void writeStepOutput(const gsArcLengthIterator<T> & arcLength, const gsMultiPatc
   std::ofstream file;
   file.open(name,std::ofstream::out | std::ofstream::app);
   file  << std::setprecision(12)
-        << arcLength.solutionU().norm() << ",";
+        << arcLength->solutionU().norm() << ",";
         for (index_t p=0; p!=points.cols(); p++)
         {
           file<< out(0,p) << ","
               << out(1,p) << ",";
         }
 
-  file  << arcLength.solutionL() << ","
-        << arcLength.indicator() << ","
+  file  << arcLength->solutionL() << ","
+        << arcLength->indicator() << ","
         << "\n";
 
   file.close();

@@ -16,8 +16,12 @@
 #include <gsKLShell/gsThinShellAssembler.h>
 #include <gsKLShell/getMaterialMatrix.h>
 
-#include <gsStructuralAnalysis/gsArcLengthIterator.h>
-#include <gsStructuralAnalysis/gsStaticSolver.h>
+#include <gsStructuralAnalysis/gsALMBase.h>
+#include <gsStructuralAnalysis/gsALMLoadControl.h>
+#include <gsStructuralAnalysis/gsALMRiks.h>
+#include <gsStructuralAnalysis/gsALMCrisfield.h>
+
+#include <gsStructuralAnalysis/gsStaticNewton.h>
 
 using namespace gismo;
 
@@ -108,6 +112,7 @@ int main (int argc, char** argv)
     real_t PoissonRatio = 0;
     real_t Density = 1e0;
     gsMultiPatch<> mp, mpBspline;
+    real_t tau = 1e2;
 
     index_t Compressibility = 0;
     index_t material = 0;
@@ -132,8 +137,8 @@ int main (int argc, char** argv)
 
     // Arc length method options
     real_t dL = 1e-2; // General arc length
-    real_t tolF = 1e-3;
-    real_t tolU = 1e-6;
+    real_t tolF = 1e-2;
+    real_t tolU = 1e-2;
 
     std::string wn("data.csv");
 
@@ -164,6 +169,7 @@ int main (int argc, char** argv)
     cmd.addReal("L","dLb", "arc length", dL);
 
     cmd.addReal("P","perturbation", "perturbation factor", perturbation);
+    cmd.addReal("F","factor", "factor for bifurcation perturbation", tau);
 
     cmd.addInt("N", "maxsteps", "Maximum number of steps", step);
 
@@ -228,9 +234,9 @@ int main (int argc, char** argv)
 
     addClamping(mpBspline,0,sides, 1e-2);
 
-    index_t N = mpBspline.patch(0).coefs().rows();
-    mpBspline.patch(0).coefs().col(2) = gsMatrix<>::Random(N,1);
-    mpBspline.patch(0).coefs().col(2) *= perturbation;
+    // index_t N = mpBspline.patch(0).coefs().rows();
+    // mpBspline.patch(0).coefs().col(2) = gsMatrix<>::Random(N,1);
+    // mpBspline.patch(0).coefs().col(2) *= perturbation;
 
       // std::vector<boxSide> sides;
       // sides.push_back(boundary::west);
@@ -583,26 +589,27 @@ int main (int argc, char** argv)
     assemblerALM->assemble();
     gsVector<> Force = assemblerALM->rhs();
 
-    gsStaticSolver<real_t> staticSolver(matrix,vector,JacobianDC,ResidualDC);
+    gsStaticNewton<real_t> staticSolver(matrix,vector,JacobianDC,ResidualDC);
     gsOptionList solverOptions = staticSolver.options();
-    solverOptions.setInt("Verbose",true);
-    solverOptions.setInt("MaxIterations",maxit);
-    solverOptions.setReal("ToleranceF",tolF);
-    solverOptions.setReal("ToleranceU",tolU);
-    solverOptions.setInt("Solver",0);
+    solverOptions.setInt("verbose",true);
+    solverOptions.setInt("maxIt",maxit);
+    solverOptions.setReal("tolF",tolF);
+    solverOptions.setReal("tolU",tolU);
     solverOptions.setInt("BifurcationMethod",0);
     staticSolver.setOptions(solverOptions);
 
-    gsArcLengthIterator<real_t> arcLength(JacobianALM, ResidualALM, Force);
-    arcLength.options().setReal("TolU",tolU);
-    arcLength.options().setReal("TolF",tolF);
-    arcLength.options().setInt("MaxIter",maxit);
-    arcLength.options().setSwitch("Verbose",true);
-    arcLength.options().setInt("SingularPointFailure",0);
-    arcLength.options().setInt("Solver",0); // LDLT solver
-    arcLength.options().setInt("BifurcationMethod",0); // 0: determinant, 1: eigenvalue
-    arcLength.options().setReal("Perturbation",1e4);
-    arcLength.applyOptions();
+    gsALMBase<real_t> * arcLength;
+    arcLength = new gsALMCrisfield<real_t>(JacobianALM, ResidualALM, Force);
+
+    arcLength->options().setReal("TolU",tolU);
+    arcLength->options().setReal("TolF",tolF);
+    arcLength->options().setInt("MaxIter",maxit);
+    arcLength->options().setSwitch("Verbose",true);
+    arcLength->options().setInt("SingularPointFailure",0);
+    arcLength->options().setInt("Solver",0); // LDLT solver
+    arcLength->options().setInt("BifurcationMethod",0); // 0: determinant, 1: eigenvalue
+    arcLength->options().setReal("Perturbation",tau);
+    arcLength->applyOptions();
 
     gsParaviewCollection collection(dirname + "/" + output);
     gsMultiPatch<> deformation = mp;
@@ -616,7 +623,7 @@ int main (int argc, char** argv)
     gsMultiPatch<> mp_def0 = mp_def;
     real_t indicator = 0.0;
     real_t indicatorOld = 1.0;
-    arcLength.setIndicator(indicator); // RESET INDICATOR
+    arcLength->setIndicator(indicator); // RESET INDICATOR
     real_t D = 0;
     real_t Dold = 0;
     // int reset = 0;
@@ -671,8 +678,8 @@ int main (int argc, char** argv)
           real_t dLtmp = dL/2;
           real_t Dtmp = D;
 
-          staticSolver.setSolution(solVectorDCold);
-          real_t goal = countNegatives(staticSolver.stabilityVec());
+          staticSolver.setDisplacement(solVectorDCold);
+          real_t goal = countNegatives(staticSolver.stabilityVec(JacobianDC(solVectorDCold)));
           real_t goalOld = goal;
           real_t indicatorRef = staticSolver.indicator();
 
@@ -716,26 +723,26 @@ int main (int argc, char** argv)
           assemblerDC->constructSolution(solVectorDC,mp_def);
 
 
-          arcLength.setLength(dL);
-          arcLength.initialize();
+          arcLength->setLength(dL);
+          arcLength->initialize();
           solVectorALM    = assemblerALM->constructSolutionVector(deformation);
           solVectorALMold = assemblerALM->constructSolutionVector(deformationOld);
           assemblerALM->constructSolution(solVectorALMold,mp_def);
 
           // =======================================================
 
-          arcLength.setSolution(solVectorALM,-assemblerALM->boundaryForce(mp_def,ps)(0,0));
-          arcLength.computeStability(solVectorALM,true);
+          arcLength->setSolution(solVectorALM,-assemblerALM->boundaryForce(mp_def,ps)(0,0));
+          arcLength->computeStability(solVectorALM,true);
 
-          indicator = arcLength.indicator();
+          indicator = arcLength->indicator();
           gsInfo<<"\t\tAL Indicator =  "<<indicator<<"\n";
 
-          arcLength.computeSingularPoint(1e-4, 25, solVectorALMold, Lold, 1e-7, 0, false,true);
-          arcLength.switchBranch();
+          arcLength->computeSingularPoint(1e-4, 25, solVectorALMold, Lold, 1e-7, 0, false,true);
+          arcLength->switchBranch();
 
-          solVectorALM = arcLength.solutionU();
-          assemblerALM->constructSolution(arcLength.solutionU(),mp_def);
-          assemblerALM->constructDisplacement(arcLength.solutionU(),deformation);
+          solVectorALM = arcLength->solutionU();
+          assemblerALM->constructSolution(arcLength->solutionU(),mp_def);
+          assemblerALM->constructDisplacement(arcLength->solutionU(),deformation);
 
           /// EXTRACT D
           gsVector<> pt(2);
@@ -750,7 +757,7 @@ int main (int argc, char** argv)
           assemblerDC->updateBCs(BCs);
           solVectorDC = assemblerDC->constructSolutionVector(deformation);
           // assemblerDC->constructDisplacement(solVector,deformation);
-          staticSolver.setSolution(solVectorDC);
+          staticSolver.setDisplacement(solVectorDC);
 
           indicator = staticSolver.indicator();
           // indicator = indicatorOld;
