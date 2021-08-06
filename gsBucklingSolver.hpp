@@ -57,7 +57,7 @@ gsBucklingSolver<T,GEigsMode>::computeSparse_impl(T shift, index_t number, index
 {
 #ifdef GISMO_WITH_SPECTRA
   if (m_verbose) { gsInfo<<"Solving eigenvalue problem" ; }
-  gsSpectraGenSymSolver<gsSparseMatrix<T>,GEigsMode> solver(m_A-shift*m_B,m_B,number,2*number);
+  gsSpectraGenSymSolver<gsSparseMatrix<T>,GEigsMode> solver(m_A-shift*m_B,m_B,number,ncvFac*number);
   if (m_verbose) { gsInfo<<"." ; }
   solver.init();
   if (m_verbose) { gsInfo<<"." ; }
@@ -96,7 +96,7 @@ gsBucklingSolver<T,GEigsMode>::computeSparse_impl(T shift, index_t number, index
     gsWarn<<"Selection Rule 'SmallestAlge' is selected, but for ShiftInvert, Buckling and Cayley it is advised to use 'LargestMagn'!\n";
 
   if (m_verbose) { gsInfo<<"Solving eigenvalue problem" ; }
-  gsSpectraGenSymShiftSolver<gsSparseMatrix<T>,GEigsMode> solver(m_A,m_B,math::floor(m_A.cols()/2),m_A.cols(),shift);
+  gsSpectraGenSymShiftSolver<gsSparseMatrix<T>,GEigsMode> solver(m_A,m_B,number,ncvFac*number,shift);
   if (m_verbose) { gsInfo<<"." ; }
   solver.init();
   if (m_verbose) { gsInfo<<"." ; }
