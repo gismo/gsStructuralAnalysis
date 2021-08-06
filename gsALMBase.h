@@ -123,8 +123,11 @@ public:
     virtual void setInitialGuess(const gsVector<T> guess) {m_U = guess;}
 
     virtual void setSolution(const gsVector<T> U, T L) {m_L = L; m_U = U; }// m_DeltaUold.setZero(); m_DeltaLold = 0;}
+    virtual void setSolutionStep(const gsVector<T> DU, T DL) {m_DeltaUold = DU; m_DeltaLold = DL;}// m_DeltaUold.setZero(); m_DeltaLold = 0;}
 
     virtual gsOptionList & options() {return m_options;};
+    virtual void setOptions(gsOptionList options) { m_options = options; this->getOptions(); };
+    virtual const void options_into(gsOptionList options) {options = m_options;};
 
     virtual void applyOptions() {this->getOptions(); }
 
@@ -140,7 +143,8 @@ public:
 
     virtual bool stabilityChange();
 
-    virtual void computeStability(gsVector<T> x, bool jacobian=true);
+    // The shift is needed to ensure that a negative eigenvalue is found
+    virtual void computeStability(gsVector<T> x, bool jacobian=true, T shift = -1e2);
     virtual index_t stability();
     virtual index_t stability(gsVector<T> x, bool jacobian=true);
 

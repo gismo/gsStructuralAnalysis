@@ -133,6 +133,15 @@ protected:
         es.init();
         es.compute(Spectra::SortRule::SmallestAlge,1000,1e-6,Spectra::SortRule::SmallestAlge);
         GISMO_ASSERT(es.info()==Spectra::CompInfo::Successful,"Spectra did not converge!"); // Reason for not converging can be due to the value of ncv (last input in the class member), which is too low.
+
+        /*
+        // ALTERNATIVE
+            gsSpectraSymShiftSolver<gsSparseMatrix<T>> es(jacMat,number,3*number);
+            es.init();
+            es.compute(Spectra::SortRule::LargestAlge,1000,1e-6,Spectra::SortRule::SmallestAlge);
+            GISMO_ASSERT(es.info()==Spectra::CompInfo::Successful,"Spectra did not converge!"); // Reason for not converging can be due to the value of ncv (last input in the class member), which is too low.
+        */
+
         // if (es.info()==Spectra::CompInfo::NotComputed)
         // if (es.info()==Spectra::CompInfo::NotConverging)
         // if (es.info()==Spectra::CompInfo::NumericalIssue)

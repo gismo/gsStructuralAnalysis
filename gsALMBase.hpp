@@ -1116,20 +1116,17 @@ bool gsALMBase<T>::testSingularPoint(T tol, index_t kmax, bool jacobian)
   T dot = (abs(m_V.dot(m_forcing)));
   if ( (abs(dot) / tol > 1e-1) && (abs(dot) / tol < 10) )
   {
-    gsInfo<<"Warning: the singular point test is close to its tolerance. dot/tol = "<<abs(dot)/tol;
+    gsInfo<<"Warning: the singular point test is close to its tolerance. dot/tol = "<<abs(dot)/tol<<" dot = "<<dot<<"\t tolerance = "<<tol<<"\n";
   }
   if (dot < tol)    // Bifurcation point
     return true;
   else        // Limit point
     return false;
-
-  if (m_verbose)
-    gsInfo<<"Singular point details -- dot = "<<dot<<"\t tolerance = "<<tol<<"\n";
 }
 
 
 template <class T>
-void gsALMBase<T>::computeStability(gsVector<T> x, bool jacobian)
+void gsALMBase<T>::computeStability(gsVector<T> x, bool jacobian, T shift)
 {
   if (jacobian) { this->computeJacobian(x);} // otherwise the jacobian is already computed (on m_U+m_DeltaU)
 
@@ -1143,11 +1140,21 @@ void gsALMBase<T>::computeStability(gsVector<T> x, bool jacobian)
   {
     #ifdef GISMO_WITH_SPECTRA
     index_t number = std::min(static_cast<index_t>(std::floor(m_jacMat.cols()/3.)),10);
-    gsSpectraSymSolver<gsSparseMatrix<T>> es(m_jacMat,number,5*number);
+    /*
+    // Without shift!
+    // This one can sometimes not converge, because spectra is better at finding large values.
+      gsSpectraSymSolver<gsSparseMatrix<T>> es(m_jacMat,number,5*number);
+      es.init();
+      es.compute(Spectra::SortRule::SmallestAlge,1000,1e-6,Spectra::SortRule::SmallestAlge);
+      GISMO_ASSERT(es.info()==Spectra::CompInfo::Successful,"Spectra did not converge!"); // Reason for not converging can be due to the value of ncv (last input in the class member), which is too low.
+    */
+
+    // With shift!
+    // This one converges easier. However, a shift must be provided!
+    gsSpectraSymShiftSolver<gsSparseMatrix<T>> es(m_jacMat,number,5*number,shift);
     es.init();
-    es.compute(Spectra::SortRule::SmallestAlge,1000,1e-6,Spectra::SortRule::SmallestAlge);
-    GISMO_ASSERT(es.info()==Spectra::CompInfo::Successful,"Spectra did not converge!"); // Reason for not converging can be due to the value of ncv (last input in the class member), which is too low.
-    // TODO: improve! For small eigenvalues it could not converge.
+    es.compute(Spectra::SortRule::LargestAlge,1000,1e-6,Spectra::SortRule::SmallestAlge);
+    GISMO_ENSURE(es.info()==Spectra::CompInfo::Successful,"Spectra did not converge!"); // Reason for not converging can be due to the value of ncv (last input in the class member), which is too low.
 
     // if (es.info()==Spectra::CompInfo::NotComputed)
     // if (es.info()==Spectra::CompInfo::NotConverging)
@@ -1411,10 +1418,16 @@ void gsALMBase<T>::switchBranch()
 {
   m_V.normalize();
   real_t lenPhi = m_V.norm();
+  gsDebugVar(lenPhi);
   real_t xi = lenPhi/m_tau;
   // gsInfo<<xi<<"\n";
   m_DeltaU = xi*m_V;
+  gsDebugVar(m_U);
   m_U = m_U + m_DeltaU;
+
+  gsDebugVar(m_DeltaU);
+  gsDebugVar(m_U);
+
 
   m_DeltaLold = 0.0;
   m_DeltaUold.setZero();
