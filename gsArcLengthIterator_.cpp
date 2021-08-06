@@ -20,6 +20,9 @@
 #include <gsStructuralAnalysis/gsALMConsistentCrisfield.h>
 #include <gsStructuralAnalysis/gsALMConsistentCrisfield.hpp>
 
+#include <gsStructuralAnalysis/gsALMExplorer.h>
+#include <gsStructuralAnalysis/gsALMExplorer.hpp>
+
 namespace gismo
 {
 	// gsArcLengthIterator is depreciated (to remove)
@@ -30,4 +33,6 @@ namespace gismo
 	CLASS_TEMPLATE_INST gsALMRiks<real_t>;
 	CLASS_TEMPLATE_INST gsALMCrisfield<real_t>;
 	CLASS_TEMPLATE_INST gsALMConsistentCrisfield<real_t>;
+
+	// CLASS_TEMPLATE_INST gsALMExplorer<real_t>;
 }

@@ -132,8 +132,8 @@ void gsALMCrisfield<T>::predictor()
     if (!m_phi_user)
       m_phi = math::pow( m_deltaUt.dot(m_deltaUt) / m_forcing.dot(m_forcing),0.5);
 
-    m_DeltaUold = m_deltaU;
-    m_DeltaLold = m_deltaL;
+    // m_DeltaUold = m_deltaU;
+    // m_DeltaLold = m_deltaL;
   }
   else // previous point is not in the origin
   {
