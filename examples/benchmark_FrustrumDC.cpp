@@ -353,18 +353,11 @@ int main (int argc, char** argv)
       gsVector<real_t> Fint = assembler->boundaryForceVector(mp_def,ps,2);
       real_t Load = Fint.sum() / (0.5*3.14159265358979);
 
-      gsMatrix<> pts(2,1);
-      pts<<0.5,0.5;
-      if (testCase==8 || testCase==9)
-      {
-        pts.resize(2,3);
-        pts.col(0)<<0.0,1.0;
-        pts.col(1)<<0.5,1.0;
-        pts.col(2)<<1.0,1.0;
-      }
-
       deformation = mp_def;
       deformation.patch(0).coefs() -= mp.patch(0).coefs();// assuming 1 patch here
+
+      gsVector<> pt(2);
+      pt<<0.5,1.0;
 
       if (stress)
       {
