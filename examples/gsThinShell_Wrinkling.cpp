@@ -133,6 +133,8 @@ int main (int argc, char** argv)
 
     std::string assemberOptionsFile("options/solver_options.xml");
 
+    gsStopwatch time;
+
     gsCmdLine cmd("Wrinkling analysis with thin shells.");
     cmd.addString( "f", "file", "Input XML file for assembler options", assemberOptionsFile );
     cmd.addInt("t", "testcase", "Test case: 0: clamped-clamped, 1: pinned-pinned, 2: clamped-free", testCase);
@@ -182,6 +184,9 @@ int main (int argc, char** argv)
     cmd.addSwitch("THB", "Use refinement", THB);
 
     try { cmd.getValues(argc,argv); } catch (int rv) { return rv; }
+
+    time.restart();
+    gsInfo<<"-> Initializing parameters..."
 
     gsFileData<> fd(assemberOptionsFile);
     gsOptionList opts;
@@ -394,8 +399,14 @@ int main (int argc, char** argv)
       mp = mpBspline;
     }
 
+    gsInfo<<"finished ["<<time.stop()<<" s]\n";
+
+
     gsMultiBasis<> dbasis(mp);
     gsInfo<<"Basis (patch 0): "<< mp.patch(0).basis() << "\n";
+
+    gsInfo<<"-> Initializing boundary conditions...";
+    time.restart();
 
     // Boundary conditions
     gsBoundaryConditions<> BCs;
@@ -643,6 +654,10 @@ int main (int argc, char** argv)
       crosssection=false;
     }
 
+    gsInfo<<"finished ["<<time.stop()<<" s]\n";
+
+    gsInfo<<"-> Initializing shell...";
+    time.restart();
 
     gsFunctionExpr<> surfForce(tx,ty,tz,3);
     gsConstantFunction<> pressFun(pressure,3);
@@ -760,36 +775,50 @@ int main (int argc, char** argv)
         assembler->setFoundation(foundFun);
 
     gsStopwatch stopwatch;
-    real_t time = 0.0;
+    real_t assemblyTime = 0.0;
 
     typedef std::function<gsSparseMatrix<real_t> (gsVector<real_t> const &)>                                Jacobian_t;
     typedef std::function<gsVector<real_t> (gsVector<real_t> const &, real_t, gsVector<real_t> const &) >   ALResidual_t;
     // Function for the Jacobian
-    Jacobian_t Jacobian = [&time,&stopwatch,&assembler,&mp_def](gsVector<real_t> const &x)
+    Jacobian_t Jacobian = [&assemblyTime,&stopwatch,&assembler,&mp_def](gsVector<real_t> const &x)
     {
       stopwatch.restart();
       assembler->constructSolution(x,mp_def);
+      gsInfo<<"Start assembly...";
       assembler->assembleMatrix(mp_def);
-      time += stopwatch.stop();
+      gsInfo<<"finished.\n";
+      assemblyTime += stopwatch.stop();
 
       gsSparseMatrix<real_t> m = assembler->matrix();
       // gsInfo<<"matrix = \n"<<m.toDense()<<"\n";
       return m;
     };
     // Function for the Residual
-    ALResidual_t ALResidual = [&time,&stopwatch,&assembler,&mp_def](gsVector<real_t> const &x, real_t lam, gsVector<real_t> const &force)
+    ALResidual_t ALResidual = [&assemblyTime,&stopwatch,&assembler,&mp_def](gsVector<real_t> const &x, real_t lam, gsVector<real_t> const &force)
     {
       stopwatch.restart();
       assembler->constructSolution(x,mp_def);
       assembler->assembleVector(mp_def);
       gsVector<real_t> Fint = -(assembler->rhs() - force);
       gsVector<real_t> result = Fint - lam * force;
-      time += stopwatch.stop();
+      assemblyTime += stopwatch.stop();
       return result; // - lam * force;
     };
+
+    gsInfo<<"finished ["<<time.stop()<<" s]\n";
+
+    gsInfo<<"-> Initial assembly...";
+    time.restart();
+
     // Assemble linear system to obtain the force vector
     assembler->assemble();
     gsVector<> Force = assembler->rhs();
+
+    gsInfo<<"finished ["<<time.stop()<<" s]\n";
+
+    gsInfo<<"-> Initializing ALM...";
+    time.restart();
+
 
     gsALMBase<real_t> * arcLength;
     if (method==0)
@@ -853,6 +882,10 @@ int main (int argc, char** argv)
     arcLength->setIndicator(indicator); // RESET INDICATOR
     bool bisected = false;
     real_t dLb0 = dLb;
+
+    gsInfo<<"finished ["<<time.stop()<<" s]\n";
+
+
     for (index_t k=0; k<step; k++)
     {
       gsInfo<<"Load step "<< k<<"\n";
@@ -933,7 +966,7 @@ int main (int argc, char** argv)
       deformation = mp_def;
       deformation.patch(0).coefs() -= mp.patch(0).coefs();// assuming 1 patch here
 
-      gsInfo<<"Total ellapsed assembly time: "<<time<<" s\n";
+      gsInfo<<"Total ellapsed assembly time: "<<assemblyTime<<" s\n";
 
       if (plot)
       {

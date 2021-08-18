@@ -81,10 +81,13 @@ void gsALMBase<T>::getOptions()
 }
 
 template <class T>
-void gsALMBase<T>::init()
+void gsALMBase<T>::init(bool stability)
 {
-  this->computeStability(m_U,true);
-  m_stability = this->stability(); // requires Jabobian!!
+  if (stability)
+  {
+    this->computeStability(m_U);
+    m_stability = this->stability(); // requires Jabobian!!
+  }
 }
 
 template <class T>
@@ -1064,6 +1067,69 @@ void gsALMBase<T>::computeSingularPoint(T singTol, index_t kmax, gsVector<T> U, 
     gsInfo<<"\t Limit point\n";
 }
 
+template <class T>
+gsMatrix<T> gsALMBase<T>::computeModes(gsVector<T> x, bool jacobian, T shift)
+{
+  if (jacobian) { this->computeJacobian(x);} // otherwise the jacobian is already computed (on m_U+m_DeltaU)
+
+  gsMatrix<T> result;
+#ifdef GISMO_WITH_SPECTRA
+  index_t number = std::min(static_cast<index_t>(std::floor(m_jacMat.cols()/3.)),10);
+  /*
+  // Without shift!
+  // This one can sometimes not converge, because spectra is better at finding large values.
+    gsSpectraSymSolver<gsSparseMatrix<T>> es(m_jacMat,number,5*number);
+    es.init();
+    es.compute(Spectra::SortRule::SmallestAlge,1000,1e-6,Spectra::SortRule::SmallestAlge);
+    GISMO_ASSERT(es.info()==Spectra::CompInfo::Successful,"Spectra did not converge!"); // Reason for not converging can be due to the value of ncv (last input in the class member), which is too low.
+  */
+
+  // With shift!
+  // This one converges easier. However, a shift must be provided!
+
+  gsSpectraSymShiftSolver<gsSparseMatrix<T>> es(m_jacMat,number,5*number,shift);
+
+  es.init();
+  es.compute(Spectra::SortRule::LargestAlge,1000,1e-6,Spectra::SortRule::SmallestAlge);
+  GISMO_ENSURE(es.info()==Spectra::CompInfo::Successful,"Spectra did not converge!"); // Reason for not converging can be due to the value of ncv (last input in the class member), which is too low.
+
+  // if (es.info()==Spectra::CompInfo::NotComputed)
+  // if (es.info()==Spectra::CompInfo::NotConverging)
+  // if (es.info()==Spectra::CompInfo::NumericalIssue)
+  // Eigen::SelfAdjointEigenSolver< gsMatrix<T> > es(m_jacMat);
+  m_stabilityVec = es.eigenvalues();
+
+  result.resize(m_numDof,countNegatives(m_stabilityVec));
+  if (result.cols() == number)
+    gsWarn<<"Number of computed eigenvectors is too small!";
+
+  for (index_t k=0; k!=result.cols(); ++k)
+  {
+    if (m_stabilityVec.at(k) < 0)
+      result.col(k) = es.eigenvectors().col(k).normalized();
+    else
+      break;
+  }
+
+#else
+  Eigen::SelfAdjointEigenSolver<gsMatrix<T>> es2(m_jacMat);
+  m_stabilityVec = es2.eigenvalues();
+
+  result.resize(m_numDof,countNegatives(m_stabilityVec));
+  for (index_t k=0; k!=result.cols(); ++k)
+  {
+    if (m_stabilityVec.at(k) < 0)
+      result.col(k) = es2.eigenvectors().col(k).normalized();
+    else
+      break;
+  }
+
+#endif
+
+  return result;
+
+}
+
 // tolB and switchBranch will be defaulted
 template <class T>
 void gsALMBase<T>::computeSingularPoint(gsVector<T> U, T L, T tolE, T tolB, bool switchBranch, bool jacobian)
@@ -1093,15 +1159,15 @@ void gsALMBase<T>::computeSingularPoint(T singTol, index_t kmax, T tolE, T tolB,
 // void gsALMBase<T>::computeSingularPoint(T tolE, T tolB, bool switchBranch)
 // { this->computeSingularPoint(1e-6, 5, m_U, m_L, tolE, tolB, switchBranch); }
 
-// ADD POINT FROM WHICH TO TEST
+// to do: ADD POINT FROM WHICH TO TEST
 template <class T>
-bool gsALMBase<T>::testSingularPoint(T tol, index_t kmax, bool jacobian)
+bool gsALMBase<T>::testSingularPoint(gsVector<T> U, T L, T tol, index_t kmax, bool jacobian)
 {
   // First, approximate the eigenvector of the Jacobian by a few arc length iterations
   // Initiate m_V and m_DeltaVDET
 
   if (jacobian)
-    this->computeJacobian(m_U);
+    this->computeJacobian(U);
 
   m_V = gsVector<T>::Ones(m_numDof);
   m_V.normalize();
@@ -1122,6 +1188,12 @@ bool gsALMBase<T>::testSingularPoint(T tol, index_t kmax, bool jacobian)
     return true;
   else        // Limit point
     return false;
+}
+
+template <class T>
+bool gsALMBase<T>::testSingularPoint(T tol, index_t kmax, bool jacobian)
+{
+  return testSingularPoint(m_U,m_L,tol,kmax,jacobian);
 }
 
 

@@ -53,8 +53,12 @@ public:
 public:
     virtual void step();
 
-    virtual void initialize()
-    {m_initialized = true; this -> initMethods(); this -> init();}
+    virtual void initialize(bool stability = true)
+    {
+        m_initialized = true;
+        this -> initMethods();
+        this -> init(stability);
+    }
 
 
 
@@ -140,11 +144,13 @@ public:
     virtual void computeSingularPoint(gsVector<T> U, T L, T tolE, T tolB=0, bool switchBranch=false, bool jacobian=false);
 
     virtual bool testSingularPoint(T tol, index_t kmax, bool jacobian=false);
+    virtual bool testSingularPoint(gsVector<T> U, T L, T tol, index_t kmax, bool jacobian=false);
 
     virtual bool stabilityChange();
 
     // The shift is needed to ensure that a negative eigenvalue is found
     virtual void computeStability(gsVector<T> x, bool jacobian=true, T shift = -1e2);
+    virtual gsMatrix<T> computeModes(gsVector<T> x, bool jacobian=true, T shift = -1e2);
     virtual index_t stability();
     virtual index_t stability(gsVector<T> x, bool jacobian=true);
 
@@ -177,7 +183,7 @@ protected:
     virtual void defaultOptions();
     virtual void getOptions();
 
-    virtual void init();
+    virtual void init(bool stability);
 
     virtual void factorizeMatrix(const gsSparseMatrix<T> & M);
     virtual gsVector<T> solveSystem(const gsVector<T> & F);
