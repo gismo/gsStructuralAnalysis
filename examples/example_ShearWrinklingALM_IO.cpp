@@ -93,7 +93,7 @@ int main (int argc, char** argv)
     bool deformed = false;
     real_t perturbation = 0;
 
-    real_t thickness = 1e-3;
+    real_t thickness = 25e-3;
     real_t E_modulus     = 1;
     real_t PoissonRatio = 0;
     real_t Density = 1e0;
@@ -194,6 +194,9 @@ int main (int argc, char** argv)
 
     try { cmd.getValues(argc,argv); } catch (int rv) { return rv; }
 
+    gsInfo<<"-> Initializing parameters...";
+    gsStopwatch time;
+
     gsFileData<> fd(assemberOptionsFile);
     gsOptionList opts;
     fd.getFirst<gsOptionList>(opts);
@@ -221,7 +224,6 @@ int main (int argc, char** argv)
 
     aDim = 380;
     bDim = 128;
-    thickness = 25e-3;
     // ![Material data]
 
     // ![Read Geometry files]
@@ -284,12 +286,19 @@ int main (int argc, char** argv)
     else
       mp = mpBspline;
 
+    gsInfo<<"finished ["<<time.stop()<<" s]\n";
+
     gsMultiBasis<> dbasis(mp);
     gsInfo<<"Basis (patch 0): "<< mp.patch(0).basis() << "\n";
+
+    gsInfo<<"-> Initializing boundary conditions...";
+    time.restart();
 
     // Boundary conditions
     gsBoundaryConditions<> BCs,BCs_ini;
     BCs.setGeoMap(mp);
+
+    gsPointLoads<real_t> pLoads = gsPointLoads<real_t>();
 
     // Initiate Surface forces
     std::string tx("0");
@@ -299,8 +308,6 @@ int main (int argc, char** argv)
     gsVector<> tmp(3);
     gsVector<> neu(3);
     tmp << 0, 0, 0;
-    neu << 0, 0, 0;
-    gsConstantFunction<> neuData(neu,3);
 
     gsConstantFunction<> displ(0.05,3);
 
@@ -331,13 +338,14 @@ int main (int argc, char** argv)
 
       BCs.addCondition(boundary::north, condition_type::collapsed, 0, 0 ,false,0);
 
-      neu<<1/aDim,0,0;
-      neuData.setValue(neu,3);
-      BCs.addCondition(boundary::north, condition_type::neumann, &neuData);
+      real_t Load = 1.0;
+      gsVector<> point(2); point<< 1.0, 1.0 ;
+      gsVector<> load (3); load << Load,0.0, 0.0;
+      pLoads.addLoad(point, load, 0 );
 
       std::stringstream ss;
       ss<<perturbation;
-      dirname = dirname + "/ShearSheet_Perturbed=" + ss.str() + "_r=" + std::to_string(numHref) + "_e=" + std::to_string(numElevate) + "_M=" + std::to_string(material) + "_c=" + std::to_string(Compressibility);
+      dirname = dirname + "/ShearSheet_Perturbed=" + ss.str() + "_r=" + std::to_string(numHref) + "_e=" + std::to_string(numElevate) + "_M=" + std::to_string(material) + "_c=" + std::to_string(Compressibility) + "_t=" + std::to_string(thickness);
       output =  "solution";
       wn = output + "data";
     }
@@ -359,9 +367,10 @@ int main (int argc, char** argv)
 
       BCs.addCondition(boundary::north, condition_type::collapsed, 0, 0 ,false,0);
 
-      neu<<1/aDim,0,0;
-      neuData.setValue(neu,3);
-      BCs.addCondition(boundary::north, condition_type::neumann, &neuData);
+      real_t Load = 1.0;
+      gsVector<> point(2); point<< 1.0, 1.0 ;
+      gsVector<> load (3); load << Load,0.0, 0.0;
+      pLoads.addLoad(point, load, 0 );
 
       std::stringstream ss;
       ss<<perturbation;
@@ -389,6 +398,11 @@ int main (int argc, char** argv)
       gsWrite(mp,dirname + "/" + "geometry");
       gsInfo<<"Geometry written in: " + dirname + "/" + "geometry.xml\n";
     }
+
+    gsInfo<<"finished ["<<time.stop()<<" s]\n";
+
+    gsInfo<<"-> Initializing shell...";
+    time.restart();
 
     gsFunctionExpr<> surfForce(tx,ty,tz,3);
     // Initialise solution object
@@ -497,37 +511,30 @@ int main (int argc, char** argv)
 
     // Construct assembler object
     assembler->setOptions(opts);
-
-    gsStopwatch stopwatch;
-    real_t time = 0.0;
+    assembler->setPointLoads(pLoads);
 
     typedef std::function<gsSparseMatrix<real_t> (gsVector<real_t> const &)>                                Jacobian_t;
     typedef std::function<gsVector<real_t> (gsVector<real_t> const &, real_t, gsVector<real_t> const &) >   ALResidual_t;
     typedef std::function<gsVector<real_t> (gsVector<real_t> const &) >                                     Residual_t;
     // Function for the Jacobian
-    Jacobian_t Jacobian = [&time,&stopwatch,&assembler](gsVector<real_t> const &x)
+    Jacobian_t Jacobian = [&assembler](gsVector<real_t> const &x)
     {
       gsMultiPatch<> mp_def;
-      stopwatch.restart();
       assembler->homogenizeDirichlet();
       assembler->constructSolution(x,mp_def);
       assembler->assembleMatrix(mp_def);
-      time += stopwatch.stop();
-
       gsSparseMatrix<real_t> m = assembler->matrix();
       // gsInfo<<"matrix = \n"<<m.toDense()<<"\n";
       return m;
     };
     // Function for the Residual
-    ALResidual_t ALResidual = [&time,&stopwatch,&assembler](gsVector<real_t> const &x, real_t lam, gsVector<real_t> const &force)
+    ALResidual_t ALResidual = [&assembler](gsVector<real_t> const &x, real_t lam, gsVector<real_t> const &force)
     {
       gsMultiPatch<> mp_def;
-      stopwatch.restart();
       assembler->constructSolution(x,mp_def);
       assembler->assembleVector(mp_def);
       gsVector<real_t> Fint = -(assembler->rhs() - force);
       gsVector<real_t> result = Fint - lam * force;
-      time += stopwatch.stop();
       return result; // - lam * force;
     };
 
@@ -540,6 +547,12 @@ int main (int argc, char** argv)
       assembler->assembleVector(mp_def);
       return assembler->rhs(); // - lam * force;
     };
+
+    gsInfo<<"finished ["<<time.stop()<<" s]\n";
+
+    gsInfo<<"-> Initializing assembly...";
+    time.restart();
+
 
     if (importdir.empty())
     {
@@ -562,6 +575,11 @@ int main (int argc, char** argv)
     assembler->assemble();
     gsVector<> Force = assembler->rhs();
 
+    gsInfo<<"finished ["<<time.stop()<<" s]\n";
+
+    gsInfo<<"-> Initializing ALM...";
+    time.restart();
+
     gsALMBase<real_t> * arcLength;
     if (method==0)
       arcLength = new gsALMLoadControl<real_t>(Jacobian, ALResidual, Force);
@@ -572,23 +590,23 @@ int main (int argc, char** argv)
     else
       GISMO_ERROR("Method "<<method<<" unknown");
 
-    if (!membrane)
-    {
+    // if (!membrane)
+    // {
       arcLength->options().setInt("Solver",0); // LDLT solver
       arcLength->options().setInt("BifurcationMethod",0); // 0: determinant, 1: eigenvalue
-    }
-    else
-    {
-      arcLength->options().setInt("Solver",1); // CG solver
-      arcLength->options().setInt("BifurcationMethod",1); // 0: determinant, 1: eigenvalue
-    }
+    // }
+    // else
+    // {
+      // arcLength->options().setInt("Solver",1); // CG solver
+      // arcLength->options().setInt("BifurcationMethod",1); // 0: determinant, 1: eigenvalue
+    // }
 
     arcLength->options().setReal("Length",dLini);
     arcLength->options().setInt("AngleMethod",2); // 0: step, 1: iteration, 2: predictor
     arcLength->options().setSwitch("AdaptiveLength",adaptive);
     arcLength->options().setInt("AdaptiveIterations",5);
     arcLength->options().setReal("Perturbation",tau);
-    arcLength->options().setReal("Scaling",-1);
+    arcLength->options().setReal("Scaling",0);
     arcLength->options().setReal("Tol",tol);
     arcLength->options().setReal("TolU",tolU);
     arcLength->options().setReal("TolF",tolF);
@@ -605,7 +623,7 @@ int main (int argc, char** argv)
 
     gsInfo<<arcLength->options();
     arcLength->applyOptions();
-    arcLength->initialize();
+    arcLength->initialize(false); //  don't compute stability
 
     gsMultiPatch<> deformation = mp;
 
@@ -616,6 +634,11 @@ int main (int argc, char** argv)
     real_t indicatorOld = 0.0;
     index_t stability = 0.0;
     index_t stabilityOld = 0.0;
+
+    gsInfo<<"finished ["<<time.stop()<<" s]\n";
+
+    gsInfo<<"-> Setting start point...";
+    time.restart();
     if (importdir.empty())
     {
       gsVector<> Uini = assembler->constructSolutionVector(mp_def);
@@ -651,7 +674,7 @@ int main (int argc, char** argv)
     Uinit = Uold + 1. / tau * Vold; // add perturbation
     arcLength->setSolution(Uinit,Lold);
 
-    arcLength->computeStability(Uinit,true);
+    arcLength->computeStability(Uinit,true,-1e-1);
     indicatorOld = 0;
     indicator = arcLength->indicator();
     stabilityOld = 0;
@@ -680,7 +703,7 @@ int main (int argc, char** argv)
         solField= gsField<>(mp,deformation);
 
       std::string fileName = importdir + "/" + output + util::to_string(0);
-      gsWriteParaview<>(solField, fileName, 1000,mesh);
+      gsWriteParaview<>(solField, fileName, 5000,mesh);
       fileName = output + util::to_string(0) + "0";
       collection.addTimestep(fileName,0,".vts");
       if (mesh) collection.addTimestep(fileName,0,"_mesh.vtp");
@@ -692,6 +715,9 @@ int main (int argc, char** argv)
     quit = false;
 
     real_t dL0 = dLini;
+
+    gsInfo<<"finished ["<<time.stop()<<" s]\n";
+
     for (index_t k=1; k<step; k++)
     {
       gsInfo<<"Load step "<< k<<"\n";
@@ -713,34 +739,11 @@ int main (int argc, char** argv)
         arcLength->computeStability(arcLength->solutionU(),true);
 
         stability = arcLength->stability();
-        gsDebugVar(stability);
-        gsDebugVar(stabilityOld);
+        gsInfo<<"stability = "<<stability<<"; stability old = "<<stabilityOld<<"\n";
         if (stability != stabilityOld && stabilityOld!=0)
         {
-          gsALMBase<real_t> * arcLengthBif;
-          if (method==0)
-            arcLengthBif = new gsALMLoadControl<real_t>(Jacobian, ALResidual, Force);
-          else if (method==1)
-            arcLengthBif = new gsALMRiks<real_t>(Jacobian, ALResidual, Force);
-          else if (method==2)
-            arcLengthBif = new gsALMCrisfield<real_t>(Jacobian, ALResidual, Force);
-          else
-            GISMO_ERROR("Method "<<method<<" unknown");
-
-          gsOptionList opts = arcLength->options();
-          opts.setInt("BifurcationMethod",1); // 0: determinant, 1: eigenvalue
-
-          arcLengthBif->setOptions(opts);
-          arcLengthBif->applyOptions();
-          arcLengthBif->initialize();
-
-          arcLength->computeStability(arcLength->solutionU(),true);
-          gsDebugVar(arcLengthBif->stability());
-
           gsInfo<<"Bifurcation spotted!"<<"\n";
-          arcLengthBif->computeSingularPoint(1e-4, 25, Uold, Lold, 1e-7, 1e-2, false);
-
-          arcLengthBif->setLength(dL0);
+          arcLength->computeSingularPoint(1e-4, 25, Uold, Lold, 1e-7, 1e-2, false, true);
 
           //////////////////////////////////////////////////////////////////////////////////////////////////
           ///////////////////////////////////////// Export to file /////////////////////////////////////////
@@ -749,32 +752,63 @@ int main (int argc, char** argv)
           gsMultiPatch<> U, DU, V;
           gsMultiPatch<> mp_perturbation;
           gsField<> solField;
-          real_t  L = arcLengthBif->solutionL(),
-                  DL = arcLengthBif->solutionDL();
+          real_t  L = arcLength->solutionL(),
+                  DL = arcLength->solutionDL();
 
-          assembler->constructDisplacement(arcLengthBif->solutionU(),U);
-          assembler->constructDisplacement(arcLengthBif->solutionDU(),DU);
-          assembler->constructDisplacement(arcLengthBif->solutionV(),V);
+          assembler->constructDisplacement(arcLength->solutionU(),U);
+          assembler->constructDisplacement(arcLength->solutionDU(),DU);
 
-          std::string exportdir1 = dirname + "/" + "start" + "_U=" + std::to_string(arcLengthBif->solutionU().norm()) + "_L=" + std::to_string(arcLengthBif->solutionL()) + "_pos";
+          gsMatrix<> modes = arcLength->computeModes(arcLength->solutionU(),true);
+          gsVector<> Vvec = gsVector<>::Zero(modes.rows());
+
+          gsInfo<<"Found "<<modes.cols()<<" modes\n";
+
+          for (index_t k = 0; k!=modes.cols(); ++k)
+            Vvec += modes.col(k);
+
+          assembler->constructDisplacement(Vvec,V);
+
+          std::string exportdir1 = dirname + "/" + "start" + "_U=" + std::to_string(arcLength->solutionU().norm()) + "_L=" + std::to_string(arcLength->solutionL()) + "_pos";
           writeBifurcation(exportdir1,U,DU,V,L,DL);
           mp_perturbation = V;
           mp_perturbation.patch(0).coefs() -= mp.patch(0).coefs();// assuming 1 patch here
+          mp_perturbation.patch(0).coefs() *= 1./ mp_perturbation.patch(0).coefs().col(2).maxCoeff();
           solField= gsField<>(mp,mp_perturbation);
-          gsWriteParaview(solField,exportdir1 + "/" +"bifurcation");
+          gsWriteParaview(solField,exportdir1 + "/" +"bifurcation",10000,mesh);
+
+          for (index_t k = 0; k!=modes.cols(); ++k)
+          {
+            assembler->constructDisplacement(modes.col(k),V);
+            mp_perturbation = V;
+            mp_perturbation.patch(0).coefs() -= mp.patch(0).coefs();// assuming 1 patch here
+            mp_perturbation.patch(0).coefs() *= 1./ mp_perturbation.patch(0).coefs().col(2).maxCoeff();
+            solField= gsField<>(mp,mp_perturbation);
+            gsWriteParaview(solField,exportdir1 + "/" +"bifurcation_mode" + std::to_string(k) + "_",10000,mesh);
+          }
 
           V.patch(0).coefs().col(2) = -V.patch(0).coefs().col(2);
-          std::string exportdir2 = dirname + "/" + "start" + "_U=" + std::to_string(arcLengthBif->solutionU().norm()) + "_L=" + std::to_string(arcLengthBif->solutionL()) + "_neg";
+          std::string exportdir2 = dirname + "/" + "start" + "_U=" + std::to_string(arcLength->solutionU().norm()) + "_L=" + std::to_string(arcLength->solutionL()) + "_neg";
           writeBifurcation(exportdir2,U,DU,V,L,DL);
           mp_perturbation = V;
           mp_perturbation.patch(0).coefs() -= mp.patch(0).coefs();// assuming 1 patch here
+          mp_perturbation.patch(0).coefs() *= 1./ mp_perturbation.patch(0).coefs().col(2).maxCoeff();
           solField= gsField<>(mp,mp_perturbation);
-          gsWriteParaview(solField,exportdir2 + "/" +"bifurcation");
+          gsWriteParaview(solField,exportdir2 + "/" +"bifurcation",10000,mesh);
+
+          for (index_t k = 0; k!=modes.cols(); ++k)
+          {
+            assembler->constructDisplacement(modes.col(k),V);
+            mp_perturbation = V;
+            mp_perturbation.patch(0).coefs() -= mp.patch(0).coefs();// assuming 1 patch here
+            mp_perturbation.patch(0).coefs() *= 1./ mp_perturbation.patch(0).coefs().col(2).maxCoeff();
+            solField= gsField<>(mp,mp_perturbation);
+            gsWriteParaview(solField,exportdir2 + "/" +"bifurcation_mode" + std::to_string(k) + "_",10000,mesh);
+          }
 
           /////////////////////////////////////////////////////////////////////////////////////////////////
 
-          gsMatrix<> Utmp = arcLengthBif->solutionU();
-          real_t Ltmp = arcLengthBif->solutionL();
+          gsMatrix<> Utmp = arcLength->solutionU();
+          real_t Ltmp = arcLength->solutionL();
           assembler->constructSolution(Utmp,mp_def);
 
           deformation = mp_def;
@@ -789,7 +823,7 @@ int main (int argc, char** argv)
               solField= gsField<>(mp,deformation);
 
             std::string fileName = importdir + "/" + output + util::to_string(k);
-            gsWriteParaview<>(solField, fileName, 1000,mesh);
+            gsWriteParaview<>(solField, fileName, 5000,mesh);
             fileName = output + util::to_string(k) + "0";
             collection.addTimestep(fileName,k,".vts");
             if (mesh) collection.addTimestep(fileName,k,"_mesh.vtp");
@@ -801,6 +835,8 @@ int main (int argc, char** argv)
           quit = false;
           stabilityOld = stability;
           stability = 1;
+
+          arcLength->setSolution(Uold,Lold);
         }
         else
           stabilityOld = stability;
@@ -835,7 +871,7 @@ int main (int argc, char** argv)
           solField= gsField<>(mp,deformation);
 
         std::string fileName = importdir + "/" + output + util::to_string(k);
-        gsWriteParaview<>(solField, fileName, 1000,mesh);
+        gsWriteParaview<>(solField, fileName, 5000,mesh);
         fileName = output + util::to_string(k) + "0";
         collection.addTimestep(fileName,k,".vts");
         if (mesh) collection.addTimestep(fileName,k,"_mesh.vtp");
@@ -944,10 +980,7 @@ void addClamping(gsMultiPatch<T>& mp, index_t patch, std::vector<boxSide> sides,
     T dknot0 = geo->basis().component(0).knots().minIntervalLength();
     T dknot1 = geo->basis().component(1).knots().minIntervalLength();
 
-    gsInfo<<"sides.size() = "<<sides.size()<<"\n";
-
     index_t k =0;
-
 
     for (std::vector<boxSide>::iterator it = sides.begin(); it != sides.end(); it++)
     {
