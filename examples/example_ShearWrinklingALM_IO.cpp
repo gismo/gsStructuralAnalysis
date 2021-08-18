@@ -757,16 +757,12 @@ int main (int argc, char** argv)
 
           assembler->constructDisplacement(arcLength->solutionU(),U);
           assembler->constructDisplacement(arcLength->solutionDU(),DU);
+          assembler->constructDisplacement(arcLength->solutionV(),V);
 
           gsMatrix<> modes = arcLength->computeModes(arcLength->solutionU(),true);
           gsVector<> Vvec = gsVector<>::Zero(modes.rows());
 
           gsInfo<<"Found "<<modes.cols()<<" modes\n";
-
-          for (index_t k = 0; k!=modes.cols(); ++k)
-            Vvec += modes.col(k);
-
-          assembler->constructDisplacement(Vvec,V);
 
           std::string exportdir1 = dirname + "/" + "start" + "_U=" + std::to_string(arcLength->solutionU().norm()) + "_L=" + std::to_string(arcLength->solutionL()) + "_pos";
           writeBifurcation(exportdir1,U,DU,V,L,DL);
@@ -775,16 +771,6 @@ int main (int argc, char** argv)
           mp_perturbation.patch(0).coefs() *= 1./ mp_perturbation.patch(0).coefs().col(2).maxCoeff();
           solField= gsField<>(mp,mp_perturbation);
           gsWriteParaview(solField,exportdir1 + "/" +"bifurcation",10000,mesh);
-
-          for (index_t k = 0; k!=modes.cols(); ++k)
-          {
-            assembler->constructDisplacement(modes.col(k),V);
-            mp_perturbation = V;
-            mp_perturbation.patch(0).coefs() -= mp.patch(0).coefs();// assuming 1 patch here
-            mp_perturbation.patch(0).coefs() *= 1./ mp_perturbation.patch(0).coefs().col(2).maxCoeff();
-            solField= gsField<>(mp,mp_perturbation);
-            gsWriteParaview(solField,exportdir1 + "/" +"bifurcation_mode" + std::to_string(k) + "_",10000,mesh);
-          }
 
           V.patch(0).coefs().col(2) = -V.patch(0).coefs().col(2);
           std::string exportdir2 = dirname + "/" + "start" + "_U=" + std::to_string(arcLength->solutionU().norm()) + "_L=" + std::to_string(arcLength->solutionL()) + "_neg";
@@ -795,14 +781,34 @@ int main (int argc, char** argv)
           solField= gsField<>(mp,mp_perturbation);
           gsWriteParaview(solField,exportdir2 + "/" +"bifurcation",10000,mesh);
 
-          for (index_t k = 0; k!=modes.cols(); ++k)
+          if (modes.cols() > 1)
           {
-            assembler->constructDisplacement(modes.col(k),V);
-            mp_perturbation = V;
-            mp_perturbation.patch(0).coefs() -= mp.patch(0).coefs();// assuming 1 patch here
-            mp_perturbation.patch(0).coefs() *= 1./ mp_perturbation.patch(0).coefs().col(2).maxCoeff();
-            solField= gsField<>(mp,mp_perturbation);
-            gsWriteParaview(solField,exportdir2 + "/" +"bifurcation_mode" + std::to_string(k) + "_",10000,mesh);
+            for (index_t k = 0; k!=modes.cols(); ++k)
+              Vvec += modes.col(k);
+
+            assembler->constructDisplacement(Vvec,V);
+
+            for (index_t k = 0; k!=modes.cols(); ++k)
+            {
+              assembler->constructDisplacement(modes.col(k),V);
+              mp_perturbation = V;
+              mp_perturbation.patch(0).coefs() -= mp.patch(0).coefs();// assuming 1 patch here
+              mp_perturbation.patch(0).coefs() *= 1./ mp_perturbation.patch(0).coefs().col(2).maxCoeff();
+              solField= gsField<>(mp,mp_perturbation);
+              gsWriteParaview(solField,exportdir1 + "/" +"bifurcation_mode" + std::to_string(k) + "_",10000,mesh);
+            }
+
+
+
+            for (index_t k = 0; k!=modes.cols(); ++k)
+            {
+              assembler->constructDisplacement(modes.col(k),V);
+              mp_perturbation = V;
+              mp_perturbation.patch(0).coefs() -= mp.patch(0).coefs();// assuming 1 patch here
+              mp_perturbation.patch(0).coefs() *= 1./ mp_perturbation.patch(0).coefs().col(2).maxCoeff();
+              solField= gsField<>(mp,mp_perturbation);
+              gsWriteParaview(solField,exportdir2 + "/" +"bifurcation_mode" + std::to_string(k) + "_",10000,mesh);
+            }
           }
 
           /////////////////////////////////////////////////////////////////////////////////////////////////
