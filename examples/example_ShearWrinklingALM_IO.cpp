@@ -602,7 +602,8 @@ int main (int argc, char** argv)
     // }
 
     arcLength->options().setReal("Length",dLini);
-    arcLength->options().setInt("AngleMethod",2); // 0: step, 1: iteration, 2: predictor
+    if (method==2)
+      arcLength->options().setInt("AngleMethod",2); // 0: step, 1: iteration, 2: predictor
     arcLength->options().setSwitch("AdaptiveLength",adaptive);
     arcLength->options().setInt("AdaptiveIterations",5);
     arcLength->options().setReal("Perturbation",tau);
@@ -666,7 +667,7 @@ int main (int argc, char** argv)
       DUvec= assembler->constructSolutionVector(DU);
       Vold = assembler->constructSolutionVector(V);
 
-      arcLength->setSolutionStep(DUvec,DL);
+      arcLength->setSolutionStep(1. / tau * Vold,0);
     }
 
     gsInfo<<"Starting branch from |U| = "<<(Uold).norm()
@@ -748,6 +749,8 @@ int main (int argc, char** argv)
           //////////////////////////////////////////////////////////////////////////////////////////////////
           ///////////////////////////////////////// Export to file /////////////////////////////////////////
           //////////////////////////////////////////////////////////////////////////////////////////////////
+
+          gsInfo<<"Bifurcation point (1) or limit point (0)? : "<<arcLength->testSingularPoint(arcLength->solutionU(), arcLength->solutionL(),1e-4,25,true )<<"\n";
 
           gsMultiPatch<> U, DU, V;
           gsMultiPatch<> mp_perturbation;

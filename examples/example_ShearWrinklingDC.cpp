@@ -270,16 +270,15 @@ int main (int argc, char** argv)
     gsBoundaryConditions<> BCs;
     BCs.setGeoMap(mp);
 
+    gsPointLoads<real_t> pLoads = gsPointLoads<real_t>();
+
     // Initiate Surface forces
     std::string tx("0");
     std::string ty("0");
     std::string tz("0");
 
     gsVector<> tmp(3);
-    gsVector<> neu(3);
     tmp << 0, 0, 0;
-    neu << 0, 0, 0;
-    gsConstantFunction<> neuData(neu,3);
 
     gsConstantFunction<> displ(0.0,3);
     gsConstantFunction<> displ_const(0.05,3);
@@ -507,7 +506,7 @@ int main (int argc, char** argv)
     solverOptions.setReal("tolF",tolF);
     solverOptions.setReal("tolU",tolU);
     solverOptions.setReal("Relaxation",0.8);
-    solverOptions.setReal("BifurcationMethod",0.8);
+    solverOptions.setInt("BifurcationMethod",1);
     staticSolver.setOptions(solverOptions);
 
     gsParaviewCollection collection(dirname + "/" + output);
