@@ -99,15 +99,15 @@ public:
         m_headstart = false;
     }
 
-    T indicator(const gsSparseMatrix<T> & jacMat)
+    T indicator(const gsSparseMatrix<T> & jacMat, T shift = -1e-2)
     {
-       _computeStability(jacMat);
+       _computeStability(jacMat, shift);
        return m_indicator;
     }
 
-    gsVector<T> stabilityVec(const gsSparseMatrix<T> & jacMat)
+    gsVector<T> stabilityVec(const gsSparseMatrix<T> & jacMat, T shift = -1e-2)
     {
-       _computeStability(jacMat);
+       _computeStability(jacMat, shift);
        return m_stabilityVec;
     }
 
@@ -125,35 +125,40 @@ protected:
         m_stabilityVec = m_LDLTsolver.vectorD();
     }
 
-    virtual void _computeStabilityEig(const gsSparseMatrix<T> & jacMat)
+    virtual void _computeStabilityEig(const gsSparseMatrix<T> & jacMat, T shift)
     {
 #ifdef GISMO_WITH_SPECTRA
         index_t number = std::min(static_cast<index_t>(std::floor(jacMat.cols()/3.)),10);
-        gsSpectraSymSolver<gsSparseMatrix<T>> es(jacMat,number,3*number);
-        es.init();
-        es.compute(Spectra::SortRule::SmallestAlge,1000,1e-6,Spectra::SortRule::SmallestAlge);
-        GISMO_ASSERT(es.info()==Spectra::CompInfo::Successful,"Spectra did not converge!"); // Reason for not converging can be due to the value of ncv (last input in the class member), which is too low.
-
         /*
-        // ALTERNATIVE
-            gsSpectraSymShiftSolver<gsSparseMatrix<T>> es(jacMat,number,3*number);
-            es.init();
-            es.compute(Spectra::SortRule::LargestAlge,1000,1e-6,Spectra::SortRule::SmallestAlge);
-            GISMO_ASSERT(es.info()==Spectra::CompInfo::Successful,"Spectra did not converge!"); // Reason for not converging can be due to the value of ncv (last input in the class member), which is too low.
+        // Without shift!
+        // This one can sometimes not converge, because spectra is better at finding large values.
+          gsSpectraSymSolver<gsSparseMatrix<T>> es(jacMat,number,5*number);
+          es.init();
+          es.compute(Spectra::SortRule::SmallestAlge,1000,1e-6,Spectra::SortRule::SmallestAlge);
+          GISMO_ASSERT(es.info()==Spectra::CompInfo::Successful,"Spectra did not converge!"); // Reason for not converging can be due to the value of ncv (last input in the class member), which is too low.
         */
+
+        // With shift!
+        // This one converges easier. However, a shift must be provided!
+        gsSpectraSymShiftSolver<gsSparseMatrix<T>> es(jacMat,number,5*number,shift);
+        es.init();
+        es.compute(Spectra::SortRule::LargestAlge,1000,1e-6,Spectra::SortRule::SmallestAlge);
+        GISMO_ENSURE(es.info()==Spectra::CompInfo::Successful,"Spectra did not converge!"); // Reason for not converging can be due to the value of ncv (last input in the class member), which is too low.
 
         // if (es.info()==Spectra::CompInfo::NotComputed)
         // if (es.info()==Spectra::CompInfo::NotConverging)
         // if (es.info()==Spectra::CompInfo::NumericalIssue)
-        // Eigen::SelfAdjointEigenSolver< gsMatrix<T> > es(m_jacMat);
+        // Eigen::SelfAdjointEigenSolver< gsMatrix<T> > es(jacMat);
         m_stabilityVec = es.eigenvalues();
 #else
         Eigen::SelfAdjointEigenSolver<gsMatrix<T>> es2(jacMat);
         m_stabilityVec = es2.eigenvalues();
 #endif
+
+        m_indicator = m_stabilityVec.colwise().minCoeff()[0]; // This is required since D does not necessarily have one column.
     }
 
-    virtual void _computeStability   (const gsSparseMatrix<T> & jacMat)
+    virtual void _computeStability   (const gsSparseMatrix<T> & jacMat, T shift)
     {
         if (m_stabilityMethod == stabmethod::Determinant)
         {
@@ -161,7 +166,7 @@ protected:
         }
         else if (m_stabilityMethod == stabmethod::Eigenvalue)
         {
-            _computeStabilityEig(jacMat);
+            _computeStabilityEig(jacMat, shift);
         }
         else
           gsInfo<<"bifurcation method unknown!";
