@@ -506,7 +506,7 @@ int main (int argc, char** argv)
     solverOptions.setReal("tolF",tolF);
     solverOptions.setReal("tolU",tolU);
     solverOptions.setReal("Relaxation",0.8);
-    solverOptions.setInt("BifurcationMethod",1);
+    solverOptions.setInt("BifurcationMethod",0);
     staticSolver.setOptions(solverOptions);
 
     gsParaviewCollection collection(dirname + "/" + output);

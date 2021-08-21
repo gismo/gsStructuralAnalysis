@@ -603,11 +603,13 @@ int main (int argc, char** argv)
 
     arcLength->options().setReal("Length",dLini);
     if (method==2)
+    {
       arcLength->options().setInt("AngleMethod",2); // 0: step, 1: iteration, 2: predictor
+      arcLength->options().setReal("Scaling",0);
+    }
     arcLength->options().setSwitch("AdaptiveLength",adaptive);
     arcLength->options().setInt("AdaptiveIterations",5);
     arcLength->options().setReal("Perturbation",tau);
-    arcLength->options().setReal("Scaling",0);
     arcLength->options().setReal("Tol",tol);
     arcLength->options().setReal("TolU",tolU);
     arcLength->options().setReal("TolF",tolF);
@@ -745,6 +747,9 @@ int main (int argc, char** argv)
         {
           gsInfo<<"Bifurcation spotted!"<<"\n";
           arcLength->computeSingularPoint(1e-4, 25, Uold, Lold, 1e-7, 1e-2, false, true);
+
+          Uold = arcLength->solutionU();
+          Lold = arcLength->solutionL();
 
           //////////////////////////////////////////////////////////////////////////////////////////////////
           ///////////////////////////////////////// Export to file /////////////////////////////////////////
