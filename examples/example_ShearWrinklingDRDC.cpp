@@ -314,7 +314,7 @@ int main (int argc, char** argv)
 
       std::stringstream ss;
       ss<<perturbation;
-      dirname = dirname + "/ShearSheet_Perturbed=" + ss.str() + "_r=" + std::to_string(numHref) + "_e=" + std::to_string(numElevate) + "_M=" + std::to_string(material) + "_c=" + std::to_string(Compressibility) + "_TolU=" + std::to_string(tolU) + "_TolF=" + std::to_string(tolF);
+      dirname = dirname + "/ShearSheetDRDC_Perturbed=" + ss.str() + "_r=" + std::to_string(numHref) + "_e=" + std::to_string(numElevate) + "_M=" + std::to_string(material) + "_c=" + std::to_string(Compressibility) + "_TolU=" + std::to_string(tolU) + "_TolF=" + std::to_string(tolF);
       output =  "solution";
       wn = output + "data.txt";
     }
@@ -336,7 +336,7 @@ int main (int argc, char** argv)
 
       std::stringstream ss;
       ss<<perturbation;
-      dirname = dirname + "/ShearSheetRestrained_Perturbed=" + ss.str() + "_r=" + std::to_string(numHref) + "_e=" + std::to_string(numElevate) + "_M=" + std::to_string(material) + "_c=" + std::to_string(Compressibility) + "_TolU=" + std::to_string(tolU) + "_TolF=" + std::to_string(tolF);
+      dirname = dirname + "/ShearSheetRestrainedDRDC_Perturbed=" + ss.str() + "_r=" + std::to_string(numHref) + "_e=" + std::to_string(numElevate) + "_M=" + std::to_string(material) + "_c=" + std::to_string(Compressibility) + "_TolU=" + std::to_string(tolU) + "_TolF=" + std::to_string(tolF);
       output =  "solution";
       wn = output + "data.txt";
     }
@@ -527,8 +527,9 @@ int main (int argc, char** argv)
     DROptions.setReal("damping",damping);
     DROptions.setReal("alpha",alpha);
     DROptions.setInt("maxIt",maxitDR);
-    DROptions.setReal("tolF",1e-2);
-    DROptions.setReal("tolE",1e-2);
+    DROptions.setReal("tolF",1e-3);
+    DROptions.setReal("tolU",1e-3);
+    DROptions.setReal("tolE",1e-3);
     DROptions.setInt("verbose",verbose);
     DRM.setOptions(DROptions);
     DRM.initialize();
