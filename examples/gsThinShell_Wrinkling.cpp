@@ -75,7 +75,6 @@ int main (int argc, char** argv)
     bool mesh       = false;
     bool stress       = false;
     bool membrane       = false;
-    bool mesh = false;
     bool SingularPoint = false;
     bool quasiNewton = false;
     int quasiNewtonInt = -1;
