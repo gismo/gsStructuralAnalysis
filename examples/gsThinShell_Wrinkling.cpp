@@ -201,7 +201,7 @@ int main (int argc, char** argv)
     else
       PoissonRatio = 0.499;
 
-    real_t mu, C01,C10;
+    real_t mu, C01(0), C10(0);
 
     /*
       Case 0 & 1: Material test (no wrinkling)
@@ -360,7 +360,7 @@ int main (int argc, char** argv)
     {
       // Cast all patches of the mp object to THB splines
       gsTHBSpline<2,real_t> thb;
-      for (index_t k=0; k!=mpBspline.nPatches(); ++k)
+      for (size_t k=0; k!=mpBspline.nPatches(); ++k)
       {
           gsTensorBSpline<2,real_t> *geo = dynamic_cast< gsTensorBSpline<2,real_t> * > (&mpBspline.patch(k));
           thb = gsTHBSpline<2,real_t>(*geo);
@@ -412,7 +412,7 @@ int main (int argc, char** argv)
     gsConstantFunction<> neuData(neu,3);
 
     // Buckling coefficient
-    real_t fac = 1;
+    //real_t fac = 1;
     // Unscaled load
     real_t Load = 0;
 

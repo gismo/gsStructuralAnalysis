@@ -218,9 +218,26 @@ public:
     T currentTime() const {return m_t; }
 
     /// set mass matrix
-    void setMassMatrix(gsMatrix<T>& Mass) {m_mass = Mass; }
-    void setDampingMatrix(gsMatrix<T>& Damp) {m_damp = Damp; }
-    void setStiffnessMatrix(gsMatrix<T>& Stif) {m_stif = Stif; }
+    /// set mass matrix
+    void setMassMatrix(const gsSparseMatrix<T>& Mass)
+    {
+        m_mass = Mass;
+        m_dofs = m_mass.cols();
+    }
+    void setDampingMatrix(const gsSparseMatrix<T>& Damp)
+    {
+        m_damp = Damp;
+        m_dofs = m_damp.cols();
+    }
+    void resetDampingMatrix()
+    {
+        m_damp = gsSparseMatrix<T>(m_dofs,m_dofs);
+    }
+    void setStiffnessMatrix(const gsSparseMatrix<T>& Stif)
+    {
+        m_stif = Stif;
+        m_dofs = m_mass.cols();
+    }
     void setJacobian(std::function < gsSparseMatrix<T> ( gsMatrix<T> const & ) > &Jacobian)
     {
         m_jacobian = Jacobian;
@@ -228,11 +245,13 @@ public:
         {
             return m_jacobian(x);
         };
+        m_dofs = m_mass.cols();
     }
     void setJacobian(std::function < gsSparseMatrix<T> ( gsMatrix<T> const &, gsMatrix<T> const & ) > &dJacobian)
     {
         m_djacobian = dJacobian;
     }
+    void resetSolution();
 
     // set solutions
     void setDisplacement(gsMatrix<T>& displ);

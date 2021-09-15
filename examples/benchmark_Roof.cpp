@@ -96,8 +96,8 @@ int main (int argc, char** argv)
     fd.getFirst<gsOptionList>(opts);
 
     gsMultiPatch<> mp;
-    real_t aDim;
-    real_t bDim;
+    //real_t aDim;
+    //real_t bDim;
 
 
     real_t thickness;

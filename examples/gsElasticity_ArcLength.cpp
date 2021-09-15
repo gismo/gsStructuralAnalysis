@@ -61,7 +61,7 @@ int main (int argc, char** argv)
     real_t thickness = 1e-3;
     real_t E_modulus     = 1;
     real_t PoissonRatio = 0;
-    real_t Density = 1e0;
+    //real_t Density = 1e0;
     gsMultiPatch<> mp;
     real_t tau = 1e4;
 
@@ -72,7 +72,7 @@ int main (int argc, char** argv)
     real_t aDim = 2.5;
     real_t bDim = 1.0;
     real_t eta = 0;
-    real_t Spring = 0;
+    //real_t Spring = 0;
 
     real_t relax = 1.0;
 
@@ -517,9 +517,9 @@ gsMultiPatch<T> BrickDomain(int n, int m, int o, int p, int q ,int r, T L, T B, 
   // Define a matrix with ones
   gsVector<> temp(len0);
   temp.setOnes();
-  for (index_t l = 0; l < len2; l++)
+  for (size_t l = 0; l < len2; l++)
     {
-        for (index_t k = 0; k < len1; k++)
+        for (size_t k = 0; k < len1; k++)
         {
             index_t offset = l*len0*len1;
             // First column contains x-coordinates (length)

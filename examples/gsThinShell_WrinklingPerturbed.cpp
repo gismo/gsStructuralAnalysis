@@ -74,7 +74,7 @@ int main (int argc, char** argv)
     bool plot       = false;
     bool stress       = false;
     bool membrane       = false;
-    bool mesh  = false;
+    //bool mesh  = false;
     bool quasiNewton = false;
     int quasiNewtonInt = -1;
     bool adaptive = false;
