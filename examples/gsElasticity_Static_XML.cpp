@@ -35,8 +35,8 @@ int main (int argc, char** argv)
     bool plot       = false;
     bool nonlinear  = false;
 
-    real_t E_modulus     = 1;
-    real_t PoissonRatio = 0;
+    //real_t E_modulus     = 1;
+    //real_t PoissonRatio = 0;
 
     int testCase = 0;
 
