@@ -482,7 +482,7 @@ int main (int argc, char** argv)
     gsInfo<<ALMoptions;
 
     gsParaviewCollection collection(dirname + "/" + output);
-    gsParaviewCollection errors(dirname + "/" + output);
+    gsParaviewCollection errors(dirname + "/" + "error");
     gsParaviewCollection Smembrane(dirname + "/" + "membrane");
     gsParaviewCollection Sflexural(dirname + "/" + "flexural");
     gsParaviewCollection Smembrane_p(dirname + "/" + "membrane_p");
@@ -563,7 +563,7 @@ int main (int argc, char** argv)
         dLold = arcLength.solutionDL();
         assembler->constructSolutionL(solVector,mp_def);
       }
-      else
+      else if (k % 5==0)
       {
         gsMultiPatch<> Uold_patch, dUold_patch;
         Uold = arcLength.solutionU();
@@ -612,7 +612,7 @@ int main (int argc, char** argv)
 
         gsElementErrorPlotter<real_t> err_eh(mp.basis(0),elErrors);
         const gsField<> elemError_eh( mp.patch(0), err_eh, true );
-        gsWriteParaview<>( elemError_eh, "error_elem_ref" + util::to_string(k), 2, true);
+        gsWriteParaview<>( elemError_eh, dirname + "/" +"error_elem_ref" + util::to_string(k), 2, true);
         errors.addTimestep("error_elem_ref" + util::to_string(k) + "0",k,".vts");
         errors.addTimestep("error_elem_ref" + util::to_string(k) + "0",k,"_mesh.vtp");
 
@@ -633,7 +633,7 @@ int main (int argc, char** argv)
         gsMarkElementsForRef( elErrorsC, adaptRefCrit, adaptRefParam, elCMarked);
 
         // gsRefineMarkedElements(mp,elMarked,0);
-        gsProcessMarkedElements(mp,elMarked, elCMarked,0,0);
+        gsProcessMarkedElements(mp,elMarked, elCMarked,1,0);
         mp_def = mp;
 
         for (index_t k=0; k!=elMarked.size(); ++k)
@@ -749,7 +749,7 @@ int main (int argc, char** argv)
           solField= gsField<>(mp,deformation);
 
         std::string fileName = dirname + "/" + output + util::to_string(k);
-        gsWriteParaview<>(solField, fileName, 2,mesh);
+        gsWriteParaview<>(solField, fileName, 1000,mesh);
         fileName = output + util::to_string(k) + "0";
         collection.addTimestep(fileName,k,".vts");
         if (mesh) collection.addTimestep(fileName,k,"_mesh.vtp");
