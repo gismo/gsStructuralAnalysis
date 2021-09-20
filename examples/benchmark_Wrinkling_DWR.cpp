@@ -245,13 +245,6 @@ int main (int argc, char** argv)
     for(index_t i = 0; i< numElevate; ++i)
       mp.patch(0).degreeElevate();    // Elevate the degree
 
-    // h-refine
-    for(index_t i = 0; i< numHref; ++i)
-      mp.patch(0).uniformRefine();
-
-    // addClamping(mp,0,sides, 1e-2);
-    mp_def = mp;
-
     // Cast all patches of the mp object to THB splines
     if (adaptiveMesh)
     {
@@ -267,7 +260,12 @@ int main (int argc, char** argv)
         }
         mp = mp_thb;
     }
+    // h-refine
+    for(index_t i = 0; i< numHref; ++i)
+      mp.patch(0).uniformRefine();
 
+    // addClamping(mp,0,sides, 1e-2);
+    mp_def = mp;
 
     gsInfo<<"alpha = "<<aDim/bDim<<"; beta = "<<bDim/thickness<<"\n";
 
@@ -509,7 +507,7 @@ int main (int argc, char** argv)
       arcLength.setSolution(Uold,Lold);
       arcLength.setSolutionStep(Uold,Lold);
 
-      gsInfo<<"Load step "<< k<<"\n";
+      gsInfo<<"Load step "<< k<<"; \tSystem size = "<<Uold.size()<<" x "<<Uold.size()<<"\n";
       arcLength.step();
 
       if (!(arcLength.converged()))
@@ -563,7 +561,7 @@ int main (int argc, char** argv)
         dLold = arcLength.solutionDL();
         assembler->constructSolutionL(solVector,mp_def);
       }
-      else if (k % 5==0)
+      else if (k % 2==0 || k % 2==1 ||  arcLength.stabilityChange())
       {
         gsMultiPatch<> Uold_patch, dUold_patch;
         Uold = arcLength.solutionU();
@@ -619,28 +617,45 @@ int main (int argc, char** argv)
         /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
         /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
         MarkingStrategy adaptRefCrit = PUCA;
-        const real_t adaptRefParam = 0.8;
+        real_t adaptRefParam;
         std::vector<bool> elMarked( elErrors.size() );
-        gsMarkElementsForRef( elErrors, adaptRefCrit, adaptRefParam, elMarked);
+        std::vector<bool> elCMarked( elErrors.size() );
 
-        // Invert errors for coarsening marking
-        std::vector<real_t> elErrorsC = elErrors;
-        for (index_t k=0; k!=elErrors.size(); k++)
-            elErrorsC[k] = -elErrors[k];
+        if (k%2==0 || arcLength.stabilityChange())
+        {
+          adaptRefParam = 0.9;
+          gsMarkElementsForRef( elErrors, adaptRefCrit, adaptRefParam, elMarked);
+          gsInfo<<"#elements before Refinement: "<<mp.basis(0).numElements()<<"\n";
+          gsRefineMarkedElements(mp,elMarked,1);
+          gsInfo<<"Refining:\n";
+          for (index_t k=0; k!=elMarked.size(); ++k)
+            gsInfo<<elMarked[k]<<"\t";
+          gsInfo<<"\n";
+          gsInfo<<"#elements after Refinement: "<<mp.basis(0).numElements()<<"\n";
+        }
+        else if (k%2==1)
+        {
+          adaptRefParam = 0.7;
+          // Invert errors for coarsening marking
+          std::vector<real_t> elErrorsC = elErrors;
+          for (index_t k=0; k!=elErrors.size(); k++)
+              elErrorsC[k] = -elErrors[k];
 
-        std::vector<bool> elCMarked( elErrorsC.size() );
-        gsMarkElementsForRef( elErrorsC, adaptRefCrit, adaptRefParam, elCMarked);
+          gsMarkElementsForRef( elErrorsC, adaptRefCrit, adaptRefParam, elCMarked);
+          gsInfo<<"#elements before Coarsening: "<<mp.basis(0).numElements()<<"\n";
+          gsInfo<<"Coarsening:\n";
+          for (index_t k=0; k!=elCMarked.size(); ++k)
+            gsInfo<<elCMarked[k]<<"\t";
+          gsInfo<<"\n";
+          gsUnrefineMarkedElements(mp,elCMarked,1);
+          gsInfo<<"#elements after Coarsening: "<<mp.basis(0).numElements()<<"\n";
+        }
 
-        // gsRefineMarkedElements(mp,elMarked,0);
-        gsProcessMarkedElements(mp,elMarked, elCMarked,1,0);
+
+        // gsProcessMarkedElements(mp,elMarked, elCMarked,1,0);
         mp_def = mp;
-
-        for (index_t k=0; k!=elMarked.size(); ++k)
-          gsInfo<<elMarked[k]<<"\n";
-
-        gsDebugVar(mp_def.patch(0).coefs().rows());
-        gsDebugVar(mp.patch(0).coefs().rows());
 
         basisL = gsMultiBasis<>(mp);
         basisH = basisL;
