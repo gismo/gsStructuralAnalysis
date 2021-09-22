@@ -150,6 +150,14 @@ int main (int argc, char** argv)
     real_t tolU = 1e-6;
     real_t tolF = 1e-3;
 
+    // Adaptive refinement options
+    bool alternate = false;
+    index_t refExt = -1;
+    index_t crsExt = -1;
+
+    index_t markstrat = 2;
+    real_t adaptRefParam = 0.9;
+
     std::string wn("data.csv");
 
     std::string assemberOptionsFile("options/solver_options.xml");
@@ -175,6 +183,12 @@ int main (int argc, char** argv)
     cmd.addInt("q","QuasiNewtonInt","Use the Quasi Newton method every INT iterations",quasiNewtonInt);
     cmd.addInt("N", "maxsteps", "Maximum number of steps", step);
 
+    cmd.addInt("E", "refExt", "Refinement extension", refExt);
+    cmd.addInt("C", "crsExt", "Coarsening extension", crsExt);
+    cmd.addSwitch("alternate", "Alternate the refinement/coarsening ", alternate);
+    cmd.addReal("a", "refparam", "Controls the adaptive refinement parameter", adaptRefParam);
+    cmd.addInt("u","rule", "Adaptive refinement rule; 1: ... ; 2: PUCA; 3: BULK", markstrat);
+
     cmd.addSwitch("adaptive", "Adaptive length ", adaptive);
     cmd.addSwitch("adaptiveMesh", "Adaptive mesh ", adaptiveMesh);
     cmd.addSwitch("bifurcation", "Compute singular points and bifurcation paths", SingularPoint);
@@ -190,6 +204,16 @@ int main (int argc, char** argv)
     cmd.addSwitch("deformed", "plot on deformed shape", deformed);
 
     try { cmd.getValues(argc,argv); } catch (int rv) { return rv; }
+
+    MarkingStrategy adaptRefCrit;
+    if (markstrat==1)
+        adaptRefCrit = GARU;
+    else if (markstrat==2)
+        adaptRefCrit = PUCA;
+    else if (markstrat==3)
+        adaptRefCrit = BULK;
+    else
+        GISMO_ERROR("MarkingStrategy Unknown");
 
     gsFileData<> fd(assemberOptionsFile);
     gsOptionList opts;
@@ -543,6 +567,10 @@ int main (int argc, char** argv)
             gsInfo<<"Perturbation written in: " + dirname + "/" + "perturbation.xml\n";
           }
           indicator = 0;
+
+          // gsDebugVar(arcLength.solutionU());
+          // gsDebugVar(arcLength.solutionV());
+
         }
         else
           indicator = arcLength.indicator();
@@ -610,51 +638,76 @@ int main (int argc, char** argv)
 
         gsElementErrorPlotter<real_t> err_eh(mp.basis(0),elErrors);
         const gsField<> elemError_eh( mp.patch(0), err_eh, true );
-        gsWriteParaview<>( elemError_eh, dirname + "/" +"error_elem_ref" + util::to_string(k), 2, true);
-        errors.addTimestep("error_elem_ref" + util::to_string(k) + "0",k,".vts");
-        errors.addTimestep("error_elem_ref" + util::to_string(k) + "0",k,"_mesh.vtp");
+        std::string fileName = dirname + "/" + "error" + util::to_string(k);
+        gsWriteParaview<>(elemError_eh, fileName, 1000,mesh);
+        fileName = "error" + util::to_string(k) + "0";
+        errors.addTimestep(fileName,k,".vts");
+        if (mesh) errors.addTimestep(fileName,k,"_mesh.vtp");
 
         /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
         /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-        MarkingStrategy adaptRefCrit = PUCA;
-        real_t adaptRefParam;
         std::vector<bool> elMarked( elErrors.size() );
         std::vector<bool> elCMarked( elErrors.size() );
 
-        if (k%2==0 || arcLength.stabilityChange())
+        if (!alternate)
         {
-          adaptRefParam = 0.9;
-          gsMarkElementsForRef( elErrors, adaptRefCrit, adaptRefParam, elMarked);
-          gsInfo<<"#elements before Refinement: "<<mp.basis(0).numElements()<<"\n";
-          gsRefineMarkedElements(mp,elMarked,1);
-          gsInfo<<"Refining:\n";
-          for (index_t k=0; k!=elMarked.size(); ++k)
-            gsInfo<<elMarked[k]<<"\t";
-          gsInfo<<"\n";
-          gsInfo<<"#elements after Refinement: "<<mp.basis(0).numElements()<<"\n";
+            if (refExt > -1 && crsExt == -1)
+            {
+                gsMarkElementsForRef( elErrors, adaptRefCrit, adaptRefParam, elMarked);
+                gsInfo<<"#elements before Refinement: "<<mp.basis(0).numElements()<<"\n";
+                // Invert errors for coarsening marking
+                gsRefineMarkedElements(mp,elMarked,refExt);
+                gsInfo<<"#elements after Refinement: "<<mp.basis(0).numElements()<<"\n";
+            }
+            else if (refExt > -1 && crsExt > -1)
+            {
+                gsMarkElementsForRef( elErrors, adaptRefCrit, adaptRefParam, elMarked);
+                gsInfo<<"#elements before Refinement/Coarsening: "<<mp.basis(0).numElements()<<"\n";
+                // Invert errors for coarsening marking
+                std::vector<real_t> elErrorsC = elErrors;
+                for (index_t k=0; k!=elErrors.size(); k++)
+                  elErrorsC[k] = -elErrors[k];
+
+                gsMarkElementsForRef( elErrorsC, adaptRefCrit, adaptRefParam, elCMarked);
+                gsProcessMarkedElements(mp,elMarked, elCMarked,refExt,crsExt);
+                gsInfo<<"#elements after Refinement/Coarsening: "<<mp.basis(0).numElements()<<"\n";
+            }
         }
-        else if (k%2==1)
+        else
         {
-          adaptRefParam = 0.7;
-          // Invert errors for coarsening marking
-          std::vector<real_t> elErrorsC = elErrors;
-          for (index_t k=0; k!=elErrors.size(); k++)
-              elErrorsC[k] = -elErrors[k];
+            if ((k%2==0 || arcLength.stabilityChange()) && refExt > -1)
+            {
+                adaptRefParam = 0.9;
+                gsMarkElementsForRef( elErrors, adaptRefCrit, adaptRefParam, elMarked);
+                gsInfo<<"#elements before Refinement: "<<mp.basis(0).numElements()<<"\n";
+                gsRefineMarkedElements(mp,elMarked,refExt);
+                gsInfo<<"Refining:\n";
+                for (index_t k=0; k!=elMarked.size(); ++k)
+                gsInfo<<elMarked[k]<<"\t";
+                gsInfo<<"\n";
+                gsInfo<<"#elements after Refinement: "<<mp.basis(0).numElements()<<"\n";
+            }
+            else if (k%2==1 && crsExt > -1)
+            {
+                adaptRefParam = 0.7;
+                // Invert errors for coarsening marking
+                std::vector<real_t> elErrorsC = elErrors;
+                for (index_t k=0; k!=elErrors.size(); k++)
+                    elErrorsC[k] = -elErrors[k];
 
-          gsMarkElementsForRef( elErrorsC, adaptRefCrit, adaptRefParam, elCMarked);
-          gsInfo<<"#elements before Coarsening: "<<mp.basis(0).numElements()<<"\n";
-          gsInfo<<"Coarsening:\n";
-          for (index_t k=0; k!=elCMarked.size(); ++k)
-            gsInfo<<elCMarked[k]<<"\t";
-          gsInfo<<"\n";
-          gsUnrefineMarkedElements(mp,elCMarked,1);
-          gsInfo<<"#elements after Coarsening: "<<mp.basis(0).numElements()<<"\n";
+                gsMarkElementsForRef( elErrorsC, adaptRefCrit, adaptRefParam, elCMarked);
+                gsInfo<<"#elements before Coarsening: "<<mp.basis(0).numElements()<<"\n";
+                gsInfo<<"Coarsening:\n";
+                for (index_t k=0; k!=elCMarked.size(); ++k)
+                gsInfo<<elCMarked[k]<<"\t";
+                gsInfo<<"\n";
+                gsUnrefineMarkedElements(mp,elCMarked,crsExt);
+                gsInfo<<"#elements after Coarsening: "<<mp.basis(0).numElements()<<"\n";
+            }
         }
 
-
-        // gsProcessMarkedElements(mp,elMarked, elCMarked,1,0);
         mp_def = mp;
 
         basisL = gsMultiBasis<>(mp);
@@ -669,12 +722,6 @@ int main (int argc, char** argv)
 
         gsQuasiInterpolate<real_t>::localIntpl(basisL.basis(0), dUold_patch.patch(0), coefs);
         dUold_patch.patch(0) = *basisL.basis(0).makeGeometry(give(coefs));
-
-        gsWriteParaview(mp,"mp",2,false);
-        gsDebugVar("geometry plotted");
-
-        gsWrite(basisL,"basis" + std::to_string(k));
-        gsDebugVar("geometry plotted");
 
         assembler->setBasisL(basisL);
         assembler->setBasisH(basisH);
@@ -698,7 +745,6 @@ int main (int argc, char** argv)
       /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
       /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-        gsDebugVar(mp_def.patch(0).coefs().rows());
 
       deformation = mp_def;
 
@@ -746,10 +792,6 @@ int main (int argc, char** argv)
       /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
       /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-      gsDebugVar(deformation.patch(0).coefs().rows());
-      gsDebugVar(mp.patch(0).coefs().rows());
 
       deformation.patch(0).coefs() -= mp.patch(0).coefs();// assuming 1 patch here
 
