@@ -149,7 +149,7 @@ void gsArcLengthIterator<T>::computeResidualNorms()
     m_residueF = m_resVec.norm() / (((m_L+m_DeltaL) * m_forcing).norm());
     m_residueU = m_deltaU.norm()/m_DeltaU.norm();
     // m_residueU = m_basisResidualU;
-    m_residueL = m_DeltaL;
+    m_residueL = m_deltaL / m_DeltaL;
   }
   else
   {
@@ -317,9 +317,19 @@ template <class T>
 void gsArcLengthIterator<T>::step()
 {
   GISMO_ASSERT(m_initialized,"Arc-Length Method is not initialized! Call initialize()");
+
   initiateStep();
-  computeJacobian();
-  predictor();
+
+  if (m_Uguess.rows()!=0 && m_Uguess.cols()!=0 && (m_Uguess-m_U).norm()!=0 && (m_Lguess-m_L)!=0)
+  {
+    computeJacobian();
+    predictorGuess();
+  }
+  else
+  {
+    computeJacobian();
+    predictor();
+  }
   computeResidual();
   computeResidualNorms();
 
@@ -350,10 +360,10 @@ void gsArcLengthIterator<T>::step()
 
     if (m_verbose)
        stepOutput();
-    else
-    {
-      gsInfo<<"Residual: "<<m_residue<<"\n";
-    }
+    // else
+    // {
+    //   gsInfo<<"Residual: "<<m_residue<<"\n";
+    // }
       // gsInfo<<"residual F = "<<m_residueF<<"\t tol F"<<m_toleranceF<<"\t residual U = "<<m_residueU<<"\t tol U"<<m_toleranceU<<"\n";
     // Termination criteria
     if ( m_residueF < m_toleranceF && m_residueU < m_toleranceU )
@@ -372,6 +382,28 @@ void gsArcLengthIterator<T>::step()
 
       // GISMO_ERROR("maximum iterations reached. Solution did not converge");
   }
+}
+
+template <class T>
+void gsArcLengthIterator<T>::predictorGuess()
+{
+  GISMO_ASSERT(m_Uguess.rows()!=0 && m_Uguess.cols()!=0,"Guess is empty");
+
+  m_deltaUt = this->solveSystem(m_forcing);
+
+  //
+  m_DeltaUold = (m_Uguess - m_U);
+  m_DeltaLold = (m_Lguess - m_L);
+
+  m_DeltaUold *= m_arcLength / math::sqrt( m_deltaU.dot(m_deltaU));
+  m_DeltaLold *= m_arcLength / math::sqrt( m_deltaU.dot(m_deltaU));
+
+  computeLambdaMU();
+
+  m_DeltaU = m_deltaU;
+  m_DeltaL = m_deltaL;
+
+  m_Uguess.resize(0);
 }
 
 // ------------------------------------------------------------------------------------------------------------
@@ -442,8 +474,8 @@ template <class T>
 void gsArcLengthIterator<T>::iterationRiks()
 {
   // Residual function
-  // r = m_phi * m_DeltaU.dot(m_DeltaU)  + (1.0-m_phi) * m_DeltaL*m_DeltaL - m_arcLength*m_arcLength;
-  T r = m_phi*(m_U + m_DeltaU - m_U).dot(m_U + m_DeltaU - m_U) + (1-m_phi)*math::pow(m_L + m_DeltaL - m_L,2.0) - m_arcLength*m_arcLength;
+  T r = m_phi * m_DeltaU.dot(m_DeltaU)  + (1.0-m_phi) * m_DeltaL*m_DeltaL - m_arcLength*m_arcLength;
+  // T r = m_phi*(m_U + m_DeltaU - m_U).dot(m_U + m_DeltaU - m_U) + (1-m_phi)*math::pow(m_L + m_DeltaL - m_L,2.0) - m_arcLength*m_arcLength;
 
   m_deltaL = - ( r + 2*m_phi*(m_DeltaU).dot(m_deltaUbar) ) / ( 2*(1-m_phi)*(m_DeltaL) + 2*m_phi*(m_DeltaU).dot(m_deltaUt) );
   m_deltaU = m_deltaUbar + m_deltaL*m_deltaUt;
@@ -1670,7 +1702,7 @@ void gsArcLengthIterator<T>::stepOutputCrisfield()
   gsInfo<<std::setw(17)<<std::left<<m_DeltaL;
   gsInfo<<std::setw(17)<<std::left<<m_deltaU.norm();
   gsInfo<<std::setw(17)<<std::left<<m_deltaL;
-  gsInfo<<std::setw(17)<<std::left<<m_arcLength; //math::pow(m_DeltaU.dot(m_DeltaU) + A0*math::pow(m_DeltaL,2.0),0.5);
+  gsInfo<<std::setw(17)<<std::left<<math::pow(m_DeltaU.dot(m_DeltaU) + A0*math::pow(m_DeltaL,2.0),0.5);
   gsInfo<<std::setw(17)<<std::left<<math::pow(m_DeltaU.norm(),2.0);
   gsInfo<<std::setw(17)<<std::left<<A0*math::pow(m_DeltaL,2.0);
   gsInfo<<std::setw(17)<<std::left<<m_indicator <<std::left << " (" <<std::left<< m_negatives<<std::left << ")";

@@ -115,10 +115,10 @@ public:
       T determinant() const {return m_jacobian(m_U).toDense().determinant();}
 
     // Miscelaneous
-      void resetStep() {m_DeltaUold.setZero();}
+      void resetStep() {m_DeltaUold.setZero(); m_DeltaLold = 0;}
 
       // Set initial guess for solution
-      void setInitialGuess(const gsVector<T> guess) {m_U = guess;}
+      void setInitialGuess(const gsVector<T> Uguess, T Lguess) {m_Uguess = Uguess; m_Lguess = Lguess;}
 
       void setSolution(const gsVector<T> U, T L) {m_L = L; m_U = U; }// m_DeltaUold.setZero(); m_DeltaLold = 0;}
 
@@ -212,6 +212,12 @@ public:
       void verbose() {m_verbose = true;}
   // --------------------------------end DEPRECIATED!!---------------------------------------------
 
+    T distance(gsVector<T>& DeltaU, T DeltaL)
+    {
+        real_t A0 = math::pow(m_phi,2)*m_forcing.dot(m_forcing);
+        return math::pow(DeltaU.dot(DeltaU) + A0*math::pow(DeltaL,2.0),0.5);
+    }
+
 protected:
 
     void init();
@@ -285,6 +291,9 @@ protected:
     void initiateStepExplicitIterations();
     void initiateStepCrisfield();
     void initiateStepLC();
+
+    void predictorGuess();
+
 
     void predictor();
     void predictorRiks();
@@ -444,7 +453,7 @@ protected:
 
     // Previous update
     gsVector<T> m_DeltaUold;
-    real_t m_DeltaLold;
+    T m_DeltaLold;
     /// Displacement vector (present, at previously converged point)
     gsVector<T> m_U, m_Uprev;
     /// Update of displacement vector
@@ -464,6 +473,11 @@ protected:
     T m_deltaL;
     /// Vector with lambda updates
     gsVector<T> m_deltaLs;
+
+    // Guess
+    gsVector<T> m_Uguess;
+    T m_Lguess;
+
 
     /// Jacobian matrix
     gsSparseMatrix<T> m_jacMat;

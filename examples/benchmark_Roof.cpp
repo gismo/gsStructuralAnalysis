@@ -272,25 +272,22 @@ int main (int argc, char** argv)
     typedef std::function<gsSparseMatrix<real_t> (gsVector<real_t> const &)>                                Jacobian_t;
     typedef std::function<gsVector<real_t> (gsVector<real_t> const &, real_t, gsVector<real_t> const &) >   ALResidual_t;
     // Function for the Jacobian
-    Jacobian_t Jacobian = [&time,&stopwatch,&assembler,&mp_def](gsVector<real_t> const &x)
+    Jacobian_t Jacobian = [&time,&stopwatch,&assembler](gsVector<real_t> const &x)
     {
-      stopwatch.restart();
+      gsMultiPatch<> mp_def;
       assembler->constructSolution(x,mp_def);
       assembler->assembleMatrix(mp_def);
-      time += stopwatch.stop();
-
       gsSparseMatrix<real_t> m = assembler->matrix();
       return m;
     };
     // Function for the Residual
-    ALResidual_t ALResidual = [&time,&stopwatch,&assembler,&mp_def](gsVector<real_t> const &x, real_t lam, gsVector<real_t> const &force)
+    ALResidual_t ALResidual = [&time,&stopwatch,&assembler](gsVector<real_t> const &x, real_t lam, gsVector<real_t> const &force)
     {
-      stopwatch.restart();
+      gsMultiPatch<> mp_def;
       assembler->constructSolution(x,mp_def);
       assembler->assembleVector(mp_def);
       gsVector<real_t> Fint = -(assembler->rhs() - force);
       gsVector<real_t> result = Fint - lam * force;
-      time += stopwatch.stop();
       return result; // - lam * force;
     };
     // Assemble linear system to obtain the force vector
@@ -355,6 +352,7 @@ int main (int argc, char** argv)
     for (index_t k=0; k<step; k++)
     {
       gsInfo<<"Load step "<< k<<"\n";
+        gsInfo<<"dL = "<<dL<<"\n";
       // assembler->constructSolution(solVector,solution);
       arcLength->step();
 
@@ -382,6 +380,8 @@ int main (int argc, char** argv)
       //     arcLength->setLength(dL);
       //   }
       // }
+
+      arcLength->resetStep();
 
       indicator = arcLength->indicator();
 
