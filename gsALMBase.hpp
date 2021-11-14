@@ -278,7 +278,11 @@ void gsALMBase<T>::step()
   m_converged = false;
   m_numIterations = 0;
   initiateStep();
-  predictor();
+
+  if (m_Uguess.rows()!=0 && m_Uguess.cols()!=0 && (m_Uguess-m_U).norm()!=0 && (m_Lguess-m_L)!=0)
+    predictorGuess();
+  else
+    predictor();
 
   computeResidual();
   computeResidualNorms();

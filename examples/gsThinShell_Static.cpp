@@ -16,7 +16,9 @@
 #include <gsKLShell/gsThinShellAssembler.h>
 #include <gsKLShell/getMaterialMatrix.h>
 
+#ifdef GISMO_ELASTICITY
 #include <gsElasticity/gsWriteParaviewMultiPhysics.h>
+#endif
 
 #include <gsStructuralAnalysis/gsStaticNewton.h>
 
@@ -1396,7 +1398,6 @@ int main(int argc, char *argv[])
         fields["Principal Direction 1"] = &stretchDir1;
         fields["Principal Direction 2"] = &stretchDir2;
         fields["Principal Direction 3"] = &stretchDir3;
-
         gsWriteParaviewMultiPhysics(fields,"stress",5000,true);
         #else
         gsWriteParaview(solutionField, "Deformation");

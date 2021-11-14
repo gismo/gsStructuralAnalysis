@@ -70,6 +70,7 @@ protected:
     void quasiNewtonIteration();
 
     void predictor();
+    void predictorGuess();
     void iteration();
 
     void initOutput();
@@ -90,6 +91,12 @@ protected:
     void computeLambdaDOT();
 
     void computeLambdaMU();
+
+    T distance(gsVector<T>& DeltaU, T DeltaL)
+    {
+        T A0 = math::pow(m_phi,2)*m_forcing.dot(m_forcing);
+        return math::pow(DeltaU.dot(DeltaU) + A0*math::pow(DeltaL,2.0),0.5);
+    }
 
 protected:
 
@@ -143,6 +150,7 @@ protected:
     /// Displacement vector (present, at previously converged point)
     using Base::m_U;
     using Base::m_Uprev;
+    using Base::m_Uguess;
     /// Update of displacement vector
     using Base::m_DeltaU;
     /// u_bar
@@ -155,6 +163,7 @@ protected:
     /// Lambda (present, at previously converged point)
     using Base::m_L;
     using Base::m_Lprev;
+    using Base::m_Lguess;
     /// Update of lambdaGeneralizedSelfAdjointEigenSolver
     using Base::m_DeltaL;
     /// Update of update of lambda

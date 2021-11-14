@@ -78,6 +78,9 @@ public:
 
 public:
 
+    index_t numDofs() {return m_forcing.size();}
+    T getLength() {return m_arcLength; }
+
       void setLength(T length)
       {
         m_options.setReal("Length",length);

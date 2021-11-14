@@ -63,6 +63,8 @@ public:
     _defaultOptions();
   }
 
+  gsSpaceTimeHierarchy() {};
+
 private:
 
   void _defaultOptions()

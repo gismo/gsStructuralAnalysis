@@ -16,9 +16,12 @@
 namespace gismo
 {
 
-template<index_t dim, class T>
+template<size_t domainDim, size_t targetDim, class T>
 class gsSpaceTimeFitter
 {
+    typedef typename gsTensorBSpline<domainDim+1,real_t>::BoundaryGeometryType slice_t;
+
+
 public:
   gsSpaceTimeFitter  ( const std::vector<gsMatrix<T>> & solutionCoefs,
                       const gsVector<T> & times,
@@ -32,7 +35,9 @@ public:
   m_bases(spatialBasis),
   m_deg(deg)
   {
-
+    GISMO_ENSURE(m_data.size() != 0,"No data provided!");
+    GISMO_ENSURE(m_data.size() == m_times.size(),"Solution coefs and times should have the same size");
+    GISMO_ENSURE(m_ptimes.size() == m_times.size(),"(Parametric)times should have the same size");
   }
 
   void setDegree(index_t deg) {m_deg = deg;}
@@ -49,37 +54,27 @@ public:
 
 protected:
 
-  gsTensorBSplineBasis<dim,T> _basis(const gsKnotVector<T> &kv, index_t nsteps)
+  gsTensorBSplineBasis<domainDim+1,T> _basis(const gsKnotVector<T> &kv, index_t nsteps)
   {
-    return _basis_impl<dim>(kv,nsteps);
+    return _basis_impl<domainDim+1>(kv,nsteps);
   }
 
-  template<index_t _dim>
-  typename std::enable_if<_dim==1, gsTensorBSplineBasis<_dim,T>>::type
+  template<index_t _domainDim>
+  typename std::enable_if<_domainDim==2, gsTensorBSplineBasis<_domainDim,T>>::type
   _basis_impl(const gsKnotVector<T> &kv, index_t nsteps)
   {
-    gsTensorBSplineBasis<_dim,T> tbasis(
-                                            kv
-                                            );
-    return tbasis;
-  }
-
-  template<index_t _dim>
-  typename std::enable_if<_dim==2, gsTensorBSplineBasis<_dim,T>>::type
-  _basis_impl(const gsKnotVector<T> &kv, index_t nsteps)
-  {
-    gsTensorBSplineBasis<_dim,T> tbasis(
+    gsTensorBSplineBasis<_domainDim,T> tbasis(
                                             static_cast<gsBSplineBasis<T> *>(&m_bases.basis(0).component(1))->knots(),
                                             kv
                                             );
     return tbasis;
   }
 
-  template<index_t _dim>
-  typename std::enable_if<_dim==3, gsTensorBSplineBasis<_dim,T>>::type
+  template<index_t _domainDim>
+  typename std::enable_if<_domainDim==3, gsTensorBSplineBasis<_domainDim,T>>::type
   _basis_impl(const gsKnotVector<T> &kv, index_t nsteps)
   {
-    gsTensorBSplineBasis<_dim,T> tbasis(
+    gsTensorBSplineBasis<_domainDim,T> tbasis(
                                             static_cast<gsBSplineBasis<T> *>(&m_bases.basis(0).component(0))->knots(),
                                             static_cast<gsBSplineBasis<T> *>(&m_bases.basis(0).component(1))->knots(),
                                             kv
@@ -87,11 +82,11 @@ protected:
     return tbasis;
   }
 
-  template<index_t _dim>
-  typename std::enable_if<_dim==4, gsTensorBSplineBasis<_dim,T>>::type
+  template<index_t _domainDim>
+  typename std::enable_if<_domainDim==4, gsTensorBSplineBasis<_domainDim,T>>::type
   _basis_impl(const gsKnotVector<T> &kv, index_t nsteps)
   {
-    gsTensorBSplineBasis<_dim,T> tbasis(
+    gsTensorBSplineBasis<_domainDim,T> tbasis(
                                             static_cast<gsBSplineBasis<T> *>(&m_bases.basis(0).component(0))->knots(),
                                             static_cast<gsBSplineBasis<T> *>(&m_bases.basis(0).component(1))->knots(),
                                             static_cast<gsBSplineBasis<T> *>(&m_bases.basis(0).component(2))->knots(),
@@ -101,6 +96,16 @@ protected:
   }
 
 public:
+
+  std::pair<T,gsGeometry<T> *> slice(T xi)
+  {
+    slice_t res;
+    m_fit.slice(domainDim,xi,res);
+    gsGeometry<T> * geom = res.clone().release();
+    T load = geom->coefs()(0,domainDim+1);
+    geom->embed(targetDim);
+    return std::make_pair(load,geom);
+  }
 
   void compute()
   {
@@ -118,24 +123,15 @@ public:
     //////// - Include dimension d
     //////// - Make compatible with other basis types (dynamic casts)
 
-    // for (index_t p = 0; p!=dbasis.nBases(); ++p)
-    // {
-      // gsTensorBSplineBasis<dim,T> tbasis(
-      //                                         static_cast<gsBSplineBasis<T> *>(&m_bases.basis(0).component(0))->knots(),
-      //                                         static_cast<gsBSplineBasis<T> *>(&m_bases.basis(0).component(1))->knots(),
-      //                                         kv
-      //                                         );
-    // }
-
     m_basis = _basis(kv,nsteps);
 
-    gsMatrix<> rhs(m_times.size(),(dim+1)*bsize);
+    gsMatrix<> rhs(m_times.size(),(targetDim+1)*bsize);
     gsVector<> ones; ones.setOnes(bsize);
 
     for (index_t lam = 0; lam!=nsteps; ++lam)
     {
-      rhs.block(lam,0,1,dim * bsize) = m_data.at(lam).reshape(1,dim * bsize);
-      rhs.block(lam,dim*bsize,1,bsize) = m_times.at(lam) * ones.transpose();
+      rhs.block(lam,0,1,targetDim * bsize) = m_data.at(lam).reshape(1,targetDim * bsize);
+      rhs.block(lam,targetDim*bsize,1,bsize) = m_times.at(lam) * ones.transpose();
     }
 
     // get the Greville Abcissae (anchors)
@@ -149,24 +145,24 @@ public:
     solver.compute(C);
 
     gsMatrix<> sol;
-    m_coefs.resize((nsteps)*bsize,dim+1);
+    m_coefs.resize((nsteps)*bsize,targetDim+1);
 
     sol = solver.solve(rhs);
 
     for (index_t lam = 0; lam!=nsteps; ++lam)
     {
-      gsMatrix<> tmp = sol.block(lam,0,1,dim * bsize);
-      m_coefs.block(lam * bsize,0,bsize,dim) = tmp.reshape(bsize,dim);
-      m_coefs.block(lam * bsize,dim,bsize,1) = sol.block(lam,dim*bsize,1,bsize).transpose();
+      gsMatrix<> tmp = sol.block(lam,0,1,targetDim * bsize);
+      m_coefs.block(lam * bsize,0,bsize,targetDim) = tmp.reshape(bsize,targetDim);
+      m_coefs.block(lam * bsize,targetDim,bsize,1) = sol.block(lam,targetDim*bsize,1,bsize).transpose();
     }
 
     // gsTensorBSpline<3,T> tspline = tbasis.makeGeometry(give(coefs)).release();
-    // gsTensorBSpline<dim,T> tspline(tbasis,give(coefs));
+    // gsTensorBSpline<dim,T> tspline(m_basis,give(m_coefs));
 
 
 
 
-    // return tbasis.makeGeometry(give(coefs));
+    m_fit = gsTensorBSpline<domainDim+1,T>(m_basis,give(m_coefs));
   }
 
 protected:
@@ -176,8 +172,10 @@ protected:
   gsMultiBasis<T> m_bases;
   index_t m_deg;
 
-  mutable gsTensorBSplineBasis<dim,T> m_basis;
+  mutable gsTensorBSplineBasis<domainDim+1,T> m_basis;
   gsMatrix<T> m_coefs;
+
+  mutable gsTensorBSpline<domainDim+1,T> m_fit;
 
 };
 

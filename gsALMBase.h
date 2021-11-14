@@ -51,6 +51,9 @@ public:
 
 // General functions
 public:
+    virtual index_t numDofs() {return m_forcing.size();}
+    virtual T getLength() {return m_arcLength; }
+
     virtual void step();
 
     virtual void initialize(bool stability = true)
@@ -124,7 +127,8 @@ public:
     virtual void resetStep() {m_DeltaUold.setZero(); m_DeltaLold = 0;}
 
     // Set initial guess for solution
-    virtual void setInitialGuess(const gsVector<T> guess) {m_U = guess;}
+    // virtual void setInitialGuess(const gsVector<T> guess) {m_U = guess;}
+    virtual void setInitialGuess(const gsVector<T> Uguess, T Lguess) {m_Uguess = Uguess; m_Lguess = Lguess;}
 
     virtual void setSolution(const gsVector<T> U, T L) {m_L = L; m_U = U; }// m_DeltaUold.setZero(); m_DeltaLold = 0;}
     virtual void setSolutionStep(const gsVector<T> DU, T DL) {m_DeltaUold = DU; m_DeltaLold = DL;}// m_DeltaUold.setZero(); m_DeltaLold = 0;}
@@ -134,6 +138,11 @@ public:
     virtual const void options_into(gsOptionList options) {options = m_options;};
 
     virtual void applyOptions() {this->getOptions(); }
+
+    virtual T distance(gsVector<T>& DeltaU, T DeltaL)
+    {
+        GISMO_NO_IMPLEMENTATION;
+    }
 
 // ------------------------------------------------------------------------------------------------------------
 // ---------------------------------------Singular point methods-----------------------------------------------
@@ -206,6 +215,7 @@ protected:
     virtual void quasiNewtonIteration() = 0;
 
     virtual void predictor() = 0;
+    virtual void predictorGuess() = 0;
     virtual void iteration() = 0;
 
     virtual void initOutput() = 0;
@@ -347,6 +357,9 @@ protected:
     T m_deltaL;
     /// Vector with lambda updates
     gsVector<T> m_deltaLs;
+
+    gsVector<T> m_Uguess;
+    T m_Lguess;
 
     /// Jacobian matrix
     gsSparseMatrix<T> m_jacMat;

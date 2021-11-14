@@ -71,6 +71,7 @@ protected:
     void quasiNewtonIteration();
 
     void predictor();
+    void predictorGuess();
     void iteration();
 
     void initOutput();
@@ -128,6 +129,7 @@ protected:
     /// Displacement vector (present, at previously converged point)
     using Base::m_U;
     using Base::m_Uprev;
+    using Base::m_Uguess;
     /// Update of displacement vector
     using Base::m_DeltaU;
     /// u_bar
@@ -140,6 +142,7 @@ protected:
     /// Lambda (present, at previously converged point)
     using Base::m_L;
     using Base::m_Lprev;
+    using Base::m_Lguess;
     /// Update of lambdaGeneralizedSelfAdjointEigenSolver
     using Base::m_DeltaL;
     /// Update of update of lambda

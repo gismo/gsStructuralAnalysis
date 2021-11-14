@@ -80,6 +80,19 @@ void gsALMLoadControl<T>::predictor()
 }
 
 template <class T>
+void gsALMLoadControl<T>::predictorGuess()
+{
+  computeJacobian();
+
+  m_DeltaL = m_deltaL = m_Lguess - m_L;
+  m_deltaUt = this->solveSystem(m_forcing);
+  m_DeltaU = m_deltaL*m_deltaUt;
+
+  // gsDebugVar(m_DeltaU.norm());
+  m_note+= "predictor\t";
+}
+
+template <class T>
 void gsALMLoadControl<T>::iterationFinish()
 {
   m_converged = true;

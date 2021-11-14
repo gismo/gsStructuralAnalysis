@@ -313,7 +313,7 @@ int main (int argc, char** argv)
     // arcLength->options().setInt("AngleMethod",0); // 0: step, 1: iteration
     arcLength->options().setSwitch("AdaptiveLength",adaptive);
     arcLength->options().setInt("AdaptiveIterations",5);
-    // arcLength->options().setReal("Scaling",0.0);
+    arcLength->options().setReal("Scaling",1.0);
     arcLength->options().setReal("Tol",tol);
     arcLength->options().setReal("TolU",tolU);
     arcLength->options().setReal("TolF",tolF);
@@ -349,6 +349,22 @@ int main (int argc, char** argv)
     arcLength->setIndicator(indicator); // RESET INDICATOR
     bool bisected = false;
     real_t dL0 = dL;
+
+    gsVector<> pt(2);
+    pt<<0.5,0.5;
+    gsMatrix<> pt_result;
+    gsMultiPatch<> mp_tmp;
+    /////////////////////////////////////////////////////////////////////////////////////////////
+    std::ofstream file;
+    file.open("sol.txt",std::ofstream::out);
+    assembler->constructSolution(Uold,mp_tmp);
+    deformation.patch(0) = mp_tmp.patch(0);
+    deformation.patch(0).coefs() -= mp.patch(0).coefs();// assuming 1 patch here
+    deformation.patch(0).eval_into(pt,pt_result);
+    file  << std::setprecision(20) << pt_result(2,0) << "," << Lold<<"\n";
+    //////////////////////////////////////////////////////////////////////////////////////////////
+
+
     for (index_t k=0; k<step; k++)
     {
       gsInfo<<"Load step "<< k<<"\n";
@@ -381,14 +397,22 @@ int main (int argc, char** argv)
       //   }
       // }
 
-      arcLength->resetStep();
-
       indicator = arcLength->indicator();
 
       solVector = arcLength->solutionU();
       Uold = solVector;
       Lold = arcLength->solutionL();
       assembler->constructSolution(solVector,mp_def);
+
+      //////////////////////////////////////////////////////////////////////////////////////////////
+      assembler->constructSolution(Uold,mp_tmp);
+      deformation.patch(0) = mp_tmp.patch(0);
+      deformation.patch(0).coefs() -= mp.patch(0).coefs();// assuming 1 patch here
+      deformation.patch(0).eval_into(pt,pt_result);
+      file  << std::setprecision(20) << pt_result(2,0) << "," << Lold<<"\n";
+      //////////////////////////////////////////////////////////////////////////////////////////////
+
+
 
       deformation = mp_def;
       deformation.patch(0).coefs() -= mp.patch(0).coefs();// assuming 1 patch here
@@ -459,6 +483,11 @@ int main (int argc, char** argv)
       Sflexural.save();
       Smembrane_p.save();
     }
+
+    //////////////////////////////////////////////////////////////////////////////////////////////
+    file.close();
+    //////////////////////////////////////////////////////////////////////////////////////////////
+
 
     delete arcLength;
 

@@ -131,6 +131,7 @@ void gsALMCrisfield<T>::predictor()
 
     if (!m_phi_user)
       m_phi = math::pow( m_deltaUt.dot(m_deltaUt) / m_forcing.dot(m_forcing),0.5);
+    m_note += " phi=" + std::to_string(m_phi);
 
     // m_DeltaUold = m_deltaU;
     // m_DeltaLold = m_deltaL;
@@ -152,6 +153,33 @@ void gsALMCrisfield<T>::predictor()
    m_DeltaUold = m_DeltaU;
    m_DeltaLold = m_DeltaL;
   }
+}
+
+template <class T>
+void gsALMCrisfield<T>::predictorGuess()
+{
+  GISMO_ASSERT(m_Uguess.rows()!=0 && m_Uguess.cols()!=0,"Guess is empty");
+
+  computeJacobian();
+
+  m_deltaUt = this->solveSystem(m_forcing);
+  if (!m_phi_user)
+    m_phi = math::pow( m_deltaUt.dot(m_deltaUt) / m_forcing.dot(m_forcing),0.5);
+  m_note += " phi=" + std::to_string(m_phi);
+
+  //
+  m_DeltaUold = (m_Uguess - m_U);
+  m_DeltaLold = (m_Lguess - m_L);
+
+  m_DeltaUold *= m_arcLength / math::sqrt( m_deltaU.dot(m_deltaU));
+  m_DeltaLold *= m_arcLength / math::sqrt( m_deltaU.dot(m_deltaU));
+
+  computeLambdaMU();
+
+  m_DeltaU = m_deltaU;
+  m_DeltaL = m_deltaL;
+
+  m_Uguess.resize(0);
 }
 
 template <class T>
@@ -486,7 +514,7 @@ void gsALMCrisfield<T>::stepOutput()
   gsInfo<<std::setw(17)<<std::left<<m_DeltaL;
   gsInfo<<std::setw(17)<<std::left<<m_deltaU.norm();
   gsInfo<<std::setw(17)<<std::left<<m_deltaL;
-  gsInfo<<std::setw(17)<<std::left<<m_arcLength; //math::pow(m_DeltaU.dot(m_DeltaU) + A0*math::pow(m_DeltaL,2.0),0.5);
+  gsInfo<<std::setw(17)<<std::left<<this->distance(m_DeltaU,m_DeltaL);//math::pow(m_DeltaU.dot(m_DeltaU) + A0*math::pow(m_DeltaL,2.0),0.5);
   gsInfo<<std::setw(17)<<std::left<<math::pow(m_DeltaU.norm(),2.0);
   gsInfo<<std::setw(17)<<std::left<<A0*math::pow(m_DeltaL,2.0);
   gsInfo<<std::setw(17)<<std::left<<m_indicator <<std::left << " (" <<std::left<< m_negatives<<std::left << ")";
