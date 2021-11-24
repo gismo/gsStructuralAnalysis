@@ -1251,7 +1251,9 @@ int main(int argc, char *argv[])
     solverOptions.setReal("Tolerance",1e-6);
     staticSolver.setOptions(solverOptions);
 
+#ifdef _OPENMP
     real_t OMPtime = omp_get_wtime();
+#endif
 
     // Solve (non-) linear problem
     /*
