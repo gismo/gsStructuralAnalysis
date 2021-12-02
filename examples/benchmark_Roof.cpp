@@ -180,6 +180,8 @@ int main (int argc, char** argv)
     BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 1 - y
     BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z
 
+    BCs.setGeoMap(mp);
+
     Load = -1e1;
     // Point loads
     gsVector<> point(2);
@@ -445,6 +447,9 @@ int main (int argc, char** argv)
       Sflexural.save();
       Smembrane_p.save();
     }
+
+  delete materialMatrix;
+  delete assembler;
 
   return result;
 }

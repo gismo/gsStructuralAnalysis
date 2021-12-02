@@ -272,6 +272,7 @@ int main (int argc, char** argv)
 
     // Boundary conditions
     gsBoundaryConditions<> BCs;
+    BCs.setGeoMap(mp);
     gsPointLoads<real_t> pLoads = gsPointLoads<real_t>();
 
     // Initiate Surface forces
@@ -711,6 +712,10 @@ int main (int argc, char** argv)
         writeToCSVfile(wnM,values);
     }
 
+
+    delete materialMatrix;
+    delete assembler;
+
     return result;
 }
 
@@ -877,6 +882,5 @@ gsMultiPatch<T> AnnularDomain(int n, int p, T R1, T R2)
     for(index_t i = 2; i< p; ++i)
         mp.patch(0).degreeElevate();    // Elevate the degree
   }
-
   return mp;
 }

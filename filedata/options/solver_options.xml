@@ -14,6 +14,5 @@
   <int  label="quBb" desc="Number of quadrature points: quA*deg + quB" value="1"/>
   <bool  label="overInt" desc="Apply overintegration?" value="0"/>
   <int label="quRule" desc="Quadrature rule [1:GaussLegendre,2:GaussLobatto]" value="1"/>
-
  </OptionList>
 </xml>

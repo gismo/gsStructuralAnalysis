@@ -129,6 +129,7 @@ int main (int argc, char** argv)
 
     // Boundary conditions
     gsBoundaryConditions<> BCs;
+    BCs.setGeoMap(mp);
 
     // BCs.addCondition(boundary::east, condition_type::neumann,&neuData );
     // Left side is always restrained
@@ -381,6 +382,10 @@ for (index_t i=0; i<steps; i++)
 }
     collection.save();
     collection_an.save();
+
+    delete materialMatrix;
+    delete assembler;
+
     return result;
 }
 

@@ -164,6 +164,7 @@ int main (int argc, char** argv)
     // Boundary conditions
     std::vector< std::pair<patchSide,int> > clamped;
     gsBoundaryConditions<> BCs;
+    BCs.setGeoMap(mp);
     gsPointLoads<real_t> pLoads = gsPointLoads<real_t>();
 
     // Initiate Surface forces
@@ -529,6 +530,9 @@ int main (int argc, char** argv)
         std::string wnM = "ModalResults/eigenvalues.txt";
         writeToCSVfile(wnM,values);
     }
+
+    delete materialMatrix;
+    delete assembler;
 
     return result;
 }
