@@ -882,7 +882,10 @@ int main (int argc, char** argv)
       Smembrane_p.save();
     }
 
-  return result;
+    delete materialMatrix;
+    delete assembler;
+
+    return result;
 }
 
 template <class T>

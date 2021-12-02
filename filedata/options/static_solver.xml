@@ -9,3 +9,4 @@
   <real label="Tolerance" desc="Relative error tolerance for Newton iterations [double]" value="1e-6"/>
   <real label="Relaxation" desc="Relative error tolerance for Newton iterations [double]" value="1.0"/>
  </OptionList>
+</xml>

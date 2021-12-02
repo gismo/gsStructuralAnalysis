@@ -384,8 +384,11 @@ int main (int argc, char** argv)
     gsMultiBasis<> dbasis(mp);
     gsInfo<<"Basis (patch 0): "<< mp.patch(0).basis() << "\n";
 
+    gsDebugVar(mp.patch(0).coefs());
+
     // Boundary conditions
     gsBoundaryConditions<> BCs;
+    BCs.setGeoMap(mp);
     gsPointLoads<real_t> pLoads = gsPointLoads<real_t>();
 
     // Initiate Surface forces
@@ -1229,6 +1232,10 @@ int main (int argc, char** argv)
       Smembrane_p.save();
     }
 
+
+  delete materialMatrix;
+  delete assembler;
+
   return result;
 }
 
@@ -1286,7 +1293,7 @@ gsMultiPatch<T> RectangularDomain(int n, int m, int p, int q, T L, T B, bool cla
   // Define a matrix with ones
   gsVector<> temp(len0);
   temp.setOnes();
-  for (index_t k = 0; k < len1; k++)
+  for (size_t k = 0; k < len1; k++)
   {
     // First column contains x-coordinates (length)
     coefs.col(0).segment(k*len0,len0) = coefvec0;

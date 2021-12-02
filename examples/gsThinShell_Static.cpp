@@ -1397,6 +1397,9 @@ int main(int argc, char *argv[])
     gsInfo<<"Total ellapsed assembly time: \t\t"<<time<<" s\n";
     gsInfo<<"Total ellapsed solution time (incl. assembly): \t"<<totaltime<<" s\n";
 
+    delete materialMatrix;
+    delete assembler;
+
     return EXIT_SUCCESS;
 
 }// end main

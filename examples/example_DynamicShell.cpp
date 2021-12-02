@@ -146,6 +146,7 @@ int main (int argc, char** argv)
 //------------------------------------------------------------------------------
 
     gsBoundaryConditions<> BCs;
+    BCs.setGeoMap(mp);
     gsPointLoads<real_t> pLoads = gsPointLoads<real_t>();
 
     BCs.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 0 ); // unknown 0 - x
@@ -297,5 +298,9 @@ for (index_t i=0; i<steps; i++)
   solution.patch(0).coefs() += mp.patch(0).coefs();// assuming 1 patch here
 }
 collection.save();
+
+delete materialMatrix;
+delete assembler;
+
 return result;
 }

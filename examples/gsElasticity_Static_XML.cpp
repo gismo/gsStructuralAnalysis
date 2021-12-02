@@ -38,7 +38,7 @@ int main (int argc, char** argv)
     //real_t E_modulus     = 1;
     //real_t PoissonRatio = 0;
 
-    int testCase = 0;
+    int testCase = 1;
 
     bool write = false;
 
