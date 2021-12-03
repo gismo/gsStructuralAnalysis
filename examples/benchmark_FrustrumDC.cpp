@@ -90,7 +90,7 @@ int main (int argc, char** argv)
     // Initialise solution object
     mp_def = mp;
 
-    gsMultiBasis<> dbasis(mp);
+    gsMultiBasis<> dbasis(mp,true);
     gsInfo<<"Basis (patch 0): "<< mp.patch(0).basis() << "\n";
 
     // Boundary conditions
