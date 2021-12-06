@@ -114,7 +114,7 @@ int main (int argc, char** argv)
 
     gsInfo<<"mu = "<<E_modulus / (2 * (1 + PoissonRatio))<<"\n";
 
-    gsMultiBasis<> dbasis(mp,false);
+    gsMultiBasis<> dbasis(mp,true);
     gsInfo<<"Basis (patch 0): "<< mp.patch(0).basis() << "\n";
     mp_def = mp;
 
@@ -137,6 +137,8 @@ int main (int argc, char** argv)
     BCs.addCondition(boundary::west, condition_type::clamped, 0, 0, false, 0 );
     BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 1 );
     BCs.addCondition(boundary::west, condition_type::clamped, 0, 0, false, 2 );
+
+    BCs.setGeoMap(mp);
 
     // Pressure
     real_t pressure = 1e3;

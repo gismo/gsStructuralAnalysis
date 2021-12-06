@@ -22,9 +22,7 @@
 
 #pragma once
 
-
 #include <gsSolver/gsBlockOp.h>
-#include <gsSolver/gsMatrixOp.h>
 
 namespace gismo
 {
@@ -51,15 +49,17 @@ class gsTimeIntegrator
 public:
 
     /// Constructor given the matrices and timestep
-    gsTimeIntegrator(   gsSparseMatrix<T> &Mass,
-                        gsSparseMatrix<T> &Damp,
-                        gsSparseMatrix<T> &Stif,
-                        std::function < gsMatrix<T> ( T) > &Force,
-                        T dt
+    gsTimeIntegrator(   const gsSparseMatrix<T> &Mass,
+                        const gsSparseMatrix<T> &Damp,
+                        const gsSparseMatrix<T> &Stif,
+                        const std::function < gsMatrix<T> ( T) > &Force,
+                        const T dt
                         )
     : m_mass(Mass),
       m_damp(Damp),
       m_stif(Stif),
+      m_jacobian(nullptr),
+      m_djacobian(nullptr),
       m_forceFun(Force),
       m_dt(dt)
     {
@@ -71,13 +71,15 @@ public:
     }
 
     /// Constructor given the matrices and timestep
-    gsTimeIntegrator(   gsSparseMatrix<T> &Mass,
-                        gsSparseMatrix<T> &Stif,
-                        std::function < gsMatrix<T> ( T) > &Force,
-                        T dt
+    gsTimeIntegrator(   const gsSparseMatrix<T> &Mass,
+                        const gsSparseMatrix<T> &Stif,
+                        const std::function < gsMatrix<T> ( T) > &Force,
+                        const T dt
                         )
     : m_mass(Mass),
       m_stif(Stif),
+      m_jacobian(nullptr),
+      m_djacobian(nullptr),
       m_forceFun(Force),
       m_dt(dt)
     {
@@ -89,16 +91,16 @@ public:
         this->initiate();
     }
 
+private:
     /// Constructor given the matrices and timestep
-    gsTimeIntegrator(   gsSparseMatrix<T> &Mass,
-                        gsSparseMatrix<T> &Damp,
-                        std::function < gsSparseMatrix<T> ( gsMatrix<T> const & ) > &Jacobian,
-                        std::function < gsMatrix<T> ( gsMatrix<T> const &, T) > &Residual,
-                        T dt
+    gsTimeIntegrator(   const gsSparseMatrix<T> &Mass,
+                        const gsSparseMatrix<T> &Damp,
+                        const std::function < gsMatrix<T> ( gsMatrix<T> const &, T) > &Residual,
+                        const T dt
                         )
     : m_mass(Mass),
       m_damp(Damp),
-      m_jacobian(Jacobian),
+      m_jacobian(nullptr),
       m_residualFun(Residual),
       m_dt(dt)
     {
@@ -110,23 +112,81 @@ public:
     }
 
     /// Constructor given the matrices and timestep
-    gsTimeIntegrator(   gsSparseMatrix<T> &Mass,
-                        std::function<gsSparseMatrix<T> (gsMatrix<real_t> const & )> Jacobian,
-                        std::function<gsMatrix<T> (gsMatrix<T> const &, T) > Residual,
-                        T dt
+    gsTimeIntegrator(   const gsSparseMatrix<T> &Mass,
+                        const std::function < gsMatrix<T> ( gsMatrix<T> const &, T) > &Residual,
+                        const T dt
                         )
     : m_mass(Mass),
-      m_jacobian(Jacobian),
+      m_jacobian(nullptr),
       m_residualFun(Residual),
       m_dt(dt)
     {
         m_dofs = m_mass.cols();
-        m_damp = gsSparseMatrix<T>(m_dofs,m_dofs);
         m_method = "Newmark";
         m_NL = true;
+        m_damp = gsSparseMatrix<T>(m_dofs,m_dofs);
         this->initializeCoefficients();
         this->initiate();
     }
+
+
+public:
+
+    /// Constructor given the matrices and timestep
+    gsTimeIntegrator(   const gsSparseMatrix<T> &Mass,
+                        const gsSparseMatrix<T> &Damp,
+                        const std::function < gsSparseMatrix<T> ( gsMatrix<T> const & ) > &Jacobian,
+                        const std::function < gsMatrix<T> ( gsMatrix<T> const &, T) > &Residual,
+                        const T dt
+                        )
+    : gsTimeIntegrator(Mass,Damp,Residual,dt)
+    {
+        m_jacobian = Jacobian;
+        m_djacobian = [this](gsVector<T> const & x, gsVector<T> const & dx)
+        {
+            return m_jacobian(x);
+        };
+    }
+
+    /// Constructor given the matrices and timestep
+    gsTimeIntegrator(   const gsSparseMatrix<T> &Mass,
+                        const std::function < gsSparseMatrix<T> ( gsMatrix<T> const & ) > &Jacobian,
+                        const std::function < gsMatrix<T> ( gsMatrix<T> const &, T) > &Residual,
+                        const T dt
+                        )
+    : gsTimeIntegrator(Mass,Residual,dt)
+    {
+        m_jacobian = Jacobian;
+        m_djacobian = [this](gsVector<T> const & x, gsVector<T> const & dx)
+        {
+            return m_jacobian(x);
+        };
+    }
+
+    /// Constructor given the matrices and timestep
+    gsTimeIntegrator(   const gsSparseMatrix<T> &Mass,
+                        const gsSparseMatrix<T> &Damp,
+                        const std::function < gsSparseMatrix<T> ( gsMatrix<T> const &, gsMatrix<T> const & ) > &dJacobian,
+                        const std::function < gsMatrix<T> ( gsMatrix<T> const &, T) > &Residual,
+                        const T dt
+                        )
+    : gsTimeIntegrator(Mass,Damp,Residual,dt)
+    {
+      m_djacobian = dJacobian;
+    }
+
+    /// Constructor given the matrices and timestep
+    gsTimeIntegrator(   const gsSparseMatrix<T> &Mass,
+                        const std::function < gsSparseMatrix<T> ( gsMatrix<T> const &, gsMatrix<T> const & ) > &dJacobian,
+                        const std::function < gsMatrix<T> ( gsMatrix<T> const &, T) > &Residual,
+                        const T dt
+                        )
+    : gsTimeIntegrator(Mass,Residual,dt)
+    {
+        m_djacobian = dJacobian;
+        m_damp = gsSparseMatrix<T>(m_dofs,m_dofs);
+    }
+
 
 public:
 
@@ -158,10 +218,40 @@ public:
     T currentTime() const {return m_t; }
 
     /// set mass matrix
-    void setMassMatrix(gsMatrix<T>& Mass) {m_mass = Mass; }
-    void setDampingMatrix(gsMatrix<T>& Damp) {m_damp = Damp; }
-    void setStiffnessMatrix(gsMatrix<T>& Stif) {m_stif = Stif; }
-    void setJacobian(std::function < gsSparseMatrix<T> ( gsMatrix<T> const & ) > &Jacobian) {m_jacobian = Jacobian; }
+    /// set mass matrix
+    void setMassMatrix(const gsSparseMatrix<T>& Mass)
+    {
+        m_mass = Mass;
+        m_dofs = m_mass.cols();
+    }
+    void setDampingMatrix(const gsSparseMatrix<T>& Damp)
+    {
+        m_damp = Damp;
+        m_dofs = m_damp.cols();
+    }
+    void resetDampingMatrix()
+    {
+        m_damp = gsSparseMatrix<T>(m_dofs,m_dofs);
+    }
+    void setStiffnessMatrix(const gsSparseMatrix<T>& Stif)
+    {
+        m_stif = Stif;
+        m_dofs = m_mass.cols();
+    }
+    void setJacobian(std::function < gsSparseMatrix<T> ( gsMatrix<T> const & ) > &Jacobian)
+    {
+        m_jacobian = Jacobian;
+        m_djacobian = [this](gsVector<T> const & x, gsVector<T> const & dx)
+        {
+            return m_jacobian(x);
+        };
+        m_dofs = m_mass.cols();
+    }
+    void setJacobian(std::function < gsSparseMatrix<T> ( gsMatrix<T> const &, gsMatrix<T> const & ) > &dJacobian)
+    {
+        m_djacobian = dJacobian;
+    }
+    void resetSolution();
 
     // set solutions
     void setDisplacement(gsMatrix<T>& displ);
@@ -222,6 +312,7 @@ protected:
     gsSparseMatrix<T> m_damp;
     gsSparseMatrix<T> m_stif;
     std::function < gsSparseMatrix<T> ( gsMatrix<T> const & ) > m_jacobian;
+    std::function < gsSparseMatrix<T> ( gsMatrix<T> const &, gsMatrix<T> const & ) > m_djacobian;
     std::function < gsMatrix<T> ( gsMatrix<T> const &, T ) > m_residualFun;
     std::function < gsMatrix<T> ( T) > m_forceFun;
     gsSparseMatrix<T> m_jacMat;
@@ -265,8 +356,6 @@ protected:
 
     // gsFunction<T> m_dini;
     // gsFunction<T> m_vini;
-
-    gsMultiPatch<T> m_solution;
 
     std::string m_method;
 

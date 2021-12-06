@@ -573,6 +573,9 @@ int main (int argc, char** argv)
       Smembrane_p.save();
     }
 
+  delete materialMatrix;
+  delete assembler;
+
   return result;
 }
 

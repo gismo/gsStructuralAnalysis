@@ -130,6 +130,7 @@ int main (int argc, char** argv)
 
     // Boundary conditions
     gsBoundaryConditions<> BCs;
+    BCs.setGeoMap(mp);
     gsPointLoads<real_t> pLoads = gsPointLoads<real_t>();
 
     // Initiate Surface forces
@@ -387,6 +388,9 @@ int main (int argc, char** argv)
 
     if (plot)
       collection.save();
+
+  delete materialMatrix;
+  delete assembler;
 
   return result;
 }

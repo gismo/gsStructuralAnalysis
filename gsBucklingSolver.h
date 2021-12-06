@@ -76,6 +76,7 @@ protected:
     using Base::m_A;
     const gsVector<T> m_rhs;
     const std::function < gsSparseMatrix<T> ( gsVector<T> const & ) > m_nonlinearFun;
+    std::function < gsSparseMatrix<T> ( gsVector<T> const &, gsVector<T> const & ) > m_dnonlinear;
     T m_scaling;
     using Base::m_B;
 

@@ -107,7 +107,9 @@ int main (int argc, char** argv)
     real_t EA,EI,r,D;
     if (testCase==0 || testCase==1 || testCase==2)
     {
-        mp = Rectangle(length,width);
+        mp.addPatch(gsNurbsCreator<>::BSplineRectangle(0,0,length,width));
+        mp.addAutoBoundaries();
+        mp.embed(3);
         EA = E_modulus*Area;
         EI = 1.0/12.0*(width*math::pow(thickness,3))*E_modulus;
         r = math::sqrt(EI/EA);
@@ -115,7 +117,9 @@ int main (int argc, char** argv)
     }
     else if (testCase==3)
     {
-        mp = Rectangle(4.0,4.0);
+        mp.addPatch(gsNurbsCreator<>::BSplineRectangle(0,0,4.0,4.0));
+        mp.addAutoBoundaries();
+        mp.embed(3);
         E_modulus = 1e5;
         PoissonRatio = 0.3;
         Density = 1e0;
@@ -133,6 +137,12 @@ int main (int argc, char** argv)
       fn = "planar/unitcircle.xml";
       gsReadFile<>(fn, mp);
     }
+    else if (testCase==8)
+    {
+        mp.addPatch( gsNurbsCreator<>::BSplineTriangle(1,1) ); // degree
+        mp.addAutoBoundaries();
+        mp.embed(3);
+    }
 
     for(index_t i = 0; i< numElevate; ++i)
         mp.patch(0).degreeElevate();    // Elevate the degree
@@ -149,11 +159,12 @@ int main (int argc, char** argv)
 
     gsInfo<<"Basis (patch 0): "<< mp.patch(0).basis() << "\n";
 
-    gsWriteParaview<>(mp, "mp", 500,true,false);
+    gsWriteParaview<>(mp, "mp", 500,true,true);
 
     // Boundary conditions
     std::vector< std::pair<patchSide,int> > clamped;
     gsBoundaryConditions<> BCs;
+    BCs.setGeoMap(mp);
     gsPointLoads<real_t> pLoads = gsPointLoads<real_t>();
 
     // Initiate Surface forces
@@ -388,6 +399,27 @@ int main (int argc, char** argv)
         for (index_t n=0; n!=gammas.size(); n++)
           omegas.push_back(math::pow(math::pow(gammas[n],4)*D/(Density*thickness),0.5));
     }
+    else if (testCase == 8)
+    {
+        thickness = 0.01;
+        PoissonRatio = 0.3;
+        // Circle
+        // Pinned-Pinned-Pinned-Pinned
+        for (index_t k = 0; k!=3; ++k)
+        {
+            BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, k ); // unknown 0 - x
+            BCs.addCondition(boundary::east, condition_type::dirichlet, 0, 0, false, k ); // unknown 0 - x
+            BCs.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, k ); // unknown 0 - x
+            BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, k ); // unknown 0 - x
+        }
+
+        BCs.addCondition(boundary::west, condition_type::clamped,0,0,false,2);
+        BCs.addCondition(boundary::east, condition_type::clamped,0,0,false,2);
+        BCs.addCondition(boundary::north, condition_type::clamped,0,0,false,2);
+        BCs.addCondition(boundary::south, condition_type::clamped,0,0,false,2);
+
+        omegas.push_back(0);
+    }
 
 
     gsFunctionExpr<> surfForce(tx,ty,tz,3);
@@ -497,6 +529,9 @@ int main (int argc, char** argv)
         std::string wnM = "ModalResults/eigenvalues.txt";
         writeToCSVfile(wnM,values);
     }
+
+    delete materialMatrix;
+    delete assembler;
 
     return result;
 }

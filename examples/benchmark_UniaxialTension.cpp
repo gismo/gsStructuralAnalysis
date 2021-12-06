@@ -124,6 +124,8 @@ int main (int argc, char** argv)
     BCs.addCondition(boundary::east, condition_type::collapsed, 0, 0, false, 0 );
     BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 1 );
 
+    BCs.setGeoMap(mp);
+
     real_t Load = 1e0;
     gsVector<> point(2);
     gsVector<> load (2);
@@ -412,6 +414,9 @@ int main (int argc, char** argv)
       Sflexural.save();
       Smembrane_p.save();
     }
+
+  delete materialMatrix;
+  delete assembler;
 
   return result;
 }

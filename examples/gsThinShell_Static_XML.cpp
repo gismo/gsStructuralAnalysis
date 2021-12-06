@@ -408,6 +408,9 @@ int main(int argc, char *argv[])
         #endif
     }
 
+    delete materialMatrix;
+    delete assembler;
+
     return EXIT_SUCCESS;
 
 }// end main

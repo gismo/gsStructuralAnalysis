@@ -322,6 +322,8 @@ int main (int argc, char** argv)
       gsInfo<< std::setprecision(12) <<strains.at(k)<<",";
     gsInfo<<"\n";
 
+  delete materialMatrix;
+  delete assembler;
 
   return result;
 }
