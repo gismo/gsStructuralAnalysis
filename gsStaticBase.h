@@ -128,7 +128,7 @@ protected:
     virtual void _computeStabilityEig(const gsSparseMatrix<T> & jacMat, T shift)
     {
 #ifdef GISMO_WITH_SPECTRA
-        index_t number = std::min(static_cast<index_t>(std::floor(jacMat.cols()/3.)),10);
+        index_t number = std::min(static_cast<index_t>(std::floor(jacMat.cols()/5.)),10);
         /*
         // Without shift!
         // This one can sometimes not converge, because spectra is better at finding large values.

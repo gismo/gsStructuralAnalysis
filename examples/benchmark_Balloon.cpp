@@ -114,12 +114,13 @@ int main (int argc, char** argv)
 
     gsInfo<<"mu = "<<E_modulus / (2 * (1 + PoissonRatio))<<"\n";
 
-    gsMultiBasis<> dbasis(mp);
+    gsMultiBasis<> dbasis(mp,false);
     gsInfo<<"Basis (patch 0): "<< mp.patch(0).basis() << "\n";
     mp_def = mp;
 
     // Boundary conditions
     gsBoundaryConditions<> BCs;
+    BCs.setGeoMap(mp);
 
     BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 0 ); // unknown 2 - z
     BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 2 - z
@@ -420,6 +421,10 @@ int main (int argc, char** argv)
       Sflexural.save();
       Smembrane_p.save();
     }
+
+  delete materialMatrix;
+  delete assembler;
+  delete arcLength;
 
   return result;
 }

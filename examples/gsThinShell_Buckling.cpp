@@ -453,7 +453,11 @@ int main (int argc, char** argv)
       BCs.addCondition(boundary::north, condition_type::dirichlet, 0, 0 ,false,1);
       BCs.addCondition(boundary::north, condition_type::dirichlet, 0, 0 ,false,2);
 
-      Load = 1e0;
+      BCs.addCondition(boundary::east, condition_type::dirichlet, 0, 0 ,false,2);
+      BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0 ,false,2);
+
+
+      Load = 1e3;
       gsVector<> point(2); point<< 1.0, 1.0 ;
       gsVector<> load (3); load << Load,0.0, 0.0;
       pLoads.addLoad(point, load, 0 );
