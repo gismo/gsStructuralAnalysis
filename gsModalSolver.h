@@ -13,6 +13,7 @@
 
 #include <typeinfo>
 #include <gsSpectra/gsSpectra.h>
+#include <gsStructuralAnalysis/gsEigenProblemBase.h>
 #pragma once
 
 
