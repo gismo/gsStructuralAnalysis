@@ -189,6 +189,28 @@ public:
 
 protected:
 
+    void initializeCoefficients();
+    void initializeSolution();
+    void constructSystemExplEuler();
+    void constructSystemImplEuler();
+    void constructSystemBlock();
+    void initiate();
+    void stepExplEuler();
+    void stepExplEulerNL();
+    void stepImplEuler();
+    void stepImplEulerNL();
+    void stepImplEulerNLOp();
+    void stepNewmark();
+    void stepNewmarkNL();
+    void stepBathe();
+    void stepBatheNL();
+    void stepCentralDiff();
+    void stepCentralDiffNL();
+    void stepRK4();
+    void stepRK4NL();
+
+protected:
+
     /// Linear solver employed
     gsSparseSolver<>::LU  m_solver;
     //gsSparseSolver<>::BiCGSTABDiagonal solver;
@@ -219,6 +241,8 @@ protected:
     int m_maxIterations;
     int m_numIterations;
 
+    bool m_first;
+
     T m_tolerance;
 
     gsMatrix<T> m_massInv;
@@ -246,9 +270,6 @@ protected:
 
     std::string m_method;
 
-    void initializeCoefficients();
-    void initializeSolution();
-
     T m_updateNorm;
     T m_residue;
 
@@ -257,19 +278,6 @@ protected:
     gsMatrix<T> m_velocities;
     gsMatrix<T> m_accelerations;
 
-    void constructSystemExplEuler();
-    void constructSystemImplEuler();
-    void constructSystemBlock();
-    void initiate();
-    void stepExplEuler();
-    void stepExplEulerNL();
-    void stepImplEuler();
-    void stepImplEulerNL();
-    void stepImplEulerNLOp();
-    void stepNewmark();
-    void stepNewmarkNL();
-    void stepBathe();
-    void stepBatheNL();
 };
 
 

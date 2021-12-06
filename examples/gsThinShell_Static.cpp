@@ -18,7 +18,7 @@
 
 #include <gsElasticity/gsWriteParaviewMultiPhysics.h>
 
-#include <gsStructuralAnalysis/gsStaticSolver.h>
+#include <gsStructuralAnalysis/gsStaticNewton.h>
 
 //#include <gsThinShell/gsNewtonIterator.h>
 
@@ -1288,18 +1288,25 @@ int main(int argc, char *argv[])
     gsVector<> vector = assembler->rhs();
 
     // Configure Structural Analsysis module
-    gsStaticSolver<real_t> staticSolver(matrix,vector,Jacobian,Residual);
+    gsStaticNewton<real_t> staticSolver(matrix,vector,Jacobian,Residual);
     gsOptionList solverOptions = staticSolver.options();
-    solverOptions.setInt("Verbose",verbose);
-    solverOptions.setInt("MaxIterations",10);
-    solverOptions.setReal("Tolerance",1e-6);
+    solverOptions.setInt("verbose",verbose);
+    solverOptions.setInt("maxIt",10);
+    solverOptions.setReal("tol",1e-6);
     staticSolver.setOptions(solverOptions);
 
     // Solve linear problem
     gsVector<> solVector;
-    solVector = staticSolver.solveLinear();
-    if (nonlinear)
+    if (!nonlinear)
+        solVector = staticSolver.solveLinear();
+    else
         solVector = staticSolver.solveNonlinear();
+
+    // OR, also possible:
+    // solVector = staticSolver.solveLinear();
+    // if (nonlinear)
+    //     solVector = staticSolver.solveNonlinear();
+
 
     totaltime += stopwatch2.stop();
 
@@ -1378,8 +1385,7 @@ int main(int argc, char *argv[])
 
         // gsField<> stressField = assembler->constructStress(mp_def,stress_type::membrane_strain);
 
-        gsWriteParaview(solutionField,"Deformation");
-
+        #ifdef GISMO_ELASTICITY
         std::map<std::string,const gsField<> *> fields;
         fields["Deformation"] = &solutionField;
         fields["Membrane Stress"] = &membraneStress;
@@ -1392,6 +1398,16 @@ int main(int argc, char *argv[])
         fields["Principal Direction 3"] = &stretchDir3;
 
         gsWriteParaviewMultiPhysics(fields,"stress",5000,true);
+        #else
+        gsWriteParaview(solutionField, "Deformation");
+        gsWriteParaview(membraneStress, "MembraneStress");
+        gsWriteParaview(flexuralStress, "FlexuralStress");
+        gsWriteParaview(Stretches, "PrincipalStretch");
+        gsWriteParaview(stretchDir1, "PrincipalDirection1");
+        gsWriteParaview(stretchDir2, "PrincipalDirection2");
+        gsWriteParaview(stretchDir3, "PrincipalDirection3");
+        #endif
+
     }
     gsInfo<<"Total ellapsed assembly time: \t\t"<<time<<" s\n";
     gsInfo<<"Total ellapsed solution time (incl. assembly): \t"<<totaltime<<" s\n";

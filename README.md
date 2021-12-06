@@ -1,3 +1,17 @@
+# To Do
+- Remove gsArcLengthIterator
+- ALResidual(x,lambda,force) --> ALResidual(x,lambda)
+
+# Changelog
+
+## v21.X:
+  - Provided base class for ALMs. All ALMs have a separate class now, and the singular point approach method is implemented in the base class.
+  - Eigenvalue problems (Buckling, Modal) have a base class as well, and `gsBucklingSolver` and `gsModalSolver` only provide a top-layer assigning the right matrices.
+  - Output splines instead of paraview!! (--plotfiles & postprocess.cpp)
+  - Dynamic relaxation method added!
+## v21.6:
+  - Initial version!
+
 # gsStructuralAnalysis
 
 Module for structural analysis with solids ([`gsElasticity`](https://github.com/gismo/gsElasticity/)) or Kirchhoff-Love shells ([`gsKLShell`](https://github.com/gismo/gsKLShell/)).
@@ -77,7 +91,7 @@ To use the `gsStaticAnalysis` class for a structural assembler (`gsElasticityAss
 ```
 gsSparseMatrix<T>   matrix = any_assembler.function_for_StiffnessMatrix();
 gsVector<T>         vector = any_assembler.function_for_rhs();
-gsStaticSolver<T>   staticSolver(matrix,vector);
+gsStaticNewton<T>   staticSolver(matrix,vector);
 
 ```
 ##### Initialization of nonlinear solver
@@ -86,7 +100,7 @@ gsSparseMatrix<T>   matrix = any_assembler.function_for_StiffnessMatrix();
 gsVector<T>         vector = any_assembler.function_for_rhs();
 Jacobian_t<T>       Jacobian = { your_jacobian };
 Residual_t<T>       Residual = { your_residual };
-gsStaticSolver<T>   staticSolver(matrix,vector,Jacobian,Residual); // see above documentation for definitions of Jacobian_t and Residual_t
+gsStaticNewton<T>   staticSolver(matrix,vector,Jacobian,Residual); // see above documentation for definitions of Jacobian_t and Residual_t
 ```
 ##### General use
 ```

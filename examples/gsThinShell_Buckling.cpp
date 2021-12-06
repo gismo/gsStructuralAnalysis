@@ -345,7 +345,7 @@ int main (int argc, char** argv)
     else if (testCase == 3)
     {
         // poisson_ratio = 0.0;
-        Load = 1e2;
+        Load = 1e8;
         neu << Load, 0, 0;
         neuData.setValue(neu,3);
         // // Clamped-Clamped
@@ -608,21 +608,14 @@ int main (int argc, char** argv)
       return m;
     };
 
-    solver.compute(K_L);
-    gsVector<> solVector = solver.solve(rhs);
-    gsMultiPatch<> deformation;
-    assembler->constructDisplacement(solVector,deformation);
-    gsField<> solField(mp,deformation);
-    gsWriteParaview<>(solField, "linearProblem", 1000);
-
-    gsBucklingSolver<real_t> buckling(K_L, rhs, K_NL);
+    gsBucklingSolver<real_t,Spectra::GEigsMode::ShiftInvert> buckling(K_L,rhs,K_NL);
     buckling.verbose();
     // buckling.computePower();
 
     if (!sparse)
       buckling.compute();
     else
-      buckling.computeSparse(shift, 10);
+      buckling.computeSparse(shift,10,2,Spectra::SortRule::LargestMagn,Spectra::SortRule::SmallestMagn);
 
     gsMatrix<> values = buckling.values();
     gsMatrix<> vectors = buckling.vectors();
@@ -630,11 +623,11 @@ int main (int argc, char** argv)
     gsDebugVar(buckling.vectors().cols());
 
     gsInfo<< "First 10 eigenvalues:\n";
-    for (index_t k = 0; k<2; k++)
+    for (index_t k = 0; k<10; k++)
         gsInfo<<"\t"<<std::setprecision(20)<<values.at(k)<<"\n";
     gsInfo<<"\n";
 
-    for (index_t k = 0; k<2; k++)
+    for (index_t k = 0; k<10; k++)
     {
       gsInfo<<"\t"<<values.at(k)*Load<<"\n";
     }

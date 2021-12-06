@@ -426,13 +426,13 @@ int main (int argc, char** argv)
     assembler->assembleMass();
     gsSparseMatrix<> M =  assembler->matrix();
 
-    gsModalSolver<real_t> modal(K,M);
+    gsModalSolver<real_t,Spectra::GEigsMode::ShiftInvert> modal(K,M);
     modal.verbose();
 
     if (!sparse)
       modal.compute();
     else
-      modal.computeSparse(shift,10);
+      modal.computeSparse(shift,10,2,Spectra::SortRule::LargestMagn,Spectra::SortRule::SmallestMagn);
 
 
     gsMatrix<> values = modal.values();

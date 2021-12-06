@@ -16,9 +16,7 @@
 #include <gsKLShell/gsThinShellAssembler.h>
 #include <gsKLShell/getMaterialMatrix.h>
 
-#include <gsStructuralAnalysis/gsStaticSolver.h>
-#include <gsStructuralAnalysis/gsTimeIntegrator.h>
-#include <gsStructuralAnalysis/gsDynamicRelaxationLC.h>
+#include <gsStructuralAnalysis/gsDynamicRelaxationDC.h>
 
 //#include <gsThinShell/gsNewtonIterator.h>
 
@@ -330,14 +328,19 @@ int main(int argc, char *argv[])
     assembler->assemble();
     gsSparseMatrix<> K = assembler->matrix();
     gsVector<> F = assembler->rhs();
+    assembler->assembleMass(true);
+    gsVector<> M = assembler->rhs();
 
     gsParaviewCollection collection("incr_solution");
 
-    gsDynamicRelaxationLC<real_t> DRM(K,F,LCResidual);
+    gsDynamicRelaxationDC<real_t> DRM(M,F,Residual);
     gsOptionList DROptions = DRM.options();
     DROptions.setReal("damping",damping);
     DROptions.setReal("alpha",alpha);
-    DROptions.setInt("maxIt",1e3);
+    DROptions.setInt("maxIt",1e5);
+    DROptions.setReal("tolF",1e-2);
+    DROptions.setReal("tolE",1e-4);
+    DROptions.setInt("verbose",verbose);
     DRM.setOptions(DROptions);
 
     index_t count = 0;
@@ -346,6 +349,10 @@ int main(int argc, char *argv[])
     DRM.init();
     for (index_t k=0; k!=steps; k++)
     {
+        displ.setValue(static_cast<real_t>(k)/steps,3);
+        gsInfo<<"Load step "<< k<<"; D = "<<static_cast<real_t>(k)/steps<<"; dD = "<<1./steps<<"\n";
+        assembler->updateBCs(bc);
+
         gsVector<> displacements;
         // real_t Ek = DRM.kineticEnergy();
         // real_t EkOld = Ek;
@@ -377,7 +384,7 @@ int main(int argc, char *argv[])
         //         break;
         // }
 
-        DRM.step(1./steps);
+        DRM.step();
 
 
         displacements = DRM.displacements();

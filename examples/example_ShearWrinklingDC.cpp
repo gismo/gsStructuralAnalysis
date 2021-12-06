@@ -16,8 +16,7 @@
 #include <gsKLShell/gsThinShellAssembler.h>
 #include <gsKLShell/getMaterialMatrix.h>
 
-// #include <gsThinShell/gsArcLengthIterator.h>
-#include <gsStructuralAnalysis/gsStaticSolver.h>
+#include <gsStructuralAnalysis/gsStaticNewton.h>
 
 using namespace gismo;
 
@@ -271,16 +270,15 @@ int main (int argc, char** argv)
     gsBoundaryConditions<> BCs;
     BCs.setGeoMap(mp);
 
+    gsPointLoads<real_t> pLoads = gsPointLoads<real_t>();
+
     // Initiate Surface forces
     std::string tx("0");
     std::string ty("0");
     std::string tz("0");
 
     gsVector<> tmp(3);
-    gsVector<> neu(3);
     tmp << 0, 0, 0;
-    neu << 0, 0, 0;
-    gsConstantFunction<> neuData(neu,3);
 
     gsConstantFunction<> displ(0.0,3);
     gsConstantFunction<> displ_const(0.05,3);
@@ -497,16 +495,18 @@ int main (int argc, char** argv)
         return assembler->rhs(); // - lam * force;
     };
 
-    gsSparseMatrix<> matrix;
-    gsVector<> vector;
+    assembler->assemble();
+    gsSparseMatrix<> matrix = assembler->matrix();
+    gsVector<> vector = assembler->rhs();
 
-    gsStaticSolver<real_t> staticSolver(matrix,vector,Jacobian,Residual);
+    gsStaticNewton<real_t> staticSolver(matrix,vector,Jacobian,Residual);
     gsOptionList solverOptions = staticSolver.options();
-    solverOptions.setInt("Verbose",true);
-    solverOptions.setInt("MaxIterations",maxit);
-    solverOptions.setReal("ToleranceF",tolF);
-    solverOptions.setReal("ToleranceU",tolU);
+    solverOptions.setInt("verbose",true);
+    solverOptions.setInt("maxIt",maxit);
+    solverOptions.setReal("tolF",tolF);
+    solverOptions.setReal("tolU",tolU);
     solverOptions.setReal("Relaxation",0.8);
+    solverOptions.setInt("BifurcationMethod",0);
     staticSolver.setOptions(solverOptions);
 
     gsParaviewCollection collection(dirname + "/" + output);
