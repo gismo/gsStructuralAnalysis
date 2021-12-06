@@ -204,6 +204,7 @@ int main (int argc, char** argv)
 
     // Boundary conditions
     gsBoundaryConditions<> BCs;
+    BCs.setGeoMap(mp);
     gsPointLoads<real_t> pLoads = gsPointLoads<real_t>();
 
     std::string output = "solution";
@@ -560,6 +561,9 @@ int main (int argc, char** argv)
       Sflexural.save();
       Smembrane_p.save();
     }
+
+  delete materialMatrix;
+  delete assembler;
 
   return result;
 }

@@ -108,6 +108,7 @@ int main (int argc, char** argv)
 
     // Boundary conditions
     gsBoundaryConditions<> BCs;
+    BCs.setGeoMap(mp);
 
     real_t Load = -1;
     gsVector<> neu(3);
@@ -438,6 +439,9 @@ int main (int argc, char** argv)
       Sflexural.save();
       Smembrane_p.save();
     }
+
+  delete materialMatrix;
+  delete assembler;
 
   return result;
 }

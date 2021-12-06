@@ -65,6 +65,8 @@ int main(int argc, char *argv[])
     std::string fn;
     bool membrane = false;
     bool weak = false;
+    bool MIP = false;
+
 
     std::string assemberOptionsFile("options/solver_options.xml");
 
@@ -93,6 +95,7 @@ int main(int argc, char *argv[])
     cmd.addSwitch("stress", "Create a ParaView visualization file with the stresses", stress);
     cmd.addSwitch("membrane", "Use membrane model (no bending)", membrane);
     cmd.addSwitch("weak", "Impose boundary conditions weakly", weak);
+    cmd.addSwitch("MIP", "Use mixed integration point method", MIP);
 
 
     try { cmd.getValues(argc,argv); } catch (int rv) { return rv; }
@@ -1258,16 +1261,40 @@ int main(int argc, char *argv[])
 
     // Function for the Jacobian
     typedef std::function<gsSparseMatrix<real_t> (gsVector<real_t> const &)>    Jacobian_t;
+    typedef std::function<gsSparseMatrix<real_t> (gsVector<real_t> const &, gsVector<real_t> const &)>    dJacobian_t;
     typedef std::function<gsVector<real_t> (gsVector<real_t> const &) >         Residual_t;
-    Jacobian_t Jacobian = [&time,&stopwatch,&assembler,&mp_def](gsVector<real_t> const &x)
+    Jacobian_t Jacobian = [&MIP,&time,&stopwatch,&assembler,&mp_def](gsVector<real_t> const &x)
     {
-      stopwatch.restart();
-      assembler->constructSolution(x,mp_def);
-      assembler->assembleMatrix(mp_def);
-      time += stopwatch.stop();
-      gsSparseMatrix<real_t> m = assembler->matrix();
-      return m;
+        stopwatch.restart();
+        assembler->constructSolution(x,mp_def);
+        assembler->assembleMatrix(mp_def);
+        assembler->assembleMatrix(mp_def);
+        time += stopwatch.stop();
+        gsSparseMatrix<real_t> m = assembler->matrix();
+        return m;
     };
+
+    dJacobian_t dJacobian = [&MIP,&time,&stopwatch,&assembler,&mp_def](gsVector<real_t> const &x, gsVector<real_t> const &dx)
+    {
+        stopwatch.restart();
+
+        // this also works
+        // assembler->constructSolution(x-upVec,mp_prev);
+        // if (MIP)
+          // assembler->assembleMatrix(mp_def,mp_prev,upVec);
+        if (MIP)
+            assembler->assembleMatrix(x,x-dx);
+        else
+        {
+            assembler->constructSolution(x,mp_def);
+            assembler->assembleMatrix(mp_def);
+        }
+
+        time += stopwatch.stop();
+        gsSparseMatrix<real_t> m = assembler->matrix();
+        return m;
+    };
+
     // Function for the Residual
     Residual_t Residual = [&time,&stopwatch,&assembler,&mp_def](gsVector<real_t> const &x)
     {
@@ -1295,7 +1322,18 @@ int main(int argc, char *argv[])
     solverOptions.setReal("tol",1e-6);
     staticSolver.setOptions(solverOptions);
 
-    // Solve linear problem
+#ifdef _OPENMP
+    real_t OMPtime = omp_get_wtime();
+#endif
+
+    // Solve (non-) linear problem
+    /*
+        NOTE: Performs solveLinear inside. It can also be done differently (below). Inside the gsStaticSolver, the solVector is initialized slightly different, hence something different is fed into the nonlinear iterations.
+
+        solVector = staticSolver.solveLinear();
+        if (nonlinear)
+            solVector = staticSolver.solveNonlinear(); // NOTE: Performs solveLinear inside.
+    */
     gsVector<> solVector;
     if (!nonlinear)
         solVector = staticSolver.solveLinear();
@@ -1411,6 +1449,9 @@ int main(int argc, char *argv[])
     }
     gsInfo<<"Total ellapsed assembly time: \t\t"<<time<<" s\n";
     gsInfo<<"Total ellapsed solution time (incl. assembly): \t"<<totaltime<<" s\n";
+
+    delete materialMatrix;
+    delete assembler;
 
     return EXIT_SUCCESS;
 
