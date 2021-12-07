@@ -59,7 +59,7 @@ int main (int argc, char** argv)
     real_t PoissonRatio = 0;
     gsMultiPatch<> mp;
 
-    int testCase = 0;
+    int testCase = 1;
 
     bool write = false;
 

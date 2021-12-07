@@ -104,6 +104,8 @@ int main (int argc, char** argv)
     bool write        = false;
     bool crosssection = false;
 
+    bool MIP = false;
+
     index_t maxit     = 20;
 
     // Arc length method options
@@ -153,6 +155,7 @@ int main (int argc, char** argv)
     cmd.addSwitch("symmetry", "Use symmetry boundary condition (different per problem)", symmetry);
     cmd.addSwitch("deformed", "plot on deformed shape", deformed);
     cmd.addSwitch("write", "write to file", write);
+    cmd.addSwitch("MIP", "Use mixed integration point method", MIP);
 
     try { cmd.getValues(argc,argv); } catch (int rv) { return rv; }
 
@@ -381,8 +384,11 @@ int main (int argc, char** argv)
     gsMultiBasis<> dbasis(mp);
     gsInfo<<"Basis (patch 0): "<< mp.patch(0).basis() << "\n";
 
+    gsDebugVar(mp.patch(0).coefs());
+
     // Boundary conditions
     gsBoundaryConditions<> BCs;
+    BCs.setGeoMap(mp);
     gsPointLoads<real_t> pLoads = gsPointLoads<real_t>();
 
     // Initiate Surface forces
@@ -949,6 +955,7 @@ int main (int argc, char** argv)
     real_t time = 0.0;
 
     typedef std::function<gsSparseMatrix<real_t> (gsVector<real_t> const &)>                                Jacobian_t;
+    typedef std::function<gsSparseMatrix<real_t> (gsVector<real_t> const &, gsVector<real_t> const &)>      dJacobian_t;
     typedef std::function<gsVector<real_t> (gsVector<real_t> const &, real_t, gsVector<real_t> const &) >   ALResidual_t;
     // Function for the Jacobian
     Jacobian_t Jacobian = [&time,&stopwatch,&assembler,&mp_def](gsVector<real_t> const &x)
@@ -956,6 +963,21 @@ int main (int argc, char** argv)
       stopwatch.restart();
       assembler->constructSolution(x,mp_def);
       assembler->assembleMatrix(mp_def);
+      time += stopwatch.stop();
+
+      gsSparseMatrix<real_t> m = assembler->matrix();
+      return m;
+    };
+    dJacobian_t dJacobian = [&time,&stopwatch,&assembler,&mp_def,&MIP](gsVector<real_t> const &x, gsVector<real_t> const &dx)
+    {
+      stopwatch.restart();
+      assembler->constructSolution(x,mp_def);
+
+      if (MIP)
+          assembler->assembleMatrix(x,x-dx);
+      else
+          assembler->assembleMatrix(mp_def);
+
       time += stopwatch.stop();
 
       gsSparseMatrix<real_t> m = assembler->matrix();
@@ -976,7 +998,7 @@ int main (int argc, char** argv)
     assembler->assemble();
     gsVector<> Force = assembler->rhs();
 
-    gsArcLengthIterator<real_t> arcLength(Jacobian, ALResidual, Force);
+    gsArcLengthIterator<real_t> arcLength(dJacobian, ALResidual, Force);
 
     if (!membrane)
     {
@@ -1210,6 +1232,10 @@ int main (int argc, char** argv)
       Smembrane_p.save();
     }
 
+
+  delete materialMatrix;
+  delete assembler;
+
   return result;
 }
 
@@ -1267,7 +1293,7 @@ gsMultiPatch<T> RectangularDomain(int n, int m, int p, int q, T L, T B, bool cla
   // Define a matrix with ones
   gsVector<> temp(len0);
   temp.setOnes();
-  for (index_t k = 0; k < len1; k++)
+  for (size_t k = 0; k < len1; k++)
   {
     // First column contains x-coordinates (length)
     coefs.col(0).segment(k*len0,len0) = coefvec0;

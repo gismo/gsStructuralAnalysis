@@ -11,10 +11,10 @@
     Author(s): H.M. Verhelst (2019-..., TU Delft)
 */
 
-#include <typeinfo>
-#include <gsSpectra/gsSpectra.h>
 #pragma once
 
+#include <gsSpectra/gsSpectra.h>
+#include <gsIO/gsOptionList.h>
 
 namespace gismo
 {
@@ -44,19 +44,68 @@ public:
    defaultOptions();
   }
 
+private:
+  /**
+   * @brief      helper constructor
+   *
+   * @param[in]  linear      The linear matrix
+   * @param[in]  force       The force vector
+   * @param[in]  residual    The residual function
+   */
   gsStaticSolver(   const gsSparseMatrix<T> &linear,
                     const gsVector<T> &force,
-                    const std::function < gsSparseMatrix<T> ( gsVector<T> const & ) > &nonlinear,
                     const std::function < gsVector<T> ( gsVector<T> const & ) > &residual
                     ) :
     m_linear(linear),
     m_force(force),
-    m_nonlinear(nonlinear),
+    m_nonlinear(nullptr),
+    m_dnonlinear(nullptr),
     m_residual(residual)
   {
     m_NL = true;
     m_converged = false;
     defaultOptions();
+  }
+
+public:
+  /**
+   * @brief      { function_description }
+   *
+   * @param[in]  linear      The linear matrix
+   * @param[in]  force       The force vector
+   * @param[in]  dnonlinear  The jacobian taking the solution x and the iterative update dx
+   * @param[in]  residual    The residual function
+   */
+  gsStaticSolver(   const gsSparseMatrix<T> &linear,
+                    const gsVector<T> &force,
+                    const std::function < gsSparseMatrix<T> ( gsVector<T> const &, gsVector<T> const &) > &dnonlinear,
+                    const std::function < gsVector<T> ( gsVector<T> const & ) > &residual
+                    ) :
+    gsStaticSolver(linear,force,residual)
+  {
+    m_dnonlinear = dnonlinear;
+  }
+
+  /**
+   * @brief      { function_description }
+   *
+   * @param[in]  linear     XXXX
+   * @param[in]  force      XXXX
+   * @param[in]  nonlinear  XXXX
+   * @param[in]  residual   XXXX
+   */
+  gsStaticSolver(   const gsSparseMatrix<T> &linear,
+                    const gsVector<T> &force,
+                    const std::function < gsSparseMatrix<T> ( gsVector<T> const & ) > &nonlinear,
+                    const std::function < gsVector<T> ( gsVector<T> const & ) > &residual
+                    ) :
+    gsStaticSolver(linear,force,residual)
+  {
+    m_nonlinear  = nonlinear;
+    m_dnonlinear = [this](gsVector<T> const & x, gsVector<T> const & dx)
+    {
+        return m_nonlinear(x);
+    };
   }
 
 public:
@@ -88,10 +137,11 @@ protected:
 
     const gsSparseMatrix<T> & m_linear;
     const gsVector<T> & m_force;
-    const std::function < gsSparseMatrix<T> ( gsVector<T> const & ) > m_nonlinear;
+    std::function < gsSparseMatrix<T> ( gsVector<T> const & ) > m_nonlinear;
+    std::function < gsSparseMatrix<T> ( gsVector<T> const &, gsVector<T> const & ) > m_dnonlinear;
     const std::function < gsVector<T> ( gsVector<T> const & ) > m_residual;
 
-    gsVector<T> m_solVec, m_DeltaU, m_deltaU;
+    gsVector<T> m_solVec;
 
     mutable index_t m_verbose;
     bool m_NL;

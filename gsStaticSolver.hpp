@@ -11,7 +11,6 @@
     Author(s): H.M. Verhelst (2019-..., TU Delft)
 */
 
-#include <typeinfo>
 #pragma once
 
 namespace gismo
@@ -37,18 +36,20 @@ gsVector<T> gsStaticSolver<T>::solveNonlinear()
 {
     m_converged = false;
     this->getOptions();
+    gsVector<T> DeltaU = gsVector<T>::Zero(m_solVec.rows());
+    gsVector<T> deltaU = gsVector<T>::Zero(m_solVec.rows());
     if (m_solVec.rows()==0)
-        m_solVec = this->solveLinear();
+    {
+        deltaU = DeltaU = this->solveLinear();
+        m_solVec.setZero();
+    }
 
-    gsVector<T> resVec = m_residual(m_solVec);
+    gsVector<T> resVec = m_residual(m_solVec+DeltaU);
     T residual = resVec.norm();
     if (residual==0) residual=1;
     T residual0 = residual;
     T residualOld = residual;
-    m_DeltaU = gsVector<T>::Zero(m_solVec.rows());
-    m_deltaU = gsVector<T>::Zero(m_solVec.rows());
     gsSparseMatrix<T> jacMat;
-
 
     if (m_verbose>0)
     {
@@ -66,17 +67,17 @@ gsVector<T> gsStaticSolver<T>::solveNonlinear()
 
     for (m_iterations = 0; m_iterations != m_maxIterations; ++m_iterations)
     {
-        jacMat = m_nonlinear(m_solVec+m_DeltaU);
+        jacMat = m_dnonlinear(m_solVec+DeltaU,deltaU);
         if (m_verbose==2)
         {
             gsInfo<<"Matrix: \n"<<jacMat.toDense()<<"\n";
             gsInfo<<"Vector: \n"<<resVec<<"\n";
         }
         m_solver.compute(jacMat);
-        m_deltaU = m_solver.solve(resVec); // this is the UPDATE
-        m_DeltaU += m_relax * m_deltaU;
+        deltaU = m_solver.solve(resVec); // this is the UPDATE
+        DeltaU += m_relax * deltaU;
 
-        resVec = m_residual(m_solVec+m_DeltaU);
+        resVec = m_residual(m_solVec+DeltaU);
         residual = resVec.norm();
 
         if (m_verbose>0)
@@ -85,9 +86,9 @@ gsVector<T> gsStaticSolver<T>::solveNonlinear()
             gsInfo<<std::setw(4)<<std::left<<m_iterations;
             gsInfo<<std::setw(17)<<std::left<<residual;
             gsInfo<<std::setw(17)<<std::left<<residual/residual0;
-            gsInfo<<std::setw(17)<<std::left<<m_relax * m_deltaU.norm();
-            gsInfo<<std::setw(17)<<std::left<<m_relax * m_deltaU.norm()/m_DeltaU.norm();
-            gsInfo<<std::setw(17)<<std::left<<m_relax * m_deltaU.norm()/m_solVec.norm();
+            gsInfo<<std::setw(17)<<std::left<<m_relax * deltaU.norm();
+            gsInfo<<std::setw(17)<<std::left<<m_relax * deltaU.norm()/DeltaU.norm();
+            gsInfo<<std::setw(17)<<std::left<<m_relax * deltaU.norm()/(m_solVec+DeltaU).norm();
             gsInfo<<std::setw(17)<<std::left<<math::log10(residualOld/residual0);
             gsInfo<<std::setw(17)<<std::left<<math::log10(residual/residual0);
             gsInfo<<"\n";
@@ -95,10 +96,10 @@ gsVector<T> gsStaticSolver<T>::solveNonlinear()
 
         residualOld = residual;
 
-        if (m_relax * m_deltaU.norm()/m_solVec.norm()  < m_toleranceU && residual/residual0 < m_toleranceF)
+        if (m_relax * deltaU.norm()/(m_solVec+DeltaU).norm()  < m_toleranceU && residual/residual0 < m_toleranceF)
         {
             m_converged = true;
-            m_solVec+=m_DeltaU;
+            m_solVec+=DeltaU;
             break;
         }
         else if (m_iterations+1 == m_maxIterations)
@@ -117,7 +118,8 @@ template <class T>
 void gsStaticSolver<T>::_computeStability(const gsVector<T> x) const
 {
     gsVector<T> stabilityVec;
-    gsSparseMatrix<T> jacMat = m_nonlinear(x);
+    gsVector<T> dx = gsVector<T>::Zero(x.size());
+    gsSparseMatrix<T> jacMat = m_dnonlinear(x,dx);
 
     #ifdef GISMO_WITH_SPECTRA
     index_t number = std::min(static_cast<index_t>(std::floor(jacMat.cols()/3.)),10);

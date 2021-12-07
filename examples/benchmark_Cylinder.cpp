@@ -119,6 +119,7 @@ int main (int argc, char** argv)
 
     // Boundary conditions
     gsBoundaryConditions<> BCs;
+    BCs.setGeoMap(mp);
 
     BCs.addCondition(boundary::north, condition_type::neumann, &neuData );
     BCs.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 1 );
@@ -404,6 +405,9 @@ int main (int argc, char** argv)
       Sflexural.save();
       Smembrane_p.save();
     }
+
+  delete materialMatrix;
+  delete assembler;
 
   return result;
 }

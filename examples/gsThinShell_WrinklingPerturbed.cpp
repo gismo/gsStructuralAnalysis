@@ -72,7 +72,6 @@ int main (int argc, char** argv)
     int numElevateL = -1;
     int numHrefL    = -1;
     bool plot       = false;
-    bool mesh       = false;
     bool stress       = false;
     bool membrane       = false;
     //bool mesh  = false;
@@ -947,6 +946,9 @@ int main (int argc, char** argv)
       Sflexural.save();
       Smembrane_p.save();
     }
+
+  delete materialMatrix;
+  delete assembler;
 
   return result;
 }
