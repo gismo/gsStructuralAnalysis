@@ -1,6 +1,6 @@
  /** @file gsControlDisplacement.h
 
-    @brief Performs linear modal analysis given a matrix or functions of a matrix
+    @brief
 
     This file is part of the G+Smo library.
 
@@ -20,20 +20,19 @@ namespace gismo
 {
 
 /**
-    @brief Performs the arc length method to solve a nonlinear equation system.
+    @brief
 
-    \tparam T coefficient type
+    \tparam T
 
-    \ingroup ThinShell
+    \ingroup gsStructuralAnalysis
 */
 template <class T>
-class gsControlDisplacement// : public gsContinuationBase<T>
+class gsControlDisplacement : public gsContinuationBase<T>
 {
 protected:
 
 public:
 
-    /// Constructor giving access to the gsShellAssembler object to create a linear system per iteration
     gsControlDisplacement(gsStaticBase<T> * solver) :
     m_solver(solver),
     first(true)
