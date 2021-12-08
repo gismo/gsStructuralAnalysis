@@ -48,19 +48,15 @@ int main(int argc, char *argv[])
     bool stress= false;
     index_t numRefine  = 1;
     index_t numElevate = 1;
-    index_t testCase = 1;
 
     index_t maxIt = 1e3;
 
     bool nonlinear = false;
     int verbose = 0;
     std::string fn;
-    bool membrane = false;
-    bool weak = false;
 
     index_t Compressibility = 0;
     index_t material = 0;
-    bool composite = false;
     index_t impl = 1; // 1= analytical, 2= generalized, 3= spectral
 
     real_t E_modulus = 1.0;
@@ -295,8 +291,6 @@ int main(int argc, char *argv[])
     NWT.reset();
     NWT.setUpdate(DRM.update());
     controlDC.step(1.0);
-
-    real_t indicator = DRM.indicator(Jacobian(controlDC.solutionU()));
 
     gsVector<> displacements = controlDR.solutionU();
 

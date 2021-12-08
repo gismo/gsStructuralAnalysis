@@ -654,8 +654,6 @@ int main (int argc, char** argv)
     gsMatrix<> values = buckling.values();
     gsMatrix<> vectors = buckling.vectors();
 
-    gsDebugVar(buckling.values().size());
-
     gsInfo<< "First 10 eigenvalues:\n";
     for (index_t k = 0; k<10; k++)
         gsInfo<<"\t"<<std::setprecision(20)<<values.at(k)<<"\n";

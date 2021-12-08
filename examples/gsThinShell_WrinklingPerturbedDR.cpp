@@ -16,7 +16,6 @@
 #include <gsKLShell/gsThinShellAssembler.h>
 #include <gsKLShell/getMaterialMatrix.h>
 
-#include <gsStructuralAnalysis/gsDynamicRelaxationLC.h>
 #include <gsStructuralAnalysis/gsStaticDR.h>
 #include <gsStructuralAnalysis/gsControlDisplacement.h>
 

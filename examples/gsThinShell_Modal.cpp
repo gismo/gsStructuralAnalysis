@@ -104,7 +104,7 @@ int main (int argc, char** argv)
 
     std::string fn;
 
-    real_t EA,EI,r;
+    real_t EA(0),EI(0),r(0);
     if (testCase==0 || testCase==1 || testCase==2)
     {
         mp.addPatch(gsNurbsCreator<>::BSplineRectangle(0,0,length,width));
