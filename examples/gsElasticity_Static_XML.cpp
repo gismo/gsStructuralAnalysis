@@ -1,6 +1,6 @@
-/** @file gsElasticity_Static.cpp
+/** @file gsElasticity_Static_XML.cpp
 
-    @brief Static simulations of a solid
+    @brief Static simulations of a solid reading from an XML file
 
     This file is part of the G+Smo library.
 
@@ -17,7 +17,7 @@
 #include <gsElasticity/gsElasticityAssembler.h>
 #include <gsElasticity/gsWriteParaviewMultiPhysics.h>
 
-#include <gsStructuralAnalysis/gsStaticSolver.h>
+#include <gsStructuralAnalysis/gsStaticNewton.h>
 
 
 using namespace gismo;
@@ -34,9 +34,6 @@ int main (int argc, char** argv)
     int numHref     = 0;
     bool plot       = false;
     bool nonlinear  = false;
-
-    //real_t E_modulus     = 1;
-    //real_t PoissonRatio = 0;
 
     int testCase = 1;
 
@@ -122,8 +119,6 @@ int main (int argc, char** argv)
     fd.getFirst<gsOptionList>(solverOptions);
 
 
-    std::string output = "solutionElasticity";
-
     // plot geometry
     if (plot)
       gsWriteParaview(mp,"mp",1000,true);
@@ -189,7 +184,7 @@ int main (int argc, char** argv)
     gsVector<> vector = assembler.rhs();
 
     // Configure Structural Analsysis module
-    gsStaticSolver<real_t> staticSolver(matrix,vector,Jacobian,Residual);
+    gsStaticNewton<real_t> staticSolver(matrix,vector,Jacobian,Residual);
     staticSolver.setOptions(solverOptions);
 
     gsInfo << "Solving...\n";
@@ -216,7 +211,7 @@ int main (int argc, char** argv)
       std::map<std::string,const gsField<> *> fields;
       fields["Displacement"] = &displacementField;
       fields["von Mises"] = &stressField;
-      gsWriteParaviewMultiPhysics(fields,"solution",1000,true);
+      gsWriteParaviewMultiPhysics(fields,"solutionElasticity",1000,false);
     }
 
     return 1;

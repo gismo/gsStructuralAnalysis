@@ -1,3 +1,17 @@
+# To Do
+- ALResidual(x,lambda,force) --> ALResidual(x,lambda)
+
+# Changelog
+
+## v21.X:
+  - Static solves can be done by `gsStaticNewton` and `gsStaticDR` (Dynamic Relaxation method), both inheriting from `gsStaticBase`
+  - Provided base class for ALMs. All ALMs have a separate class now, and the singular point approach method is implemented in the base class.
+  - Eigenvalue problems (Buckling, Modal) have a base class as well, and `gsBucklingSolver` and `gsModalSolver` only provide a top-layer assigning the right matrices.
+  - Output splines instead of paraview!! (--plotfiles & postprocess.cpp)
+  - Dynamic relaxation method added!
+## v21.6:
+  - Initial version!
+
 # gsStructuralAnalysis
 
 Module for structural analysis with solids ([`gsElasticity`](https://github.com/gismo/gsElasticity/)) or Kirchhoff-Love shells ([`gsKLShell`](https://github.com/gismo/gsKLShell/)).
@@ -30,7 +44,7 @@ The `gsStructuralAnalysis` 	module provides the following analysis tools:
 * `gsStaticAnalysis`&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Requires (nonlinear) stiffness matrix and a right-hand side (residual for nonlinear). Simply solves Newton iterations.
 * `gsModalSolver`&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Solves the vibration problem to find eigenfrequencies and mode shapes given linear mass and stiffness matrices.
 * `gsBucklingSolver`&nbsp;&nbsp;&nbsp;&nbsp;Solves the a buckling eigenvalue problem given a solution **u** from a linear analysis, the linear stiffness matrix and the jacobian given **u**.
-* `gsArcLengthIterator`&nbsp;&nbsp;Used for nonlinear buckling analysis (i.e. *post buckling analysis*). It includes arc-length schemes, extended arc-length methods and branch-switching methods.
+* `gsALMBase`&nbsp;&nbsp;Used for nonlinear buckling analysis (i.e. *post buckling analysis*). It includes arc-length schemes, extended arc-length methods and branch-switching methods.
 * `gsTimeIntegrator`&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Solves the (nonlinear) second-order structural dynamics problem.
 
 All the tools in the `gsStructuralAnalysis` structural mass matrices, (linear/nonlinear) siffness matrices and forcing vectors/jacobians. The nonlinear modules typically work with jacobians and residuals of the following form (example using `gsThinShellAssembler`):
@@ -77,7 +91,7 @@ To use the `gsStaticAnalysis` class for a structural assembler (`gsElasticityAss
 ```
 gsSparseMatrix<T>   matrix = any_assembler.function_for_StiffnessMatrix();
 gsVector<T>         vector = any_assembler.function_for_rhs();
-gsStaticSolver<T>   staticSolver(matrix,vector);
+gsStaticNewton<T>   staticSolver(matrix,vector);
 
 ```
 ##### Initialization of nonlinear solver
@@ -86,7 +100,7 @@ gsSparseMatrix<T>   matrix = any_assembler.function_for_StiffnessMatrix();
 gsVector<T>         vector = any_assembler.function_for_rhs();
 Jacobian_t<T>       Jacobian = { your_jacobian };
 Residual_t<T>       Residual = { your_residual };
-gsStaticSolver<T>   staticSolver(matrix,vector,Jacobian,Residual); // see above documentation for definitions of Jacobian_t and Residual_t
+gsStaticNewton<T>   staticSolver(matrix,vector,Jacobian,Residual); // see above documentation for definitions of Jacobian_t and Residual_t
 ```
 ##### General use
 ```
@@ -118,15 +132,15 @@ gsMatrix<T> values = buckling.values();
 gsMatrix<T> vectors = buckling.vectors();
 ```
 
-#### Post-Buckling analysis using gsArcLengthIterations
-The implementation includes the *Riks Method*, the *(Consistent) Crisfield Method*, the *Extended Iterations Method* and a simple *Load Control Method*.
+#### Post-Buckling analysis using arc-length methods
+The implementation includes the *Riks Method*, the *(Consistent) Crisfield Method* and a simple *Load Control Method*.
 
-To use the `gsArcLengthIterator` class for a structural assembler (`gsElasticityAssembler` or `gsThinShellAssembler`), one simply performs the following steps:
+To use the `gsALMBase` class (here the derived `gsALMCrisfield`) for a structural assembler (`gsElasticityAssembler` or `gsThinShellAssembler`), one simply performs the following steps:
 ```
 gsVector<T>         vector = any_assembler.function_for_rhs(); // this is the force of the linear system
 Jacobian_t<T>       Jacobian = { your_jacobian };
 ALResidual_t<T>     ALResidual = { your_arclenght_residual };
-gsArcLengthIterator<T> arclength(Jacobian, ALResidual, Force);
+gsALMCrisfield<T> arclength(Jacobian, ALResidual, Force);
 
 // example for setting options
 arcLength.options().setInt("Method",method); // method 0: 1: 2: 3: 4:

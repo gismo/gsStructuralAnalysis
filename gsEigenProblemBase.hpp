@@ -1,6 +1,6 @@
- /** @file gsBucklingSolver.hpp
+ /** @file gsEigenProblemBase.hpp
 
-    @brief Performs linear buckling analysis given a matrix or functions of a matrix
+    @brief Performs linear modal analysis given a matrix or functions of a matrix
 
     This file is part of the G+Smo library.
 
@@ -11,30 +11,27 @@
     Author(s): H.M. Verhelst (2019-..., TU Delft)
 */
 
+#include <typeinfo>
 #pragma once
-
-
-//////////////////////////////////////////////////
-//////////////////////////////////////////////////
 
 namespace gismo
 {
 
 template <class T, Spectra::GEigsMode GEigsMode>
-void gsBucklingSolver<T,GEigsMode>::initializeMatrix()
+void gsEigenProblemBase<T,GEigsMode>::compute()
 {
-  if (m_verbose) { gsInfo<<"Computing matrices" ; }
-  m_solver.compute(m_A);
-  if (m_verbose) { gsInfo<<"." ; }
-  m_solVec = m_solver.solve(m_scaling*m_rhs);
-  if (m_verbose) { gsInfo<<"." ; }
-  m_B = m_dnonlinear(m_solVec,gsVector<T>::Zero(m_solVec.rows()))-m_A;
-  if (m_verbose) { gsInfo<<"." ; }
-  if (m_verbose) { gsInfo<<"Finished\n" ; }
+    if (m_verbose) { gsInfo<<"Solving eigenvalue problem" ; }
+    m_eigSolver.compute(m_A,m_B);
+    if (m_verbose) { gsInfo<<"." ; }
+    m_values  = m_eigSolver.eigenvalues();
+    if (m_verbose) { gsInfo<<"." ; }
+    m_vectors = m_eigSolver.eigenvectors();
+    if (m_verbose) { gsInfo<<"." ; }
+    if (m_verbose) { gsInfo<<"Finished\n" ; }
 };
 
 template <class T, Spectra::GEigsMode GEigsMode>
-void gsBucklingSolver<T,GEigsMode>::compute(T shift)
+void gsEigenProblemBase<T,GEigsMode>::compute(T shift)
 {
     if (m_verbose) { gsInfo<<"Solving eigenvalue problem" ; }
     m_eigSolver.compute(m_A-shift*m_B,m_B);
@@ -53,7 +50,7 @@ typename std::enable_if<_GEigsMode==Spectra::GEigsMode::Cholesky ||
                         _GEigsMode==Spectra::GEigsMode::RegularInverse
                         ,
                         void>::type
-gsBucklingSolver<T,GEigsMode>::computeSparse_impl(T shift, index_t number, index_t ncvFac, Spectra::SortRule selectionRule, Spectra::SortRule sortRule)
+gsEigenProblemBase<T,GEigsMode>::computeSparse_impl(T shift, index_t number, index_t ncvFac, Spectra::SortRule selectionRule, Spectra::SortRule sortRule)
 {
 #ifdef GISMO_WITH_SPECTRA
   if (m_verbose) { gsInfo<<"Solving eigenvalue problem" ; }
@@ -87,7 +84,7 @@ typename std::enable_if<_GEigsMode==Spectra::GEigsMode::ShiftInvert ||
                         _GEigsMode==Spectra::GEigsMode::Cayley
                         ,
                         void>::type
-gsBucklingSolver<T,GEigsMode>::computeSparse_impl(T shift, index_t number, index_t ncvFac, Spectra::SortRule selectionRule, Spectra::SortRule sortRule)
+gsEigenProblemBase<T,GEigsMode>::computeSparse_impl(T shift, index_t number, index_t ncvFac, Spectra::SortRule selectionRule, Spectra::SortRule sortRule)
 {
 #ifdef GISMO_WITH_SPECTRA
   if (selectionRule == Spectra::SortRule::SmallestMagn )
@@ -119,7 +116,7 @@ gsBucklingSolver<T,GEigsMode>::computeSparse_impl(T shift, index_t number, index
 };
 
 template <class T, Spectra::GEigsMode GEigsMode>
-void gsBucklingSolver<T,GEigsMode>::computePower()
+void gsEigenProblemBase<T,GEigsMode>::computePower()
 {
     if (m_verbose) { gsInfo<<"Solving eigenvalue problem" ; }
     gsMatrix<T> D = m_A.toDense().inverse() * (m_B);
@@ -150,9 +147,8 @@ void gsBucklingSolver<T,GEigsMode>::computePower()
     if (m_verbose) { gsInfo<<"Finished\n" ; }
 };
 
-
 template <class T, Spectra::GEigsMode GEigsMode>
-std::vector<std::pair<T,gsMatrix<T>> > gsBucklingSolver<T,GEigsMode>::makeMode(int k) const
+std::vector<std::pair<T,gsMatrix<T>> > gsEigenProblemBase<T,GEigsMode>::makeMode(int k) const
 {
     std::vector<std::pair<T,gsMatrix<T>> > mode;
     mode.push_back( std::make_pair( m_values.at(k), m_vectors.col(k) ) );
