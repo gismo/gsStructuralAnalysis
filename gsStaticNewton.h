@@ -83,6 +83,9 @@ public:
     :
         m_linear(linear),
         m_force(force),
+        m_nonlinear(nonlinear),
+        m_dnonlinear(nullptr),
+        m_residualFun(nullptr),
         m_ALresidualFun(ALResidual)
     {
         m_L = 1.0;
@@ -90,6 +93,12 @@ public:
         {
             return m_ALresidualFun(x,m_L);
         };
+
+        m_dnonlinear = [this](gsVector<T> const & x, gsVector<T> const & dx)
+        {
+            return m_nonlinear(x);
+        };
+
         this->_init();
         m_NL = true;
     }
