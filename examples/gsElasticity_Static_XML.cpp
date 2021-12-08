@@ -1,6 +1,6 @@
-/** @file gsElasticity_Static.cpp
+/** @file gsElasticity_Static_XML.cpp
 
-    @brief Static simulations of a solid
+    @brief Static simulations of a solid reading from an XML file
 
     This file is part of the G+Smo library.
 
@@ -34,9 +34,6 @@ int main (int argc, char** argv)
     int numHref     = 0;
     bool plot       = false;
     bool nonlinear  = false;
-
-    real_t E_modulus     = 1;
-    real_t PoissonRatio = 0;
 
     int testCase = 0;
 

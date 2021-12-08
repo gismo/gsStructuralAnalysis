@@ -2,6 +2,10 @@
 
     @brief Benchmark for the collapsing frustrum with Displacement Control (DC)
 
+    Based on:
+    Başar, Y., & Itskov, M. (1998). Finite element formulation of the Ogden material model with application to ruber-like shells.
+    International Journal for Numerical Methods in Engineering. https://doi.org/10.1002/(SICI)1097-0207(19980815)42:7<1279::AID-NME437>3.0.CO;2-I
+
     This file is part of the G+Smo library.
 
     This Source Code Form is subject to the terms of the Mozilla Public
@@ -169,7 +173,8 @@ int main (int argc, char** argv)
 
     std::string commands = "mkdir -p " + dirname;
     const char *command = commands.c_str();
-    system(command);
+    int systemRet = system(command);
+    GISMO_ASSERT(systemRet!=-1,"Something went wrong with calling the system argument");
 
     // plot geometry
     if (plot)
@@ -430,8 +435,8 @@ int main (int argc, char** argv)
     gsInfo<<"Total ellapsed assembly time: \t\t"<<time<<" s\n";
     gsInfo<<"Total ellapsed solution time (incl. assembly): \t"<<totaltime<<" s\n";
 
-  delete assembler;
   delete materialMatrix;
+  delete assembler;
 
   return result;
 }

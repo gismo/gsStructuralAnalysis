@@ -1,4 +1,4 @@
-/** @file gsThinShell_Static.cpp
+/** @file gsThinShell_Static2.cpp
 
     @brief Static simulations of a shell
 
@@ -18,7 +18,7 @@
 
 #include <gsElasticity/gsWriteParaviewMultiPhysics.h>
 
-#include <gsStructuralAnalysis/gsStaticSolver.h>
+#include <gsStructuralAnalysis/gsStaticNewton.h>
 
 //#include <gsThinShell/gsNewtonIterator.h>
 
@@ -1068,11 +1068,11 @@ int main(int argc, char *argv[])
         tmp << 0,0,-1e-6;
     }
 
-    gsDebugVar(bc);
     //! [Refinement]
 
     // Linear isotropic material model
     gsConstantFunction<> force(tmp,3);
+    gsConstantFunction<> pressFun(pressure,3);
     gsFunctionExpr<> t(std::to_string(thickness), 3);
     gsFunctionExpr<> E(std::to_string(E_modulus),3);
     gsFunctionExpr<> nu(std::to_string(PoissonRatio),3);
@@ -1178,6 +1178,7 @@ int main(int argc, char *argv[])
     // Construct assembler object
     assembler->setOptions(opts);
     assembler->setPointLoads(pLoads);
+    assembler->setPressure(pressFun);
 
     // gsVector<> found_vec(3);
     // found_vec<<0,0,2;
@@ -1242,7 +1243,7 @@ int main(int argc, char *argv[])
     gsVector<> vector = assembler->rhs();
 
     // // Configure Structural Analsysis module
-    // gsStaticSolver<real_t> staticSolver(matrix,vector,Jacobian,Residual);
+    // gsStaticNewton<real_t> staticSolver(matrix,vector,Jacobian,Residual);
     // gsOptionList solverOptions = staticSolver.options();
     // solverOptions.setInt("Verbose",verbose);
     // solverOptions.setInt("MaxIterations",10);
@@ -1440,6 +1441,9 @@ int main(int argc, char *argv[])
     }
     gsInfo<<"Total ellapsed assembly time: \t\t"<<time<<" s\n";
     gsInfo<<"Total ellapsed solution time (incl. assembly): \t"<<totaltime<<" s\n";
+
+    delete materialMatrix;
+    delete assembler;
 
     return EXIT_SUCCESS;
 

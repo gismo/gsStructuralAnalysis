@@ -85,7 +85,9 @@ int main (int argc, char** argv)
 
     try { cmd.getValues(argc,argv); } catch (int rv) { return rv; }
 
-    real_t L,B,H;
+    real_t L = 0;
+    real_t B = 0;
+    real_t H = 0;
     gsMultiBasis<> dbasis;
     if (testCase==0)
     {
@@ -130,12 +132,13 @@ int main (int argc, char** argv)
     }
     else
     {
-        gsInfo<<"No geometry found\n";
+        GISMO_ERROR("No geometry found");
     }
 
     gsInfo<<"Basis (patch 0): "<< dbasis.basis(0) << "\n";
 
     gsBoundaryConditions<> BCs;
+    BCs.setGeoMap(mp);
 
     real_t displ = 1e0;
     gsFunctionExpr<> displ1("1",3);
@@ -445,9 +448,9 @@ gsMultiPatch<T> BrickDomain(int n, int m, int o, int p, int q ,int r, T L, T B, 
   // Define a matrix with ones
   gsVector<> temp(len0);
   temp.setOnes();
-  for (index_t l = 0; l < len2; l++)
+  for (size_t l = 0; l < len2; l++)
     {
-        for (index_t k = 0; k < len1; k++)
+        for (size_t k = 0; k < len1; k++)
         {
             index_t offset = l*len0*len1;
             // First column contains x-coordinates (length)

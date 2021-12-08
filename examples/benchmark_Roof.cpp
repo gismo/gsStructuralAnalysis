@@ -1,6 +1,11 @@
-/** @file gsThinShell_ArcLength.cpp
+/** @file benchmark_Roof.cpp
 
-    @brief Code for the arc-length method of a shell based on loads
+    @brief Collapse of a cylindrical roof, from
+
+    Guo, Y., Do, H., & Ruess, M. (2019). Isogeometric stability analysis of thin shells:
+    From simple geometries to engineering models.
+    International Journal for Numerical Methods in Engineering.
+    https://doi.org/10.1002/nme.6020
 
     This file is part of the G+Smo library.
 
@@ -100,9 +105,6 @@ int main (int argc, char** argv)
     fd.getFirst<gsOptionList>(opts);
 
     gsMultiPatch<> mp;
-    real_t aDim;
-    real_t bDim;
-
 
     real_t thickness;
     real_t Exx, Eyy, Gxy;
@@ -150,6 +152,7 @@ int main (int argc, char** argv)
 
     // Boundary conditions
     gsBoundaryConditions<> BCs;
+    BCs.setGeoMap(mp);
     gsPointLoads<real_t> pLoads = gsPointLoads<real_t>();
 
     // Initiate Surface forces
@@ -198,7 +201,9 @@ int main (int argc, char** argv)
 
     std::string commands = "mkdir -p " + dirname;
     const char *command = commands.c_str();
-    system(command);
+    int systemRet = system(command);
+    GISMO_ASSERT(systemRet!=-1,"Something went wrong with calling the system argument");
+
 
     // plot geometry
     if (plot)
@@ -460,7 +465,9 @@ int main (int argc, char** argv)
       Smembrane_p.save();
     }
 
-    delete arcLength;
+  delete materialMatrix;
+  delete assembler;
+  delete arcLength;
 
   return result;
 }

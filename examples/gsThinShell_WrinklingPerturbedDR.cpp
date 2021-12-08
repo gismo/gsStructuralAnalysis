@@ -1,6 +1,6 @@
-/** @file gsThinShell_WrinklingPerturbed.cpp
+/** @file gsThinShell_WrinklingPerturbedDR.cpp
 
-    @brief Performs wrinkling simulations of different cases USING A PERTURBATION from a multipatch
+    @brief Performs wrinkling simulations of different cases USING A PERTURBATION from a multipatch using Dynamic Relaxation
 
     This file is part of the G+Smo library.
 
@@ -202,6 +202,9 @@ int main (int argc, char** argv)
           C10 = 6.21485502e4; // c1/2
           C01 = 15.8114570e4; // c2/2
         }
+        else
+          C10 = C01 = 0;
+
         Ratio = C10/C01;
         mu = 2*(C01+C10);
       }
@@ -211,6 +214,8 @@ int main (int argc, char** argv)
           C10 = (0.5)*1e6;
         else if (testCase==3 || testCase==5 || testCase==7)
           C10 = 19.1010178e4;
+        else
+          C10 = 0;
 
         mu = 2*C10;
       }
@@ -345,7 +350,7 @@ int main (int argc, char** argv)
     gsConstantFunction<> displ(0.0,3);
     gsConstantFunction<> disply(0.0,3);
 
-    real_t Displ;
+    real_t Displ = 0;
 
     if (testCase == 2 || testCase == 3)
     {
@@ -460,7 +465,8 @@ int main (int argc, char** argv)
 
     std::string commands = "mkdir -p " + dirname;
     const char *command = commands.c_str();
-    system(command);
+    int systemRet = system(command);
+    GISMO_ASSERT(systemRet!=-1,"Something went wrong with calling the system argument");
 
     // plot geometry
     if (plot)
@@ -774,6 +780,9 @@ int main (int argc, char** argv)
         Py_Finalize();
       #endif
     }
+
+  delete materialMatrix;
+  delete assembler;
 
   return result;
 }

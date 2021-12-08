@@ -1,6 +1,11 @@
-/** @file example_DynamicShellNL.cpp
+/** @file example_DynamicShell.cpp
 
     @brief Example for nonlinear time integration of a linear shell
+
+    Fig 12 of:
+    Filho, L. A. D., & Awruch, A. M. (2004).
+    Geometrically nonlinear static and dynamic analysis of shells and plates using the eight-node hexahedral element with one-point quadrature.
+    Finite Elements in Analysis and Design. https://doi.org/10.1016/j.finel.2003.08.012
 
     This file is part of the G+Smo library.
 
@@ -98,6 +103,9 @@ int main (int argc, char** argv)
     // dirname = "DynamicShellResults_NM_r" + std::to_string(numHref) + "e" + std::to_string(numElevate) + "_dt" + std::to_string(dt);
     dirname = "DynamicShellResults";
     system(("mkdir -p " + dirname).c_str());
+    int systemRet = system(("mkdir -p " + dirname).c_str());
+    GISMO_ASSERT(systemRet!=-1,"Something went wrong with calling the system argument");
+
 
     wn = dirname + "/output.csv";
 
@@ -146,6 +154,7 @@ int main (int argc, char** argv)
 //------------------------------------------------------------------------------
 
     gsBoundaryConditions<> BCs;
+    BCs.setGeoMap(mp);
     gsPointLoads<real_t> pLoads = gsPointLoads<real_t>();
 
     BCs.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 0 ); // unknown 0 - x
@@ -297,5 +306,9 @@ for (index_t i=0; i<steps; i++)
   solution.patch(0).coefs() += mp.patch(0).coefs();// assuming 1 patch here
 }
 collection.save();
+
+delete materialMatrix;
+delete assembler;
+
 return result;
 }

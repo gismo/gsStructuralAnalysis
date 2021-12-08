@@ -247,6 +247,7 @@ int main (int argc, char** argv)
 
     // Boundary conditions
     gsBoundaryConditions<> BCs;
+    BCs.setGeoMap(mp);
     gsPointLoads<real_t> pLoads = gsPointLoads<real_t>();
 
     std::string output = "solution";
@@ -274,7 +275,8 @@ int main (int argc, char** argv)
 
     std::string commands = "mkdir -p " + dirname;
     const char *command = commands.c_str();
-    system(command);
+    int systemRet = system(command);
+    GISMO_ASSERT(systemRet!=-1,"Something went wrong with calling the system argument");
 
     // plot geometry
     if (plot)
@@ -572,6 +574,10 @@ int main (int argc, char** argv)
       Smembrane.save();
       Smembrane_p.save();
     }
+
+    delete materialMatrix;
+    delete assembler;
+    delete arcLength;
 
   return result;
 }

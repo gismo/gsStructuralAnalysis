@@ -143,6 +143,7 @@ int main (int argc, char** argv)
 
     // Boundary conditions
     gsBoundaryConditions<> BCs;
+    BCs.setGeoMap(mp);
     gsPointLoads<real_t> pLoads = gsPointLoads<real_t>();
 
     BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 0 ); // unknown 2 - z
@@ -322,6 +323,8 @@ int main (int argc, char** argv)
       gsInfo<< std::setprecision(12) <<strains.at(k)<<",";
     gsInfo<<"\n";
 
+  delete materialMatrix;
+  delete assembler;
 
   return result;
 }

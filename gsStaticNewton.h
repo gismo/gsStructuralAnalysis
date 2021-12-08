@@ -34,59 +34,90 @@ protected:
 
     typedef gsStaticBase<T> Base;
 
-    typedef std::function<gsVector<T>(gsVector<T> const &)   >          Residual_t;
-    typedef std::function<gsVector<T>(gsVector<T> const &, T)>          ALResidual_t;
-    typedef std::function < gsSparseMatrix<T> ( gsVector<T> const & ) > Jacobian_t;
+    typedef std::function<gsVector<T>(gsVector<T> const &)   >                                          Residual_t;
+    typedef std::function<gsVector<T>(gsVector<T> const &, T)>                                          ALResidual_t;
+    typedef std::function < gsSparseMatrix<T> ( gsVector<T> const & ) >                                 Jacobian_t;
+    typedef std::function<gsSparseMatrix<real_t> (gsVector<real_t> const &,gsVector<real_t> const &)>   dJacobian_t;
 
 public:
 
-  /// Constructor giving access to the gsShellAssembler object to create a linear system per iteration
-  gsStaticNewton(   const gsSparseMatrix<T> &linear,
-                    const gsVector<T> &force
-                    ) :
-    m_linear(linear),
-    m_force(force),
-    m_nonlinear(nullptr),
-    m_residualFun(nullptr)
-  {
-    this->_init();
-    m_NL = false;
-    m_U.setZero(m_dofs);
-  }
+    /// Constructor giving access to the gsShellAssembler object to create a linear system per iteration
+    gsStaticNewton(     const gsSparseMatrix<T> &linear,
+                        const gsVector<T> &force        )
+    :
+        m_linear(linear),
+        m_force(force),
+        m_nonlinear(nullptr),
+        m_residualFun(nullptr)
+    {
+        this->_init();
+        m_NL = false;
+        m_U.setZero(m_dofs);
+    }
 
-  gsStaticNewton(   const gsSparseMatrix<T> &linear,
+    gsStaticNewton( const gsSparseMatrix<T> &linear,
                     const gsVector<T> &force,
                     const Jacobian_t &nonlinear,
-                    const Residual_t &residual
-                    ) :
-    m_linear(linear),
-    m_force(force),
-    m_nonlinear(nonlinear),
-    m_residualFun(residual),
-    m_ALresidualFun(nullptr)
-  {
-    this->_init();
-    m_NL = true;
-  }
+                    const Residual_t &residual      )
+    :
+        m_linear(linear),
+        m_force(force),
+        m_nonlinear(nonlinear),
+        m_dnonlinear(nullptr),
+        m_residualFun(residual),
+        m_ALresidualFun(nullptr)
+    {
+        m_dnonlinear = [this](gsVector<T> const & x, gsVector<T> const & dx)
+        {
+            return m_nonlinear(x);
+        };
 
-  gsStaticNewton(   const gsSparseMatrix<T> &linear,
+        this->_init();
+        m_NL = true;
+    }
+
+    gsStaticNewton( const gsSparseMatrix<T> &linear,
                     const gsVector<T>  &force,
                     const Jacobian_t   &nonlinear,
-                    const ALResidual_t &ALResidual
-                    ) :
-    m_linear(linear),
-    m_force(force),
-    m_nonlinear(nonlinear),
-    m_ALresidualFun(ALResidual)
-  {
-    m_L = 1.0;
-    m_residualFun = [this](gsVector<T> const & x)
+                    const ALResidual_t &ALResidual  )
+    :
+        m_linear(linear),
+        m_force(force),
+        m_ALresidualFun(ALResidual)
     {
-        return m_ALresidualFun(x,m_L);
-    };
-    this->_init();
-    m_NL = true;
-  }
+        m_L = 1.0;
+        m_residualFun = [this](gsVector<T> const & x)
+        {
+            return m_ALresidualFun(x,m_L);
+        };
+        this->_init();
+        m_NL = true;
+    }
+
+    /**
+     * @brief      { function_description }
+     *
+     * @param[in]  linear      The linear matrix
+     * @param[in]  force       The force vector
+     * @param[in]  dnonlinear  The jacobian taking the solution x and the iterative update dx
+     * @param[in]  residual    The residual function
+     */
+    gsStaticNewton(   const gsSparseMatrix<T> &linear,
+                      const gsVector<T> &force,
+                      const dJacobian_t &dnonlinear,
+                      const Residual_t &residual
+                      )
+    :
+        m_linear(linear),
+        m_force(force),
+        m_nonlinear(nullptr),
+        m_dnonlinear(dnonlinear),
+        m_residualFun(residual),
+        m_ALresidualFun(nullptr)
+    {
+        this->_init();
+        m_NL = true;
+    }
 
 public:
 
@@ -131,6 +162,7 @@ protected:
     const gsSparseMatrix<T> & m_linear;
     const gsVector<T> & m_force;
     const Jacobian_t m_nonlinear;
+    dJacobian_t m_dnonlinear;
     Residual_t m_residualFun;
     const ALResidual_t m_ALresidualFun;
 

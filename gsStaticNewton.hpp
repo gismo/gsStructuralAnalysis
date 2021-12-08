@@ -101,7 +101,7 @@ gsVector<T> gsStaticNewton<T>::solveNonlinear()
 
     if (m_DeltaU.norm()==0 || m_DeltaU.rows()==0) ///
     {
-        m_DeltaU = this->solveLinear();
+        m_deltaU = m_DeltaU = this->solveLinear();
         m_U.setZero(); // Needed because linear solve modifies m_U.
         m_headstart = true; // due to this, the relative residual is based on the solution of the linear solve
     }
@@ -114,7 +114,7 @@ gsVector<T> gsStaticNewton<T>::solveNonlinear()
 
     for (m_numIterations = 0; m_numIterations != m_maxIterations; ++m_numIterations)
     {
-        jacMat = m_nonlinear(m_U+m_DeltaU);
+        jacMat = m_dnonlinear(m_U+m_DeltaU,m_deltaU);
         if (m_verbose==2)
         {
             gsInfo<<"Matrix: \n"<<jacMat.toDense()<<"\n";

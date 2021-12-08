@@ -1,6 +1,6 @@
- /** @file gsArcLengthIterator.h
+ /** @file gsALMBase.h
 
-    @brief Performs the arc length method to solve a nonlinear equation system.
+    @brief Base class to perform the arc length method to solve a nonlinear equation system.
 
     This file is part of the G+Smo library.
 
@@ -12,7 +12,9 @@
 */
 
 #pragma once
+#ifdef GISMO_WITH_SPECTRA
 #include <gsSpectra/gsSpectra.h>
+#endif
 
 namespace gismo
 {

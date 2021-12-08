@@ -1508,16 +1508,10 @@ void gsALMBase<T>::switchBranch()
 {
   m_V.normalize();
   real_t lenPhi = m_V.norm();
-  gsDebugVar(lenPhi);
   real_t xi = lenPhi/m_tau;
   // gsInfo<<xi<<"\n";
   m_DeltaU = xi*m_V;
-  gsDebugVar(m_U);
   m_U = m_U + m_DeltaU;
-
-  gsDebugVar(m_DeltaU);
-  gsDebugVar(m_U);
-
 
   m_DeltaLold = 0.0;
   m_DeltaUold.setZero();

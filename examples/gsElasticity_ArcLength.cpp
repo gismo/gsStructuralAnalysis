@@ -1,4 +1,4 @@
-/** @file gsThinShell_ArcLength.cpp
+/** @file gsElasticity_ArcLength.cpp
 
     @brief Code for the arc-length method of a solid based on loads
 
@@ -64,7 +64,6 @@ int main (int argc, char** argv)
     real_t thickness = 1e-3;
     real_t E_modulus     = 1;
     real_t PoissonRatio = 0;
-    real_t Density = 1e0;
     gsMultiPatch<> mp;
     real_t tau = 1e4;
 
@@ -75,7 +74,6 @@ int main (int argc, char** argv)
     real_t aDim = 2.5;
     real_t bDim = 1.0;
     real_t eta = 0;
-    real_t Spring = 0;
 
     real_t relax = 1.0;
 
@@ -184,6 +182,7 @@ int main (int argc, char** argv)
     gsInfo<<"Basis (patch 0): "<< dbasis.basis(0) << "\n";
 
     gsBoundaryConditions<> BCs;
+    BCs.setGeoMap(mp);
 
     real_t displ = 1e0;
     gsFunctionExpr<> displ1("1",3);
@@ -286,7 +285,9 @@ int main (int argc, char** argv)
 
     std::string commands = "mkdir -p " + dirname;
     const char *command = commands.c_str();
-    system(command);
+    int systemRet = system(command);
+    GISMO_ASSERT(systemRet!=-1,"Something went wrong with calling the system argument");
+
 
     // plot geometry
     if (plot)
@@ -471,6 +472,8 @@ int main (int argc, char** argv)
       collection.save();
     }
 
+  delete arcLength;
+
   return result;
 }
 
@@ -527,9 +530,9 @@ gsMultiPatch<T> BrickDomain(int n, int m, int o, int p, int q ,int r, T L, T B, 
   // Define a matrix with ones
   gsVector<> temp(len0);
   temp.setOnes();
-  for (index_t l = 0; l < len2; l++)
+  for (size_t l = 0; l < len2; l++)
     {
-        for (index_t k = 0; k < len1; k++)
+        for (size_t k = 0; k < len1; k++)
         {
             index_t offset = l*len0*len1;
             // First column contains x-coordinates (length)
