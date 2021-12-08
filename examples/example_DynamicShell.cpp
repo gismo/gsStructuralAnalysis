@@ -33,7 +33,6 @@ int main (int argc, char** argv)
     int numElevate  = 1;
     int numHref     = 1;
     bool plot       = false;
-    bool nonlinear  = false;
 
     real_t thickness = 0.01576;
     real_t width = 1; // Width of the strip is equal to 1.
@@ -42,7 +41,6 @@ int main (int argc, char** argv)
     real_t E_modulus = 1e7;
     real_t PoissonRatio = 0.3;
     real_t Density = 0.000245;
-    real_t load = 1e-3;
     gsMultiPatch<> mp;
 
     real_t EA = E_modulus*Area;
@@ -102,7 +100,6 @@ int main (int argc, char** argv)
     std::string dirname;
     // dirname = "DynamicShellResults_NM_r" + std::to_string(numHref) + "e" + std::to_string(numElevate) + "_dt" + std::to_string(dt);
     dirname = "DynamicShellResults";
-    system(("mkdir -p " + dirname).c_str());
     int systemRet = system(("mkdir -p " + dirname).c_str());
     GISMO_ASSERT(systemRet!=-1,"Something went wrong with calling the system argument");
 

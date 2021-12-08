@@ -15,6 +15,7 @@
 #ifdef GISMO_WITH_SPECTRA
 #include <gsSpectra/gsSpectra.h>
 #endif
+#include <gsIO/gsOptionList.h>
 
 namespace gismo
 {

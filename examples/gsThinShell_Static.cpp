@@ -1296,27 +1296,6 @@ int main(int argc, char *argv[])
         return m;
     };
 
-    dJacobian_t dJacobian = [&MIP,&time,&stopwatch,&assembler,&mp_def](gsVector<real_t> const &x, gsVector<real_t> const &dx)
-    {
-        stopwatch.restart();
-
-        // this also works
-        // assembler->constructSolution(x-upVec,mp_prev);
-        // if (MIP)
-          // assembler->assembleMatrix(mp_def,mp_prev,upVec);
-        if (MIP)
-            assembler->assembleMatrix(x,x-dx);
-        else
-        {
-            assembler->constructSolution(x,mp_def);
-            assembler->assembleMatrix(mp_def);
-        }
-
-        time += stopwatch.stop();
-        gsSparseMatrix<real_t> m = assembler->matrix();
-        return m;
-    };
-
     // Function for the Residual
     Residual_t Residual = [&time,&stopwatch,&assembler,&mp_def](gsVector<real_t> const &x)
     {

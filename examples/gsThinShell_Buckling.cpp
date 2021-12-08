@@ -84,6 +84,8 @@ int main (int argc, char** argv)
 
     bool MIP = false;
 
+    index_t nmodes = 1;
+
     std::string assemberOptionsFile("options/solver_options.xml");
 
     gsCmdLine cmd("Buckling analysis for thin shells.");
