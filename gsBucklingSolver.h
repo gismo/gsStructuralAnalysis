@@ -20,11 +20,28 @@ namespace gismo
 {
 
 /**
-    @brief Performs the arc length method to solve a nonlinear equation system.
+    @brief
+    Performs linear buckling analysis given a matrix or functions of a matrix
 
-    \tparam T coefficient type
+    Linear buckling analysis is performed by solving the following eigenvalue problem:
 
-    \ingroup ThinShell
+    \f{align*}{
+        (K_L-\sigma K_{NL}(\mathbf{u}^L_h))\mathbf{v}_h = \lambda K_{NL}(\mathbf{u}_h) \mathbf{v}_h
+    \f}
+
+    Where \f$K_L\f$ is the linear stiffness matrix, \f$K_{NL}(\mathbf{u}_h)\f$ is the tangential
+    stiffness matrix assembled around \f$\mathbf{u}^L_h\f$. The solution \f$\mathbf{u}^L_h\f$ is
+    obtained by solving a linear problem \f$K_L\mathbf{u}^L_h = \mathbf{P}\f$. Furthermore,
+    \f$\sigma\f$ is a shift and \f$(\lambda+\sigma\f)\mathbf{P}$ is the critical buckling load.
+    The modeshape is represented by \f$\phi\f$.
+
+    An example with the use of this class is in \ref gsThinShell_Buckling.cpp
+
+    \tparam T           coefficient type
+
+    \tparam GEigsMode   The mode for the Spectra solver
+
+    \ingroup gsStructuralAnalysis
 */
 template <class T, Spectra::GEigsMode GEigsMode = Spectra::GEigsMode::Cholesky>
 class gsBucklingSolver : public gsEigenProblemBase<T,GEigsMode>
@@ -35,7 +52,14 @@ protected:
 
 public:
 
-    /// Constructor giving access to the gsShellAssembler object to create a linear system per iteration
+    /**
+     * @brief      Constructor
+     *
+     * @param      linear     The linear stiffness matrix
+     * @param      rhs        The external force vector for linearization
+     * @param      nonlinear  The Jacobian
+     * @param[in]  scaling    A scaling factor (optional)
+     */
     gsBucklingSolver(   gsSparseMatrix<T> &linear,
                         gsVector<T> &rhs,
                         std::function < gsSparseMatrix<T> ( gsVector<T> const & ) > &nonlinear,
@@ -54,7 +78,14 @@ public:
     this->initializeMatrix();
   }
 
-  /// Constructor giving access to the gsShellAssembler object to create a linear system per iteration
+  /**
+   * @brief      Constructor
+   *
+   * @param      linear     The linear stiffness matrix
+   * @param      rhs        The external force vector for linearization
+   * @param      nonlinear  The Jacobian taking the solution and the update as argument
+   * @param[in]  scaling    A scaling factor (optional)
+   */
   gsBucklingSolver(     gsSparseMatrix<T> &linear,
                         gsVector<T> &rhs,
                         std::function < gsSparseMatrix<T> ( gsVector<T> const &, gsVector<T> const & ) > &dnonlinear,
@@ -70,7 +101,12 @@ public:
   }
 
 
-  /// Constructor giving access to the gsShellAssembler object to create a linear system per iteration
+  /**
+   * @brief      Constructor
+   *
+   * @param      linear     The linear stiffness matrix
+   * @param      nonlinear  The Jacobian which has already been assembled
+   */
   gsBucklingSolver(     gsSparseMatrix<T> &linear,
                         gsSparseMatrix<T> &nonlinear )
   {

@@ -4,8 +4,10 @@
 
     Figure 4 from Kiendl et al 2015
 
-    Kiendl, J., Hsu, M.-C., Wu, M. C. H., & Reali, A. (2015). Isogeometric Kirchhoff–Love shell formulations for general hyperelastic materials. Computer Methods in Applied Mechanics and Engineering, 291, 280–303. https://doi.org/10.1016/J.CMA.2015.03.010
-
+    Kiendl, J., Hsu, M.-C., Wu, M. C. H., & Reali, A. (2015).
+    Isogeometric Kirchhoff–Love shell formulations for general hyperelastic materials.
+    Computer Methods in Applied Mechanics and Engineering, 291, 280–303.
+    https://doi.org/10.1016/J.CMA.2015.03.010
 
     This file is part of the G+Smo library.
 

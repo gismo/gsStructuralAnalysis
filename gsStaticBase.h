@@ -1,6 +1,6 @@
  /** @file gsStaticBase.h
 
-    @brief Performs linear modal analysis given a matrix or functions of a matrix
+    @brief Base class for static solvers
 
     This file is part of the G+Smo library.
 
@@ -20,7 +20,7 @@ namespace gismo
 {
 
 /**
-    @brief Performs the arc length method to solve a nonlinear equation system.
+    @brief Base class for static solvers
 
     \tparam T coefficient type
 
@@ -33,13 +33,15 @@ public:
 
     virtual ~gsStaticBase() {};
 
+    /// Solve
     virtual void solve() = 0;
-    // virtual void init() = 0;
-    // virtual void restart() = 0;
 
+    /// Initialize output
     virtual void initOutput() = 0;
+    /// Stepwise output
     virtual void stepOutput(index_t k) = 0;
 
+    /// Get default options
     virtual void defaultOptions()
     {
         m_options.addReal("tol","Relative Tolerance",1e-6);
@@ -50,6 +52,7 @@ public:
         m_options.addInt ("BifurcationMethod","Bifurcation Identification based on: 0: Determinant;  1: Eigenvalue",stabmethod::Eigenvalue);
     }
 
+    /// Apply the options
     virtual void getOptions()
     {
         m_tolF = m_options.getReal("tolF")!=-1 ? m_options.getReal("tolF") : m_options.getReal("tol");
@@ -59,21 +62,29 @@ public:
         m_stabilityMethod     = m_options.getInt ("BifurcationMethod");
     }
 
+    /// Set the options from \a options
     void setOptions(gsOptionList & options) {m_options.update(options,gsOptionList::addIfUnknown); }
 
+    /// Get options
     gsOptionList options() const {return m_options;}
 
+    /// Access the solution
     gsVector<T> solution() const {return m_U;}
+
+    /// Access the update
     gsVector<T> update() const {return m_DeltaU;}
 
+    /// Set the displacement
     void setDisplacement(const gsVector<T> displacement)
     {
         m_start = true;
         m_U = displacement;
     }
 
+    /// Set the load
     void setLoad(const T L) { m_L = L;}
 
+    /// Set the displacement and the load
     void setSolution(const gsVector<T> displacement, const T L)
     {
         this->setDisplacement(displacement);
@@ -85,11 +96,16 @@ public:
         m_DeltaU = update;
     }
 
+    /// Returns the number of iterations
     index_t iterations() const { return m_numIterations; }
+
+    /// Returns whether the solver converged or not
     bool converged() const { return m_converged; }
 
+    /// Returns the number of DoFs of the system
     index_t numDofs() { return m_dofs; }
 
+    /// Reset the stored solution
     void reset()
     {
         m_U.setZero();
@@ -99,12 +115,14 @@ public:
         m_headstart = false;
     }
 
+    /// Returns the stability indicator
     T indicator(const gsSparseMatrix<T> & jacMat, T shift = -1e-2)
     {
        _computeStability(jacMat, shift);
        return m_indicator;
     }
 
+    /// Returns the stability vector
     gsVector<T> stabilityVec(const gsSparseMatrix<T> & jacMat, T shift = -1e-2)
     {
        _computeStability(jacMat, shift);
@@ -112,6 +130,7 @@ public:
     }
 
 protected:
+    /// Computes the stability vector using the determinant of the Jacobian
     virtual void _computeStabilityDet(const gsSparseMatrix<T> & jacMat)
     {
         m_LDLTsolver.compute(jacMat);
@@ -125,6 +144,7 @@ protected:
         m_stabilityVec = m_LDLTsolver.vectorD();
     }
 
+    /// Computes the stability vector using the eigenvalues of the Jacobian, optionally applying a shift
     virtual void _computeStabilityEig(const gsSparseMatrix<T> & jacMat, T shift)
     {
 #ifdef GISMO_WITH_SPECTRA
@@ -158,6 +178,7 @@ protected:
         m_indicator = m_stabilityVec.colwise().minCoeff()[0]; // This is required since D does not necessarily have one column.
     }
 
+    /// Computes the stability of the Jacobian, optionally applying a shift (if provided)
     virtual void _computeStability   (const gsSparseMatrix<T> & jacMat, T shift)
     {
         if (m_stabilityMethod == stabmethod::Determinant)

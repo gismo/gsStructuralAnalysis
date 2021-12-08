@@ -24,7 +24,7 @@ namespace gismo
 {
 
 /**
-    @brief Performs the arc length method to solve a nonlinear equation system.
+    @brief Performs the Consistent Crisfield arc length method to solve a nonlinear equation system.
 
     \tparam T coefficient type
 
@@ -51,7 +51,7 @@ protected:
 
 public:
 
-    /// Constructor giving access to the gsShellAssembler object to create a linear system per iteration
+    /// Constructor
     gsALMConsistentCrisfield(   std::function < gsSparseMatrix<T> ( gsVector<T> const & ) > &Jacobian,
                                 std::function < gsVector<T> ( gsVector<T> const &, T, gsVector<T> const & ) > &Residual,
                                 gsVector<T> &Force )
@@ -63,7 +63,7 @@ public:
         initMethods();
     }
 
-    /// Constructor giving access to the gsShellAssembler object to create a linear system per iteration
+    /// Constructor using the jacobian that takes the solution and the solution step
     gsALMConsistentCrisfield(   std::function < gsSparseMatrix<T> ( gsVector<T> const &, gsVector<T> const & ) > &dJacobian,
                                 std::function < gsVector<T> ( gsVector<T> const &, T, gsVector<T> const & ) > &Residual,
                                 gsVector<T> &Force )
@@ -77,22 +77,31 @@ public:
 
 protected:
 
-// Implementations for virtual functions
+    /// See gsALMBase
     void initMethods();
+    /// See gsALMBase
     void initiateStep();
+    /// See gsALMBase
     void iterationFinish();
 
+    /// See gsALMBase
     void quasiNewtonPredictor();
+    /// See gsALMBase
     void quasiNewtonIteration();
 
+    /// See gsALMBase
     void predictor();
+    /// See gsALMBase
     void iteration();
 
+    /// See gsALMBase
     void initOutput();
+    /// See gsALMBase
     void stepOutput();
 
-// Additional internal functions
+    /// See gsALMBase
     void defaultOptions();
+    /// See gsALMBase
     void getOptions();
 
 protected:

@@ -1,6 +1,6 @@
-/** @file .cpp
+/** @file gsStaticDR.cpp
 
-    @brief
+    @brief Static solver using the Dynamic Relaxation method
 
     This file is part of the G+Smo library.
 
@@ -17,6 +17,11 @@
 namespace gismo
 {
 
+/**
+ * @brief Static solver using the Dynamic Relaxation method
+ *
+ * @tparam     T     coefficient type
+ */
 template <class T>
 class gsStaticDR : public gsStaticBase<T>
 {
@@ -28,7 +33,14 @@ protected:
     typedef std::function<gsVector<T>(gsVector<T> const &, T)>  ALResidual_t;
 
 public:
-    /// Constructor given the matrices and timestep
+
+    /**
+     * @brief      Constructor
+     *
+     * @param[in]  M         Lumped mass matrix (as vector)
+     * @param[in]  F         External forcing vector
+     * @param[in]  Residual  The residual
+     */
     gsStaticDR( const gsVector<T> & M, // lumped
                 const gsVector<T> & F,
                 const Residual_t &Residual
@@ -42,7 +54,14 @@ public:
         this->_init();
     }
 
-    /// Constructor given the matrices and timestep
+
+    /**
+     * @brief      Constructs a new instance.
+     *
+     * @param[in]  M         Lumped mass matrix (as vector)
+     * @param[in]  F         External forcing vector
+     * @param[in]  Residual  The residual as arc-length object
+     */
     gsStaticDR( const gsVector<T>   & M, // lumped
                 const gsVector<T>   & F,
                 const ALResidual_t  & ALResidual
@@ -62,50 +81,59 @@ public:
 
 /// gsStaticBase base functions
 public:
+    /// See \ref gsStaticBase
     void solve();
+    /// See \ref gsStaticBase
     void initialize();
 
+    /// See \ref gsStaticBase
     void initOutput();
+    /// See \ref gsStaticBase
     void stepOutput(index_t k);
 
+    /// See \ref gsStaticBase
     void defaultOptions();
+    /// See \ref gsStaticBase
     void getOptions();
 
+    /// See \ref gsStaticBase
     void setOptions(gsOptionList & options) {m_options.update(options,gsOptionList::addIfUnknown); }
 
-/// Class-specific
 public:
+    /// Returns the kinetic energy
     T kineticEnergy() const { return m_Ek; }
+    /// Returns the kinetic energy in all steps
     gsVector<T> energies() const { return gsAsVector<T>(m_Eks); }
+    /// Returns the kinetic energy relative to the first iteration
     gsVector<T> relEnergies() const { return gsAsVector<T>(m_Eks)/m_Ek0; }
+    /// Returns the velocity
     gsVector<T> velocities() const {return m_v;}
 
 protected:
-
+    /// Performs an iteration
     void _iteration();
+    /// Identifies a peak
     void _peak();
+    /// Starts the method
     void _start();
+    /// Initializes the method
     void _init();
 
 public:
-    //// ????
+    //// Perform a step back
     void _stepBack()
     {
         m_U -= m_DeltaU;
     }
 
-    //// ????
+    /// Start over again
     void _reset()
     {
         _start();
     }
 
-
-
-
+    /// Return the residual norm
     T residualNorm() const { return m_R.norm(); }
-
-
 
 protected:
     const gsVector<T> m_mass;
@@ -121,7 +149,6 @@ protected:
     using Base::m_L;
     using Base::m_DeltaL;
     using Base::m_deltaL;
-
 
     // Iterations
     using Base::m_numIterations;
@@ -151,13 +178,9 @@ protected:
     // Headstart
     using Base::m_headstart;
 
-
-
     // Velocities
     gsVector<T> m_v;                // (class-specific)
     gsVector<T> m_massInv, m_damp;  // (class-specific)
-
-
 
     // Coefficients
     T m_dt, m_alpha, m_c;           // (class-specific)

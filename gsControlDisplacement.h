@@ -1,6 +1,6 @@
  /** @file gsControlDisplacement.h
 
-    @brief
+    @brief Simple class for displacement control given a static solver
 
     This file is part of the G+Smo library.
 
@@ -20,9 +20,9 @@ namespace gismo
 {
 
 /**
-    @brief
+    @brief Simple class for displacement control given a static solver
 
-    \tparam T
+    \tparam T coefficient type
 
     \ingroup gsStructuralAnalysis
 */
@@ -33,6 +33,7 @@ protected:
 
 public:
 
+    /// Constructor given a static solver
     gsControlDisplacement(gsStaticBase<T> * solver) :
     m_solver(solver),
     first(true)
@@ -56,16 +57,19 @@ public:
         }
     }
 
+    /// Return the displacements
     gsVector<T> solutionU()
     {
         return m_U;
     }
 
+    /// Return the load
     T solutionL()
     {
         return m_L;
     }
 
+    /// Reset the solver
     void reset()
     {
         m_solver->reset();

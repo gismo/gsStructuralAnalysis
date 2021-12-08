@@ -1,0 +1,22 @@
+namespace gismo {
+/**
+
+\page benchmark_Beam benchmark_Beam.cpp
+
+Two benchmark cases using arc-length methods for a beam, according to
+
+Pagani, A., & Carrera, E. (2018).
+Unified formulation of geometrically nonlinear refined beam theories.
+Mechanics of Advanced Materials and Structures, 25(1), 15–31.
+https://doi.org/10.1080/15376494.2016.1232458
+
+\section benchmark_Beam_Annotated Annotated source file
+
+Here is the full file \c examples/benchmark_Beam.cpp. Clicking on a function
+or class name will lead you to its reference documentation.
+
+\include benchmark_Beam.cpp
+
+*/
+
+}

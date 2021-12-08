@@ -1,6 +1,6 @@
  /** @file gsEigenProblemBase.h
 
-    @brief Performs linear buckling analysis given a matrix or functions of a matrix
+    @brief Base class for buckling and modal analyses
 
     This file is part of the G+Smo library.
 
@@ -20,7 +20,7 @@ namespace gismo
 {
 
 /**
-    @brief Performs linear buckling analysis given a matrix or functions of a matrix
+    @brief Base class for buckling and modal analyses
 
     \tparam T coefficient type
 

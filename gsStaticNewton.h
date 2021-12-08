@@ -1,6 +1,6 @@
  /** @file gsStaticNewton.h
 
-    @brief Performs linear modal analysis given a matrix or functions of a matrix
+    @brief Static solver using a newton method
 
     This file is part of the G+Smo library.
 
@@ -21,7 +21,7 @@ namespace gismo
 {
 
 /**
-    @brief Performs the arc length method to solve a nonlinear equation system.
+    @brief Static solver using a newton method
 
     \tparam T coefficient type
 
@@ -41,7 +41,12 @@ protected:
 
 public:
 
-    /// Constructor giving access to the gsShellAssembler object to create a linear system per iteration
+    /**
+     * @brief      Constructor
+     *
+     * @param[in]  linear  The linear stiffness matrix
+     * @param[in]  force   The external force
+     */
     gsStaticNewton(     const gsSparseMatrix<T> &linear,
                         const gsVector<T> &force        )
     :
@@ -55,6 +60,14 @@ public:
         m_U.setZero(m_dofs);
     }
 
+    /**
+     * @brief      Constructor
+     *
+     * @param[in]  linear     The linear stiffness matrix
+     * @param[in]  force      The external force
+     * @param[in]  nonlinear  The Jacobian
+     * @param[in]  residual   The residual
+     */
     gsStaticNewton( const gsSparseMatrix<T> &linear,
                     const gsVector<T> &force,
                     const Jacobian_t &nonlinear,
@@ -76,6 +89,14 @@ public:
         m_NL = true;
     }
 
+    /**
+     * @brief      Constructor
+     *
+     * @param[in]  linear     The linear stiffness matrix
+     * @param[in]  force      The external force
+     * @param[in]  nonlinear  The Jacobian
+     * @param[in]  residual   The residual as arc-length object
+     */
     gsStaticNewton( const gsSparseMatrix<T> &linear,
                     const gsVector<T>  &force,
                     const Jacobian_t   &nonlinear,
@@ -130,27 +151,36 @@ public:
 
 public:
 
+    /// See \ref gsStaticBase
     void solve() { m_U = solveNonlinear(); }
+    /// Perform a linear solve
     gsVector<T> solveLinear();
+    /// Perform a nonlinear solve
     gsVector<T> solveNonlinear();
 
+    /// See \ref gsStaticBase
     void initialize() {_init(); };
 
+    /// See \ref gsStaticBase
     void initOutput();
+    /// See \ref gsStaticBase
     void stepOutput(index_t k);
 
+    /// See \ref gsStaticBase
     void defaultOptions();
+    /// See \ref gsStaticBase
     void getOptions();
-
 
     using Base::indicator;
     using Base::stabilityVec;
 
+    /// See \ref gsStaticBase
     T indicator()
     {
         return indicator(m_nonlinear(m_U));
     }
 
+    /// See \ref gsStaticBase
     gsVector<T> stabilityVec()
     {
         return stabilityVec(m_nonlinear(m_U));
@@ -160,10 +190,13 @@ protected:
 
     using Base::_computeStability;
 
-
+    /// Initializes the method
     void _init();
+    /// Starts the method
     void _start();
+    /// Factorizes the \a jacMat
     void _factorizeMatrix(const gsSparseMatrix<T> & jacMat) const;
+    /// Solves the system with RHS \a F and LHS the Jacobian
     gsVector<T> _solveSystem(const gsVector<T> & F);
 
 protected:
