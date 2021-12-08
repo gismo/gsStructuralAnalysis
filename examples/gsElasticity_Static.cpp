@@ -59,7 +59,7 @@ int main (int argc, char** argv)
     real_t PoissonRatio = 0;
     gsMultiPatch<> mp;
 
-    int testCase = 0;
+    int testCase = 1;
 
     bool write = false;
 
@@ -85,9 +85,7 @@ int main (int argc, char** argv)
 
     try { cmd.getValues(argc,argv); } catch (int rv) { return rv; }
 
-    real_t L = 0;
-    real_t B = 0;
-    real_t H = 0;
+    real_t L(0),B(0),H(0);
     gsMultiBasis<> dbasis;
     if (testCase==0)
     {
@@ -452,7 +450,7 @@ gsMultiPatch<T> BrickDomain(int n, int m, int o, int p, int q ,int r, T L, T B, 
     {
         for (size_t k = 0; k < len1; k++)
         {
-            index_t offset = l*len0*len1;
+            const index_t offset = l*len0*len1;
             // First column contains x-coordinates (length)
             coefs.col(0).segment(k*len0+offset,len0) = coefvec0;
             // Second column contains y-coordinates (width)

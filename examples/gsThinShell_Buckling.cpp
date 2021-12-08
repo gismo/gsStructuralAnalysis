@@ -91,6 +91,9 @@ int main (int argc, char** argv)
 
     cmd.addInt("t", "testcase", "Test case: 0: clamped-clamped, 1: pinned-pinned, 2: clamped-free", testCase);
 
+    cmd.addInt( "N", "nmodes", "Number of modes",  nmodes );
+
+
     cmd.addInt("r","hRefine", "Number of dyadic h-refinement (bisection) steps to perform before solving", numHref);
     cmd.addInt("e","degreeElevation", "Number of degree elevation steps to perform on the Geometry's basis before solving", numElevate);
     cmd.addInt("R","hRefine2", "Number of dyadic h-refinement (bisection) steps to perform before solving (secondary direction)", numHrefL);
@@ -168,7 +171,15 @@ int main (int argc, char** argv)
       // E_modulus = 200e9;
       // PoissonRatio = 0.3;
 
-      mp = RectangularDomain(numHrefL,numHref,numElevateL,numElevate,length,width);
+      mp = Rectangle(length,width);
+
+      // p-refine
+      if (numElevate != 0)
+          mp.degreeElevate(numElevate);
+
+      // h-refine
+      for (index_t r =0; r < numHref; ++r)
+          mp.uniformRefine();
     }
     else if (testCase==8)
     {
@@ -460,7 +471,6 @@ int main (int argc, char** argv)
       BCs.addCondition(boundary::east, condition_type::dirichlet, 0, 0 ,false,2);
       BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0 ,false,2);
 
-
       Load = 1e3;
       gsVector<> point(2); point<< 1.0, 1.0 ;
       gsVector<> load (3); load << Load,0.0, 0.0;
@@ -637,12 +647,12 @@ int main (int argc, char** argv)
     if (!sparse)
       buckling.compute();
     else
-      buckling.computeSparse(shift,10,2,Spectra::SortRule::LargestMagn,Spectra::SortRule::SmallestMagn);
+      buckling.computeSparse(shift,nmodes,2,Spectra::SortRule::LargestMagn,Spectra::SortRule::SmallestMagn);
 
     gsMatrix<> values = buckling.values();
     gsMatrix<> vectors = buckling.vectors();
 
-    gsDebugVar(buckling.vectors().cols());
+    gsDebugVar(buckling.values().size());
 
     gsInfo<< "First 10 eigenvalues:\n";
     for (index_t k = 0; k<10; k++)
@@ -876,6 +886,5 @@ gsMultiPatch<T> AnnularDomain(int n, int p, T R1, T R2)
     for(index_t i = 2; i< p; ++i)
         mp.patch(0).degreeElevate();    // Elevate the degree
   }
-
   return mp;
 }

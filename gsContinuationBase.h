@@ -26,10 +26,8 @@ namespace gismo
 template <class T>
 class gsContinuationBase
 {
-
-    virtual ~gsContinuationBase() {};
-
 public:
+    virtual ~gsContinuationBase() {};
 
     virtual void step(T dL) = 0;
     virtual gsVector<T> solutionU() = 0;

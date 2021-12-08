@@ -207,7 +207,7 @@ int main (int argc, char** argv)
     else
       PoissonRatio = 0.499;
 
-    real_t mu, C01,C10;
+    real_t mu, C01(0), C10(0);
 
     /*
       Case 0 & 1: Material test (no wrinkling)

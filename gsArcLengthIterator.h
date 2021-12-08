@@ -13,6 +13,7 @@
 
 #pragma once
 #include <gsSpectra/gsSpectra.h>
+#include <gsIO/gsOptionList.h>
 
 namespace gismo
 {
@@ -147,6 +148,7 @@ public:
       void setInitialGuess(const gsVector<T> guess) {m_U = guess;}
 
       void setSolution(const gsVector<T> U, T L) {m_L = L; m_U = U; }// m_DeltaUold.setZero(); m_DeltaLold = 0;}
+      void setSolutionStep(const gsVector<T> DU, T DL) {m_DeltaUold = DU; m_DeltaLold = DL;}// m_DeltaUold.setZero(); m_DeltaLold = 0;}
 
       gsOptionList & options() {return m_options;}
 

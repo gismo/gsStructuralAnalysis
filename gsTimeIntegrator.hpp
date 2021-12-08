@@ -13,6 +13,9 @@
 
 #pragma once
 
+#include <gsSolver/gsGMRes.h>
+#include <gsSolver/gsMatrixOp.h>
+
 namespace gismo
 {
 
@@ -38,6 +41,7 @@ namespace gismo
         if (m_method=="ExplEuler" || m_method=="ImplEuler" || m_method=="RK4")
         {
             m_sol = gsMatrix<T>::Zero(2*m_dofs,1);
+            m_aNew = gsMatrix<T>::Zero(m_dofs,1);
         }
         else if ((m_method=="Newmark") || (m_method=="Bathe") || (m_method=="CentralDiff"))
         {
@@ -49,6 +53,23 @@ namespace gismo
         {
             gsInfo<<"Method unknown...";
         }
+    }
+
+    template <class T>
+    void gsTimeIntegrator<T>::resetSolution()
+    {
+        if (m_method=="ExplEuler" || m_method=="ImplEuler" || m_method=="RK4")
+        {
+            m_sol = gsMatrix<T>::Zero(2*m_dofs,1);
+            m_aNew = gsMatrix<T>::Zero(m_dofs,1);
+        }
+        else if ((m_method=="Newmark") || (m_method=="Bathe") || (m_method=="CentralDiff"))
+        {
+            m_uNew = gsMatrix<T>::Zero(m_dofs,1);
+            m_vNew = gsMatrix<T>::Zero(m_dofs,1);
+            m_aNew = gsMatrix<T>::Zero(m_dofs,1);
+        }
+
     }
 
     template <class T>
@@ -73,7 +94,8 @@ namespace gismo
     void gsTimeIntegrator<T>::setAcceleration(gsMatrix<T>& accel)
     {
         if (m_method=="ExplEuler" || m_method=="ImplEuler" || m_method=="RK4")
-            gsWarn<<"Initial acceleration not implemented for method "<<m_method<<"\n";
+            // gsWarn<<"Initial acceleration not implemented for method "<<m_method<<"\n";
+            m_aNew = accel;
         else if ((m_method=="Newmark") || (m_method=="Bathe") || (m_method=="CentralDiff"))
             m_aNew = accel;
     }
@@ -391,6 +413,7 @@ namespace gismo
     void gsTimeIntegrator<T>::stepImplEulerNLOp()
     {
         gsMatrix<T> solOld = m_sol;
+        gsMatrix<T> dsol;
         gsMatrix<T> uOld = solOld.topRows(m_dofs);
         gsMatrix<T> vOld = solOld.bottomRows(m_dofs);
         gsMatrix<T> uNew,vNew;
@@ -432,10 +455,12 @@ namespace gismo
             Amat->addOperator(1,1,makeMatrixOp(m_mass + m_dt*m_damp) );
 
             m_residue= m_sysvec.norm();
-            gmres.solve(-m_sysvec,m_dsol);
+            gmres.solve(-m_sysvec,dsol);
+
+            m_dsol = dsol;
 
             m_sol += m_dsol;
-            m_updateNorm = m_dsol.norm() / m_sol.norm();
+            m_updateNorm = dsol.norm() / m_sol.norm();
 
             if (m_verbose)
             {
@@ -885,6 +910,7 @@ namespace gismo
         {
             m_displacements = m_sol.topRows(m_dofs);
             m_velocities = m_sol.bottomRows(m_dofs);
+            m_accelerations = m_aNew;
         }
         else if ((m_method=="Newmark") || (m_method=="Bathe") || (m_method=="CentralDiff"))
         {

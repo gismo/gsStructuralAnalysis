@@ -35,7 +35,7 @@ int main (int argc, char** argv)
     bool plot       = false;
     bool nonlinear  = false;
 
-    int testCase = 0;
+    int testCase = 1;
 
     bool write = false;
 
