@@ -271,7 +271,7 @@ int main(int argc, char *argv[])
     DROptions.setReal("damping",damping);
     DROptions.setReal("alpha",alpha);
     DROptions.setInt("maxIt",maxIt);
-    DROptions.setReal("tol",1e-6);
+    DROptions.setReal("tol",1e-2);
     DROptions.setReal("tolE",1e-4);
     DROptions.setInt("verbose",verbose);
     DRM.setOptions(DROptions);
@@ -296,14 +296,7 @@ int main(int argc, char *argv[])
     NWT.setUpdate(DRM.update());
     controlDC.step(1.0);
 
-    gsDebugVar(controlDR.solutionL());
-    gsDebugVar(controlDR.solutionU().norm());
-
-    gsDebugVar(controlDC.solutionL());
-    gsDebugVar(controlDC.solutionU().norm());
-
     real_t indicator = DRM.indicator(Jacobian(controlDC.solutionU()));
-    gsDebugVar(indicator);
 
     gsVector<> displacements = controlDR.solutionU();
 
