@@ -19,11 +19,11 @@
 namespace gismo
 {
 /**
-    @brief Performs Newton iterations to solve a nonlinear equation system.
+    @brief Provides temporal solvers for structural analysis problems
 
     \tparam T coefficient type
 
-    \ingroup ThinShell
+    \ingroup gsTimeIntegrator
 */
 template <class T>
 class gsTimeIntegrator

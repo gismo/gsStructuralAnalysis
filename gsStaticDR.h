@@ -21,6 +21,8 @@ namespace gismo
  * @brief Static solver using the Dynamic Relaxation method
  *
  * @tparam     T     coefficient type
+ *
+ * \ingroup gsStaticBase
  */
 template <class T>
 class gsStaticDR : public gsStaticBase<T>

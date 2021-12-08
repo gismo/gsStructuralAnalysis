@@ -23,7 +23,7 @@ namespace gismo
 
     \tparam T coefficient type
 
-    \ingroup gsStructuralAnalysis
+    \ingroup gsALMBase
 */
 template <class T>
 class gsALMCrisfield : public gsALMBase<T>

@@ -24,7 +24,7 @@ namespace gismo
 
     \tparam T coefficient type
 
-    \ingroup StructuralAnalysis
+    \ingroup gsStructuralAnalysis
 */
 template <class T, Spectra::GEigsMode GEigsMode>
 class gsEigenProblemBase

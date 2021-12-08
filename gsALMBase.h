@@ -21,7 +21,7 @@ namespace gismo
 {
 
 /**
-    @brief Performs the arc length method to solve a nonlinear equation system.
+    @brief Performs the arc length method to solve a nonlinear system of equations.
 
     \tparam T coefficient type
 

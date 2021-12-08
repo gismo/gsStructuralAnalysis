@@ -25,7 +25,7 @@ namespace gismo
 
     \tparam T coefficient type
 
-    \ingroup ThinShell
+    \ingroup gsStructuralAnalysis
 */
 template <class T>
 class gsStaticNewton : public gsStaticBase<T>
