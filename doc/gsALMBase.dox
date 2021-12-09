@@ -1,7 +1,8 @@
 namespace gismo
 {
 
-/** \defgroup gsALMBase gsALMBase
+/** \page gsALMBase gsALM-classes
+\defgroup gsALMBase gsALMBase
 \ingroup gsStructuralAnalysis
 
 Performs the arc length method to solve a nonlinear equation system.

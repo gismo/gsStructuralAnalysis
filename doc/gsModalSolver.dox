@@ -1,7 +1,8 @@
 namespace gismo
 {
 
-/** \defgroup gsModalSolver gsModalSolver
+/** \page gsModalSolver gsModalSolver
+\defgroup gsModalSolver gsModalSolver
 \ingroup gsStructuralAnalysis
 
 Linear modal analysis is performed by solving the following eigenvalue problem:

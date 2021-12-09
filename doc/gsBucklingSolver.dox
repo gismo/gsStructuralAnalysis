@@ -1,7 +1,8 @@
 namespace gismo
 {
 
-/** \defgroup gsBucklingSolver gsBucklingSolver
+/** \page gsBucklingSolver gsBucklingSolver
+\defgroup gsBucklingSolver gsBucklingSolver
 \ingroup gsStructuralAnalysis
 
 Linear buckling analysis is performed by solving the following eigenvalue problem:
