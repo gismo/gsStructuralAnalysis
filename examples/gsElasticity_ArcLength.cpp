@@ -96,7 +96,7 @@ int main (int argc, char** argv)
 
     std::string wn("data.csv");
 
-    gsCmdLine cmd("Thin shell plate example.");
+    gsCmdLine cmd("Arc-length methods using gsElasticity.");
 
     cmd.addInt("t", "testcase", "Test case: 0: clamped-clamped, 1: pinned-pinned, 2: clamped-free", testCase);
 

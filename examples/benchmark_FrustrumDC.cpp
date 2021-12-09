@@ -59,7 +59,7 @@ int main (int argc, char** argv)
 
     std::string wn("data.csv");
 
-    gsCmdLine cmd("Arc-length analysis for thin shells.");
+    gsCmdLine cmd("Displacement-controlled collapsing frustrum.");
 
     cmd.addInt("t", "testcase", "Test case: 0: free; 1: restrained", testCase);
     cmd.addInt("r","hRefine", "Number of dyadic h-refinement (bisection) steps to perform before solving", numRefine);

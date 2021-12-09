@@ -45,7 +45,7 @@ int main (int argc, char** argv)
     fn2 = "pde/elasticity_brick.xml";
     fn3 = "options/static_solver.xml";
 
-    gsCmdLine cmd("Thin shell plate example.");
+    gsCmdLine cmd("Static analysis using gsElasticity.");
     cmd.addInt("r","hRefine",
        "Number of dyadic h-refinement (bisection) steps to perform before solving",
        numHref);

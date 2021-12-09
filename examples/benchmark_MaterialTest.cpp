@@ -72,7 +72,7 @@ int main (int argc, char** argv)
 
     std::string wn("data.csv");
 
-    gsCmdLine cmd("Wrinkling analysis with thin shells.");
+    gsCmdLine cmd("Material test for arc-length analysis.");
 
     cmd.addInt("t", "testcase", "Test case: 0: clamped-clamped, 1: pinned-pinned, 2: clamped-free", testCase);
 
