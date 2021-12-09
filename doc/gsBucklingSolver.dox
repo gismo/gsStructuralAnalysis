@@ -7,9 +7,9 @@ namespace gismo
 
 Linear buckling analysis is performed by solving the following eigenvalue problem:
 
-\f{align*}{
+\f[
     (K_L-\sigma K_{NL}(\mathbf{u}^L_h))\mathbf{v}_h = \lambda K_{NL}(\mathbf{u}_h) \mathbf{v}_h
-\f}
+\f]
 
 Where \f$K_L\f$ is the linear stiffness matrix, \f$K_{NL}(\mathbf{u}_h)\f$ is the tangential
 stiffness matrix assembled around \f$\mathbf{u}^L_h\f$. The solution \f$\mathbf{u}^L_h\f$ is
