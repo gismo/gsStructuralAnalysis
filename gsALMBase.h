@@ -12,6 +12,8 @@
 */
 
 #pragma once
+#include <gsCore/gsLinearAlgebra.h>
+
 #ifdef GISMO_WITH_SPECTRA
 #include <gsSpectra/gsSpectra.h>
 #endif

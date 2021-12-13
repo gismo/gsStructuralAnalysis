@@ -12,7 +12,11 @@
 */
 
 #include <typeinfo>
+
+#ifdef GISMO_WITH_SPECTRA
 #include <gsSpectra/gsSpectra.h>
+#endif
+
 #pragma once
 
 

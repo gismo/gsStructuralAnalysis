@@ -14,6 +14,10 @@
 #include <gsSpectra/gsSpectra.h>
 #include <gsStructuralAnalysis/gsEigenProblemBase.h>
 
+#ifdef GISMO_WITH_SPECTRA
+#include <gsSpectra/gsSpectra.h>
+#endif
+
 #pragma once
 
 namespace gismo
@@ -24,16 +28,14 @@ namespace gismo
 
     \tparam T           coefficient type
 
-    \tparam GEigsMode   The mode for the Spectra solver
-
     \ingroup gsBucklingSolver
 */
-template <class T, Spectra::GEigsMode GEigsMode = Spectra::GEigsMode::Cholesky>
-class gsBucklingSolver : public gsEigenProblemBase<T,GEigsMode>
+template <class T>
+class gsBucklingSolver : public gsEigenProblemBase<T>
 {
 protected:
 
-    typedef gsEigenProblemBase<T,GEigsMode> Base;
+    typedef gsEigenProblemBase<T> Base;
 
 public:
 
@@ -54,8 +56,6 @@ public:
     m_scaling(scaling)
   {
     m_A = linear;
-    m_verbose = false;
-
     m_dnonlinear = [this](gsVector<T> const & x, gsVector<T> const & dx)
     {
         return m_nonlinear(x);
@@ -80,8 +80,6 @@ public:
     m_scaling(scaling)
   {
     m_A = linear;
-    m_verbose = false;
-
     this->initializeMatrix();
   }
 
@@ -97,21 +95,21 @@ public:
   {
     m_A = linear;
     m_B = nonlinear-m_A;
-    m_verbose = false;
   }
 
 protected:
 
     void initializeMatrix()
     {
-        if (m_verbose) { gsInfo<<"Computing matrices" ; }
+        bool verbose = m_options.getSwitch("verbose");
+        if (verbose) { gsInfo<<"Computing matrices" ; }
         m_solver.compute(m_A);
-        if (m_verbose) { gsInfo<<"." ; }
+        if (verbose) { gsInfo<<"." ; }
         m_solVec = m_solver.solve(m_scaling*m_rhs);
-        if (m_verbose) { gsInfo<<"." ; }
+        if (verbose) { gsInfo<<"." ; }
         m_B = m_dnonlinear(m_solVec,gsVector<T>::Zero(m_solVec.rows()))-m_A;
-        if (m_verbose) { gsInfo<<"." ; }
-        if (m_verbose) { gsInfo<<"Finished\n" ; }
+        if (verbose) { gsInfo<<"." ; }
+        if (verbose) { gsInfo<<"Finished\n" ; }
     }
 
 protected:
@@ -128,7 +126,7 @@ protected:
     gsSparseSolver<>::SimplicialLDLT  m_solver;
     gsVector<> m_solVec;
 
-    using Base::m_verbose;
+    using Base::m_options;
 
 };
 

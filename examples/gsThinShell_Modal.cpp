@@ -461,10 +461,17 @@ int main (int argc, char** argv)
     gsModalSolver<real_t,Spectra::GEigsMode::ShiftInvert> modal(K,M);
     modal.verbose();
 
+    gsModalSolver<real_t> modal(K,M);
+    modal.options().setInt("solver",2);
+    modal.options().setInt("selectionRule",0);
+    modal.options().setInt("sortRule",4);
+    modal.options().setSwitch("verbose",true);
+    modal.options().setInt("ncvFac",2);
+
     if (!sparse)
       modal.compute();
     else
-      modal.computeSparse(shift,10,2,Spectra::SortRule::LargestMagn,Spectra::SortRule::SmallestMagn);
+      modal.computeSparse(shift,10);
 
 
     gsMatrix<> values = modal.values();
