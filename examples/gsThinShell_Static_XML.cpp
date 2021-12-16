@@ -31,8 +31,8 @@ int main(int argc, char *argv[])
     bool plot  = false;
     bool stress= false;
     bool mesh= false;
-    index_t numRefine  = 1;
-    index_t numElevate = 1;
+    index_t numRefine  = 0;
+    index_t numElevate = 0;
 
     index_t Compressibility = 0;
     index_t material = 0;
@@ -118,10 +118,24 @@ int main(int argc, char *argv[])
     // Loads
     gsPointLoads<real_t> pLoads = gsPointLoads<real_t>();
     gsMatrix<> points,loads;
+    gsMatrix<index_t> pid_ploads;
     fd.getId(30,points);
     fd.getId(31,loads);
+    fd.getId(32,pid_ploads);
     for (index_t k =0; k!=points.cols(); k++)
-        pLoads.addLoad(points.col(k), loads.col(k), 0 ); // in parametric domain!
+        pLoads.addLoad(points.col(k), loads.col(k), pid_ploads.at(k) ); // in parametric domain!
+
+    // Reference points
+    gsMatrix<> refPoints,refPatches;
+    gsInfo<<"Reading reference point locations from "<<fn2<<" (ID=50) ...";
+    if ( fd.hasId(50) )
+        fd.getId(50,refPoints);
+    gsInfo<<"Finished\n";
+    gsInfo<<"Reading reference patches from "<<fn2<<" (ID=51) ...";
+    if ( fd.hasId(51) )
+        fd.getId(51,refPatches);
+    gsInfo<<"Finished\n";
+    GISMO_ENSURE(refPatches.cols()==refPoints.cols(),"Number of reference points and patches do not match");
 
     // Material properties
     gsFunctionExpr<> t,E,nu,rho;
@@ -188,7 +202,7 @@ int main(int argc, char *argv[])
     // define basis
     gsMultiBasis<> dbasis(mp);
 
-    gsInfo << "Patches: "<< mp.nPatches() <<", degree: "<< dbasis.minCwiseDegree() <<"\n";
+    gsInfo << "Patches: "<< mp.nPatches() <<", degree: "<< dbasis.minCwiseDegree() << "\n";
     gsInfo<<mp_def<<"\n";
     gsInfo << dbasis.basis(0)<<"\n";
 
@@ -312,17 +326,21 @@ int main(int argc, char *argv[])
       return assembler->rhs();
     };
 
+    gsInfo << "Assemble done ("<<matrix.rows()<<"x"<<matrix.cols()<<")\n";
     // Configure Structural Analsysis module
     gsStaticNewton<real_t> staticSolver(matrix,vector,Jacobian,Residual);
     staticSolver.setOptions(solverOptions);
 
     // Solve linear problem
+    gsInfo << "Solving linear system..\n";
     gsVector<> solVector;
     solVector = staticSolver.solveLinear();
+    gsInfo << "Solving done.\n";
     if (nonlinear)
         solVector = staticSolver.solveNonlinear();
 
     mp_def = assembler->constructSolution(solVector);
+    gsInfo << "Solution constructed.\n";
 
     deformation = mp_def;
     for (size_t k = 0; k != mp_def.nPatches(); ++k)
@@ -338,12 +356,28 @@ int main(int argc, char *argv[])
         // ev.writeParaview( u_sol   , G, "solution");
 
         // gsFileManager::open("solution.pvd");
-
-        gsInfo <<"Maximum deformation coef: "
-               << deformation.patch(0).coefs().colwise().maxCoeff() <<".\n";
-        gsInfo <<"Minimum deformation coef: "
-               << deformation.patch(0).coefs().colwise().minCoeff() <<".\n";
     }
+
+    // gsInfo <<"Maximum deformation coef: "
+    //        << deformation.patch(0).coefs().colwise().maxCoeff() <<".\n";
+    // gsInfo <<"Minimum deformation coef: "
+    //        << deformation.patch(0).coefs().colwise().minCoeff() <<".\n";
+
+    if (refPoints.cols()!=0)
+    {
+        gsMatrix<> refs(1,3*refPoints.cols());
+        for (index_t p=0; p!=refPoints.cols(); p++)
+            refs.block(0,p*3,1,3) = deformation.piece(refPatches(0,p)).eval(refPoints.col(p)).transpose();
+
+        gsInfo<<"References\n";
+        for (index_t p=0; p!=refPoints.cols(); ++p)
+            gsInfo<<"x"<<std::to_string(p)<<"\ty"<<std::to_string(p)<<"\tz"<<std::to_string(p)<<"\t";
+        gsInfo<<"\n";
+            for (index_t p=0; p!=refPoints.cols(); ++p)
+                gsInfo<<refs(0,3*p)<<"\t"<<refs(0,3*p+1)<<"\t"<<refs(0,3*p+2)<<"\t";
+        gsInfo<<"\n";
+    }
+
     if (stress)
     {
 
