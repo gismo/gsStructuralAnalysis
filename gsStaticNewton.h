@@ -242,28 +242,14 @@ protected:
     using Base::m_headstart;
 
     /// Linear solver employed
-    using Base::m_LDLTsolver;   // Cholesky
-    mutable gsSparseSolver<>::CGDiagonal      m_CGsolver;     // CG
-
+    using Base::m_solver;   // Cholesky by default
+    
     using Base::m_stabilityMethod;
-    mutable index_t m_solverType;
 
     /// Indicator for bifurcation
     using Base::m_indicator;
 
     using Base::m_dofs;
-
-    struct solver
-    {
-        enum type
-        {
-            LDLT = 0,
-            CG  = 1, // The CG solver is robust for membrane models, where zero-blocks in the matrix might occur.
-        };
-    };
-
-
-
 };
 
 
