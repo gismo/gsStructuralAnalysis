@@ -25,6 +25,19 @@
     <!-- Mu2 -->
     <Function type="FunctionExpr" id="18" tag="Material" dim="3">-0.0625</Function>
 
+    <!-- Reference point coordinates -->
+<Matrix rows="2" cols="1" id="50" >
+  0.5 0.0
+</Matrix>
+<!-- Reference point patch indices -->
+<Matrix rows="1" cols="1" id="51" >
+  0
+</Matrix>
+<!-- Reference value -->
+<Matrix rows="1" cols="1" id="2" >
+  0
+</Matrix>
+
 <!-- Boundary conditions and loads -->
 <!-- 1 = west, 2 = east, 3 = south, 4 = north -->
 <boundaryConditions id="20" multipatch="1">

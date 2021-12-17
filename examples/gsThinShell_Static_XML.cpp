@@ -126,7 +126,7 @@ int main(int argc, char *argv[])
         pLoads.addLoad(points.col(k), loads.col(k), pid_ploads.at(k) ); // in parametric domain!
 
     // Reference points
-    gsMatrix<> refPoints,refPatches;
+    gsMatrix<> refPoints,refPatches; // todo: add refValue..
     gsInfo<<"Reading reference point locations from "<<fn2<<" (ID=50) ...";
     if ( fd.hasId(50) )
         fd.getId(50,refPoints);
@@ -306,8 +306,8 @@ int main(int argc, char *argv[])
 
     // Define Matrices
     assembler->assemble();
-    gsSparseMatrix<> matrix = assembler->matrix();
-    gsVector<> vector = assembler->rhs();
+    const gsSparseMatrix<> & matrix = assembler->matrix();
+    const gsVector<> & vector = assembler->rhs();
     typedef std::function<gsSparseMatrix<real_t> (gsVector<real_t> const &)>    Jacobian_t;
     typedef std::function<gsVector<real_t> (gsVector<real_t> const &) >         Residual_t;
     // Function for the Jacobian
