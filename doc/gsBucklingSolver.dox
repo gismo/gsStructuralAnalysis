@@ -19,4 +19,7 @@ The modeshape is represented by \f$\phi\f$.
 
 Examples with the use of this class are:
 - \subpage gsThinShell_Buckling.cpp
+
+*/
+
 }
