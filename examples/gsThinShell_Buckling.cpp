@@ -509,7 +509,6 @@ int main (int argc, char** argv)
     gsConstantFunction<> pressFun(pressure,3);
     // Initialise solution object
     gsMultiPatch<> mp_def = mp;
-    gsSparseSolver<>::LU solver;
 
     // Linear isotropic material model
     gsConstantFunction<> force(tmp,3);
@@ -642,14 +641,18 @@ int main (int argc, char** argv)
       return m;
     };
 
-    gsBucklingSolver<real_t,Spectra::GEigsMode::ShiftInvert> buckling(K_L,rhs,dK_NL);
-    buckling.verbose();
+    gsBucklingSolver<real_t> buckling(K_L,rhs,dK_NL);
+    buckling.options().setInt("solver",2);
+    buckling.options().setInt("selectionRule",0);
+    buckling.options().setInt("sortRule",4);
+    buckling.options().setSwitch("verbose",true);
+    buckling.options().setInt("ncvFac",2);
     // buckling.computePower();
 
     if (!sparse)
       buckling.compute();
     else
-      buckling.computeSparse(shift,nmodes,2,Spectra::SortRule::LargestMagn,Spectra::SortRule::SmallestMagn);
+      buckling.computeSparse(shift,nmodes);//,2,Spectra::SortRule::LargestMagn,Spectra::SortRule::SmallestMagn);
 
     gsMatrix<> values = buckling.values();
     gsMatrix<> vectors = buckling.vectors();
@@ -681,7 +684,7 @@ int main (int argc, char** argv)
         {
 
           // Compute solution based on eigenmode with number 'mode'
-          modeShape = vectors.col(m);//solver.solve( assembler->rhs() );
+          modeShape = vectors.col(m);
           assembler->constructSolution(modeShape, solution);
 
           // compute the deformation spline

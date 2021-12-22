@@ -58,7 +58,7 @@ int main (int argc, char** argv)
     int steps = 100;
     real_t periods = 1;
 
-    gsCmdLine cmd("Thin shell plate example.");
+    gsCmdLine cmd("Dynamics of a nonlinear beam.");
     cmd.addInt("r","hRefine",
                "Number of dyadic h-refinement (bisection) steps to perform before solving",
                numHref);

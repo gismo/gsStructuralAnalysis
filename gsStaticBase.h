@@ -12,7 +12,11 @@
 */
 
 #include <typeinfo>
+
+#ifdef GISMO_WITH_SPECTRA
 #include <gsSpectra/gsSpectra.h>
+#endif
+
 #pragma once
 
 
@@ -50,6 +54,7 @@ public:
         m_options.addInt("maxIt","Maximum number of iterations",25);
         m_options.addInt("verbose","Verbose output",0);
         m_options.addInt ("BifurcationMethod","Bifurcation Identification based on: 0: Determinant;  1: Eigenvalue",stabmethod::Eigenvalue);
+        m_options.addString("Solver","Sparse linear solver", "SimplicialLDLT");
     }
 
     /// Apply the options
@@ -60,6 +65,7 @@ public:
         m_maxIterations = m_options.getInt("maxIt");
         m_verbose = m_options.getInt("verbose");
         m_stabilityMethod     = m_options.getInt ("BifurcationMethod");
+        m_solver = gsSparseSolver<T>::get( m_options.askString("Solver","SimplicialLDLT") );
     }
 
     /// Set the options from \a options
@@ -133,15 +139,16 @@ protected:
     /// Computes the stability vector using the determinant of the Jacobian
     virtual void _computeStabilityDet(const gsSparseMatrix<T> & jacMat)
     {
-        m_LDLTsolver.compute(jacMat);
+        m_solver->compute(jacMat);
         // If 1: matrix is not SPD
-        GISMO_ASSERT(m_LDLTsolver.info()==Eigen::ComputationInfo::Success,"Solver error with code "<<m_LDLTsolver.info()<<". See Eigen documentation on ComputationInfo \n"
-                                                                  <<Eigen::ComputationInfo::Success<<": Success"<<"\n"
-                                                                  <<Eigen::ComputationInfo::NumericalIssue<<": NumericalIssue"<<"\n"
-                                                                  <<Eigen::ComputationInfo::NoConvergence<<": NoConvergence"<<"\n"
-                                                                  <<Eigen::ComputationInfo::InvalidInput<<": InvalidInput"<<"\n");
+        GISMO_ASSERT(m_solver->info()==Eigen::ComputationInfo::Success,"Solver error with code "<<m_solver->info()<<". See Eigen documentation on ComputationInfo \n"
+                     <<Eigen::ComputationInfo::Success<<": Success"<<"\n"
+                     <<Eigen::ComputationInfo::NumericalIssue<<": NumericalIssue"<<"\n"
+                     <<Eigen::ComputationInfo::NoConvergence<<": NoConvergence"<<"\n"
+                     <<Eigen::ComputationInfo::InvalidInput<<": InvalidInput"<<"\n");
 
-        m_stabilityVec = m_LDLTsolver.vectorD();
+        if ( auto * s = dynamic_cast<typename gsSparseSolver<T>::SimplicialLDLT*>(m_solver.get()) )
+            m_stabilityVec = s->vectorD();
     }
 
     /// Computes the stability vector using the eigenvalues of the Jacobian, optionally applying a shift
@@ -219,7 +226,7 @@ protected:
 
     gsVector<T> m_stabilityVec;
 
-    mutable gsSparseSolver<>::SimplicialLDLT  m_LDLTsolver;   // Cholesky
+    mutable typename gsSparseSolver<T>::uPtr  m_solver;   // Cholesky by default
 
     index_t m_stabilityMethod;
 

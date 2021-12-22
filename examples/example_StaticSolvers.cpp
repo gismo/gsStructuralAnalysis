@@ -72,7 +72,7 @@ int main(int argc, char *argv[])
 
     real_t dt = 0.1;
 
-    gsCmdLine cmd("Static analysis for thin shells.");
+    gsCmdLine cmd("Simple example showing the use of the static solvers.");
     cmd.addString( "f", "file", "Input XML file for assembler options", assemberOptionsFile );
     cmd.addInt( "e", "degreeElevation",
                 "Number of degree elevation steps to perform before solving (0: equalize degree in all directions)", numElevate );

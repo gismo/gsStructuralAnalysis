@@ -9,7 +9,8 @@
 namespace gismo
 {
 
-/** \defgroup gsStructuralAnalysis Structural Analysis module
+/** \page gsStructuralAnalysis Structural Analysis module
+\defgroup gsStructuralAnalysis gsStructuralAnalysis
 \ingroup Modules
 
 This module contains algorithms for structural analysis. The module is versatile in its use with the elasticity elements from \ref Elasticity and \ref KLShell. The module is enhanced by the \ref gsSpectra class for eigenvalue computations.

@@ -21,10 +21,8 @@ template <class T>
 void gsStaticNewton<T>::defaultOptions()
 {
     Base::defaultOptions();
-    m_options.addInt ("Solver","Linear solver: 0 = LDLT; 1 = CG",solver::CG); // The CG solver is robust for membrane models, where zero-blocks in the matrix might occur.
+    m_options.setString("Solver","CGDiagonal"); // The CG solver is robust for membrane models, where zero-blocks in the matrix might occur.
     m_options.addReal("Relaxation","Relaxation parameter",1);
-
-
 };
 
 template <class T>
@@ -32,7 +30,6 @@ void gsStaticNewton<T>::getOptions()
 {
     Base::getOptions();
 
-    m_solverType          = m_options.getInt ("Solver");
     // if (m_solverType!=solver::LDLT && m_stabilityMethod==stabmethod::Determinant)
     // {
     //   gsWarn<<"Determinant method cannot be used with solvers other than LDLT. Bifurcation method will be set to 'Eigenvalue'.\n";
@@ -40,7 +37,6 @@ void gsStaticNewton<T>::getOptions()
     // }
 
     m_relax = m_options.getReal("Relaxation");
-
 };
 
 template <class T>
@@ -56,7 +52,6 @@ void gsStaticNewton<T>::initOutput()
     gsInfo<<std::setw(17)<<std::left<<"log(Ri/R0):";
     gsInfo<<std::setw(17)<<std::left<<"log(Ri+1/R0)";
     gsInfo<<"\n";
-
 }
 
 template <class T>
@@ -151,57 +146,32 @@ gsVector<T> gsStaticNewton<T>::solveNonlinear()
 template <class T>
 void gsStaticNewton<T>::_factorizeMatrix(const gsSparseMatrix<T> & jacMat) const
 {
-  if (m_solverType==solver::LDLT)
-  {
-    m_LDLTsolver.compute(jacMat);
+    m_solver->compute(jacMat);
     // If 1: matrix is not SPD
-    GISMO_ASSERT(m_LDLTsolver.info()==Eigen::ComputationInfo::Success,"Solver error with code "<<m_LDLTsolver.info()<<". See Eigen documentation on ComputationInfo \n"
-                                                                <<Eigen::ComputationInfo::Success<<": Success"<<"\n"
-                                                                <<Eigen::ComputationInfo::NumericalIssue<<": NumericalIssue"<<"\n"
-                                                                <<Eigen::ComputationInfo::NoConvergence<<": NoConvergence"<<"\n"
-                                                                <<Eigen::ComputationInfo::InvalidInput<<": InvalidInput"<<"\n");
-
-  }
-  else if (m_solverType==solver::CG)
-  {
-    m_CGsolver.compute(jacMat);
-
-    GISMO_ASSERT(m_CGsolver.info()==Eigen::ComputationInfo::Success,"Solver error with code "<<m_CGsolver.info()<<". See Eigen documentation on ComputationInfo \n"
-                                                                <<Eigen::ComputationInfo::Success<<": Success"<<"\n"
-                                                                <<Eigen::ComputationInfo::NumericalIssue<<": NumericalIssue"<<"\n"
-                                                                <<Eigen::ComputationInfo::NoConvergence<<": NoConvergence"<<"\n"
-                                                                <<Eigen::ComputationInfo::InvalidInput<<": InvalidInput"<<"\n");
-
-  }
-  else
-    GISMO_ERROR("Solver type "<<m_solverType<<" unknown.");
-
-
+    GISMO_ENSURE(m_solver->info()==Eigen::ComputationInfo::Success,"Solver error with code "<<m_solver->info()<<". See Eigen documentation on ComputationInfo \n"
+                 <<Eigen::ComputationInfo::Success<<": Success"<<"\n"
+                 <<Eigen::ComputationInfo::NumericalIssue<<": NumericalIssue"<<"\n"
+                 <<Eigen::ComputationInfo::NoConvergence<<": NoConvergence"<<"\n"
+                 <<Eigen::ComputationInfo::InvalidInput<<": InvalidInput"<<"\n");
 }
 
 template <class T>
 gsVector<T> gsStaticNewton<T>::_solveSystem(const gsVector<T> & F)
 {
-  if (m_solverType==solver::LDLT)
-    return m_LDLTsolver.solve(F);
-  else if (m_solverType==solver::CG)
-    return m_CGsolver.solve(F);
-  else
-    GISMO_ERROR("Solver type "<<m_solverType<<" unknown.");
-
+    return m_solver->solve(F);
 }
 
 template <class T>
 void gsStaticNewton<T>::_init()
 {
     m_stabilityMethod = 0;
-    m_solverType = 0;
     m_converged = false;
     m_start = false;
     m_headstart = false;
     m_dofs = m_force.rows();
 
-    if (m_dofs==0) gsWarn<<"The number of degrees of freedom is equal to zero. This can lead to bad initialization.\n";
+    if (m_dofs==0)
+        gsWarn<<"The number of degrees of freedom is equal to zero. This can lead to bad initialization.\n";
 
     m_U.setZero(m_dofs);
     m_DeltaU.setZero(m_dofs);

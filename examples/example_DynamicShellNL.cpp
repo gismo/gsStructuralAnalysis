@@ -61,7 +61,7 @@ int main (int argc, char** argv)
 
     std::string assemberOptionsFile("options/solver_options.xml");
 
-    gsCmdLine cmd("Dynamic analysis (nonlinear) for thin shells.");
+    gsCmdLine cmd("Dynamics of a nonlinear spherical cap.");
     cmd.addString( "f", "file", "Input XML file for assembler options", assemberOptionsFile );
     cmd.addInt("r","hRefine",
                "Number of dyadic h-refinement (bisection) steps to perform before solving",

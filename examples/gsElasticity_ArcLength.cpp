@@ -96,7 +96,7 @@ int main (int argc, char** argv)
 
     std::string wn("data.csv");
 
-    gsCmdLine cmd("Thin shell plate example.");
+    gsCmdLine cmd("Arc-length methods using gsElasticity.");
 
     cmd.addInt("t", "testcase", "Test case: 0: clamped-clamped, 1: pinned-pinned, 2: clamped-free", testCase);
 
@@ -359,7 +359,7 @@ int main (int argc, char** argv)
     else
       GISMO_ERROR("Method "<<method<<" unknown");
 
-    arcLength->options().setInt("Solver",0); // LDLT solver
+    arcLength->options().setString("Solver","SimplicialLDLT"); // LDLT solver
     arcLength->options().setInt("BifurcationMethod",0); // 0: determinant, 1: eigenvalue
     arcLength->options().setReal("Length",dLb);
     arcLength->options().setInt("AngleMethod",0); // 0: step, 1: iteration

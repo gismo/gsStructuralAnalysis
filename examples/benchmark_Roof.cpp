@@ -73,7 +73,7 @@ int main (int argc, char** argv)
 
     std::string assemberOptionsFile("options/solver_options.xml");
 
-    gsCmdLine cmd("Arc-length analysis for thin shells.");
+    gsCmdLine cmd("Arc-length analysis of a collapsing roof.");
     cmd.addString( "f", "file", "Input XML file for assembler options", assemberOptionsFile );
 
     cmd.addInt("t", "testcase", "Test case: 0: clamped-clamped, 1: pinned-pinned, 2: clamped-free", testCase);
@@ -317,7 +317,7 @@ int main (int argc, char** argv)
     else
       GISMO_ERROR("Method unknown");
 
-    arcLength->options().setInt("Solver",0); // LDLT solver
+    arcLength->options().setString("Solver","SimplicialLDLT"); // LDLT solver
     arcLength->options().setInt("BifurcationMethod",0); // 0: determinant, 1: eigenvalue
     arcLength->options().setReal("Length",dL);
     // arcLength->options().setInt("AngleMethod",0); // 0: step, 1: iteration

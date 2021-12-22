@@ -25,7 +25,7 @@ Module for structural analysis with solids ([`gsElasticity`](https://github.com/
 |Status|completed|
 |Developer|[Hugo Verhelst](https://github.com/hverhelst)|
 |Maintainer|[h.m.verhelst@tudelft.nl](mailto:h.m.verhelst@tudelft.nl)|
-|Last checked|13-11-2020|
+|Last checked|09-12-2021|
 
 #### Dependencies
 `gsSpectra` via `-cmake . -DGISMO_WITH_SPECTRA=ON`.

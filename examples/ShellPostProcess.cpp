@@ -139,7 +139,7 @@ int main(int argc, char *argv[])
       {
         std::ofstream file(path + output + util::to_string(k) + ".csv");
 
-        for (index_t p = 0; p!=sol.nPatches(); p++)
+        for (size_t p = 0; p!=sol.nPatches(); p++)
         {
           gsMatrix<> ab = sol.patch(p).support();
           gsVector<> a = ab.col(0);

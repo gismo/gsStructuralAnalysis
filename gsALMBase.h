@@ -12,6 +12,8 @@
 */
 
 #pragma once
+#include <gsCore/gsLinearAlgebra.h>
+
 #ifdef GISMO_WITH_SPECTRA
 #include <gsSpectra/gsSpectra.h>
 #endif
@@ -338,6 +340,8 @@ protected:
     std::function < gsMatrix<T> ( gsVector<T> const &, T, gsVector<T> const & ) > m_residualFun;
     gsVector<T> m_forcing;
 
+    mutable typename gsSparseSolver<T>::uPtr m_solver; // Cholesky by default
+
     /// Linear solver employed
     gsSparseSolver<>::SimplicialLDLT  m_LDLTsolver;   // Cholesky
     gsSparseSolver<>::CGDiagonal      m_CGsolver;     // CG
@@ -488,7 +492,6 @@ protected:
     index_t m_stability; //current step
     // Method to check if a point is a bifurcation point
     index_t m_bifurcationMethod;
-    index_t m_solverType;
 
     // What to do after computeSingularPoint fails?
     index_t m_SPfail;

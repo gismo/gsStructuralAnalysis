@@ -55,7 +55,7 @@ int main (int argc, char** argv)
 
     std::string wn("data.csv");
 
-    gsCmdLine cmd("Arc-length analysis for thin shells.");
+    gsCmdLine cmd("Uniaxially stretched sheet.");
 
     cmd.addInt("r","hRefine", "Number of dyadic h-refinement (bisection) steps to perform before solving", numRefine);
     cmd.addInt("e","degreeElevation", "Number of degree elevation steps to perform on the Geometry's basis before solving", numElevate);
@@ -286,7 +286,7 @@ int main (int argc, char** argv)
     else
       GISMO_ERROR("Method "<<method<<" unknown");
 
-    arcLength->options().setInt("Solver",0); // CG solver
+    arcLength->options().setString("Solver","SimplicialLDLT"); // LDLT solver
     arcLength->options().setInt("BifurcationMethod",0); // 0: determinant, 1: eigenvalue
     arcLength->options().setReal("Length",dL);
     arcLength->options().setInt("AngleMethod",0); // 0: step, 1: iteration

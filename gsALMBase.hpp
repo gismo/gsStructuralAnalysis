@@ -40,7 +40,7 @@ void gsALMBase<T>::defaultOptions()
 
     m_options.addInt ("SingularPointFailure","What to do wne a singular point determination fails?: 0 = Apply solution anyways; 1 = Proceed without singular point",SPfail::With);
 
-    m_options.addInt ("Solver","Linear solver: 0 = LDLT; 1 = CG",solver::CG); // The CG solver is robust for membrane models, where zero-blocks in the matrix might occur.
+    m_options.addString("Solver","Sparse linear solver", "SimplicialLDLT");
 
     m_options.addSwitch ("Verbose","Verbose output",false);
 
@@ -65,11 +65,11 @@ void gsALMBase<T>::getOptions()
     m_quasiNewtonInterval = m_options.getInt ("QuasiIterations");
 
     m_bifurcationMethod   = m_options.getInt ("BifurcationMethod");
-    m_solverType          = m_options.getInt ("Solver");
-    if (m_solverType!=solver::LDLT && m_bifurcationMethod==bifmethod::Determinant)
+    m_solver = gsSparseSolver<T>::get( m_options.getString("Solver") );
+    if  (!dynamic_cast<typename gsSparseSolver<T>::SimplicialLDLT*>(m_solver.get()) && m_bifurcationMethod==bifmethod::Determinant)
     {
-      gsWarn<<"Determinant method cannot be used with solvers other than LDLT. Bifurcation method will be set to 'Eigenvalue'.\n";
-      m_bifurcationMethod = bifmethod::Eigenvalue;
+        gsWarn<<"Determinant method cannot be used with solvers other than LDLT. Bifurcation method will be set to 'Eigenvalue'.\n";
+        m_bifurcationMethod = bifmethod::Eigenvalue;
     }
 
     m_verbose             = m_options.getSwitch ("Verbose");
@@ -148,42 +148,18 @@ void gsALMBase<T>::computeResidualNorms()
 template <class T>
 void gsALMBase<T>::factorizeMatrix(const gsSparseMatrix<T> & M)
 {
-  if (m_solverType==solver::LDLT)
-  {
-    m_LDLTsolver.compute(M);
-    // If 1: matrix is not SPD
-    GISMO_ASSERT(m_LDLTsolver.info()==Eigen::ComputationInfo::Success,"Solver error with code "<<m_LDLTsolver.info()<<". See Eigen documentation on ComputationInfo \n"
-                                                                <<Eigen::ComputationInfo::Success<<": Success"<<"\n"
-                                                                <<Eigen::ComputationInfo::NumericalIssue<<": NumericalIssue"<<"\n"
-                                                                <<Eigen::ComputationInfo::NoConvergence<<": NoConvergence"<<"\n"
-                                                                <<Eigen::ComputationInfo::InvalidInput<<": InvalidInput"<<"\n");
-
-  }
-  else if (m_solverType==solver::CG)
-  {
-    m_CGsolver.compute(M);
-
-    GISMO_ASSERT(m_CGsolver.info()==Eigen::ComputationInfo::Success,"Solver error with code "<<m_CGsolver.info()<<". See Eigen documentation on ComputationInfo \n"
-                                                                <<Eigen::ComputationInfo::Success<<": Success"<<"\n"
-                                                                <<Eigen::ComputationInfo::NumericalIssue<<": NumericalIssue"<<"\n"
-                                                                <<Eigen::ComputationInfo::NoConvergence<<": NoConvergence"<<"\n"
-                                                                <<Eigen::ComputationInfo::InvalidInput<<": InvalidInput"<<"\n");
-
-  }
-  else
-    GISMO_ERROR("Solver type "<<m_solverType<<" unknown.");
-
+  m_solver->compute(M);
+  GISMO_ASSERT(m_solver->info()==Eigen::ComputationInfo::Success,"Solver error with code "<<m_LDLTsolver.info()<<". See Eigen documentation on ComputationInfo \n"
+                                                              <<Eigen::ComputationInfo::Success<<": Success"<<"\n"
+                                                              <<Eigen::ComputationInfo::NumericalIssue<<": NumericalIssue"<<"\n"
+                                                              <<Eigen::ComputationInfo::NoConvergence<<": NoConvergence"<<"\n"
+                                                              <<Eigen::ComputationInfo::InvalidInput<<": InvalidInput"<<"\n");
 }
 
 template <class T>
 gsVector<T> gsALMBase<T>::solveSystem(const gsVector<T> & F)
 {
-  if (m_solverType==solver::LDLT)
-    return m_LDLTsolver.solve(F);
-  else if (m_solverType==solver::CG)
-    return m_CGsolver.solve(F);
-  else
-    GISMO_ERROR("Solver type "<<m_solverType<<" unknown.");
+  return m_solver->solve(F);
 }
 
 template <class T>
@@ -1223,8 +1199,13 @@ void gsALMBase<T>::computeStability(gsVector<T> x, bool jacobian, T shift)
   // gsInfo<<"x = \n"<<x.transpose()<<"\n";
   if (m_bifurcationMethod == bifmethod::Determinant)
   {
-    factorizeMatrix(m_jacMat);
-    m_stabilityVec = m_LDLTsolver.vectorD();
+    if ( auto * s = dynamic_cast<typename gsSparseSolver<T>::SimplicialLDLT*>(m_solver.get()) )
+    {
+      factorizeMatrix(m_jacMat);
+      m_stabilityVec = s->vectorD();
+    }
+    else
+      GISMO_ERROR("Determinant stability method only works with SimplicialLDLT solver, current solver is "<<m_options.getString("Solver"));
   }
   else if (m_bifurcationMethod == bifmethod::Eigenvalue)
   {

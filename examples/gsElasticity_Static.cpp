@@ -65,7 +65,7 @@ int main (int argc, char** argv)
 
     std::string wn("data.csv");
 
-    gsCmdLine cmd("Thin shell plate example.");
+    gsCmdLine cmd("Static analysis using gsElasticity.");
     cmd.addInt("r","hRefine",
        "Number of dyadic h-refinement (bisection) steps to perform before solving",
        numHref);
