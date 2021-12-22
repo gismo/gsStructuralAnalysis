@@ -16,7 +16,9 @@
 #include <gsKLShell/gsThinShellAssembler.h>
 #include <gsKLShell/getMaterialMatrix.h>
 
+#ifdef GISMO_ELASTICITY
 #include <gsElasticity/gsWriteParaviewMultiPhysics.h>
+#endif
 
 #include <gsStructuralAnalysis/gsStaticNewton.h>
 
@@ -45,11 +47,9 @@ int main(int argc, char *argv[])
     std::string fn1,fn2,fn3,fn4;
     fn1 = "planar/unitplate.xml";
     fn2 = "pde/kirchhoff_shell1.xml";
-    fn3 = "options/solver_options.xml";
     bool membrane = false;
 
     gsCmdLine cmd("Static analysis for thin shells.");
-    cmd.addString( "s", "file", "Input XML file for assembler options", fn3 );
     cmd.addInt( "e", "degreeElevation",
                 "Number of degree elevation steps to perform before solving (0: equalize degree in all directions)", numElevate );
     cmd.addInt( "r", "uniformRefine", "Number of Uniform h-refinement steps to perform before solving",  numRefine );
@@ -77,6 +77,7 @@ int main(int argc, char *argv[])
     gsMultiPatch<> mp, mp_def, deformation;
     gsFileData<> fd;
 
+    bool NURBS = false; // flag needed for benchmarking with NURBS geometries, compared to v21.6
     if (testCase == 1)
     {
         fn1 = "planar/unitplate.xml";
@@ -86,21 +87,27 @@ int main(int argc, char *argv[])
     {
         fn1 = "surface/scordelis_lo_roof.xml";
         fn2 = "pde/kirchhoff_shell_scordelis.xml";
+        NURBS = true;
     }
     else if (testCase == 3)
     {
         fn1 = "surface/quarter_hemisphere.xml";
         fn2 = "pde/kirchhoff_shell_hemisphere.xml";
+        NURBS = true;
     }
     else if (testCase == 4)
     {
         fn1 = "surface/pinched_cylinder.xml";
         fn2 = "pde/kirchhoff_shell_pinchedCylinder.xml";
+        NURBS = true;
     }
 
     gsReadFile<>(fn1, mp);
     fd.read(fn2);
     gsInfo << "Loaded file "<< fd.lastPath() <<"\n";
+
+    mp.clearTopology();
+    mp.computeTopology();
 
     // Boundary conditions
     gsBoundaryConditions<> bc;
@@ -119,14 +126,24 @@ int main(int argc, char *argv[])
     gsPointLoads<real_t> pLoads = gsPointLoads<real_t>();
     gsMatrix<> points,loads;
     gsMatrix<index_t> pid_ploads;
-    fd.getId(30,points);
-    fd.getId(31,loads);
-    fd.getId(32,pid_ploads);
+    if ( fd.hasId(30) )
+        fd.getId(30,points);
+    if ( fd.hasId(31) )
+        fd.getId(31,loads);
+
+    if ( fd.hasId(32) )
+        fd.getId(32,pid_ploads);
+    else
+        pid_ploads = gsMatrix<index_t>::Zero(1,points.cols());
+
     for (index_t k =0; k!=points.cols(); k++)
         pLoads.addLoad(points.col(k), loads.col(k), pid_ploads.at(k) ); // in parametric domain!
 
+    gsInfo<<pLoads;
+
     // Reference points
-    gsMatrix<> refPoints,refPatches; // todo: add refValue..
+    gsMatrix<index_t> refPatches;
+    gsMatrix<> refPoints, refValue; // todo: add refValue..
     gsInfo<<"Reading reference point locations from "<<fn2<<" (ID=50) ...";
     if ( fd.hasId(50) )
         fd.getId(50,refPoints);
@@ -134,6 +151,12 @@ int main(int argc, char *argv[])
     gsInfo<<"Reading reference patches from "<<fn2<<" (ID=51) ...";
     if ( fd.hasId(51) )
         fd.getId(51,refPatches);
+    gsInfo<<"Finished\n";
+    gsInfo<<"Reading reference values from "<<fn2<<" (ID=52) ...";
+    if ( fd.hasId(52) )
+        fd.getId(52,refValue);
+    else
+        refValue = gsMatrix<>::Zero(mp.geoDim(),refPoints.cols());
     gsInfo<<"Finished\n";
     GISMO_ENSURE(refPatches.cols()==refPoints.cols(),"Number of reference points and patches do not match");
 
@@ -193,14 +216,17 @@ int main(int argc, char *argv[])
     for (int r =0; r < numRefine; ++r)
         mp.uniformRefine();
 
-    gsOptionList solverOptions;
-    fd.getId(90, solverOptions); // id=4: assembler options
+    gsOptionList solverOptions, assemblerOptions;
+    if (fd.hasId(90))
+        fd.getId(90, solverOptions);
+    if (fd.hasId(91))
+        fd.getId(91, assemblerOptions);
 
     // set initial deformation to undeformed state
     mp_def = mp;
 
     // define basis
-    gsMultiBasis<> dbasis(mp);
+    gsMultiBasis<> dbasis(mp,NURBS);
 
     gsInfo << "Patches: "<< mp.nPatches() <<", degree: "<< dbasis.minCwiseDegree() << "\n";
     gsInfo<<mp_def<<"\n";
@@ -295,13 +321,8 @@ int main(int argc, char *argv[])
     else
         assembler = new gsThinShellAssembler<3, real_t, true >(mp,dbasis,bc,force,materialMatrix);
 
-    fd.read(fn3);
-    gsOptionList opts;
-    fd.getFirst<gsOptionList>(opts);
-
-
     // Construct assembler object
-    assembler->setOptions(opts);
+    assembler->setOptions(assemblerOptions);
     assembler->setPointLoads(pLoads);
 
     // Define Matrices
@@ -365,22 +386,30 @@ int main(int argc, char *argv[])
 
     if (refPoints.cols()!=0)
     {
-        gsMatrix<> refs(1,3*refPoints.cols());
+        gsMatrix<> refs(1,mp.geoDim()*refPoints.cols());
         for (index_t p=0; p!=refPoints.cols(); p++)
-            refs.block(0,p*3,1,3) = deformation.piece(refPatches(0,p)).eval(refPoints.col(p)).transpose();
+            refs.block(0,p*mp.geoDim(),1,mp.geoDim()) = deformation.piece(refPatches(0,p)).eval(refPoints.col(p)).transpose();
 
-        gsInfo<<"References\n";
+        gsInfo<<"Computed values\n";
         for (index_t p=0; p!=refPoints.cols(); ++p)
             gsInfo<<"x"<<std::to_string(p)<<"\ty"<<std::to_string(p)<<"\tz"<<std::to_string(p)<<"\t";
         gsInfo<<"\n";
-            for (index_t p=0; p!=refPoints.cols(); ++p)
-                gsInfo<<refs(0,3*p)<<"\t"<<refs(0,3*p+1)<<"\t"<<refs(0,3*p+2)<<"\t";
+        for (index_t p=0; p!=refPoints.cols(); ++p)
+            gsInfo<<refs(0,mp.geoDim()*p)<<"\t"<<refs(0,mp.geoDim()*p+1)<<"\t"<<refs(0,mp.geoDim()*p+2)<<"\t";
+        gsInfo<<"\n";
+
+        gsInfo<<"Reference values\n"; // provided as mp.geoDim() x points.cols() matrix
+        for (index_t p=0; p!=refValue.cols(); ++p)
+            gsInfo<<"x"<<std::to_string(p)<<"\ty"<<std::to_string(p)<<"\tz"<<std::to_string(p)<<"\t";
+        gsInfo<<"\n";
+        for (index_t p=0; p!=refValue.cols(); ++p)
+            for (index_t d=0; d!=mp.geoDim(); d++)
+                gsInfo<<refValue(d,p)<<"\t";
         gsInfo<<"\n";
     }
 
     if (stress)
     {
-
         gsPiecewiseFunction<> membraneStresses;
         assembler->constructStress(mp_def,membraneStresses,stress_type::membrane);
         gsField<> membraneStress(mp_def,membraneStresses, true);

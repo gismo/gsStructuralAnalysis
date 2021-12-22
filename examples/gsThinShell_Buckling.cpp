@@ -509,7 +509,6 @@ int main (int argc, char** argv)
     gsConstantFunction<> pressFun(pressure,3);
     // Initialise solution object
     gsMultiPatch<> mp_def = mp;
-    gsSparseSolver<>::LU solver;
 
     // Linear isotropic material model
     gsConstantFunction<> force(tmp,3);
@@ -685,7 +684,7 @@ int main (int argc, char** argv)
         {
 
           // Compute solution based on eigenmode with number 'mode'
-          modeShape = vectors.col(m);//solver.solve( assembler->rhs() );
+          modeShape = vectors.col(m);
           assembler->constructSolution(modeShape, solution);
 
           // compute the deformation spline

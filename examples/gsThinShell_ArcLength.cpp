@@ -1017,12 +1017,12 @@ int main (int argc, char** argv)
 
     if (!membrane)
     {
-      arcLength->options().setInt("Solver",0); // LDLT solver
+      arcLength->options().setString("Solver","SimplicialLDLT"); // LDLT solver
       arcLength->options().setInt("BifurcationMethod",0); // 0: determinant, 1: eigenvalue
     }
     else
     {
-      arcLength->options().setInt("Solver",1); // CG solver
+      arcLength->options().setString("Solver","CGDiagonal"); // CG solver
       arcLength->options().setInt("BifurcationMethod",1); // 0: determinant, 1: eigenvalue
     }
 

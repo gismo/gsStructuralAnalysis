@@ -59,6 +59,7 @@ public:
         m_NL = false;
         this->initializeCoefficients();
         this->initiate();
+        m_solver = gsSparseSolver<T>::get( "LU" ); // todo: make proper options
     }
 
     /**
@@ -379,9 +380,7 @@ protected:
 protected:
 
     /// Linear solver employed
-    gsSparseSolver<>::LU  m_solver;
-    //gsSparseSolver<>::BiCGSTABDiagonal solver;
-    //gsSparseSolver<>::QR  solver;
+    mutable typename gsSparseSolver<T>::uPtr m_solver;
 
 protected:
 

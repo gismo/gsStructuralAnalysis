@@ -498,7 +498,6 @@ int main (int argc, char** argv)
 
     // Initialise solution object
     gsMultiPatch<> mp_def = mp;
-    gsSparseSolver<>::LU solver;
 
     // Linear isotropic material model
     gsFunctionExpr<> force("0","0","0",3);
