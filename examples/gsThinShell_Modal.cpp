@@ -425,7 +425,6 @@ int main (int argc, char** argv)
     gsFunctionExpr<> surfForce(tx,ty,tz,3);
     // Initialise solution object
     gsMultiPatch<> mp_def = mp;
-    gsSparseSolver<>::LU solver;
 
     // Linear isotropic material model
     gsConstantFunction<> force(tmp,3);
@@ -457,9 +456,6 @@ int main (int argc, char** argv)
     gsSparseMatrix<> K =  assembler->matrix();
     assembler->assembleMass();
     gsSparseMatrix<> M =  assembler->matrix();
-
-    gsModalSolver<real_t,Spectra::GEigsMode::ShiftInvert> modal(K,M);
-    modal.verbose();
 
     gsModalSolver<real_t> modal(K,M);
     modal.options().setInt("solver",2);
@@ -502,7 +498,7 @@ int main (int argc, char** argv)
         {
 
           // Compute solution based on eigenmode with number 'mode'
-          modeShape = modal.vector(m);//solver.solve( assembler->rhs() );
+          modeShape = modal.vector(m);
           assembler->constructSolution(modeShape, solution);
 
           // compute the deformation spline

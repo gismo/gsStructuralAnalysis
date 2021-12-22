@@ -73,7 +73,7 @@
 <Matrix rows="3" cols="0" id="31" tag="Loads" >
 </Matrix>
 
-<!-- Assembler options -->
+<!-- Solver options -->
 <OptionList id="90">
   <int label="verbose" desc="Verbose for Newton iterations [0: off, 1: iterations, 2: full (matrix and vector output)" value="1"/>
   <int label="maxIt" desc="Maximum number of Newton iterations [integer]" value="10"/>
@@ -81,7 +81,13 @@
   <real label="tolU" desc="Relative error tolerance for Newton iterations [double]" value="-1"/>
   <real label="tol" desc="Relative error tolerance for Newton iterations [double]" value="1e-6"/>
   <real label="Relaxation" desc="Relative error tolerance for Newton iterations [double]" value="1.0"/>
+  <string label="Solver" desc="Specifies the sparse solver, see gsSparseSolver::get for more details [string]" value="CGDiagonal"/>
  </OptionList>
+
+ <!-- Assembler options -->
+ <OptionList id="91">
+   <int label="Continuity" desc="Set the continuity of the interface assembly [int]" value="0"/>
+  </OptionList>
 
 
 

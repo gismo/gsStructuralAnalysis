@@ -59,6 +59,9 @@ public:
     {
         return m_nonlinear(x);
     };
+
+    m_solver = gsSparseSolver<T>::get( "SimplicialLDLT" );
+
     this->initializeMatrix();
   }
 
@@ -79,6 +82,9 @@ public:
     m_scaling(scaling)
   {
     m_A = linear;
+
+    m_solver = gsSparseSolver<T>::get( "SimplicialLDLT" );
+
     this->initializeMatrix();
   }
 
@@ -96,15 +102,25 @@ public:
     m_B = nonlinear-m_A;
   }
 
+  // todo: add solver option
+  // gsOptionList defaultOptions()
+  // {
+  //   gsOptionList options;
+  //   options = Base::defaultOptions()
+  //   options.addString("Solver","Specify the sparse solver","SimplicialLDLT");
+  //   return options;
+  // }
+
+
 protected:
 
     void initializeMatrix()
     {
         bool verbose = m_options.getSwitch("verbose");
         if (verbose) { gsInfo<<"Computing matrices" ; }
-        m_solver.compute(m_A);
+        m_solver->compute(m_A);
         if (verbose) { gsInfo<<"." ; }
-        m_solVec = m_solver.solve(m_scaling*m_rhs);
+        m_solVec = m_solver->solve(m_scaling*m_rhs);
         if (verbose) { gsInfo<<"." ; }
         m_B = m_dnonlinear(m_solVec,gsVector<T>::Zero(m_solVec.rows()))-m_A;
         if (verbose) { gsInfo<<"." ; }
@@ -122,7 +138,7 @@ protected:
 
 
     /// Linear solver employed
-    gsSparseSolver<>::SimplicialLDLT  m_solver;
+    mutable typename gsSparseSolver<T>::uPtr m_solver;
     gsVector<> m_solVec;
 
     using Base::m_options;

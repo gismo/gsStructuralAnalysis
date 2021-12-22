@@ -317,7 +317,7 @@ int main (int argc, char** argv)
     else
       GISMO_ERROR("Method unknown");
 
-    arcLength->options().setInt("Solver",0); // LDLT solver
+    arcLength->options().setString("Solver","SimplicialLDLT"); // LDLT solver
     arcLength->options().setInt("BifurcationMethod",0); // 0: determinant, 1: eigenvalue
     arcLength->options().setReal("Length",dL);
     // arcLength->options().setInt("AngleMethod",0); // 0: step, 1: iteration

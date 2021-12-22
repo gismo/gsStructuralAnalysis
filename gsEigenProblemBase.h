@@ -42,7 +42,7 @@ public:
 
 public:
 
-    gsOptionList defaultOptions()
+    virtual gsOptionList defaultOptions()
     {
         gsOptionList options;
         options.addSwitch("verbose","Verbose output",false);

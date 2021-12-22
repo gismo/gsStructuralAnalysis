@@ -25,6 +25,19 @@
     <!-- Mu2 -->
     <Function type="FunctionExpr" id="18" tag="Material" dim="3">-0.0625</Function>
 
+    <!-- Reference point coordinates -->
+<Matrix rows="2" cols="1" id="50" >
+  0.5 0.0
+</Matrix>
+<!-- Reference point patch indices -->
+<Matrix rows="1" cols="1" id="51" >
+  0
+</Matrix>
+<!-- Reference value -->
+<Matrix rows="1" cols="1" id="2" >
+  0
+</Matrix>
+
 <!-- Boundary conditions and loads -->
 <!-- 1 = west, 2 = east, 3 = south, 4 = north -->
 <boundaryConditions id="20" multipatch="1">
@@ -80,6 +93,19 @@
 <Matrix rows="3" cols="0" id="31" tag="Loads" >
 </Matrix>
 
+<!-- Reference point coordinates -->
+<Matrix rows="2" cols="1" id="50" >
+  0.5 0.0
+</Matrix>
+<!-- Reference point patch indices -->
+<Matrix rows="1" cols="1" id="51" >
+  0
+</Matrix>
+<!-- Reference point patch indices -->
+<Matrix rows="3" cols="1" id="52" >
+  0 0 0.30024
+</Matrix>
+
 <!-- Assembler options -->
  <OptionList id="90">
   <int label="verbose" desc="Verbose for Newton iterations [0: off, 1: iterations, 2: full (matrix and vector output)" value="1"/>
@@ -88,7 +114,9 @@
   <real label="tolU" desc="Relative error tolerance for Newton iterations [double]" value="-1"/>
   <real label="tol" desc="Relative error tolerance for Newton iterations [double]" value="1e-6"/>
   <real label="Relaxation" desc="Relative error tolerance for Newton iterations [double]" value="1.0"/>
+  <string label="Solver" desc="Specifies the sparse solver, see gsSparseSolver::get for more details [string]" value="CGDiagonal"/>
  </OptionList>
+
 
 
 </xml>
