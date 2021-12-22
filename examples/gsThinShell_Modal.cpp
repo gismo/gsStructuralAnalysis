@@ -107,6 +107,14 @@ int main (int argc, char** argv)
     real_t EA(0),EI(0),r(0);
     if (testCase==0 || testCase==1 || testCase==2)
     {
+        if (testCase==2)
+        {
+            width = 0.5;
+            thickness = 0.5;
+            E_modulus = 210e9;
+            Density = 7800;
+        }
+        
         mp.addPatch(gsNurbsCreator<>::BSplineRectangle(0,0,length,width));
         mp.addAutoBoundaries();
         mp.embed(3);
@@ -166,6 +174,7 @@ int main (int argc, char** argv)
     gsBoundaryConditions<> BCs;
     BCs.setGeoMap(mp);
     gsPointLoads<real_t> pLoads = gsPointLoads<real_t>();
+    gsPointLoads<real_t> pMass = gsPointLoads<real_t>();
 
     // Initiate Surface forces
     std::string tx("0");
@@ -237,7 +246,13 @@ int main (int argc, char** argv)
         BCs.addCondition(boundary::east, condition_type::dirichlet, 0, 0, false, 0 ); // unknown 0 - x
         BCs.addCondition(boundary::east, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 1 - y
 
-        omegas.push_back(3.52/(2*3.1415926535)*math::pow((1/length),2)*math::pow(EI/(Density*Area),0.5));
+        omegas.push_back(3.52*math::pow((1/length),2)*math::pow(EI/(Density*Area),0.5));
+
+        gsVector<> point(2);
+        gsVector<> mass (1);
+
+        point<< 1.0, 0.5 ; mass << 100.0 ;
+        pMass.addLoad(point, mass, 0 );
     }
     else if (testCase == 3)
     {
@@ -447,15 +462,15 @@ int main (int argc, char** argv)
     gsThinShellAssemblerBase<real_t>* assembler;
     assembler = new gsThinShellAssembler<3, real_t, true >(mp,dbasis,BCs,force,materialMatrix);
 
-    assembler->setPointLoads(pLoads);
+    assembler->setPointMass(pMass);
     assembler->setOptions(opts);
     // Initialise solution object
     gsMultiPatch<> solution = mp;
 
     assembler->assemble();
-    gsSparseMatrix<> K =  assembler->matrix();
+    gsSparseMatrix<> K = assembler->matrix();
     assembler->assembleMass();
-    gsSparseMatrix<> M =  assembler->matrix();
+    gsSparseMatrix<> M = assembler->massMatrix();
 
     gsModalSolver<real_t> modal(K,M);
     modal.options().setInt("solver",2);
