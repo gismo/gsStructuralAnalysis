@@ -11,7 +11,6 @@
     Author(s): H.M. Verhelst (2019-..., TU Delft)
 */
 
-#include <gsSpectra/gsSpectra.h>
 #include <gsStructuralAnalysis/gsEigenProblemBase.h>
 
 #ifdef GISMO_WITH_SPECTRA
