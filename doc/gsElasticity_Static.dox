@@ -1,0 +1,17 @@
+namespace gismo {
+/**
+
+\page gsElasticity_Static gsElasticity_Static.cpp
+
+Static simulations of a solid
+
+\section gsElasticity_Static_Annotated Annotated source file
+
+Here is the full file \c examples/gsElasticity_Static.cpp. Clicking on a function
+or class name will lead you to its reference documentation.
+
+\include gsElasticity_Static.cpp
+
+*/
+
+}

@@ -1,0 +1,95 @@
+/*
+    This file is part of the G+Smo library.
+
+    This Source Code Form is subject to the terms of the Mozilla Public
+    License, v. 2.0. If a copy of the MPL was not distributed with this
+    file, You can obtain one at http://mozilla.org/MPL/2.0/.
+*/
+
+namespace gismo
+{
+
+/** \page gsStructuralAnalysis Structural Analysis module
+\defgroup gsStructuralAnalysis gsStructuralAnalysis
+\ingroup Modules
+
+This module contains algorithms for structural analysis. The module is versatile in its use with the elasticity elements from \ref Elasticity and \ref KLShell. The module is enhanced by the \ref gsSpectra class for eigenvalue computations.
+
+\section IntroStructuralAnalysis Using the Structural Analysis module
+
+The routines in the structural analysis module are typically based on four entities:
+- The external force vector (\f$\mathbf{F}_{\text{ext}}\f$),
+- The linear stiffness matrix (\f$K_L\f$),
+- The residual vector (\f$\mathbf{R}(\mathbf{u}_h)\f$),
+- The tangential stiffness matrix or Jacobian (\f$K(\mathbf{u}_h)\f$),
+
+Where \f$\mathbf{u}_h\f$ is the discrete solution.
+
+\subsection forceVector The force vector
+
+The force vector (\f$\mathbf{F}_{\text{ext}}\f$) is the vector that contains the external force contributions on the object. These could be due to body forces, point loads, etc. It is defined as a \ref gsVector throughout the module.
+
+\subsection linearMatrix The linear stiffness matrix
+
+The linear stiffness matrix (\f$K_L\f$) is the matrix that has to be assembled given the undeformed configuration of the object. In fact, it is similar to assembling the tangential stiffness matrix around the zero vector (\f$K(\mathbf{0}_h)\f$). The linear stiffness matrix should always be provided as a \ref gsSparseMatrix.
+
+\subsection Residual The tangential stiffness matrix or Jacobian
+
+The residual vector is the vector that represents the difference between the internal and external forces inside the body:
+\f{align*}{
+\mathbf{R}(\mathbf{u}_h) = \mathbf{F}_{\text{ext}} - \mathbf{F}_{\text{int}}(\mathbf{u}_h)
+\f}
+
+Since the residual depends on the solution vector \f$\mathbf{u}_h\f$, it has to be an object that takes the solution vector as an input. In the module, the residual vector has the following type:
+~~~~~
+typedef std::function<gsVector<real_t> (gsVector<real_t> const &) > Residual_t;
+~~~~~
+When using the Structural Analysis module in practice, one can define the residual vector as a lambda function:
+~~~~~
+// Declare Residual type
+typedef std::function<gsVector<real_t> (gsVector<real_t> const &) > Residual_t;
+// Define Residual function
+Residual_t Residual = [&<objects needed to assemble the Jacobian>](gsVector<real_t> const &x)
+{
+    <Code to assemble the Residual>
+    return <Residual>
+};
+~~~~~
+
+For some applications, the use of arc-length methods for continuation, the external force is scaled with an unknown load factor \f$\lambda\f$. In this case, the definition of the residual is
+\f{align*}{
+\mathbf{R}(\mathbf{u}_h,\lambda) = \lambda\mathbf{F}_{\text{ext}} - \mathbf{F}_{\text{int}}(\mathbf{u}_h)
+\f}
+
+In this case, the residual can be defined as follows, using the external load vector as input as well:
+~~~~~
+// Declare ALResidual type
+typedef std::function<gsVector<real_t> (gsVector<real_t> const &, real_t, gsVector<real_t> const &) > ALResidual_t;
+// Define ALResidual function
+ALResidual_t ALResidual = [&time,&stopwatch,&assembler,&mp_def](gsVector<real_t> const &x, real_t lam, gsVector<real_t> const &force)
+{
+    <Code to assemble the ALResidual>
+    return <ALResidual>
+};
+~~~~~
+
+\subsection Jacobian The tangential stiffness matrix or Jacobian
+
+The tangential stiffness matrix is the matrix that follows from linearizing the linear stiffness matrix with respect to the deformations collected a discrete vector (\f$\mathbf{u}_h\f$). Therefore, the tangential stiffness matrix is an object that takes the solution vector as an input. In the module, the tangential stiffness matrix has the following type:
+~~~~~
+std::function < gsSparseMatrix<T> ( gsVector<T> const &, gsVector<T> const &) >
+~~~~~
+When using the Structural Analysis module in practice, one can define the tangential stiffness matrix as a lambda function:
+~~~~~
+// Declare Jacobian type
+typedef std::function<gsSparseMatrix<real_t> (gsVector<real_t> const &)> Jacobian_t;
+// Define Jacobian function
+Jacobian_t Jacobian = [&<objects needed to assemble the Jacobian>](gsVector<real_t> const &x)
+{
+    <Code to assemble the Jacobian>
+    return <Jacobian>
+};
+~~~~~
+*/
+
+}

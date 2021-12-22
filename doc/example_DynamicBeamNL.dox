@@ -1,0 +1,17 @@
+namespace gismo {
+/**
+
+\page gsThinShell_DynamicBeamNL gsThinShell_DynamicBeamNL.cpp
+
+Computes nonlinear dynamic analysis of a beam
+
+\section gsThinShell_DynamicBeamNL_Annotated Annotated source file
+
+Here is the full file \c examples/gsThinShell_DynamicBeamNL.cpp. Clicking on a function
+or class name will lead you to its reference documentation.
+
+\include gsThinShell_DynamicBeamNL.cpp
+
+*/
+
+}

@@ -1,0 +1,17 @@
+namespace gismo {
+/**
+
+\page example_DynamicShellNL example_DynamicShellNL.cpp
+
+Example for nonlinear time integration of a nonlinear shell
+
+\section example_DynamicShellNL_Annotated Annotated source file
+
+Here is the full file \c examples/example_DynamicShellNL.cpp. Clicking on a function
+or class name will lead you to its reference documentation.
+
+\include example_DynamicShellNL.cpp
+
+*/
+
+}

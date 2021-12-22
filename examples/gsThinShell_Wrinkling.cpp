@@ -16,8 +16,10 @@
 #include <gsKLShell/gsThinShellAssembler.h>
 #include <gsKLShell/getMaterialMatrix.h>
 
-// #include <gsThinShell/gsArcLengthIterator.h>
-#include <gsStructuralAnalysis/gsArcLengthIterator.h>
+#include <gsStructuralAnalysis/gsALMBase.h>
+#include <gsStructuralAnalysis/gsALMLoadControl.h>
+#include <gsStructuralAnalysis/gsALMRiks.h>
+#include <gsStructuralAnalysis/gsALMCrisfield.h>
 
 using namespace gismo;
 
@@ -57,7 +59,7 @@ template <class T>
 void initStepOutput( const std::string name, const gsMatrix<T> & points);
 
 template <class T>
-void writeStepOutput(const gsArcLengthIterator<T> & arcLength, const gsMultiPatch<T> & deformation, const std::string name, const gsMatrix<T> & points, const index_t extreme=-1, const index_t kmax=100);
+void writeStepOutput(const gsALMBase<T> * arcLength, const gsMultiPatch<T> & deformation, const std::string name, const gsMatrix<T> & points, const index_t extreme=-1, const index_t kmax=100);
 
 void initSectionOutput( const std::string dirname, bool undeformed=false);
 
@@ -75,7 +77,6 @@ int main (int argc, char** argv)
     bool mesh       = false;
     bool stress       = false;
     bool membrane       = false;
-    //bool mesh = false;
     bool SingularPoint = false;
     bool quasiNewton = false;
     int quasiNewtonInt = -1;
@@ -132,6 +133,8 @@ int main (int argc, char** argv)
 
     std::string assemberOptionsFile("options/solver_options.xml");
 
+    gsStopwatch time;
+
     gsCmdLine cmd("Wrinkling analysis with thin shells.");
     cmd.addString( "f", "file", "Input XML file for assembler options", assemberOptionsFile );
     cmd.addInt("t", "testcase", "Test case: 0: clamped-clamped, 1: pinned-pinned, 2: clamped-free", testCase);
@@ -176,12 +179,14 @@ int main (int argc, char** argv)
     cmd.addSwitch("membrane", "Use membrane model (no bending)", membrane);
     cmd.addSwitch("symmetry", "Use symmetry boundary condition (different per problem)", symmetry);
     cmd.addSwitch("deformed", "plot on deformed shape", deformed);
-    cmd.addSwitch("mesh","plot the mesh",mesh);
     cmd.addSwitch("weak", "Use weak clamping", weak);
 
     cmd.addSwitch("THB", "Use refinement", THB);
 
     try { cmd.getValues(argc,argv); } catch (int rv) { return rv; }
+
+    time.restart();
+    gsInfo<<"-> Initializing parameters...";
 
     gsFileData<> fd(assemberOptionsFile);
     gsOptionList opts;
@@ -223,6 +228,9 @@ int main (int argc, char** argv)
           C10 = 6.21485502e4; // c1/2
           C01 = 15.8114570e4; // c2/2
         }
+        else
+          C10 = C01 = 0;
+
         Ratio = C10/C01;
         mu = 2*(C01+C10);
       }
@@ -232,6 +240,8 @@ int main (int argc, char** argv)
           C10 = (0.5)*1e6;
         else if (testCase==1) // --> Panaitescu2019
           C10 = 19.1010178e4;
+        else
+          C10 = 0;
 
         mu = 2*C10;
       }
@@ -271,6 +281,9 @@ int main (int argc, char** argv)
           C10 = 6.21485502e4; // c1/2
           C01 = 15.8114570e4; // c2/2
         }
+        else
+          C10 = C01 = 0;
+
         Ratio = C10/C01;
         mu = 2*(C01+C10);
       }
@@ -280,6 +293,8 @@ int main (int argc, char** argv)
           C10 = (0.5)*1e6;
         else if (testCase==3 || testCase==5 || testCase==7)
           C10 = 19.1010178e4;
+        else
+          C10 = 0;
 
         mu = 2*C10;
       }
@@ -394,11 +409,18 @@ int main (int argc, char** argv)
       mp = mpBspline;
     }
 
+    gsInfo<<"finished ["<<time.stop()<<" s]\n";
+
+
     gsMultiBasis<> dbasis(mp);
     gsInfo<<"Basis (patch 0): "<< mp.patch(0).basis() << "\n";
 
+    gsInfo<<"-> Initializing boundary conditions...";
+    time.restart();
+
     // Boundary conditions
     gsBoundaryConditions<> BCs;
+    BCs.setGeoMap(mp);
     gsPointLoads<real_t> pLoads = gsPointLoads<real_t>();
 
     // Initiate Surface forces
@@ -412,8 +434,6 @@ int main (int argc, char** argv)
     neu << 0, 0, 0;
     gsConstantFunction<> neuData(neu,3);
 
-    // Buckling coefficient
-    //real_t fac = 1;
     // Unscaled load
     real_t Load = 0;
 
@@ -617,7 +637,8 @@ int main (int argc, char** argv)
 
     std::string commands = "mkdir -p " + dirname;
     const char *command = commands.c_str();
-    system(command);
+    int systemRet = system(command);
+    GISMO_ASSERT(systemRet!=-1,"Something went wrong with calling the system argument");
 
     // plot geometry
     if (plot)
@@ -643,13 +664,16 @@ int main (int argc, char** argv)
       crosssection=false;
     }
 
+    gsInfo<<"finished ["<<time.stop()<<" s]\n";
+
+    gsInfo<<"-> Initializing shell...";
+    time.restart();
 
     gsFunctionExpr<> surfForce(tx,ty,tz,3);
     gsConstantFunction<> pressFun(pressure,3);
     gsConstantFunction<> foundFun(foundation,3);
     // Initialise solution object
     gsMultiPatch<> mp_def = mp;
-    gsSparseSolver<>::LU solver;
 
     // Linear isotropic material model
     gsConstantFunction<> force(tmp,3);
@@ -760,75 +784,95 @@ int main (int argc, char** argv)
         assembler->setFoundation(foundFun);
 
     gsStopwatch stopwatch;
-    real_t time = 0.0;
+    real_t assemblyTime = 0.0;
 
     typedef std::function<gsSparseMatrix<real_t> (gsVector<real_t> const &)>                                Jacobian_t;
     typedef std::function<gsVector<real_t> (gsVector<real_t> const &, real_t, gsVector<real_t> const &) >   ALResidual_t;
     // Function for the Jacobian
-    Jacobian_t Jacobian = [&time,&stopwatch,&assembler,&mp_def](gsVector<real_t> const &x)
+    Jacobian_t Jacobian = [&assemblyTime,&stopwatch,&assembler,&mp_def](gsVector<real_t> const &x)
     {
       stopwatch.restart();
       assembler->constructSolution(x,mp_def);
+      gsInfo<<"Start assembly...";
       assembler->assembleMatrix(mp_def);
-      time += stopwatch.stop();
+      gsInfo<<"finished.\n";
+      assemblyTime += stopwatch.stop();
 
       gsSparseMatrix<real_t> m = assembler->matrix();
       // gsInfo<<"matrix = \n"<<m.toDense()<<"\n";
       return m;
     };
     // Function for the Residual
-    ALResidual_t ALResidual = [&time,&stopwatch,&assembler,&mp_def](gsVector<real_t> const &x, real_t lam, gsVector<real_t> const &force)
+    ALResidual_t ALResidual = [&assemblyTime,&stopwatch,&assembler,&mp_def](gsVector<real_t> const &x, real_t lam, gsVector<real_t> const &force)
     {
       stopwatch.restart();
       assembler->constructSolution(x,mp_def);
       assembler->assembleVector(mp_def);
       gsVector<real_t> Fint = -(assembler->rhs() - force);
       gsVector<real_t> result = Fint - lam * force;
-      time += stopwatch.stop();
+      assemblyTime += stopwatch.stop();
       return result; // - lam * force;
     };
+
+    gsInfo<<"finished ["<<time.stop()<<" s]\n";
+
+    gsInfo<<"-> Initial assembly...";
+    time.restart();
+
     // Assemble linear system to obtain the force vector
     assembler->assemble();
     gsVector<> Force = assembler->rhs();
 
+    gsInfo<<"finished ["<<time.stop()<<" s]\n";
 
-    gsArcLengthIterator<real_t> arcLength(Jacobian, ALResidual, Force);
+    gsInfo<<"-> Initializing ALM...";
+    time.restart();
+
+
+    gsALMBase<real_t> * arcLength;
+    if (method==0)
+      arcLength = new gsALMLoadControl<real_t>(Jacobian, ALResidual, Force);
+    else if (method==1)
+      arcLength = new gsALMRiks<real_t>(Jacobian, ALResidual, Force);
+    else if (method==2)
+      arcLength = new gsALMCrisfield<real_t>(Jacobian, ALResidual, Force);
+    else
+      GISMO_ERROR("Method "<<method<<" unknown");
 
     if (!membrane)
     {
-      arcLength.options().setInt("Solver",0); // LDLT solver
-      arcLength.options().setInt("BifurcationMethod",0); // 0: determinant, 1: eigenvalue
+      arcLength->options().setString("Solver","SimplicialLDLT"); // LDLT solver
+      arcLength->options().setInt("BifurcationMethod",0); // 0: determinant, 1: eigenvalue
     }
     else
     {
-      arcLength.options().setInt("Solver",1); // CG solver
-      arcLength.options().setInt("BifurcationMethod",1); // 0: determinant, 1: eigenvalue
+      arcLength->options().setString("Solver","CGDiagonal"); // CG solver
+      arcLength->options().setInt("BifurcationMethod",1); // 0: determinant, 1: eigenvalue
     }
 
-    arcLength.options().setInt("Method",method);
-    arcLength.options().setReal("Length",dLb);
-    arcLength.options().setInt("AngleMethod",0); // 0: step, 1: iteration
-    arcLength.options().setSwitch("AdaptiveLength",adaptive);
-    arcLength.options().setInt("AdaptiveIterations",5);
-    arcLength.options().setReal("Perturbation",tau);
-    arcLength.options().setReal("Scaling",0.0);
-    arcLength.options().setReal("Tol",tol);
-    arcLength.options().setReal("TolU",tolU);
-    arcLength.options().setReal("TolF",tolF);
-    arcLength.options().setInt("MaxIter",maxit);
-    arcLength.options().setSwitch("Verbose",true);
-    arcLength.options().setReal("Relaxation",relax);
+    arcLength->options().setReal("Length",dLb);
+    arcLength->options().setInt("AngleMethod",0); // 0: step, 1: iteration
+    arcLength->options().setSwitch("AdaptiveLength",adaptive);
+    arcLength->options().setInt("AdaptiveIterations",5);
+    arcLength->options().setReal("Perturbation",tau);
+    arcLength->options().setReal("Scaling",0.0);
+    arcLength->options().setReal("Tol",tol);
+    arcLength->options().setReal("TolU",tolU);
+    arcLength->options().setReal("TolF",tolF);
+    arcLength->options().setInt("MaxIter",maxit);
+    arcLength->options().setSwitch("Verbose",true);
+    arcLength->options().setReal("Relaxation",relax);
     if (quasiNewtonInt>0)
     {
       quasiNewton = true;
-      arcLength.options().setInt("QuasiIterations",quasiNewtonInt);
+      arcLength->options().setInt("QuasiIterations",quasiNewtonInt);
     }
-    arcLength.options().setSwitch("Quasi",quasiNewton);
+    arcLength->options().setSwitch("Quasi",quasiNewton);
 
 
-    gsDebug<<arcLength.options();
-    arcLength.applyOptions();
-    arcLength.initialize();
+    gsDebug<<arcLength->options();
+    arcLength->applyOptions();
+    arcLength->initialize();
 
 
     gsParaviewCollection collection(dirname + "/" + output);
@@ -844,30 +888,34 @@ int main (int argc, char** argv)
 
     gsMatrix<> solVector;
     real_t indicator = 0.0;
-    arcLength.setIndicator(indicator); // RESET INDICATOR
+    arcLength->setIndicator(indicator); // RESET INDICATOR
     bool bisected = false;
     real_t dLb0 = dLb;
+
+    gsInfo<<"finished ["<<time.stop()<<" s]\n";
+
+
     for (index_t k=0; k<step; k++)
     {
       gsInfo<<"Load step "<< k<<"\n";
       // assembler->constructSolution(solVector,solution);
-      arcLength.step();
+      arcLength->step();
 
-      // gsInfo<<"m_U = "<<arcLength.solutionU()<<"\n";
-      if (!(arcLength.converged()))
+      // gsInfo<<"m_U = "<<arcLength->solutionU()<<"\n";
+      if (!(arcLength->converged()))
       {
         gsInfo<<"Error: Loop terminated, arc length method did not converge.\n";
         dLb = dLb / 2.;
-        arcLength.setLength(dLb);
-        arcLength.setSolution(Uold,Lold);
+        arcLength->setLength(dLb);
+        arcLength->setSolution(Uold,Lold);
         bisected = true;
         k -= 1;
         continue;
         // if (plot)
         // {
-        //   solVector = arcLength.solutionU();
+        //   solVector = arcLength->solutionU();
         //   Uold = solVector;
-        //   Lold = arcLength.solutionL();
+        //   Lold = arcLength->solutionL();
         //   assembler->constructSolution(solVector,mp_def);
 
         //   deformation = mp_def;
@@ -884,29 +932,29 @@ int main (int argc, char** argv)
 
       if (SingularPoint)
       {
-        arcLength.computeStability(arcLength.solutionU(),quasiNewton);
-        if (arcLength.stabilityChange())
+        arcLength->computeStability(arcLength->solutionU(),quasiNewton);
+        if (arcLength->stabilityChange())
         {
           gsInfo<<"Bifurcation spotted!"<<"\n";
-          arcLength.computeSingularPoint(1e-4, 5, Uold, Lold, 1e-7, 0, false);
-          arcLength.switchBranch();
+          arcLength->computeSingularPoint(1e-4, 5, Uold, Lold, 1e-7, 0, false);
+          arcLength->switchBranch();
           dLb0 = dLb = dL;
-          arcLength.setLength(dLb);
+          arcLength->setLength(dLb);
 
           if (writeP)
           {
             gsMultiPatch<> mp_perturbation;
-            assembler->constructSolution(arcLength.solutionV(),mp_perturbation);
+            assembler->constructSolution(arcLength->solutionV(),mp_perturbation);
             gsWrite(mp_perturbation,dirname + "/" +"perturbation");
             gsInfo<<"Perturbation written in: " + dirname + "/" + "perturbation.xml\n";
           }
         }
       }
-      indicator = arcLength.indicator();
+      indicator = arcLength->indicator();
 
-      solVector = arcLength.solutionU();
+      solVector = arcLength->solutionU();
       Uold = solVector;
-      Lold = arcLength.solutionL();
+      Lold = arcLength->solutionL();
       assembler->constructSolution(solVector,mp_def);
 
       gsMatrix<> pts(2,1);
@@ -927,7 +975,7 @@ int main (int argc, char** argv)
       deformation = mp_def;
       deformation.patch(0).coefs() -= mp.patch(0).coefs();// assuming 1 patch here
 
-      gsInfo<<"Total ellapsed assembly time: "<<time<<" s\n";
+      gsInfo<<"Total ellapsed assembly time: "<<assemblyTime<<" s\n";
 
       if (plot)
       {
@@ -996,7 +1044,7 @@ int main (int argc, char** argv)
       if (!bisected)
       {
         dLb = dLb0;
-        arcLength.setLength(dLb);
+        arcLength->setLength(dLb);
       }
       bisected = false;
 
@@ -1012,6 +1060,10 @@ int main (int argc, char** argv)
       Sflexural.save();
       Smembrane_p.save();
     }
+
+  delete materialMatrix;
+  delete assembler;
+  delete arcLength;
 
   return result;
 }
@@ -1321,7 +1373,7 @@ void initStepOutput(const std::string name, const gsMatrix<T> & points)
 }
 
 template <class T>
-void writeStepOutput(const gsArcLengthIterator<T> & arcLength, const gsMultiPatch<T> & deformation, const std::string name, const gsMatrix<T> & points, const index_t extreme, const index_t kmax) // extreme: the column of point indices to compute the extreme over (default -1)
+void writeStepOutput(const gsALMBase<T> * arcLength, const gsMultiPatch<T> & deformation, const std::string name, const gsMatrix<T> & points, const index_t extreme, const index_t kmax) // extreme: the column of point indices to compute the extreme over (default -1)
 {
   gsMatrix<T> P(2,1), Q(2,1);
   gsMatrix<T> out(3,points.cols());
@@ -1339,7 +1391,7 @@ void writeStepOutput(const gsArcLengthIterator<T> & arcLength, const gsMultiPatc
   if (extreme==-1)
   {
     file  << std::setprecision(6)
-          << arcLength.solutionU().norm() << ",";
+          << arcLength->solutionU().norm() << ",";
           for (index_t p=0; p!=points.cols(); p++)
           {
             file<< out(0,p) << ","
@@ -1347,8 +1399,8 @@ void writeStepOutput(const gsArcLengthIterator<T> & arcLength, const gsMultiPatc
                 << out(2,p) << ",";
           }
 
-    file  << arcLength.solutionL() << ","
-          << arcLength.indicator() << ","
+    file  << arcLength->solutionL() << ","
+          << arcLength->indicator() << ","
           << "\n";
   }
   else if (extreme==0 || extreme==1)
@@ -1366,7 +1418,7 @@ void writeStepOutput(const gsArcLengthIterator<T> & arcLength, const gsMultiPatc
     }
 
     file  << std::setprecision(6)
-          << arcLength.solutionU().norm() << ",";
+          << arcLength->solutionU().norm() << ",";
           for (index_t p=0; p!=points.cols(); p++)
           {
             file<< out(0,p) << ","
@@ -1374,8 +1426,8 @@ void writeStepOutput(const gsArcLengthIterator<T> & arcLength, const gsMultiPatc
                 << std::max(abs(out2.col(p).maxCoeff()),abs(out2.col(p).minCoeff())) << ",";
           }
 
-    file  << arcLength.solutionL() << ","
-          << arcLength.indicator() << ","
+    file  << arcLength->solutionL() << ","
+          << arcLength->indicator() << ","
           << "\n";
   }
   else

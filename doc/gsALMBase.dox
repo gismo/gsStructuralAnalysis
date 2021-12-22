@@ -1,0 +1,32 @@
+namespace gismo
+{
+
+/** \page gsALMBase gsALM-classes
+\defgroup gsALMBase gsALMBase
+\ingroup gsStructuralAnalysis
+
+Performs the arc length method to solve a nonlinear equation system.
+
+More details can be found in [1].
+
+Examples with the use of arc-length methods are
+- \subpage benchmark_Balloon.cpp
+- \subpage benchmark_Beam.cpp
+- \subpage benchmark_Cylinder.cpp
+- \subpage benchmark_FrustrumALM.cpp
+- \subpage benchmark_MaterialTest.cpp
+- \subpage benchmark_Roof.cpp
+- \subpage benchmark_UniaxialTension.cpp
+- \subpage benchmark_Wrinkling.cpp
+- \subpage gsElasticity_ArcLength.cpp
+- \subpage gsThinShell_ArcLength.cpp
+- \subpage gsThinShell_Wrinkling.cpp
+- \subpage gsThinShell_WrinklingFitting.cpp
+- \subpage gsThinShell_WrinklingPerturbed.cpp
+
+
+[1] de Borst, R., Crisfield, M. A., Remmers, J. J. C., & Verhoosel, C. V. (2012). Non-Linear Finite Element Analysis of Solids and Structures: Second Edition. In Non-Linear Finite Element Analysis of Solids and Structures: Second Edition. https://doi.org/10.1002/9781118375938
+
+*/
+}
+
