@@ -20,6 +20,7 @@
 // #include <gsThinShell/gsArcLengthIterator.h>
 #include <gsStructuralAnalysis/gsArcLengthIterator.h>
 #include <gsAssembler/gsAdaptiveRefUtils.h>
+#include <gsAssembler/gsAdaptiveMeshing.h>
 
 using namespace gismo;
 
@@ -520,6 +521,16 @@ int main (int argc, char** argv)
     real_t indicator = 0.0;
     bool bisected = false;
     real_t dLb0 = dLb;
+
+    gsAdaptiveMeshing<real_t> mesher(mp);
+    mesher.options().setInt("CoarsenRule",markstrat);
+    mesher.options().setInt("RefineRule",markstrat);
+    mesher.options().setReal("CoarsenParam",adaptRefParam);
+    mesher.options().setReal("RefineParam",adaptRefParam);
+    mesher.options().setInt("CoarsenExtension",crsExt);
+    mesher.options().setInt("RefineExtension",refExt);
+    mesher.options().setInt("MaxLevel",4);
+    mesher.getOptions();
     for (index_t k=0; k<step; k++)
     {
 
@@ -580,17 +591,9 @@ int main (int argc, char** argv)
       // Refinement
       /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-      if (!adaptiveMesh)
+      if (adaptiveMesh && !arcLength.stabilityChange())
       {
-        solVector = arcLength.solutionU();
-        Uold = solVector;
-        Lold = arcLength.solutionL();
-        dUold = arcLength.solutionDU();
-        dLold = arcLength.solutionDL();
-        assembler->constructSolutionL(solVector,mp_def);
-      }
-      else if (k % 2==0 || k % 2==1 ||  arcLength.stabilityChange())
-      {
+        gsMultiPatch<> primalL, dualL, dualH;
         gsMultiPatch<> Uold_patch, dUold_patch;
         Uold = arcLength.solutionU();
         dUold = arcLength.solutionDU();
@@ -598,121 +601,91 @@ int main (int argc, char** argv)
         assembler->constructMultiPatchL(dUold,dUold_patch);
 
         assembler->constructSolutionL(Uold,mp_def);
+        assembler->constructMultiPatchL(Uold,primalL);
 
         /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
         // ADAPTIVE MESHING PART
         /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+        real_t refTol = 1e-4; // refine if error is above
+        real_t crsTol = 1e-6; // coarsen if error is below
+        GISMO_ENSURE(refTol >= crsTol,"Refinement tolerance should be bigger than the coarsen tolerance");
+        real_t error = 1;
+        index_t maxIt = 1;
 
-        gsMultiPatch<> primalL, dualL, dualH;
-        assembler->constructMultiPatchL(Uold,primalL);
-
-        gsInfo << "Assembling dual matrix (L)... "<< std::flush;
-        assembler->assembleMatrixH(mp_def);
-        gsInfo << "done.\n";
-        gsInfo << "Assembling dual vector (L)... "<< std::flush;
-        assembler->assembleDualL(primalL);
-        gsInfo << "done.\n";
-        gsInfo << "Solving dual (L), size = "<<assembler->matrixL().rows()<<","<<assembler->matrixL().cols()<<"... "<< std::flush;
-        solver.compute(assembler->matrixL());
-        solVector = solver.solve(assembler->dualL());
-        assembler->constructMultiPatchL(solVector,dualL);
-        gsInfo << "done.\n";
-
-        gsInfo << "Assembling dual matrix (H)... "<< std::flush;
-        assembler->assembleMatrixH(mp_def);
-        gsInfo << "done.\n";
-        gsInfo << "Assembling dual vector (H)... "<< std::flush;
-        assembler->assembleDualH(primalL);
-        gsInfo << "done.\n";
-        gsInfo << "Solving dual (H), size = "<<assembler->matrixH().rows()<<","<<assembler->matrixH().cols()<<"... "<< std::flush;
-        solver.compute(assembler->matrixH());
-        solVector = solver.solve(assembler->dualH());
-        gsDebugVar("DUAL");
-        assembler->constructMultiPatchH(solVector,dualH);
-        gsInfo << "done.\n";
-
-        gsInfo<<"Error = "<<assembler->computeError(dualL,dualH,mp_def)<<"\n";
-        std::vector<real_t> elErrors = assembler->computeErrorElements(dualL,dualH,mp_def);
-        gsAsVector<real_t> gsElErrors(elErrors);
-        gsDebugVar(gsElErrors.sum());
-
-        gsElementErrorPlotter<real_t> err_eh(mp.basis(0),elErrors);
-        const gsField<> elemError_eh( mp.patch(0), err_eh, true );
-        std::string fileName = dirname + "/" + "error" + util::to_string(k);
-        gsWriteParaview<>(elemError_eh, fileName, 1000,mesh);
-        fileName = "error" + util::to_string(k) + "0";
-        errors.addTimestep(fileName,k,".vts");
-        if (mesh) errors.addTimestep(fileName,k,"_mesh.vtp");
-
-        /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-        /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-        std::vector<bool> elMarked( elErrors.size() );
-        std::vector<bool> elCMarked( elErrors.size() );
-
-        if (!alternate)
+        for (index_t it = 0; it!=maxIt; it++)
         {
-            if (refExt > -1 && crsExt == -1)
-            {
-                gsMarkElementsForRef( elErrors, adaptRefCrit, adaptRefParam, elMarked);
-                gsInfo<<"#elements before Refinement: "<<mp.basis(0).numElements()<<"\n";
-                // Invert errors for coarsening marking
-                gsRefineMarkedElements(mp,elMarked,refExt);
-                gsInfo<<"#elements after Refinement: "<<mp.basis(0).numElements()<<"\n";
-            }
-            else if (refExt > -1 && crsExt > -1)
-            {
-                gsMarkElementsForRef( elErrors, adaptRefCrit, adaptRefParam, elMarked);
-                gsInfo<<"#elements before Refinement/Coarsening: "<<mp.basis(0).numElements()<<"\n";
-                // Invert errors for coarsening marking
-                std::vector<real_t> elErrorsC = elErrors;
-                for (index_t k=0; k!=elErrors.size(); k++)
-                  elErrorsC[k] = -elErrors[k];
+            gsInfo << "Assembling dual matrix (L)... "<< std::flush;
+            assembler->assembleMatrixL(mp_def);
+            gsInfo << "done.\n";
+            gsInfo << "Assembling dual vector (L)... "<< std::flush;
+            assembler->assembleDualL(primalL,mp_def);
+            gsInfo << "done.\n";
+            gsInfo << "Solving dual (L), size = "<<assembler->matrixL().rows()<<","<<assembler->matrixL().cols()<<"... "<< std::flush;
+            solver.compute(assembler->matrixL());
+            solVector = solver.solve(assembler->dualL());
+            assembler->constructMultiPatchL(solVector,dualL);
+            gsInfo << "done.\n";
 
-                gsMarkElementsForRef( elErrorsC, adaptRefCrit, adaptRefParam, elCMarked);
-                gsProcessMarkedElements(mp,elMarked, elCMarked,refExt,crsExt);
-                gsInfo<<"#elements after Refinement/Coarsening: "<<mp.basis(0).numElements()<<"\n";
+            gsInfo << "Assembling dual matrix (H)... "<< std::flush;
+            assembler->assembleMatrixH(mp_def);
+            gsInfo << "done.\n";
+            gsInfo << "Assembling dual vector (H)... "<< std::flush;
+            assembler->assembleDualH(primalL,mp_def);
+            gsInfo << "done.\n";
+            gsInfo << "Solving dual (H), size = "<<assembler->matrixH().rows()<<","<<assembler->matrixH().cols()<<"... "<< std::flush;
+            solver.compute(assembler->matrixH());
+            solVector = solver.solve(assembler->dualH());
+            gsDebugVar("DUAL");
+            assembler->constructMultiPatchH(solVector,dualH);
+            gsInfo << "done.\n";
+
+            assembler->computeErrorElements(dualL,dualH,mp_def);
+            error = std::abs(assembler->error());
+            gsInfo<<"Error = "<<error<<"\n";
+            std::vector<real_t> elErrors = assembler->absErrors();
+
+            if (it==0)
+            {
+                gsElementErrorPlotter<real_t> err_eh(mp.basis(0),elErrors);
+                const gsField<> elemError_eh( mp.patch(0), err_eh, true );
+                std::string fileName = dirname + "/" + "error" + util::to_string(k);
+                gsWriteParaview<>(elemError_eh, fileName, 10000,mesh);
+                fileName = "error" + util::to_string(k) + "0";
+                errors.addTimestep(fileName,k,".vts");
+                if (mesh) errors.addTimestep(fileName,k,"_mesh.vtp");
             }
+
+            mesher.mark(elErrors);
+            if (error > refTol)
+            {
+                gsDebugVar(mp.patch(0).coefs().rows());
+                gsInfo<<"Error is too big!\n";
+                mesher.flatten(2);
+                mesher.refine();
+                gsDebugVar(mp.patch(0).coefs().rows());
+            }
+            else if (error < crsTol)
+            {
+                gsDebugVar(mp.patch(0).coefs().rows());
+                gsInfo<<"Error is too small!\n";
+                mesher.unrefine();
+                gsDebugVar(mp.patch(0).coefs().rows());
+            }
+            else
+            {
+                gsInfo<<"Error is in the range "<<crsTol<<" < "<<error<<" < "<<refTol<<"\n";
+                break;
+            }
+
+            // mp_def = mp;
+
+            basisL = gsMultiBasis<>(mp);
+            basisH = basisL;
+            basisH.degreeElevate(1);
+
+            assembler->setBasisL(basisL);
+            assembler->setBasisH(basisH);
         }
-        else
-        {
-            if ((k%2==0 || arcLength.stabilityChange()) && refExt > -1)
-            {
-                adaptRefParam = 0.9;
-                gsMarkElementsForRef( elErrors, adaptRefCrit, adaptRefParam, elMarked);
-                gsInfo<<"#elements before Refinement: "<<mp.basis(0).numElements()<<"\n";
-                gsRefineMarkedElements(mp,elMarked,refExt);
-                gsInfo<<"Refining:\n";
-                for (index_t k=0; k!=elMarked.size(); ++k)
-                gsInfo<<elMarked[k]<<"\t";
-                gsInfo<<"\n";
-                gsInfo<<"#elements after Refinement: "<<mp.basis(0).numElements()<<"\n";
-            }
-            else if (k%2==1 && crsExt > -1)
-            {
-                adaptRefParam = 0.7;
-                // Invert errors for coarsening marking
-                std::vector<real_t> elErrorsC = elErrors;
-                for (index_t k=0; k!=elErrors.size(); k++)
-                    elErrorsC[k] = -elErrors[k];
-
-                gsMarkElementsForRef( elErrorsC, adaptRefCrit, adaptRefParam, elCMarked);
-                gsInfo<<"#elements before Coarsening: "<<mp.basis(0).numElements()<<"\n";
-                gsInfo<<"Coarsening:\n";
-                for (index_t k=0; k!=elCMarked.size(); ++k)
-                gsInfo<<elCMarked[k]<<"\t";
-                gsInfo<<"\n";
-                gsUnrefineMarkedElements(mp,elCMarked,crsExt);
-                gsInfo<<"#elements after Coarsening: "<<mp.basis(0).numElements()<<"\n";
-            }
-        }
-
-        mp_def = mp;
-
-        basisL = gsMultiBasis<>(mp);
-        basisH = basisL;
-        basisH.degreeElevate(1);
 
         // Project the solution from old mesh to new mesh
         gsMatrix<> coefs;
@@ -739,66 +712,29 @@ int main (int argc, char** argv)
 
         assembler->assembleL();
         Force = assembler->primalL();
+    }
+    else
+    {
+        solVector = arcLength.solutionU();
+        Uold = solVector;
+        Lold = arcLength.solutionL();
+        dUold = arcLength.solutionDU();
+        dLold = arcLength.solutionDL();
+        assembler->constructSolutionL(solVector,mp_def);
+    }
 
-      }
+    /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-      /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-      /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    deformation = mp_def;
 
-      deformation = mp_def;
+    deformation.patch(0).coefs() -= mp.patch(0).coefs();// assuming 1 patch here
 
-      /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-      // ADAPTIVE MESHING PART
-      /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    gsInfo<<"Total ellapsed assembly time: "<<time<<" s\n";
 
-      // gsMultiPatch<> primalL, dualL, dualH;
-      // assembler->constructMultiPatchL(solVector,primalL);
-
-      // gsInfo << "Assembling dual matrix (L)... "<< std::flush;
-      // assembler->assembleMatrixH(mp_def);
-      // gsInfo << "done.\n";
-      // gsInfo << "Assembling dual vector (L)... "<< std::flush;
-      // assembler->assembleDualL(primalL);
-      // gsInfo << "done.\n";
-      // gsInfo << "Solving dual (L), size = "<<assembler->matrixL().rows()<<","<<assembler->matrixL().cols()<<"... "<< std::flush;
-      // solver.compute(assembler->matrixL());
-      // solVector = solver.solve(assembler->dualL());
-      // assembler->constructMultiPatchL(solVector,dualL);
-      // gsInfo << "done.\n";
-
-      // gsInfo << "Assembling dual matrix (H)... "<< std::flush;
-      // assembler->assembleMatrixH(mp_def);
-      // gsInfo << "done.\n";
-      // gsInfo << "Assembling dual vector (H)... "<< std::flush;
-      // assembler->assembleDualH(primalL);
-      // gsInfo << "done.\n";
-      // gsInfo << "Solving dual (H), size = "<<assembler->matrixH().rows()<<","<<assembler->matrixH().cols()<<"... "<< std::flush;
-      // solver.compute(assembler->matrixH());
-      // solVector = solver.solve(assembler->dualH());
-      // assembler->constructMultiPatchH(solVector,dualH);
-      // gsInfo << "done.\n";
-
-      // gsInfo<<"Error = "<<assembler->computeError(dualL,dualH,mp_def)<<"\n";
-      // std::vector<real_t> elErrors = assembler->computeErrorElements(dualL,dualH,mp_def);
-
-
-      // gsElementErrorPlotter<real_t> err_eh(mp.basis(0),elErrors);
-      // const gsField<> elemError_eh( mp.patch(0), err_eh, true );
-      // gsWriteParaview<>( elemError_eh, "error_elem_ref" + util::to_string(k), 1000, true);
-      // errors.addTimestep("error_elem_ref" + util::to_string(k) + "0",k,".vts");
-      // errors.addTimestep("error_elem_ref" + util::to_string(k) + "0",k,"_mesh.vtp");
-
-      /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-      /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-      deformation.patch(0).coefs() -= mp.patch(0).coefs();// assuming 1 patch here
-
-      gsInfo<<"Total ellapsed assembly time: "<<time<<" s\n";
-
-      if (plot)
-      {
+    if (plot)
+    {
         gsField<> solField;
         if (deformed)
           solField= gsField<>(mp_def,deformation);
@@ -810,9 +746,9 @@ int main (int argc, char** argv)
         fileName = output + util::to_string(k) + "0";
         collection.addTimestep(fileName,k,".vts");
         if (mesh) collection.addTimestep(fileName,k,"_mesh.vtp");
-      }
-      if (stress)
-      {
+    }
+    if (stress)
+    {
         gsField<> membraneStress, flexuralStress, membraneStress_p;
 
         gsPiecewiseFunction<> membraneStresses;
@@ -851,22 +787,22 @@ int main (int argc, char** argv)
         gsWriteParaview( membraneStress_p, fileName, 1000);
         fileName = "membrane_p" + util::to_string(k) + "0";
         Smembrane_p.addTimestep(fileName,k,".vts");
-      }
+    }
 
 
 
-      if (write)
+    if (write)
         writeStepOutput(arcLength,deformation, dirname + "/" + wn, writePoints,1, 201);
 
-      if (crosssection && cross_coordinate!=-1)
+    if (crosssection && cross_coordinate!=-1)
         writeSectionOutput(deformation,dirname,cross_coordinate,cross_val,201,false);
 
-      if (!bisected)
-      {
+    if (!bisected)
+    {
         dLb = dLb0;
         arcLength.setLength(dLb);
-      }
-      bisected = false;
+    }
+    bisected = false;
 
     }
 
