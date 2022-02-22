@@ -342,10 +342,6 @@ protected:
 
     mutable typename gsSparseSolver<T>::uPtr m_solver; // Cholesky by default
 
-    /// Linear solver employed
-    gsSparseSolver<>::SimplicialLDLT  m_LDLTsolver;   // Cholesky
-    gsSparseSolver<>::CGDiagonal      m_CGsolver;     // CG
-
 protected:
 
     mutable gsOptionList m_options;

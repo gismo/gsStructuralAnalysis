@@ -149,7 +149,7 @@ template <class T>
 void gsALMBase<T>::factorizeMatrix(const gsSparseMatrix<T> & M)
 {
   m_solver->compute(M);
-  GISMO_ASSERT(m_solver->info()==Eigen::ComputationInfo::Success,"Solver error with code "<<m_LDLTsolver.info()<<". See Eigen documentation on ComputationInfo \n"
+  GISMO_ASSERT(m_solver->info()==Eigen::ComputationInfo::Success,"Solver error with code "<<m_solver->info()<<". See Eigen documentation on ComputationInfo \n"
                                                               <<Eigen::ComputationInfo::Success<<": Success"<<"\n"
                                                               <<Eigen::ComputationInfo::NumericalIssue<<": NumericalIssue"<<"\n"
                                                               <<Eigen::ComputationInfo::NoConvergence<<": NoConvergence"<<"\n"
