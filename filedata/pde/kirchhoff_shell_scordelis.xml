@@ -72,7 +72,7 @@
   <bc unknown="0" type="Neumann" function="1">
   </bc>
 
-  <cv unknown="0" patch="0" corner="1">
+  <cv patch="0" corner="1" component = "0">
     0.0
   </cv>
 </boundaryConditions>
