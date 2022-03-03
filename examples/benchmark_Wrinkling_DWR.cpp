@@ -661,7 +661,7 @@ int main (int argc, char** argv)
             {
                 gsDebugVar(mp.patch(0).coefs().rows());
                 gsInfo<<"Error is too big!\n";
-                mesher.flatten(2);
+                // mesher.flatten(2);
                 mesher.refine();
                 gsDebugVar(mp.patch(0).coefs().rows());
             }
