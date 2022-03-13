@@ -30,13 +30,12 @@ public:
   }
 
   /**
-   * @brief      { function_description }
+   * @brief      Initializes the hierarchy given the first level of solutions
    *
    * @param[in]  times      The times (MONOTONICALLY INCREASING!)
    * @param[in]  solutions  The solutions
-   * @param[in]  maxLevels  The maximum levels
    */
-  gsAdaptiveSpaceTime(const std::vector<T> times, const  std::vector<solution_t> solutions)
+  gsAdaptiveSpaceTime(const std::vector<T> & times, const  std::vector<solution_t> & solutions)
   :
   m_initialized(false)
   {
@@ -49,12 +48,38 @@ public:
     m_xi = m_t;
     m_xi.transform(0,1);
 
-    GISMO_ASSERT(m_xi.size()==solutions.size(),"Something went wrong");
     for (size_t k=0; k!=m_xi.size(); ++k)
       m_solutions.insert({m_xi.at(k),solutions.at(k)});
 
     _defaultOptions();
   }
+
+  /**
+   * @brief      Initializes the hierarchy without solutions
+   *
+   * @param[in]  times      The times (MONOTONICALLY INCREASING!)
+   */
+  gsAdaptiveSpaceTime(const std::vector<T> & times)
+  :
+  m_initialized(false)
+  {
+    // Initialize the knot vectors
+    m_t = gsKnotVector<T>(times,1,0);
+    m_t.degreeDecrease(1);
+
+    m_xi = m_t;
+    m_xi.transform(0,1);
+
+    _defaultOptions();
+  }
+
+  // gsAdaptiveSpaceTime(const T tmin, const T tmax, const index_t N = 10)
+  // :
+  // m_initialized(false)
+  // {
+  //   std::vector<T>
+  // }
+
 
   gsAdaptiveSpaceTime() {};
 
@@ -78,58 +103,6 @@ private:
     m_tolerance = m_options.getReal("Tolerance");
   }
 
-  // std::pair<point_t,point_t> _interval(node_t * node)
-  // {
-  //   std::pair<point_t,point_t> interval;
-
-  //   if (node->isLeaf())
-  //   {
-  //     interval.first  = node->lowCorner();
-  //     interval.second = node->uppCorner();
-  //     return interval;
-  //   }
-  //   else
-  //   {
-  //     node_t * left  = node->left;
-  //     node_t * right = node->right;
-  //     while (!left->isLeaf() || !right->isLeaf())
-  //     {
-  //       if (!left->isLeaf())
-  //         left  = left ->left;
-  //       if (!right->isLeaf())
-  //         right = right->right;
-  //     }
-  //     interval.first  = left->lowCorner();
-  //     interval.second = right->uppCorner();
-  //     return interval;
-  //   }
-  // }
-
-  // void _initLevel(index_t level)
-  // {
-  //   GISMO_ASSERT(m_ptimes.size()==m_indices.size(),"times and indices have different level");
-  //   if (m_ptimes.size() < level+1 && level < m_maxLevel)
-  //   {
-  //     gsVector<T> time;
-  //     time.setLinSpaced(m_points*math::pow(2,level),0,1);
-  //     m_ptime = std::vector(time.data(),time.data() + time.rows()*time.cols());
-  //     gsVector<index_t> index;
-  //     index.setLinSpaced(m_points*math::pow(2,level),0,m_points*math::pow(2,level)-1);
-  //     m_index = std::vector(index.data(),index.data() + index.rows()*index.cols());
-
-  //     m_ptimes.push_back(std::map<index_t,T>());
-  //     m_indices.push_back(std::map<T,index_t>());
-  //     GISMO_ASSERT(m_ptime.size()==m_index.size(),"Sizes are not the same!");
-  //     for (index_t k=0; k!=m_ptime.size(); k++)
-  //     {
-  //       m_ptimes[level].insert({m_index[k],m_ptime[k]});
-  //       m_indices[level].insert({m_ptime[k],m_index[k]});
-  //     }
-
-  //     // m_solutions.push_back(std::map<index_t,solution_t>());
-  //     // m_times.push_back(std::map<index_t,T>());
-  //   }
-  // }
 public:
 
   void init()
@@ -140,11 +113,13 @@ public:
     m_queue.swap(queue);
 
     T low,upp;
-    for (typename std::map<T,solution_t>::const_iterator it = m_solutions.begin(); it != std::prev(m_solutions.end()); )
+    for (typename gsKnotVector<T>::const_iterator it = m_xi.begin(); it != std::prev(m_xi.end()); )
     {
-      low = it->first;
+      low = *it;
       it++;
-      upp = it->first;
+      upp = *it;
+
+      gsDebugVar(*it);
 
       m_queue.push({low,upp});
     }
@@ -333,6 +308,8 @@ public:
       distances.at(k-1) = (tcurr - tprev) / dt;
       tprev = tcurr;
     }
+
+    gsDebugVar(gsAsVector(distances));
 
     if (!(distances.back() < m_tolerance))
     {
