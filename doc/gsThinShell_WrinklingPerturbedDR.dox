@@ -1,0 +1,19 @@
+namespace gismo {
+/**
+
+\page gsThinShell_WrinklingPerturbedDR gsThinShell_WrinklingPerturbedDR.cpp
+
+
+Performs wrinkling simulations of different cases USING A PERTURBATION from a multipatch using Dynamic Relaxation.
+
+
+\section gsThinShell_WrinklingPerturbedDR_Annotated Annotated source file
+
+Here is the full file \c examples/gsThinShell_WrinklingPerturbedDR.cpp. Clicking on a function
+or class name will lead you to its reference documentation.
+
+\include gsThinShell_WrinklingPerturbedDR.cpp
+
+*/
+
+}

@@ -1,0 +1,19 @@
+namespace gismo
+{
+
+/** \defgroup gsStaticBase gsStaticBase
+\ingroup gsStructuralAnalysis
+
+Base class for static solvers.
+
+Examples with the use of static solvers are:
+- \subpage benchmark_FrustrumDC.cpp
+- \subpage benchmark_MaterialTestConv.cpp
+- \subpage example_StaticSolvers.cpp
+- \subpage gsElasticity_Static.cpp
+- \subpage gsElasticity_Static_XML.cpp
+- \subpage gsThinShell_Static.cpp
+- \subpage gsThinShell_Static_XML.cpp
+- \subpage gsThinShell_WrinklingPerturbedDC.cpp
+- \subpage gsThinShell_WrinklingPerturbedDR.cpp
+}

@@ -1,6 +1,6 @@
  /** @file gsStaticNewton.h
 
-    @brief Performs linear modal analysis given a matrix or functions of a matrix
+    @brief Static solver using a newton method
 
     This file is part of the G+Smo library.
 
@@ -12,7 +12,11 @@
 */
 
 #include <typeinfo>
+
+#ifdef GISMO_WITH_SPECTRA
 #include <gsSpectra/gsSpectra.h>
+#endif
+
 #include <gsStructuralAnalysis/gsStaticBase.h>
 #pragma once
 
@@ -21,11 +25,11 @@ namespace gismo
 {
 
 /**
-    @brief Performs the arc length method to solve a nonlinear equation system.
+    @brief Static solver using a newton method
 
     \tparam T coefficient type
 
-    \ingroup ThinShell
+    \ingroup gsStructuralAnalysis
 */
 template <class T>
 class gsStaticNewton : public gsStaticBase<T>
@@ -34,83 +38,153 @@ protected:
 
     typedef gsStaticBase<T> Base;
 
-    typedef std::function<gsVector<T>(gsVector<T> const &)   >          Residual_t;
-    typedef std::function<gsVector<T>(gsVector<T> const &, T)>          ALResidual_t;
-    typedef std::function < gsSparseMatrix<T> ( gsVector<T> const & ) > Jacobian_t;
+    typedef std::function<gsVector<T>(gsVector<T> const &)   >                                          Residual_t;
+    typedef std::function<gsVector<T>(gsVector<T> const &, T)>                                          ALResidual_t;
+    typedef std::function < gsSparseMatrix<T> ( gsVector<T> const & ) >                                 Jacobian_t;
+    typedef std::function<gsSparseMatrix<real_t> (gsVector<real_t> const &,gsVector<real_t> const &)>   dJacobian_t;
 
 public:
 
-  /// Constructor giving access to the gsShellAssembler object to create a linear system per iteration
-  gsStaticNewton(   const gsSparseMatrix<T> &linear,
-                    const gsVector<T> &force
-                    ) :
-    m_linear(linear),
-    m_force(force),
-    m_nonlinear(nullptr),
-    m_residualFun(nullptr)
-  {
-    this->_init();
-    m_NL = false;
-    m_U.setZero(m_dofs);
-  }
+    /**
+     * @brief      Constructor
+     *
+     * @param[in]  linear  The linear stiffness matrix
+     * @param[in]  force   The external force
+     */
+    gsStaticNewton(     const gsSparseMatrix<T> &linear,
+                        const gsVector<T> &force        )
+    :
+        m_linear(linear),
+        m_force(force),
+        m_nonlinear(nullptr),
+        m_residualFun(nullptr)
+    {
+        this->_init();
+        m_NL = false;
+        m_U.setZero(m_dofs);
+    }
 
-  gsStaticNewton(   const gsSparseMatrix<T> &linear,
+    /**
+     * @brief      Constructor
+     *
+     * @param[in]  linear     The linear stiffness matrix
+     * @param[in]  force      The external force
+     * @param[in]  nonlinear  The Jacobian
+     * @param[in]  residual   The residual
+     */
+    gsStaticNewton( const gsSparseMatrix<T> &linear,
                     const gsVector<T> &force,
                     const Jacobian_t &nonlinear,
-                    const Residual_t &residual
-                    ) :
-    m_linear(linear),
-    m_force(force),
-    m_nonlinear(nonlinear),
-    m_residualFun(residual),
-    m_ALresidualFun(nullptr)
-  {
-    this->_init();
-    m_NL = true;
-  }
+                    const Residual_t &residual      )
+    :
+        m_linear(linear),
+        m_force(force),
+        m_nonlinear(nonlinear),
+        m_dnonlinear(nullptr),
+        m_residualFun(residual),
+        m_ALresidualFun(nullptr)
+    {
+        m_dnonlinear = [this](gsVector<T> const & x, gsVector<T> const & dx)
+        {
+            return m_nonlinear(x);
+        };
 
-  gsStaticNewton(   const gsSparseMatrix<T> &linear,
+        this->_init();
+        m_NL = true;
+    }
+
+    /**
+     * @brief      Constructor
+     *
+     * @param[in]  linear     The linear stiffness matrix
+     * @param[in]  force      The external force
+     * @param[in]  nonlinear  The Jacobian
+     * @param[in]  residual   The residual as arc-length object
+     */
+    gsStaticNewton( const gsSparseMatrix<T> &linear,
                     const gsVector<T>  &force,
                     const Jacobian_t   &nonlinear,
-                    const ALResidual_t &ALResidual
-                    ) :
-    m_linear(linear),
-    m_force(force),
-    m_nonlinear(nonlinear),
-    m_ALresidualFun(ALResidual)
-  {
-    m_L = 1.0;
-    m_residualFun = [this](gsVector<T> const & x)
+                    const ALResidual_t &ALResidual  )
+    :
+        m_linear(linear),
+        m_force(force),
+        m_nonlinear(nonlinear),
+        m_dnonlinear(nullptr),
+        m_residualFun(nullptr),
+        m_ALresidualFun(ALResidual)
     {
-        return m_ALresidualFun(x,m_L);
-    };
-    this->_init();
-    m_NL = true;
-  }
+        m_L = 1.0;
+        m_residualFun = [this](gsVector<T> const & x)
+        {
+            return m_ALresidualFun(x,m_L);
+        };
+
+        m_dnonlinear = [this](gsVector<T> const & x, gsVector<T> const & dx)
+        {
+            return m_nonlinear(x);
+        };
+
+        this->_init();
+        m_NL = true;
+    }
+
+    /**
+     * @brief      { function_description }
+     *
+     * @param[in]  linear      The linear matrix
+     * @param[in]  force       The force vector
+     * @param[in]  dnonlinear  The jacobian taking the solution x and the iterative update dx
+     * @param[in]  residual    The residual function
+     */
+    gsStaticNewton(   const gsSparseMatrix<T> &linear,
+                      const gsVector<T> &force,
+                      const dJacobian_t &dnonlinear,
+                      const Residual_t &residual
+                      )
+    :
+        m_linear(linear),
+        m_force(force),
+        m_nonlinear(nullptr),
+        m_dnonlinear(dnonlinear),
+        m_residualFun(residual),
+        m_ALresidualFun(nullptr)
+    {
+        this->_init();
+        m_NL = true;
+    }
 
 public:
 
+    /// See \ref gsStaticBase
     void solve() { m_U = solveNonlinear(); }
+    /// Perform a linear solve
     gsVector<T> solveLinear();
+    /// Perform a nonlinear solve
     gsVector<T> solveNonlinear();
 
+    /// See \ref gsStaticBase
     void initialize() {_init(); };
 
+    /// See \ref gsStaticBase
     void initOutput();
+    /// See \ref gsStaticBase
     void stepOutput(index_t k);
 
+    /// See \ref gsStaticBase
     void defaultOptions();
+    /// See \ref gsStaticBase
     void getOptions();
-
 
     using Base::indicator;
     using Base::stabilityVec;
 
+    /// See \ref gsStaticBase
     T indicator()
     {
         return indicator(m_nonlinear(m_U));
     }
 
+    /// See \ref gsStaticBase
     gsVector<T> stabilityVec()
     {
         return stabilityVec(m_nonlinear(m_U));
@@ -120,10 +194,13 @@ protected:
 
     using Base::_computeStability;
 
-
+    /// Initializes the method
     void _init();
+    /// Starts the method
     void _start();
+    /// Factorizes the \a jacMat
     void _factorizeMatrix(const gsSparseMatrix<T> & jacMat) const;
+    /// Solves the system with RHS \a F and LHS the Jacobian
     gsVector<T> _solveSystem(const gsVector<T> & F);
 
 protected:
@@ -131,6 +208,7 @@ protected:
     const gsSparseMatrix<T> & m_linear;
     const gsVector<T> & m_force;
     const Jacobian_t m_nonlinear;
+    dJacobian_t m_dnonlinear;
     Residual_t m_residualFun;
     const ALResidual_t m_ALresidualFun;
 
@@ -168,28 +246,14 @@ protected:
     using Base::m_headstart;
 
     /// Linear solver employed
-    using Base::m_LDLTsolver;   // Cholesky
-    mutable gsSparseSolver<>::CGDiagonal      m_CGsolver;     // CG
-
+    using Base::m_solver;   // Cholesky by default
+    
     using Base::m_stabilityMethod;
-    mutable index_t m_solverType;
 
     /// Indicator for bifurcation
     using Base::m_indicator;
 
     using Base::m_dofs;
-
-    struct solver
-    {
-        enum type
-        {
-            LDLT = 0,
-            CG  = 1, // The CG solver is robust for membrane models, where zero-blocks in the matrix might occur.
-        };
-    };
-
-
-
 };
 
 

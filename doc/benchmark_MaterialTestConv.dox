@@ -1,0 +1,25 @@
+namespace gismo {
+/**
+
+\page benchmark_MaterialTestConv benchmark_MaterialTestConv.cpp
+
+
+Stretches a planar material with both ends clamped; convergence test
+
+Reproduces figure 10 of:
+
+Verhelst, H. M., Möller, M., Den Besten, J. H., Mantzaflaris, A., & Kaminski, M. L. (2021).
+Stretch-Based Hyperelastic Material Formulations for Isogeometric Kirchhoff–Love Shells with Application to Wrinkling.
+Computer-Aided Design, 139, 103075.
+https://doi.org/10.1016/j.cad.2021.103075
+
+\section benchmark_MaterialTestConv_Annotated Annotated source file
+
+Here is the full file \c examples/benchmark_MaterialTestConv.cpp. Clicking on a function
+or class name will lead you to its reference documentation.
+
+\include benchmark_MaterialTestConv.cpp
+
+*/
+
+}

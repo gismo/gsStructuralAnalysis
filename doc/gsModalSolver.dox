@@ -1,0 +1,20 @@
+namespace gismo
+{
+
+/** \page gsModalSolver gsModalSolver
+\defgroup gsModalSolver gsModalSolver
+\ingroup gsStructuralAnalysis
+
+Linear modal analysis is performed by solving the following eigenvalue problem:
+
+\f{align*}{
+    (K - \sigma M)\mathbf{v}_h = \lambda M\mathbf{v}_h
+\f}
+
+Where \f$K\f$ is the linear stiffness matrix, \f$M\f$ is the mass matrix. Furthermore,
+\f$\sigma\f$ is a shift and \f$(\lambda+\sigma\f)\f$ is the eigenfrequency.
+The modeshape is represented by \f$\phi\f$.
+
+Examples with the use of this class are:
+- \subpage gsThinShell_Modal.cpp
+}

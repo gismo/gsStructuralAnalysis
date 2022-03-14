@@ -231,6 +231,9 @@ int main (int argc, char** argv)
           C10 = 6.21485502e4; // c1/2
           C01 = 15.8114570e4; // c2/2
         }
+        else
+          C10 = C01 = 0;
+
         Ratio = C10/C01;
         mu = 2*(C01+C10);
       }
@@ -240,6 +243,8 @@ int main (int argc, char** argv)
           C10 = (0.5)*1e6;
         else if (testCase==3 || testCase==5 || testCase==7)
           C10 = 19.1010178e4;
+        else
+          C10 = 0;
 
         mu = 2*C10;
       }
@@ -336,7 +341,7 @@ int main (int argc, char** argv)
 
     // Cast all patches of the mp object to THB splines
     gsTHBSpline<2,real_t> thb;
-    for (index_t k=0; k!=mpBspline.nPatches(); ++k)
+    for (size_t k=0; k!=mpBspline.nPatches(); ++k)
     {
         gsTensorBSpline<2,real_t> *geo = dynamic_cast< gsTensorBSpline<2,real_t> * > (&mpBspline.patch(k));
         thb = gsTHBSpline<2,real_t>(*geo);
@@ -372,6 +377,7 @@ int main (int argc, char** argv)
 
     // Boundary conditions
     gsBoundaryConditions<> BCs;
+    BCs.setGeoMap(mp);
     gsPointLoads<real_t> pLoads = gsPointLoads<real_t>();
 
     // Initiate Surface forces
@@ -385,8 +391,6 @@ int main (int argc, char** argv)
     neu << 0, 0, 0;
     gsConstantFunction<> neuData(neu,3);
 
-    // Buckling coefficient
-    real_t fac = 1;
     // Unscaled load
     real_t Load = 0;
 
@@ -558,7 +562,8 @@ int main (int argc, char** argv)
 
     std::string commands = "mkdir -p " + dirname;
     const char *command = commands.c_str();
-    system(command);
+    int systemRet = system(command);
+    GISMO_ASSERT(systemRet!=-1,"Something went wrong with calling the system argument");
 
     // plot geometry
     if (plot)
@@ -590,7 +595,6 @@ int main (int argc, char** argv)
     gsConstantFunction<> foundFun(foundation,3);
     // Initialise solution object
     gsMultiPatch<> mp_def = mp;
-    gsSparseSolver<>::LU solver;
 
     // Linear isotropic material model
     gsConstantFunction<> force(tmp,3);
@@ -744,12 +748,12 @@ int main (int argc, char** argv)
 
     if (!membrane)
     {
-      arcLength->options().setInt("Solver",0); // LDLT solver
+      arcLength->options().setString("Solver","SimplicialLDLT"); // LDLT solver
       arcLength->options().setInt("BifurcationMethod",0); // 0: determinant, 1: eigenvalue
     }
     else
     {
-      arcLength->options().setInt("Solver",1); // CG solver
+      arcLength->options().setString("Solver","CGDiagonal"); // CG solver
       arcLength->options().setInt("BifurcationMethod",1); // 0: determinant, 1: eigenvalue
     }
 
@@ -961,6 +965,10 @@ int main (int argc, char** argv)
       Sflexural.save();
       Smembrane_p.save();
     }
+
+  delete materialMatrix;
+  delete assembler;
+  delete arcLength;
 
   return result;
 }

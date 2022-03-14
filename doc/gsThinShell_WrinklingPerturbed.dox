@@ -1,0 +1,17 @@
+namespace gismo {
+/**
+
+\page gsThinShell_WrinklingPerturbed gsThinShell_WrinklingPerturbed.cpp
+
+Performs wrinkling simulations of different cases USING A PERTURBATION from a multipatch
+
+\section gsThinShell_WrinklingPerturbed_Annotated Annotated source file
+
+Here is the full file \c examples/gsThinShell_WrinklingPerturbed.cpp. Clicking on a function
+or class name will lead you to its reference documentation.
+
+\include gsThinShell_WrinklingPerturbed.cpp
+
+*/
+
+}

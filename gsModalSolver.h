@@ -12,7 +12,13 @@
 */
 
 #include <typeinfo>
+#include <gsStructuralAnalysis/gsEigenProblemBase.h>
+#include <gsIO/gsOptionList.h>
+
+#ifdef GISMO_WITH_SPECTRA
 #include <gsSpectra/gsSpectra.h>
+#endif
+
 #pragma once
 
 
@@ -20,28 +26,32 @@ namespace gismo
 {
 
 /**
-    @brief Performs the arc length method to solve a nonlinear equation system.
+    @brief Performs linear modal analysis given a matrix or functions of a matrix
 
-    \tparam T coefficient type
+    \tparam T           coefficient type
 
-    \ingroup ThinShell
+    \ingroup gsModalSolver
 */
-template <class T, Spectra::GEigsMode GEigsMode = Spectra::GEigsMode::Cholesky>
-class gsModalSolver : public gsEigenProblemBase<T,GEigsMode>
+template <class T>
+class gsModalSolver : public gsEigenProblemBase<T>
 {
 protected:
 
-    typedef gsEigenProblemBase<T,GEigsMode> Base;
+    typedef gsEigenProblemBase<T> Base;
 
 public:
 
-  /// Constructor giving access to the gsShellAssembler object to create a linear system per iteration
+  /**
+   * @brief      Constructor
+   *
+   * @param      stiffness  The stiffness matrix
+   * @param      mass       The mass matrix
+   */
   gsModalSolver(        gsSparseMatrix<T> &stiffness,
                         gsSparseMatrix<T> &mass     )
   {
     m_A = stiffness;
     m_B = mass;
-    m_verbose = false;
   }
 
 
@@ -49,8 +59,7 @@ protected:
 
     using Base::m_A;
     using Base::m_B;
-    using Base::m_verbose;
-
+    using Base::m_options;
 };
 
 

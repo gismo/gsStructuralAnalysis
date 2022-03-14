@@ -1,6 +1,6 @@
-/** @file gsThinShell_WrinklingPerturbed.cpp
+/** @file gsThinShell_WrinklingPerturbedDR.cpp
 
-    @brief Performs wrinkling simulations of different cases USING A PERTURBATION from a multipatch
+    @brief Performs wrinkling simulations of different cases USING A PERTURBATION from a multipatch using Dynamic Relaxation
 
     This file is part of the G+Smo library.
 
@@ -16,7 +16,8 @@
 #include <gsKLShell/gsThinShellAssembler.h>
 #include <gsKLShell/getMaterialMatrix.h>
 
-#include <gsStructuralAnalysis/gsDynamicRelaxationLC.h>
+#include <gsStructuralAnalysis/gsStaticDR.h>
+#include <gsStructuralAnalysis/gsControlDisplacement.h>
 
 using namespace gismo;
 
@@ -79,6 +80,7 @@ int main (int argc, char** argv)
     bool symmetry = false;
     bool deformed = false;
     real_t perturbation = 0;
+    int verbose = 0;
 
     real_t thickness = 1e-3;
     real_t E_modulus     = 1;
@@ -144,6 +146,7 @@ int main (int argc, char** argv)
     cmd.addReal("P","perturbation", "perturbation factor", perturbation);
 
     cmd.addInt("N", "maxsteps", "Maximum number of steps", step);
+    cmd.addInt("v","verbose", "0: no; 1: iteration output; 2: Full matrix and vector output", verbose);
 
     cmd.addSwitch("plot", "Plot result in ParaView format", plot);
     cmd.addSwitch("mesh", "Plot mesh?", mesh);
@@ -202,6 +205,9 @@ int main (int argc, char** argv)
           C10 = 6.21485502e4; // c1/2
           C01 = 15.8114570e4; // c2/2
         }
+        else
+          C10 = C01 = 0;
+
         Ratio = C10/C01;
         mu = 2*(C01+C10);
       }
@@ -211,6 +217,8 @@ int main (int argc, char** argv)
           C10 = (0.5)*1e6;
         else if (testCase==3 || testCase==5 || testCase==7)
           C10 = 19.1010178e4;
+        else
+          C10 = 0;
 
         mu = 2*C10;
       }
@@ -345,7 +353,7 @@ int main (int argc, char** argv)
     gsConstantFunction<> displ(0.0,3);
     gsConstantFunction<> disply(0.0,3);
 
-    real_t Displ;
+    real_t Displ = 0;
 
     if (testCase == 2 || testCase == 3)
     {
@@ -460,7 +468,8 @@ int main (int argc, char** argv)
 
     std::string commands = "mkdir -p " + dirname;
     const char *command = commands.c_str();
-    system(command);
+    int systemRet = system(command);
+    GISMO_ASSERT(systemRet!=-1,"Something went wrong with calling the system argument");
 
     // plot geometry
     if (plot)
@@ -489,7 +498,6 @@ int main (int argc, char** argv)
 
     // Initialise solution object
     gsMultiPatch<> mp_def = mp;
-    gsSparseSolver<>::LU solver;
 
     // Linear isotropic material model
     gsFunctionExpr<> force("0","0","0",3);
@@ -611,9 +619,18 @@ int main (int argc, char** argv)
     // Construct assembler object
     assembler->setOptions(opts);
 
-    typedef std::function<gsVector<real_t> (gsVector<real_t> const &, real_t, gsVector<real_t> const &) >   DCResidual_t;
+    // Function for the Jacobian
+    typedef std::function<gsSparseMatrix<real_t> (gsVector<real_t> const &)>    Jacobian_t;
+    typedef std::function<gsVector<real_t> (gsVector<real_t> const &, real_t) >   ALResidual_t;
+    Jacobian_t Jacobian = [&assembler,&mp_def](gsVector<real_t> const &x)
+    {
+      assembler->constructSolution(x,mp_def);
+      assembler->assembleMatrix(mp_def);
+      gsSparseMatrix<real_t> m = assembler->matrix();
+      return m;
+    };
     // Function for the Residual
-    DCResidual_t DCResidual = [&displ,&BCs,&assembler,&mp_def](gsVector<real_t> const &x, real_t lam, gsVector<real_t> const &force)
+    ALResidual_t ALResidual = [&displ,&BCs,&assembler,&mp_def](gsVector<real_t> const &x, real_t lam)
     {
         displ.setValue(lam,3);
         assembler->updateBCs(BCs);
@@ -622,19 +639,23 @@ int main (int argc, char** argv)
         return assembler->rhs(); // - lam * force;
     };
 
+    displ.setValue(1.0,3);
+    assembler->updateBCs(BCs);
     // Assemble linear system to obtain the force vector
     assembler->assemble();
-    gsVector<> F = assembler->rhs();
     gsSparseMatrix<> K = assembler->matrix();
+    gsVector<> F = assembler->rhs();
+    assembler->assembleMass(true);
+    gsVector<> M = assembler->rhs();
 
-
-    gsDynamicRelaxationLC<real_t> DRM(K,F,DCResidual);
+    gsStaticDR<real_t> DRM(M,F,ALResidual);
     gsOptionList DROptions = DRM.options();
     DROptions.setReal("damping",damping);
     DROptions.setReal("alpha",alpha);
     DROptions.setInt("maxIt",maxit);
-    DROptions.setReal("tolF",tolF);
+    DROptions.setReal("tol",tolF);
     DROptions.setReal("tolE",tolE);
+    DROptions.setInt("verbose",verbose);
     DRM.setOptions(DROptions);
 
     gsParaviewCollection collection(dirname + "/" + output);
@@ -644,7 +665,10 @@ int main (int argc, char** argv)
     gsMultiPatch<> deformation = mp;
 
     gsMatrix<> solVector;
-    DRM.init();
+    DRM.initialize();
+
+    gsControlDisplacement<real_t> control(&DRM);
+
     real_t Load;
     gsVector<real_t> energies;
 
@@ -657,9 +681,9 @@ int main (int argc, char** argv)
 
     for (index_t k=0; k<step; k++)
     {
-      gsInfo<<"Load step "<< k<<"\n";
       Load = Displ/step;
-      DRM.step(Load);
+      gsInfo<<"Load step "<< k<<", Load = "<<Load<<"\n";
+      control.step(Load);
       gsInfo<<"Step finished in "<<DRM.iterations()<<" iterations";
 
       energies = DRM.relEnergies();
@@ -680,7 +704,7 @@ int main (int argc, char** argv)
 #endif
       }
 
-      solVector = DRM.displacements();
+      solVector = control.solutionU();
       mp_def = assembler->constructSolution(solVector);
 
       // assembler->constructSolution(solVector,solution);
@@ -753,7 +777,7 @@ int main (int argc, char** argv)
       if (crosssection && cross_coordinate!=-1)
         writeSectionOutput(deformation,dirname,cross_coordinate,cross_val,201,false);
 
-      DRM.setDisplacement(solVector);
+      // DRM.setDisplacement(solVector);
 
     }
 
@@ -774,6 +798,9 @@ int main (int argc, char** argv)
         Py_Finalize();
       #endif
     }
+
+  delete materialMatrix;
+  delete assembler;
 
   return result;
 }

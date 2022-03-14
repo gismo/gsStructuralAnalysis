@@ -1,6 +1,6 @@
-/** @file gsThinShell_DynamicBeam.cpp
+/** @file gsThinShell_DynamicBeamNL.cpp
 
-    @brief Example testing thin shell solver.
+    @brief Computes nonlinear dynamic analysis of a beam
 
     This file is part of the G+Smo library.
 
@@ -58,7 +58,7 @@ int main (int argc, char** argv)
     int steps = 100;
     real_t periods = 1;
 
-    gsCmdLine cmd("Thin shell plate example.");
+    gsCmdLine cmd("Dynamics of a nonlinear beam.");
     cmd.addInt("r","hRefine",
                "Number of dyadic h-refinement (bisection) steps to perform before solving",
                numHref);
@@ -129,6 +129,7 @@ int main (int argc, char** argv)
 
     // Boundary conditions
     gsBoundaryConditions<> BCs;
+    BCs.setGeoMap(mp);
 
     // BCs.addCondition(boundary::east, condition_type::neumann,&neuData );
     // Left side is always restrained
@@ -238,7 +239,9 @@ int main (int argc, char** argv)
 // Nonlinear time integration
 //------------------------------------------------------------------------------
 std::string dirname = "DynamicBeamResults";
-system(("mkdir -p " + dirname).c_str());
+int systemRet = system(("mkdir -p " + dirname).c_str());
+GISMO_ASSERT(systemRet!=-1,"Something went wrong with calling the system argument");
+
 std::string wn = dirname + "/output.csv";
 
 gsParaviewCollection collection("DynamicBeamResults/solution");
@@ -379,9 +382,13 @@ for (index_t i=0; i<steps; i++)
 
   // gsInfo<<displacements.transpose()<<"\n";
 }
-    collection.save();
-    collection_an.save();
-    return result;
+collection.save();
+collection_an.save();
+
+delete materialMatrix;
+delete assembler;
+
+return result;
 }
 
 template <class T>
