@@ -166,6 +166,13 @@ public:
     // Set initial guess for solution
     // virtual void setInitialGuess(const gsVector<T> guess) {m_U = guess;}
     virtual void setInitialGuess(const gsVector<T> Uguess, T Lguess) {m_Uguess = Uguess; m_Lguess = Lguess;}
+    virtual void setPrevious(const gsVector<T> Uprev, T Lprev)
+    {
+        m_Uprev = Uprev;
+        m_Lprev = Lprev;
+        m_DeltaUold = m_U - m_Uprev;
+        m_DeltaLold = m_L - m_Lprev;
+    }
 
     /// Sets the solution
     virtual void setSolution(const gsVector<T> U, T L) {m_L = L; m_U = U; }// m_DeltaUold.setZero(); m_DeltaLold = 0;}

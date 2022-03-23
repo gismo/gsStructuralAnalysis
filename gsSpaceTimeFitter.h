@@ -1,6 +1,6 @@
- /** @file gsSpaceTimeHierarchy.h
+ /** @file gsSpaceTimeFitter.h
 
-    @brief Performs the arc length method to solve a nonlinear equation system.
+    @brief XXX
 
     This file is part of the G+Smo library.
 
@@ -16,7 +16,7 @@
 namespace gismo
 {
 
-template<size_t domainDim, size_t targetDim, class T>
+template<size_t domainDim, class T>
 class gsSpaceTimeFitter
 {
     typedef typename gsTensorBSpline<domainDim+1,real_t>::BoundaryGeometryType slice_t;
@@ -36,8 +36,9 @@ public:
   m_deg(deg)
   {
     GISMO_ENSURE(m_data.size() != 0,"No data provided!");
-    GISMO_ENSURE(m_data.size() == m_times.size(),"Solution coefs and times should have the same size");
-    GISMO_ENSURE(m_ptimes.size() == m_times.size(),"(Parametric)times should have the same size");
+    GISMO_ENSURE(m_data.size() == (size_t)m_times.size(),"Solution coefs and times should have the same size");
+    GISMO_ENSURE((size_t)m_ptimes.size() == (size_t)m_times.size(),"(Parametric)times should have the same size");
+    m_targetDim = m_data.at(0).cols();
   }
 
   void setDegree(index_t deg) {m_deg = deg;}
@@ -103,13 +104,13 @@ public:
     m_fit.slice(domainDim,xi,res);
     gsGeometry<T> * geom = res.clone().release();
     T load = geom->coefs()(0,domainDim+1);
-    geom->embed(targetDim);
+    geom->embed(m_targetDim);
     return std::make_pair(load,geom);
   }
 
   void compute()
   {
-    GISMO_ASSERT(m_data.size()==m_times.rows(),"Number of time and solution steps should match! "<<m_data.size()<<"!="<<m_times.rows());
+    GISMO_ASSERT(m_data.size()==(size_t)m_times.rows(),"Number of time and solution steps should match! "<<m_data.size()<<"!="<<m_times.rows());
     // GISMO_ASSERT(m_data.at(0).cols() == dim,"Is the dimension correct?"<<m_data.at(0).cols()<<"!="<<dim);
     index_t nsteps = m_times.rows();
     index_t bsize = m_data.at(0).rows();
@@ -125,47 +126,44 @@ public:
 
     m_basis = _basis(kv,nsteps);
 
-    gsMatrix<> rhs(m_times.size(),(targetDim+1)*bsize);
-    gsVector<> ones; ones.setOnes(bsize);
+    gsMatrix<T> rhs(m_times.size(),m_targetDim*bsize+1);
+    gsVector<T> ones; ones.setOnes(bsize);
 
     for (index_t lam = 0; lam!=nsteps; ++lam)
     {
-      rhs.block(lam,0,1,targetDim * bsize) = m_data.at(lam).reshape(1,targetDim * bsize);
-      rhs.block(lam,targetDim*bsize,1,bsize) = m_times.at(lam) * ones.transpose();
+      rhs.block(lam,0,1,m_targetDim * bsize) = m_data.at(lam).reshape(1,m_targetDim * bsize);
+      rhs(lam,m_targetDim*bsize) = m_times.at(lam);
     }
 
     // get the Greville Abcissae (anchors)
-    gsMatrix<> anchors = lbasis.anchors();
+    gsMatrix<T> anchors = lbasis.anchors();
 
     // Get the collocation matrix at the anchors
-    gsSparseMatrix<> C;
-    lbasis.collocationMatrix(anchors,C);
+    gsSparseMatrix<T> C = lbasis.collocationMatrix(anchors);
 
     gsSparseSolver<>::LU solver;
     solver.compute(C);
 
-    gsMatrix<> sol;
-    m_coefs.resize((nsteps)*bsize,targetDim+1);
+    gsMatrix<T> sol;
+    m_coefs.resize((nsteps)*bsize,m_targetDim+1);
 
     sol = solver.solve(rhs);
 
     for (index_t lam = 0; lam!=nsteps; ++lam)
     {
-      gsMatrix<> tmp = sol.block(lam,0,1,targetDim * bsize);
-      m_coefs.block(lam * bsize,0,bsize,targetDim) = tmp.reshape(bsize,targetDim);
-      m_coefs.block(lam * bsize,targetDim,bsize,1) = sol.block(lam,targetDim*bsize,1,bsize).transpose();
+      gsMatrix<> tmp = sol.block(lam,0,1,m_targetDim * bsize);
+      m_coefs.block(lam * bsize,0,bsize,m_targetDim) = tmp.reshape(bsize,m_targetDim);
+      m_coefs.block(lam * bsize,m_targetDim,bsize,1) = sol(lam,m_targetDim*bsize) * ones;
     }
 
     // gsTensorBSpline<3,T> tspline = tbasis.makeGeometry(give(coefs)).release();
     // gsTensorBSpline<dim,T> tspline(m_basis,give(m_coefs));
 
-
-
-
     m_fit = gsTensorBSpline<domainDim+1,T>(m_basis,give(m_coefs));
   }
 
 protected:
+  index_t m_targetDim;
   std::vector<gsMatrix<T>> m_data;
   gsVector<T> m_times;
   gsVector<T> m_ptimes;

@@ -48,8 +48,13 @@ public:
     m_xi = m_t;
     m_xi.transform(0,1);
 
-    for (size_t k=0; k!=m_xi.size(); ++k)
+    m_solutions.insert({m_xi.at(0),solutions.at(0)});
+    m_guesses  .insert({m_xi.at(0),&(m_solutions[m_xi.at(0)])});
+    for (size_t k=1; k!=m_xi.size(); ++k)
+    {
       m_solutions.insert({m_xi.at(k),solutions.at(k)});
+      m_guesses  .insert({m_xi.at(k),&(m_solutions[m_xi.at(k)])});
+    }
 
     _defaultOptions();
   }
@@ -146,10 +151,10 @@ public:
     T dt  = (tupp-tlow);
 
     GISMO_ASSERT(m_solutions.count(xilow)!=0,"Cannot find start point at tstart = "<<tlow<<"\n");
-    GISMO_ASSERT(m_solutions.count(xiupp)!=0,"Cannot find end point at tend = "<<tupp<<"\n");
+    GISMO_ASSERT(m_guesses  .count(xilow)!=0,"Cannot find end point at tend = "<<tupp<<"\n");
 
     solution_t start = m_solutions[xilow];
-    solution_t guess = m_solutions[xiupp];
+    solution_t guess = *(m_guesses[xilow]);
 
     // add the job to the active jobs
     m_jobs[m_ID++] = std::make_pair(xilow,xiupp);
@@ -222,11 +227,17 @@ public:
    * @param      ptimes     The parametric times on which the solutions are computed ()
    * @param      solutions  The solutions
    */
+  /// NOTE/TODO: WE DO NOT NEED TIMES
   void submit(index_t ID, const std::vector<T> & distances, const std::vector<T> & times, const std::vector<solution_t> & solutions)
   {
     GISMO_ASSERT(m_initialized,"Structure is not initialized");
     GISMO_ASSERT(distances.size()==solutions.size()+1,"You must provide one more distance than solutions");
     GISMO_ASSERT(times.size()==solutions.size(),"number of parametric times must be equal to the number of solutions");
+
+    // Xi:        [xilow,xi1,...,xiupp]
+    // distances: [d(xilow,xi1),d(xi1,xi2),...,d(xin,xiupp)]
+    // times:     [NOT NEEDED]
+    // solutions: [u(xi1),...,u(xin)]
 
     T tlow, tupp, xilow, xiupp, dxi, Dt, dt;
     std::vector<T> t,xi;
@@ -281,6 +292,15 @@ public:
       gsInfo<<"Added a solution on time = "<<m_tmap[xi.at(k)]<<" (parametric time = "<<xi.at(k)<<")\n";
       m_solutions[xi.at(k)] = solutions.at(k-1);
     }
+
+    // The guess for the first computed point (xi[1]) is the solution on xi[0]
+    m_guesses[xi.at(1)] = &(m_solutions[xi.at(0)]);
+    for (size_t k=2; k!=xi.size(); k++) // add only INTERIOR solutions
+    {
+      gsInfo<<"Added a guess on time = "<<m_tmap[xi.at(k)]<<" (parametric time = "<<xi.at(k)<<")\n";
+      m_guesses[xi.at(k)] = &(m_solutions[xi.at(k-1)]);
+    }
+
 
     m_tmp[ID] = xi;
   }
@@ -517,6 +537,7 @@ protected:
 
   // solution map, stores the solution per parametric value
   std::map<T,solution_t>       m_solutions;
+  std::map<T,solution_t * >    m_guesses;
 
   // map that maps GIVEN a parametric value TO a time
   std::map<T,T> m_tmap, m_ximap;
