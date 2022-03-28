@@ -11,6 +11,9 @@
     Author(s): H.M. Verhelst (2019-..., TU Delft)
 */
 
+#include <gsModeling/gsFitting.h>
+#include <gsIO/gsOptionList.h>
+
 #pragma once
 
 namespace gismo
@@ -20,39 +23,55 @@ template<class T>
 class gsSolutionFitter
 {
 public:
-  gsSolutionFitter  ( const std::vector<gsMatrix<T>> & solutionCoefs,
+  gsSolutionFitter  ( const std::vector<gsVector<T>> & data,
                       const gsVector<T> & times,
-                      const gsVector<T> & ptimes,
                       const index_t deg = 2)
   :
-  m_data(solutionCoefs),
-  m_times(times),
-  m_ptimes(ptimes),
   m_deg(deg)
   {
-    GISMO_ENSURE(m_data.size() != 0,"No data provided!");
-    GISMO_ENSURE(m_data.size() == (size_t)m_times.size(),"Solution coefs and times should have the same size");
-    GISMO_ENSURE((size_t)m_ptimes.size() == (size_t)m_times.size(),"(Parametric)times should have the same size");
-    m_targetDim = m_data.at(0).cols();
+    this->_defaultOptions();
+
+    GISMO_ENSURE(data.size() != 0,"No data provided!");
+    GISMO_ENSURE(data.size() == (size_t)times.size(),"Solution coefs and times should have the same size");
+    // GISMO_ENSURE((size_t)m_ptimes.size() == (size_t)m_times.size(),"(Parametric)times should have the same size");
+
+    for (index_t k=0; k!=times.size(); k++)
+      m_data.insert({times[k],data[k]});
   }
+
+  // gsSolutionFitter  ( const std::vector<gsVector<T>> & data,
+  //                     const gsVector<T> & times,
+  //                     const gsVector<T> & ptimes,
+  //                     const index_t deg = 2)
+  // :
+  // {
+  //   std::vector<gsVector<T>> tmp = data;
+  //   GISMO_ENSURE(data.size() == (size_t)times.rows(),"Solution coefs and times should have the same size");
+  //   for (size_t k = 0; k!=data.size(); k++)
+  //   {
+  //     tmp[k] = conservativeResize(tmp[k].rows()+1);
+  //     tmp[k].tail() = times[k];
+  //   }
+
+  //   gsSolutionFitter<T>(tmp,ptimes,deg);
+  // }
 
   void setDegree(index_t deg) {m_deg = deg;}
 
-  void addDataPoint(gsMatrix<T> & solution, T time, T ptime, index_t continuity )
+  void addDataPoint(gsVector<T> & point, T ptime)//, index_t continuity )
   {
-    index_t N = m_ptimes.rows();
-    m_ptimes.conservativeResize(N+1);
-    m_ptimes.row(N) = ptime;
-    gsDebugVar(m_ptimes);
-    std::sort(begin(m_ptimes),end(m_ptimes));
-    gsDebugVar(m_ptimes);
+    m_data.insert({ptime,point});
+    gsDebugVar(m_data.size());
   }
 
-  const gsVector<T> & ptimes() const { return m_ptimes; }
-  const gsVector<T> &  times() const { return  m_times; }
-  const std::vector<gsMatrix<T>> & data() const { return  m_data; }
+  gsOptionList& options() {return m_options;}
 
 protected:
+
+  void _defaultOptions()
+  {
+    m_options.addInt("Parameterization","Type of parameterization to be used: 0: uniform, 1: chord-length, 2: centripetal",1);
+  }
 
   gsBSplineBasis<T> _basis(const gsKnotVector<T> &kv, index_t nsteps)
   {
@@ -62,17 +81,13 @@ protected:
 
 public:
 
-  std::pair<T,gsMatrix<T> > slice(T xi)
+  const gsBSpline<T> & fit() const {return m_fit; }
+
+  gsVector<T> slice(T xi)
   {
-    T load;
     gsVector<T> pt(1);
     pt<<xi;
-    gsMatrix<T> res = m_fit.eval(pt);
-    load = res(res.rows()-1,0); // the last entry is the load factor
-    res.conservativeResize(res.rows()-1,1);
-    index_t bsize = m_data.at(0).rows();
-    res.resize(bsize,m_targetDim);
-    return std::make_pair(load,res);
+    return m_fit.eval(pt);
   }
 
   T nearestParam(const gsMatrix<T> & solution, gsMatrix<T> & params, index_t nTrialPoints = 25, index_t nIterations = 100)
@@ -132,26 +147,67 @@ public:
 
   void compute()
   {
-    GISMO_ASSERT(m_data.size()==(size_t)m_times.rows(),"Number of time and solution steps should match! "<<m_data.size()<<"!="<<m_times.rows());
-    // GISMO_ASSERT(m_data.at(0).cols() == dim,"Is the dimension correct?"<<m_data.at(0).cols()<<"!="<<dim);
-    index_t nsteps = m_times.rows();
-    index_t bsize = m_data.at(0).rows();
+    GISMO_ASSERT(m_data.size()>(m_deg),"Data needs to have more than "<<m_deg<<" points, but only "<<m_data.size()<<" are stored!");
+    index_t nsteps = m_data.size();
+
+    gsDebugVar(nsteps);
+
+    // gsMatrix<T> ptimes(1,nsteps);
+    std::vector<T> ptimes(nsteps);
+    gsMatrix<T> rhs(nsteps,m_data.at(0).rows());
+    index_t k=0;
+    for(typename std::map<T,gsVector<T>>::iterator it = m_data.begin(); it != m_data.end(); ++it, ++k)
+    {
+      // ptimes(0,k) = it->first;
+      ptimes.at(k) = it->first;
+      rhs.row(k) = it->second;
+    }
 
     // Prepare fitting basis
-    gsKnotVector<> kv(m_ptimes.minCoeff(),m_ptimes.maxCoeff(),nsteps-(m_deg+1),m_deg+1);
-    m_basis = gsBSplineBasis<T>(kv);
+    std::vector<T> u_bar(ptimes.size());
+    u_bar.front() = 0;
+    u_bar.back()  = 1;
 
-    gsDebugVar(m_basis.size());
-    gsDebugVar(kv);
-
-    gsMatrix<T> rhs(m_times.size(),m_targetDim*bsize+1);
-    gsVector<T> ones; ones.setOnes(bsize);
-
-    for (index_t lam = 0; lam!=nsteps; ++lam)
+    gsKnotVector<T> kv;
+    index_t param = m_options.getInt("Parameterization");
+    if (param==0)
     {
-      rhs.block(lam,0,1,m_targetDim * bsize) = m_data.at(lam).reshape(1,m_targetDim * bsize);
-      rhs(lam,m_targetDim*bsize) = m_times.at(lam);
+      kv = gsKnotVector<T>(gsAsVector<T>(ptimes).minCoeff(),gsAsVector<T>(ptimes).maxCoeff(),nsteps-(m_deg+1),m_deg+1, 1);
     }
+    else if (param==1 || param==2)
+    {
+      // Chord-length parameterization
+      T d = 0.;
+      for (typename std::vector<T>::iterator pit = std::next(ptimes.begin()); pit!=ptimes.end(); pit++)
+        d += math::pow(*pit - *std::prev(pit),1./param);
+
+      typename std::vector<T>::iterator pit = std::next(ptimes.begin());
+      for (typename std::vector<T>::iterator it=std::next(u_bar.begin()); it!=std::prev(u_bar.end()); it++, pit++)
+        *it = *std::prev(it) + 1. / d * math::pow(*pit - *std::prev(pit),1./param);
+
+      std::vector<T> u(nsteps+m_deg+1);
+      for (index_t k=0; k!=m_deg+1; k++)
+      {
+        u.at(k) = 0;
+        u.at(u.size()-k-1) = 1;
+      }
+      for (index_t j=1; j!=nsteps-m_deg; j++)
+      {
+        u.at(j+m_deg) = 0;
+        for (index_t i=j; i!=j+m_deg; i++)
+          u.at(j+m_deg) += u_bar.at(i);
+
+        u.at(j+m_deg) /= m_deg;
+      }
+
+      kv = gsKnotVector<T>(u,m_deg);
+      kv.affineTransformTo(ptimes.front(),ptimes.back());
+    }
+    else
+      GISMO_ERROR("Parameterization unknown");
+
+
+    m_basis = gsBSplineBasis<T>(kv);
 
     // get the Greville Abcissae (anchors)
     gsMatrix<T> anchors = m_basis.anchors();
@@ -159,18 +215,24 @@ public:
     // Get the collocation matrix at the anchors
     gsSparseMatrix<T> C = m_basis.collocationMatrix(anchors);
 
-    gsSparseSolver<>::LU solver;
-    solver.compute(C);
+    // gsSparseSolver<>::LU solver;
+    // solver.compute(C);
 
-    m_coefs = solver.solve(rhs);
+    // m_coefs = solver.solve(rhs);
+    // m_fit = gsBSpline<T>(m_basis,give(m_coefs));
 
-    m_fit = gsBSpline<T>(m_basis,give(m_coefs));
+    gsFitting<T> fitter(gsAsMatrix<T>(ptimes,1,ptimes.size()),rhs.transpose(),m_basis);
+    gsSparseMatrix<T> lhs(nsteps,nsteps);
+    lhs.setIdentity();
+    fitter.setConstraints(C,rhs);
+    fitter.compute(0.0);
+
+    m_fit = gsBSpline<T>(m_basis,give(fitter.result()->coefs()));
   }
 
 protected:
-  index_t m_targetDim;
-  std::vector<gsMatrix<T>> m_data;
-  gsVector<T> m_times;
+  std::map<T,gsVector<T>> m_data;
+
   gsVector<T> m_ptimes;
   index_t m_deg;
 
@@ -178,6 +240,8 @@ protected:
   gsMatrix<T> m_coefs;
 
   mutable gsBSpline<T> m_fit;
+
+  gsOptionList m_options;
 
 };
 
