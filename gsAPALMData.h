@@ -1,4 +1,4 @@
- /** @file gsAdaptiveSpaceTime.h
+ /** @file gsAPALMData.h
 
     @brief Performs the arc length method to solve a nonlinear equation system.
 
@@ -19,12 +19,12 @@ namespace gismo
 {
 
 template<class T, class solution_t >
-class gsAdaptiveSpaceTime
+class gsAPALMData
 {
 
 public:
 
-  ~gsAdaptiveSpaceTime()
+  ~gsAPALMData()
   {
 
   }
@@ -35,7 +35,7 @@ public:
    * @param[in]  times      The times (MONOTONICALLY INCREASING!)
    * @param[in]  solutions  The solutions
    */
-  gsAdaptiveSpaceTime(const std::vector<T> & times, const  std::vector<solution_t> & solutions)
+  gsAPALMData(const std::vector<T> & times, const  std::vector<solution_t> & solutions)
   :
   m_initialized(false)
   {
@@ -64,7 +64,7 @@ public:
    *
    * @param[in]  times      The times (MONOTONICALLY INCREASING!)
    */
-  gsAdaptiveSpaceTime(const std::vector<T> & times)
+  gsAPALMData(const std::vector<T> & times)
   :
   m_initialized(false)
   {
@@ -78,7 +78,7 @@ public:
     _defaultOptions();
   }
 
-  // gsAdaptiveSpaceTime(const T tmin, const T tmax, const index_t N = 10)
+  // gsAPALMData(const T tmin, const T tmax, const index_t N = 10)
   // :
   // m_initialized(false)
   // {
@@ -86,7 +86,7 @@ public:
   // }
 
 
-  gsAdaptiveSpaceTime() {};
+  gsAPALMData() {};
 
 private:
 
@@ -565,5 +565,5 @@ protected:
 
 
 // #ifndef GISMO_BUILD_LIB
-// #include GISMO_HPP_HEADER(gsAdaptiveSpaceTime.hpp)
+// #include GISMO_HPP_HEADER(gsAPALMData.hpp)
 // #endif

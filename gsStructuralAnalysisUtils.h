@@ -49,7 +49,7 @@ public:
         file.open(name,std::ofstream::out | std::ofstream::app);
         for (index_t p=0; p!=m_points.cols(); p++)
             for (index_t h=0; h!=headers.size(); h++)
-                file<< "point "<<p<<" - "<<headers[h]<< ",";
+                file<< "point"<<p<<"-"<<headers[h]<< ",";
         file.close();
     }
 
