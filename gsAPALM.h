@@ -55,18 +55,62 @@ public:
 
   gsOptionList & options() { return m_options; }
 
-  const std::vector<solution_t>   & getSolutions() const { return m_solutions; }
-  const std::vector<T>            & getTimes()     const { return m_times; }
   const gsAPALMData<T,solution_t> & getHierarchy() const { return m_data; }
-
-  std::vector<solution_t>   getSolutions()  { return m_solutions; }
-  std::vector<T>            getTimes()      { return m_times; }
   gsAPALMData<T,solution_t> getHierarchy()  { return m_data; }
+
+  const std::vector<solution_t>   & getFlatSolutions() const { return m_solutions; }
+  const std::vector<T>            & getFlatTimes()     const { return m_times; }
+  const std::vector<index_t>      & getFlatLevels()    const { return m_levels; }
+
+  std::vector<solution_t>   getFlatSolutions()  { return m_solutions; }
+  std::vector<T>            getFlatTimes()      { return m_times; }
+  std::vector<index_t>      getFlatLevels()     { return m_levels; }
+
+  const std::vector<solution_t *>   & getSolutions(index_t level) const { return m_lvlSolutions[level]; }
+  const std::vector<T *>            & getTimes(index_t level)     const { return m_lvlTimes[level]; }
+
+  std::vector<solution_t>   getSolutions(index_t level)
+  {
+    std::vector<solution_t> result;
+    for (typename std::vector<solution_t *>::iterator it=m_lvlSolutions[level].begin(); it!=m_lvlSolutions[level].end(); it++)
+      result.push_back(**it);
+    return result;
+  }
+
+  std::vector<T>   getTimes(index_t level)
+  {
+    std::vector<T> result;
+    for (typename std::vector<T *>::iterator it=m_lvlTimes[level].begin(); it!=m_lvlTimes[level].end(); it++)
+      result.push_back(**it);
+    return result;
+  }
+
+  std::vector<std::vector<solution_t>> getSolutionsPerLevel()
+  {
+    std::vector<std::vector<solution_t>> result(m_lvlSolutions.size());
+    for (index_t l=0; l!=m_lvlSolutions.size(); l++)
+      for (typename std::vector<solution_t *>::iterator it=m_lvlSolutions[l].begin(); it!=m_lvlSolutions[l].end(); it++)
+        result[l].push_back(**it);
+    return result;
+  }
+
+  std::vector<std::vector<T>> getTimesPerLevel()
+  {
+    std::vector<std::vector<T>> result(m_lvlTimes.size());
+    for (index_t l=0; l!=m_lvlSolutions.size(); l++)
+      for (typename std::vector<T *>::iterator it=m_lvlTimes[l].begin(); it!=m_lvlTimes[l].end(); it++)
+        result[l].push_back(**it);
+    return result;
+  }
 
 protected:
 
   std::vector<solution_t> m_solutions;
   std::vector<T> m_times;
+  std::vector<index_t> m_levels;
+
+  std::vector<std::vector<solution_t * > >  m_lvlSolutions;
+  std::vector<std::vector<T * > >           m_lvlTimes;
 
   gsALMBase<T> * m_ALM;
   gsAPALMData<T,solution_t> m_data;

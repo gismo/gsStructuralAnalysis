@@ -91,7 +91,7 @@ public:
 
   bool empty();
 
-  std::pair<std::vector<T>,std::vector<solution_t>> getFlatSolution();
+  std::tuple<std::vector<T>,std::vector<solution_t>,std::vector<index_t>> getFlatSolution(index_t level=-1);
 
   void print();
 
@@ -102,8 +102,10 @@ public:
   size_t nActive() { return m_tmp.size(); }
   size_t nWaiting() { return m_queue.size(); }
 
+  size_t maxLevel() { return m_maxLevel; }
+
 protected:
-  std::pair<index_t,T> _activeJob(index_t ID);
+  std::tuple<T,T,index_t> _activeJob(index_t ID);
 
   void _buildMap();
 
@@ -119,25 +121,25 @@ protected:
   // solution map, stores the solution per parametric value
   std::map<T,solution_t>       m_solutions;
   std::map<T,solution_t * >    m_guesses;
+  // map that maps GIVEN a parametric value TO a level
+  std::map<T,index_t>          m_levels;
 
   // map that maps GIVEN a parametric value TO a time
   std::map<T,T> m_tmap;
   // map that maps GIVEN a time TO a parametric value
   std::map<T,T> m_ximap;
-  // map that maps GIVEN a parametric value TO a level
-  std::map<T,index_t> m_lmap;
 
   // Parametric domain
   gsKnotVector<T> m_xi;
   // Temporal domain
   gsKnotVector<T> m_t;
 
-  // Stores [xi_i,xi_i+1]
-  std::queue<std::pair<T,T>>          m_queue;
+  // Stores [xi_i,xi_i+1,level]
+  std::queue<std::tuple<T,T,index_t>>          m_queue;
 
-  // Stores ID, [xi_i,xi_i+1]
+  // Stores ID, [xi_i,xi_i+1,level]
   // map that maps GIVEN an ID TO a parametric interval
-  std::map<index_t,std::pair<T,T>>    m_jobs;
+  std::map<index_t,std::tuple<T,T,index_t>>    m_jobs;
 
   mutable index_t                           m_ID = (0);
 

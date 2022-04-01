@@ -65,6 +65,7 @@ void gsAPALM<T,solution_t>::serialSolve(index_t Nsteps)
   // Store initial solution
   m_solutions.push_back({U0,L0});
   m_times.push_back(s);
+  m_levels.push_back(0);
   m_ALM->setSolution(U0,L0);
 
   for (index_t k=1; k!=Nsteps; k++)
@@ -93,6 +94,7 @@ void gsAPALM<T,solution_t>::serialSolve(index_t Nsteps)
     T lambda = m_ALM->solutionL();
     m_solutions.push_back({m_ALM->solutionU(),lambda});
     m_times.push_back(s);
+    m_levels.push_back(0);
 
     this->serialStepOutput(m_ALM->solutionU(),lambda);
 
@@ -126,38 +128,39 @@ void gsAPALM<T,solution_t>::parallelSolve()
 {
   solution_t start, guess, reference;
   index_t ID;
-  real_t tstart = 0;
-  real_t tend = 0;
-  real_t dt, dt0;
+  T tstart = 0;
+  T tend = 0;
+  T dt, dt0;
   index_t it = 0;
   index_t itmax = 100;
-  real_t TOL = 1e-2;
-  gsVector<> DeltaU;
-  real_t DeltaL;
+  T TOL = 1e-2;
+  gsVector<T> DeltaU;
+  T DeltaL;
   index_t Nintervals = m_subIntervals;
   std::vector<solution_t> stepSolutions;
-  std::vector<real_t> stepTimes;
-  std::vector<real_t> distances;
-  real_t lowerError, upperError;
+  std::vector<T> stepTimes;
+  std::vector<T> distances;
+  T lowerError, upperError;
   bool bisected = false;
-  real_t dt_rem = 0;
+  T dt_rem = 0;
 
   T Lguess, Lold, L0;
   gsMatrix<T> Uguess,Uold, U0;
 
   while (!m_data.empty() && it < itmax)
   {
+    Nintervals = m_subIntervals;
     gsInfo<<"There are "<<m_data.nActive()<<" active jobs and "<<m_data.nWaiting()<<" jobs in the queue\n";
     stepSolutions.resize(Nintervals);
     stepTimes.resize(Nintervals);
-    distances.resize(Nintervals);
+    distances.resize(Nintervals+1);
 
     std::tie(ID,tstart,tend,dt0,start,guess) = m_data.pop();
     std::tie(Uold,Lold) = start;
     std::tie(Uguess,Lguess) = guess;
 
-    gsMatrix<> Uori = Uold;
-    real_t Lori = Lold;
+    gsMatrix<T> Uori = Uold;
+    T Lori = Lold;
 
     dt0 = dt0 / Nintervals;
     dt = dt0;
@@ -169,11 +172,11 @@ void gsAPALM<T,solution_t>::parallelSolve()
     gsDebug<<"Start - ||u|| = "<<Uold.norm()<<", L = "<<Lold<<"\n";
     gsDebug<<"Guess - ||u|| = "<<Uguess.norm()<<", L = "<<Lguess<<"\n";
 
-    gsVector<> tmpU = Uold-Uguess;
-    real_t tmpL = Lold-Lguess;
+    gsVector<T> tmpU = Uold-Uguess;
+    T tmpL = Lold-Lguess;
 
 
-    real_t s = 0;
+    T s = 0;
 
     gsInfo<<"Starting with ID "<<ID<<" from (|U|,L) = ("<<Uold.norm()<<","<<Lold<<"), curve time = "<<tstart<<"\n";
     for (index_t k = 0; k!=Nintervals; k++)
@@ -219,7 +222,7 @@ void gsAPALM<T,solution_t>::parallelSolve()
         Nintervals++;
         stepSolutions.resize(Nintervals);
         stepTimes.resize(Nintervals);
-        distances.resize(Nintervals);
+        distances.resize(Nintervals+1);
       }
 
       m_ALM->setLength(dt);
@@ -232,31 +235,39 @@ void gsAPALM<T,solution_t>::parallelSolve()
 
     DeltaU = reference.first - m_ALM->solutionU();
     DeltaL = reference.second - m_ALM->solutionL();
-    upperError = m_ALM->distance(DeltaU,DeltaL);
-    // gsDebugVar(m_ALM->distance(DeltaU,DeltaL));
+    upperError = distances.back() = m_ALM->distance(DeltaU,DeltaL);
+
+    DeltaU = reference.first - Uori;
+    DeltaL = reference.second - Lori;
+    T upperDistance = m_ALM->distance(DeltaU,DeltaL);
 
     DeltaU = stepSolutions.back().first - Uori;
     DeltaL = stepSolutions.back().second - Lori;
-    lowerError = s - m_ALM->distance(DeltaU,DeltaL);
+    T lowerDistance = m_ALM->distance(DeltaU,DeltaL);
+
+    lowerError = s - lowerDistance;
 
   /////////////////////////////////////////////////////////////////////////////////////////////
   /////////////////////////////////////////////////////////////////////////////////////////////
   /////////////////////////////////////////////////////////////////////////////////////////////
   /////////////////////////////////////////////////////////////////////////////////////////////
 
-    m_data.submit(ID,distances,stepSolutions,upperError,lowerError);
+    m_data.submit(ID,distances,stepSolutions,upperDistance,lowerDistance);
     m_data.finishJob(ID);
 
     it++;
   }
 
-  m_data.printQueue();
-  std::tie(m_times,m_solutions) = m_data.getFlatSolution();
-
-  m_data.printKnots();
-
-  gsDebugVar(gsAsVector(m_times));
-
+  std::tie(m_times,m_solutions,m_levels) = m_data.getFlatSolution();
+  m_lvlSolutions.resize(m_data.maxLevel()+1);
+  m_lvlTimes.resize(m_data.maxLevel()+1);
+  for (index_t k=0; k!=m_solutions.size(); k++)
+  {
+    GISMO_ASSERT(m_lvlSolutions.size() > (size_t)m_levels[k],"level mismatch, maxLevel = " << m_data.maxLevel() << "level = "<<m_levels[k]);
+    GISMO_ASSERT(m_lvlTimes.size() > (size_t)m_levels[k],"level mismatch, maxLevel = " << m_data.maxLevel() << "level = "<<m_levels[k]);
+    m_lvlSolutions[m_levels[k]].push_back(&(m_solutions[k]));
+    m_lvlTimes[m_levels[k]].push_back(&(m_times[k]));
+  }
 }
 
 } // namespace gismo

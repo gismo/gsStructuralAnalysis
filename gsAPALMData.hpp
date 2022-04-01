@@ -77,7 +77,7 @@ void gsAPALMData<T,solution_t>::init()
 {
   this->_applyOptions();
   // Clean queue
-  std::queue<std::pair<T,T>> queue;
+  std::queue<std::tuple<T,T,index_t>> queue;
   m_queue.swap(queue);
 
   T low,upp;
@@ -86,7 +86,7 @@ void gsAPALMData<T,solution_t>::init()
     low = *it;
     it++;
     upp = *it;
-    m_queue.push({low,upp});
+    m_queue.push({low,upp,1});
   }
 
   this->_buildMap();
@@ -105,10 +105,12 @@ void gsAPALMData<T,solution_t>::setData(const std::vector<T> & times,const  std:
   m_xi.transform(0,1);
 
   m_solutions.insert({m_xi.at(0),solutions.at(0)});
+  m_levels.insert({m_xi.at(0),0});
   m_guesses  .insert({m_xi.at(0),&(m_solutions[m_xi.at(0)])});
   for (size_t k=1; k!=m_xi.size(); ++k)
   {
     m_solutions.insert({m_xi.at(k),solutions.at(k)});
+    m_levels.insert({m_xi.at(k),0});
     m_guesses  .insert({m_xi.at(k),&(m_solutions[m_xi.at(k)])});
   }
 }
@@ -126,8 +128,9 @@ std::tuple<index_t, T     , T   , T , solution_t, solution_t> gsAPALMData<T,solu
   GISMO_ASSERT(m_initialized,"Structure is not initialized");
   GISMO_ASSERT(!m_queue.empty(),"The queue is empty! Something went wrong.");
 
-  T xilow = m_queue.front().first;
-  T xiupp = m_queue.front().second;
+  T xilow = std::get<0>(m_queue.front());
+  T xiupp = std::get<1>(m_queue.front());
+  index_t level = std::get<2>(m_queue.front());
   m_queue.pop();
   T tlow = m_tmap[xilow];
   T tupp = m_tmap[xiupp];
@@ -141,8 +144,8 @@ std::tuple<index_t, T     , T   , T , solution_t, solution_t> gsAPALMData<T,solu
   solution_t guess = *(m_guesses[xilow]);
 
   // add the job to the active jobs
-  m_jobs[m_ID++] = std::make_pair(xilow,xiupp);
-  if (m_verbose==2) gsInfo<<"Got active job (ID="<<m_ID-1<<") on interval = ["<<xilow<<","<<xiupp<<"] = ["<<tlow<<","<<tupp<<"]\n";
+  m_jobs[m_ID++] = std::make_tuple(xilow,xiupp,level);
+  if (m_verbose==2) gsInfo<<"Got active job (ID="<<m_ID-1<<") on interval = ["<<xilow<<","<<xiupp<<"] = ["<<tlow<<","<<tupp<<"] with level "<<level<<"\n";
 
   return std::make_tuple(m_ID-1,tlow, tupp, dt, start, guess);
 }
@@ -174,9 +177,9 @@ bool gsAPALMData<T,solution_t>::getReferenceByPar(T xi, solution_t & result)
 template <class T, class solution_t >
 bool gsAPALMData<T,solution_t>::getReferenceByID(index_t ID, solution_t & result)
 {
-  if (m_solutions.count(m_jobs[ID].second)!=0)
+  if (m_solutions.count(std::get<1>(m_jobs[ID]))!=0)
   {
-    result =  m_solutions[m_jobs[ID].second];
+    result =  m_solutions[std::get<1>(m_jobs[ID])];
     return true;
   }
   else
@@ -184,10 +187,10 @@ bool gsAPALMData<T,solution_t>::getReferenceByID(index_t ID, solution_t & result
 }
 
 template <class T, class solution_t >
-void gsAPALMData<T,solution_t>::submit(index_t ID, const std::vector<T> & distances, std::vector<solution_t> solutions, const T & upperError, const T & lowerError)
+void gsAPALMData<T,solution_t>::submit(index_t ID, const std::vector<T> & distances, std::vector<solution_t> solutions, const T & upperDistance, const T & lowerDistance)
 {
   GISMO_ASSERT(m_initialized,"Structure is not initialized");
-  GISMO_ASSERT(distances.size()==solutions.size(),"You must provide one distance per solution");
+  GISMO_ASSERT(distances.size()==solutions.size()+1,"You must provide one more distance than solutions");
 
   //  <d(xilow,xin)                                            >
   //  <d(xilow,xi1)> <d(xi1,xi2) > <d(xi2,Dxin-1)> <d(xin-1,xin)> <d(xin,xiupp)>
@@ -198,41 +201,52 @@ void gsAPALMData<T,solution_t>::submit(index_t ID, const std::vector<T> & distan
   // D(.,.) is the sum of intervals
   // By the triangle inequality, d(xilow,xin)\leq D(xilow,xin)
 
-  // Xi:        [xilow,xi1,...,xiupp]
-  // distances: [d(xilow,xi1),d(xi1,xi2),...,d(xin-1,xin)]
-  // solutions: [u(xi1),...,u(xin)]
-  // lowerError = d(xilow,xin)
-  // upperError = d(xin,xiupp)
+  // N: number of interior points
+  // Xi:        [xilow,xi1,...,xiupp] (size N+2)
+  // distances: [d(xilow,xi1),d(xi1,xi2),...,d(xin-1,xin),d(xin,xiupp)] (size N+1)
+  // solutions: [u(xi1),...,u(xin)] (size N)
+  // lowerDistance = d(xilow,xin)
+  // upperDistance = d(xilow,xiupp)
 
   //////////////////////////////////////////////////////////////////////////////
   // Rescale intervals
   //////////////////////////////////////////////////////////////////////////////
   T tlow, tupp, xilow, xiupp, dxi, Dt, dt;
   std::vector<T> t,xi;
+  index_t level;
+
 
   // Compute interval (xi and t)
-  std::tie(xilow,xiupp) = m_jobs[ID];
+  std::tie(xilow,xiupp,level) = m_jobs[ID];
   tlow = m_tmap[xilow];
   tupp = m_tmap[xiupp];
 
   // Compute interval distance
   dxi = xiupp - xilow;
+  // Get the original distance
   Dt = tupp - tlow; // original time step
 
   // Get time points
-  t.resize(solutions.size()+1);
+  t.resize(distances.size()+1);
   t.at(0) = tlow;
-  for (size_t k=0; k!=solutions.size(); k++)
+  for (size_t k=0; k!=distances.size(); k++)
     t.at(k+1) = t.at(k) + distances.at(k);
-  t.push_back(t.back()+upperError);
 
-  T dt_tmp = 0;
-  for(typename std::vector<T>::const_iterator it = distances.begin(); it != distances.end(); ++it)
-      dt_tmp += *it;
+  gsDebugVar(gsAsVector<T>(t));
+
+  // check if the total distance matches the original time step
+  T dt_tmp = std::accumulate(distances.begin(), std::prev(distances.end()), 0.0);
   GISMO_ASSERT((Dt-dt_tmp)/Dt<1e-12,"Total distance of the computed intervals should be equal to the original interval length ("<<dt_tmp<<"!="<<Dt<<")");
 
-  // Get actual time step and the error
+  // get the total travelled distance
   dt = t.back()-tlow;
+
+  // Compute the lower and upper errors
+  // The lowerError is the surplus distance over the first intervals
+  // The upperError is the distance between the last computed point and the referemce, minus the lowerError
+  T totalError = dt-upperDistance;
+  T lowerError = Dt-lowerDistance;
+  T upperError = totalError-lowerError;
 
   // Fill and scale xi vector
   xi.resize(solutions.size()+2);
@@ -247,12 +261,13 @@ void gsAPALMData<T,solution_t>::submit(index_t ID, const std::vector<T> & distan
   if (m_verbose==1)
   {
     gsInfo<<"Relative errors:\n";
-    gsInfo<<"\tlowerError/Dt = "<<lowerError/Dt<<"\n";
-    gsInfo<<"\tupperError/Dt = "<<upperError/Dt<<"\n";
+    gsInfo<<"\tlowerError/dt = "<<lowerError/dt<<"\n";
+    gsInfo<<"\tupperError/dt = "<<upperError/dt<<"\n";
   }
-  if (upperError/Dt < m_tolerance)
+  // if (totalError/dt < m_tolerance)
+  if (false)
   {
-    GISMO_ASSERT(lowerError/Dt<m_tolerance,"Lower error is big, but upper error is small. How is this possible?");
+    GISMO_ASSERT(lowerError/dt<m_tolerance,"Lower error is larger than total error. How is this possible?");
     t .erase(t .end()-2);
     xi.erase(xi.end()-2);
     solutions.erase(solutions.end()-1);
@@ -261,13 +276,24 @@ void gsAPALMData<T,solution_t>::submit(index_t ID, const std::vector<T> & distan
   }
   else
   {
-    size_t kstart = xi.size()-1;
+    size_t kmin = 1;
+    size_t kmax = xi.size();
     if (lowerError/Dt<m_tolerance)
-      kstart = 1;
-    for (size_t k = kstart; k!=xi.size(); k++)
+      kmin = xi.size()-1;
+    if (upperError/Dt<m_tolerance)
+      kmax = xi.size()-1;
+    for (size_t k = kmin; k!=kmax; k++)
     {
-      m_queue.push(std::make_pair(xi.at(k-1),xi.at(k)));
-      if (m_verbose==1) gsInfo<<"Interval ["<<xi.at(k-1)<<","<<xi.at(k)<<"] added to queue\n";
+      if (level < m_maxLevel)
+      {
+        m_queue.push(std::make_tuple(xi.at(k-1),xi.at(k),level+1));
+        if (m_verbose==1) gsInfo<<"Interval ["<<xi.at(k-1)<<","<<xi.at(k)<<"] on level "<<level+1<<" added to queue\n";
+      }
+      else
+      {
+        if (m_verbose==1) gsInfo<<"Interval ["<<xi.at(k-1)<<","<<xi.at(k)<<"] on level "<<level+1<<" NOT added to queue (max level reached)\n";
+      }
+
     }
   }
 
@@ -290,6 +316,7 @@ void gsAPALMData<T,solution_t>::submit(index_t ID, const std::vector<T> & distan
   {
     if (m_verbose==2) gsInfo<<"Added a solution on time = "<<m_tmap[xi.at(k)]<<" (parametric time = "<<xi.at(k)<<")\n";
     m_solutions[xi.at(k)] = solutions.at(k-1);
+    m_levels[xi.at(k)] = level;
   }
 
   // The guess for the first computed point (xi[1]) is the solution on xi[0]
@@ -323,13 +350,14 @@ template <class T, class solution_t >
 void gsAPALMData<T,solution_t>::removeJob(index_t ID)
 {
   // Remove ID
-  if (m_verbose==2) gsInfo<<"Erasing finished job on level = "<<m_jobs[ID].first<<"; time = "<<m_jobs[ID].second<<"\n";
+  if (m_verbose==2) gsInfo<<"Erasing finished job on level = "<<std::get<0>(m_jobs[ID])
+                          <<"; time = "<<std::get<1>(m_jobs[ID])<<"\n";
   m_jobs.erase(ID);
   if (m_verbose==2)
   {
     gsDebug<<"Current active jobs\n";
-    for (typename std::map<index_t,std::pair<T,T>>::const_iterator it = m_jobs.begin(); it!=m_jobs.end(); ++it)
-      gsDebug<<"ID = "<<it->first<<"; level = "<<it->second.first<<"; time = "<<it->second.second<<"\n";
+    for (typename std::map<index_t,std::tuple<T,T,index_t>>::const_iterator it = m_jobs.begin(); it!=m_jobs.end(); ++it)
+      gsDebug<<"ID = "<<it->first<<"; xilow = "<<std::get<0>(it->second)<<"; xiupp = "<<std::get<1>(it->second)<<"; level = "<<std::get<2>(it->second)<<"\n";
   }
 }
 
@@ -340,18 +368,23 @@ bool gsAPALMData<T,solution_t>::empty()
 }
 
 template <class T, class solution_t >
-std::pair<std::vector<T>,std::vector<solution_t>> gsAPALMData<T,solution_t>::getFlatSolution()
+std::tuple<std::vector<T>,std::vector<solution_t>,std::vector<index_t>> gsAPALMData<T,solution_t>::getFlatSolution(index_t level)
 {
   std::vector<T> times;
   std::vector<solution_t> solutions;
+  std::vector<index_t> levels;
 
   for (typename std::map<T,solution_t>::const_iterator it = m_solutions.begin(); it!=m_solutions.end(); ++it)
   {
-    times.push_back(m_tmap[it->first]);
-    solutions.push_back(it->second);
+    if (m_levels[it->first]==level || level==-1)
+    {
+      times.push_back(m_tmap[it->first]);
+      solutions.push_back(it->second);
+      levels.push_back(m_levels[it->first]);
+    }
   }
 
-  return std::make_pair(times,solutions);
+  return std::make_tuple(times,solutions,levels);
 }
 
 template <class T, class solution_t >
@@ -367,15 +400,16 @@ void gsAPALMData<T,solution_t>::print()
 template <class T, class solution_t >
 void gsAPALMData<T,solution_t>::printQueue()
 {
-  std::queue<std::pair<T,T>> queue = m_queue;
+  std::queue<std::tuple<T,T,index_t>> queue = m_queue;
   gsInfo<<"Queue has "<<queue.size()<<" elements\n";
   while (!queue.empty())
   {
-    gsInfo<<"Start time "<<queue.front().first<<"; end time = "<<queue.front().second<<"\n";
+    gsInfo<<"Start time "<<std::get<0>(queue.front())
+          <<"; end time = "<<std::get<1>(queue.front())
+          <<"; level = "<<std::get<2>(queue.front())<<"\n";
     queue.pop();
   }
   gsInfo<<"Queue is empty\n";
-
 }
 
 template <class T, class solution_t >
@@ -386,7 +420,7 @@ void gsAPALMData<T,solution_t>::printKnots()
 }
 
 template <class T, class solution_t >
-std::pair<index_t,T> gsAPALMData<T,solution_t>::_activeJob(index_t ID)
+std::tuple<T,T,index_t> gsAPALMData<T,solution_t>::_activeJob(index_t ID)
 {
   if (m_jobs.count(ID) == 1)
     return m_jobs[ID];

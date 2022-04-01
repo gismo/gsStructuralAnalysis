@@ -18,10 +18,10 @@ namespace gismo
 {
 
 template<class T>
-class gsStructuralAnalysisOutputBase
+class gsStructuralAnalysisOutput
 {
 public:
-    gsStructuralAnalysisOutputBase(const std::string name)
+    gsStructuralAnalysisOutput(const std::string name)
     :
     m_fname(name),
     m_precision(5)
@@ -29,9 +29,9 @@ public:
 
     }
 
-    gsStructuralAnalysisOutputBase(const std::string name, const gsMatrix<T> & points)
+    gsStructuralAnalysisOutput(const std::string name, const gsMatrix<T> & points)
     :
-    gsStructuralAnalysisOutputBase(name)
+    gsStructuralAnalysisOutput(name)
     {
         m_points = points;
     }
@@ -43,13 +43,22 @@ public:
         file.close();
     }
 
-    void _initPointHeader(const std::string name, std::vector<std::string> headers)
+    void _initPointHeader(const std::string name, std::vector<std::string> pointHeaders)
     {
         std::ofstream file;
         file.open(name,std::ofstream::out | std::ofstream::app);
         for (index_t p=0; p!=m_points.cols(); p++)
-            for (index_t h=0; h!=headers.size(); h++)
-                file<< "point"<<p<<"-"<<headers[h]<< ",";
+            for (index_t h=0; h!=pointHeaders.size(); h++)
+                file<< "point"<<p<<"-"<<pointHeaders[h]<< ",";
+        file.close();
+    }
+
+    void _initOtherHeader(const std::string name, std::vector<std::string> otherHeaders)
+    {
+        std::ofstream file;
+        file.open(name,std::ofstream::out | std::ofstream::app);
+        for (index_t h=0; h!=otherHeaders.size(); h++)
+            file<<otherHeaders[h]<< ",";
         file.close();
     }
 
@@ -60,6 +69,15 @@ public:
         for (index_t p=0; p!=pointData.cols(); p++)
             for (index_t c=0; c!=pointData.rows(); c++)
                 file  << pointData(c,p) << ",";
+        file.close();
+    }
+
+    void _writeOtherData(const std::string name, const gsVector<T> & otherData)
+    {
+        std::ofstream file;
+        file.open(name,std::ofstream::out | std::ofstream::app);
+        for (index_t c=0; c!=otherData.size(); c++)
+            file  << otherData.at(c) << ",";
         file.close();
     }
 
@@ -76,6 +94,53 @@ public:
         file.close();
     }
 
+    void init(std::vector<std::string> pointHeaders, std::vector<std::string> otherHeaders)
+    {
+        m_nPointHeaders = pointHeaders.size();
+        m_nOtherHeaders = otherHeaders.size();
+        std::ofstream file;
+        file.open(m_fname,std::ofstream::out);
+        file  << std::setprecision(m_precision);
+        file.close();
+
+        this->_initPointHeader(m_fname, pointHeaders);
+        this->_initOtherHeader(m_fname, otherHeaders);
+
+        file.open(m_fname,std::ofstream::out | std::ofstream::app);
+        file  << "\n";
+        file.close();
+    }
+
+    void init(std::vector<std::string> pointHeaders)
+    {
+        std::vector<std::string> empty;
+        this->init(pointHeaders,empty);
+    }
+
+    void add(const gsMatrix<T> & pointSolutions, const gsVector<T> & otherData)
+    {
+        GISMO_ASSERT(pointSolutions.rows()==m_nPointHeaders,"Number of solutions per point is different from the defined number of headers");
+        GISMO_ASSERT(otherData.size()==m_nOtherHeaders,"Number of other data is different from the defined number of headers");
+        std::ofstream file;
+        file.open(m_fname,std::ofstream::out | std::ofstream::app);
+        file  << std::setprecision(m_precision);
+        file.close();
+
+        this->_writePointData(m_fname,pointSolutions);
+        this->_writeOtherData(m_fname,otherData);
+
+        file.open(m_fname,std::ofstream::out | std::ofstream::app);
+        file  << "\n";
+        file.close();
+    }
+
+
+    void add(const gsMatrix<T> & pointSolutions)
+    {
+        gsVector<T> empty;
+        this->add(pointSolutions,empty);
+    }
+
     void setPrecision(index_t precision) { m_precision = precision; }
 
 protected:
@@ -83,145 +148,7 @@ protected:
     std::string m_fname;
     std::ofstream m_file;
     index_t m_precision;
-};
-
-template<class T>
-class gsALMOutput : public gsStructuralAnalysisOutputBase<T>
-{
-    typedef gsStructuralAnalysisOutputBase<T> Base;
-
-public:
-    gsALMOutput(const std::string name)
-    :
-    Base(name)
-    {
-
-    }
-
-    gsALMOutput(const std::string name, const gsMatrix<T> & points)
-    :
-    Base(name,points)
-    {
-
-    }
-
-    void init(std::vector<std::string> headers)
-    {
-        m_nheaders = headers.size();
-        std::ofstream file;
-        file.open(m_fname,std::ofstream::out);
-        file  << std::setprecision(m_precision)
-              << "Deformation norm" << ",";
-        file.close();
-
-        Base::_initPointHeader(m_fname, headers);
-
-        file.open(m_fname,std::ofstream::out | std::ofstream::app);
-        file  << "Lambda" << ","
-              << "Indicator"
-              << "\n";
-        file.close();
-    }
-
-    void add(const gsMatrix<T> & pointSolutions, const gsVector<T> & solutionVector, const T lambda, const T indicator)
-    {
-        GISMO_ASSERT(pointSolutions.rows()==m_nheaders,"Number of solutions per point is different from the defined number of headers");
-        std::ofstream file;
-        file.open(m_fname,std::ofstream::out | std::ofstream::app);
-        file  << std::setprecision(m_precision)
-                << solutionVector.norm() << ",";
-        file.close();
-
-        Base::_writePointData(m_fname,pointSolutions);
-
-        file.open(m_fname,std::ofstream::out | std::ofstream::app);
-        file  << lambda << ","
-                << indicator << ","
-                << "\n";
-        file.close();
-    }
-
-    void add(const gsMatrix<T> & pointSolutions, const T lambda)
-    {
-        GISMO_ASSERT(pointSolutions.rows()==m_nheaders,"Number of solutions per point is different from the defined number of headers");
-        std::ofstream file;
-        file.open(m_fname,std::ofstream::out | std::ofstream::app);
-        file  << std::setprecision(m_precision)
-                << "NA" << ",";
-        file.close();
-
-        Base::_writePointData(m_fname,pointSolutions);
-
-        file.open(m_fname,std::ofstream::out | std::ofstream::app);
-        file  << lambda << ","
-                << "NA" << ","
-                << "\n";
-        file.close();
-    }
-
-protected:
-    using Base::m_points;
-    using Base::m_fname;
-    using Base::m_precision;
-    index_t m_nheaders;
-
-};
-
-template<class T>
-class gsStaticOutput : public gsStructuralAnalysisOutputBase<T>
-{
-    typedef gsStructuralAnalysisOutputBase<T> Base;
-
-public:
-    gsStaticOutput(const std::string name)
-    :
-    Base(name)
-    {
-
-    }
-
-    gsStaticOutput(const std::string name, const gsMatrix<T> & points)
-    :
-    Base(name,points)
-    {
-
-    }
-
-    void init(std::vector<std::string> headers)
-    {
-        m_nheaders = headers.size();
-        std::ofstream file;
-        file.open(m_fname,std::ofstream::out);
-        file  << std::setprecision(m_precision);
-        file.close();
-
-        Base::_initPointHeader(m_fname, headers);
-
-        file.open(m_fname,std::ofstream::out | std::ofstream::app);
-        file<< "\n";
-        file.close();
-    }
-
-    void add(const gsMatrix<T> & pointSolutions)
-    {
-        GISMO_ASSERT(pointSolutions.rows()==m_nheaders,"Number of solutions per point is different from the defined number of headers");
-        std::ofstream file;
-        file.open(m_fname,std::ofstream::out | std::ofstream::app);
-        file  << std::setprecision(m_precision);
-        file.close();
-
-        Base::_writePointData(m_fname,pointSolutions);
-
-        file.open(m_fname,std::ofstream::out | std::ofstream::app);
-        file  << "\n";
-        file.close();
-    }
-
-protected:
-    using Base::m_points;
-    using Base::m_fname;
-    using Base::m_precision;
-    index_t m_nheaders;
+    index_t m_nPointHeaders, m_nOtherHeaders;
 
 };
 
