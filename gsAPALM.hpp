@@ -16,8 +16,8 @@
 namespace gismo
 {
 
-template <class T, class solution_t >
-gsAPALM<T,solution_t>::gsAPALM(       gsALMBase<T> * ALM,
+template <class T>
+gsAPALM<T>::gsAPALM(       gsALMBase<T> * ALM,
                                         const gsAPALMData<T,solution_t> & Data)
 :
 m_ALM(ALM),
@@ -27,28 +27,33 @@ m_data(Data)
   this->_getOptions();
 }
 
-template <class T, class solution_t >
-void gsAPALM<T,solution_t>::_defaultOptions()
+template <class T>
+void gsAPALM<T>::_defaultOptions()
 {
   m_options.addSwitch("Verbose","Verbosity",false);
   m_options.addInt("SubIntervals","Number of subintervals",2);
+  m_options.addSwitch("SingularPoint","Enable singular point detection",false);
+  m_options.addReal("LengthMultiplier","Multiplier for the length after detection of a bifurcation point",1);
 }
 
-template <class T, class solution_t >
-void gsAPALM<T,solution_t>::_getOptions()
+template <class T>
+void gsAPALM<T>::_getOptions()
 {
   m_verbose = m_options.getSwitch("Verbose");
   m_subIntervals = m_options.getInt("SubIntervals");
+  m_singularPoint = m_options.getSwitch("SingularPoint");
+  m_lengthMult = m_options.getReal("LengthMultiplier");
+
 }
 
-template <class T, class solution_t >
-void gsAPALM<T,solution_t>::initialize()
+template <class T>
+void gsAPALM<T>::initialize()
 {
   this->_getOptions();
 }
 
-template <class T, class solution_t >
-void gsAPALM<T,solution_t>::serialSolve(index_t Nsteps)
+template <class T>
+void gsAPALM<T>::serialSolve(index_t Nsteps)
 {
   bool bisected = false;
   T s = 0;
@@ -92,22 +97,12 @@ void gsAPALM<T,solution_t>::serialSolve(index_t Nsteps)
     Lold = m_ALM->solutionL();
 
     T lambda = m_ALM->solutionL();
-    m_solutions.push_back({m_ALM->solutionU(),lambda});
+    std::pair<gsVector<T>,T> pair = std::make_pair(m_ALM->solutionU(),lambda);
+    m_solutions.push_back(pair);
     m_times.push_back(s);
     m_levels.push_back(0);
 
-    this->serialStepOutput(m_ALM->solutionU(),lambda);
-
-    // // add data point to fit
-    // index_t N = m_ALM->solutionU().rows();
-    // gsVector<T> sol(N+1);
-    // sol.head(N) = m_ALM->solutionU();
-    // sol.at(N) = lambda;
-    // cfitter.addDataPoint(sol,s);
-    // if (k>deg_z+1)
-    //   cfitter.compute();
-    //
-
+    this->serialStepOutput(pair,s,k);
 
     if (!bisected)
     {
@@ -123,8 +118,8 @@ void gsAPALM<T,solution_t>::serialSolve(index_t Nsteps)
   m_data.printQueue();
 }
 
-template <class T, class solution_t >
-void gsAPALM<T,solution_t>::parallelSolve()
+template <class T>
+void gsAPALM<T>::parallelSolve()
 {
   solution_t start, guess, reference;
   index_t ID;
@@ -146,6 +141,7 @@ void gsAPALM<T,solution_t>::parallelSolve()
 
   T Lguess, Lold, L0;
   gsMatrix<T> Uguess,Uold, U0;
+  index_t level;
 
   while (!m_data.empty() && it < itmax)
   {
@@ -155,7 +151,7 @@ void gsAPALM<T,solution_t>::parallelSolve()
     stepTimes.resize(Nintervals);
     distances.resize(Nintervals+1);
 
-    std::tie(ID,tstart,tend,dt0,start,guess) = m_data.pop();
+    std::tie(ID,tstart,tend,dt0,start,guess,level) = m_data.pop();
     std::tie(Uold,Lold) = start;
     std::tie(Uguess,Lguess) = guess;
 
@@ -197,13 +193,14 @@ void gsAPALM<T,solution_t>::parallelSolve()
       }
       GISMO_ENSURE(m_ALM->converged(),"Loop terminated, arc length method did not converge.\n");
 
-      stepSolutions.at(k) = std::make_pair(m_ALM->solutionU(),m_ALM->solutionL());
-      stepTimes.at(k) = tstart + dt;
+      std::pair<gsVector<T>,T> pair = std::make_pair(m_ALM->solutionU(),m_ALM->solutionL());
+      T time = tstart + dt;
+      stepSolutions.at(k) = pair;
+      stepTimes.at(k) = time;
       DeltaU = m_ALM->solutionU() - Uold;
       DeltaL = m_ALM->solutionL() - Lold;
 
       distances.at(k) = m_ALM->distance(DeltaU,DeltaL);
-      gsDebugVar(m_ALM->distance(DeltaU,DeltaL));
 
       s += distances.at(k);
 
@@ -224,6 +221,8 @@ void gsAPALM<T,solution_t>::parallelSolve()
         stepTimes.resize(Nintervals);
         distances.resize(Nintervals+1);
       }
+
+      this->parallelStepOutput(pair,time,k);
 
       m_ALM->setLength(dt);
       dt_rem = 0;
@@ -254,6 +253,8 @@ void gsAPALM<T,solution_t>::parallelSolve()
 
     m_data.submit(ID,distances,stepSolutions,upperDistance,lowerDistance);
     m_data.finishJob(ID);
+
+    this->parallelIntervalOutput(stepSolutions,stepTimes,level,ID);
 
     it++;
   }

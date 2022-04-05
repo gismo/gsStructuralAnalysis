@@ -115,6 +115,13 @@ void gsAPALMData<T,solution_t>::setData(const std::vector<T> & times,const  std:
   }
 }
 
+// template <class T, class solution_t >
+// void gsAPALMData<T,solution_t>::initEmptyQueue(const index_t & N)
+// {
+//   setData(times,solutions);
+//   init();
+// }
+
 template <class T, class solution_t >
 void gsAPALMData<T,solution_t>::init(const std::vector<T> & times,const  std::vector<solution_t> & solutions)
 {
@@ -123,7 +130,7 @@ void gsAPALMData<T,solution_t>::init(const std::vector<T> & times,const  std::ve
 }
 
 template <class T, class solution_t >
-std::tuple<index_t, T     , T   , T , solution_t, solution_t> gsAPALMData<T,solution_t>::pop()
+std::tuple<index_t, T     , T   , T , solution_t, solution_t, index_t> gsAPALMData<T,solution_t>::pop()
 {
   GISMO_ASSERT(m_initialized,"Structure is not initialized");
   GISMO_ASSERT(!m_queue.empty(),"The queue is empty! Something went wrong.");
@@ -147,7 +154,7 @@ std::tuple<index_t, T     , T   , T , solution_t, solution_t> gsAPALMData<T,solu
   m_jobs[m_ID++] = std::make_tuple(xilow,xiupp,level);
   if (m_verbose==2) gsInfo<<"Got active job (ID="<<m_ID-1<<") on interval = ["<<xilow<<","<<xiupp<<"] = ["<<tlow<<","<<tupp<<"] with level "<<level<<"\n";
 
-  return std::make_tuple(m_ID-1,tlow, tupp, dt, start, guess);
+  return std::make_tuple(m_ID-1,tlow, tupp, dt, start, guess, level);
 }
 
 template <class T, class solution_t >

@@ -63,8 +63,8 @@ public:
 
   gsOptionList & options() { return m_options; }
 
-  //         ID,      tstart, tend, dt, start     , guess
-  std::tuple<index_t, T     , T   , T , solution_t, solution_t> pop();
+  //         ID,      tstart, tend, dt, start     , guess,      level
+  std::tuple<index_t, T     , T   , T , solution_t, solution_t, index_t> pop();
 
   bool getReferenceByTime(T time, solution_t & result);
 

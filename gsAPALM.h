@@ -20,11 +20,12 @@
 namespace gismo
 {
 
-template<class T, class solution_t>
+template<class T>
 class gsAPALM
 {
 
 public:
+  typedef typename std::pair<gsVector<real_t>,real_t> solution_t;
 
   virtual ~gsAPALM() { }
 
@@ -50,8 +51,9 @@ public:
   virtual void serialSolve(index_t Nsteps = 10);
   virtual void parallelSolve();
 
-  virtual void serialStepOutput(const gsVector<T> & U, const T & L) {};
-  virtual void parallelStepOutput(const gsVector<T> & U, const T & L) {};
+  virtual void serialStepOutput(const std::pair<gsVector<T>,T> & pair, const T & time, index_t step) {};
+  virtual void parallelStepOutput(const std::pair<gsVector<T>,T> & pair, const T & time, index_t step) {};
+  virtual void parallelIntervalOutput(const std::vector<std::pair<gsVector<T>,T>> & stepSolutions, const std::vector<T> & stepTimes, index_t level, index_t ID) {};
 
   gsOptionList & options() { return m_options; }
 
@@ -119,6 +121,9 @@ protected:
   index_t m_subIntervals;
 
   gsOptionList m_options;
+
+  bool m_singularPoint;
+  T m_lengthMult;
 };
 
 }
