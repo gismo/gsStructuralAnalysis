@@ -55,7 +55,7 @@ void gsALMCrisfield<T>::initMethods()
 template <class T>
 void gsALMCrisfield<T>::quasiNewtonPredictor()
 {
-  computeJacobian();
+  m_jacMat = computeJacobian();
   computeUt(); // rhs does not depend on solution
   computeUbar(); // rhs contains residual and should be computed every time
 
@@ -64,7 +64,7 @@ void gsALMCrisfield<T>::quasiNewtonPredictor()
 template <class T>
 void gsALMCrisfield<T>::quasiNewtonIteration()
 {
-  computeJacobian();
+  m_jacMat = computeJacobian();
   computeUt(); // rhs does not depend on solution
 }
 
@@ -108,7 +108,7 @@ void gsALMCrisfield<T>::initiateStep()
 template <class T>
 void gsALMCrisfield<T>::predictor()
 {
-  computeJacobian();
+  m_jacMat = computeJacobian();
 
   m_deltaUt = this->solveSystem(m_forcing);
 
@@ -160,7 +160,7 @@ void gsALMCrisfield<T>::predictorGuess()
 {
   GISMO_ASSERT(m_Uguess.rows()!=0 && m_Uguess.cols()!=0,"Guess is empty");
 
-  computeJacobian();
+  m_jacMat = computeJacobian();
 
   m_deltaUt = this->solveSystem(m_forcing);
   if (!m_phi_user)
@@ -168,11 +168,11 @@ void gsALMCrisfield<T>::predictorGuess()
   m_note += " phi=" + std::to_string(m_phi);
 
   //
-  m_DeltaUold = (m_Uguess - m_U);
-  m_DeltaLold = (m_Lguess - m_L);
+  m_DeltaUold = -(m_Uguess - m_U);
+  m_DeltaLold = -(m_Lguess - m_L);
 
-  m_DeltaUold *= m_arcLength / math::sqrt( m_deltaU.dot(m_deltaU));
-  m_DeltaLold *= m_arcLength / math::sqrt( m_deltaU.dot(m_deltaU));
+  // m_DeltaUold *= m_arcLength / math::sqrt( m_deltaU.dot(m_deltaU));
+  // m_DeltaLold *= m_arcLength / math::sqrt( m_deltaU.dot(m_deltaU));
 
   computeLambdaMU();
 

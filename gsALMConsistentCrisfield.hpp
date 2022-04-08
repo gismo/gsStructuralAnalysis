@@ -54,7 +54,7 @@ void gsALMConsistentCrisfield<T>::initMethods()
 template <class T>
 void gsALMConsistentCrisfield<T>::quasiNewtonPredictor()
 {
-  computeJacobian();
+  m_jacMat = computeJacobian();
   computeUt(); // rhs does not depend on solution
   computeUbar(); // rhs contains residual and should be computed every time
 
@@ -64,7 +64,7 @@ void gsALMConsistentCrisfield<T>::quasiNewtonPredictor()
 template <class T>
 void gsALMConsistentCrisfield<T>::quasiNewtonIteration()
 {
-  computeJacobian();
+  m_jacMat = computeJacobian();
   computeUt(); // rhs does not depend on solution
 }
 
@@ -99,7 +99,7 @@ void gsALMConsistentCrisfield<T>::initiateStep()
 template <class T>
 void gsALMConsistentCrisfield<T>::predictor()
 {
-  computeJacobian();
+  m_jacMat = computeJacobian();
 
   // Check if the solution on start and prev are similar.
   // Then compute predictor of the method
@@ -137,7 +137,7 @@ void gsALMConsistentCrisfield<T>::predictor()
 template <class T>
 void gsALMConsistentCrisfield<T>::predictorGuess()
 {
-  computeJacobian();
+  m_jacMat = computeJacobian();
 
   // Check if the solution on start and prev are similar.
   // Then compute predictor of the method

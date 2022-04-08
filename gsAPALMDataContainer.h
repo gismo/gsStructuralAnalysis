@@ -30,9 +30,11 @@ public:
 
   ~gsAPALMDataContainer() { }
 
+  gsAPALMDataContainer() { }
+
   gsAPALMDataContainer(const gsAPALMData<T,solution_t> & data)
   {
-    m_container.push_back(data);
+    this->add(data);
   }
 
   bool empty()
@@ -40,14 +42,33 @@ public:
     bool result = true;
     for (typename std::vector<gsAPALMData<T,solution_t>>::iterator it=m_container.begin(); it!=m_container.end(); it++)
       result &= it->empty();
+    return result;
   }
 
-  index_t nBraches()
+  index_t nBranches()
   {
     return m_container.size();
   }
 
   // std::tuple<std::vector<T>,std::vector<solution_t>,std::vector<index_t>> getFlatSolution(index_t level=-1);
+
+  void add(const gsAPALMData<T,solution_t> & data)
+  {
+    m_container.push_back(data);
+  }
+
+  gsAPALMData<T,solution_t> & branch(index_t k)
+  {
+    return m_container.at(k);
+  }
+
+  index_t getFirstNonEmptyBranch()
+  {
+    index_t k=0;
+    while (m_container[k].empty() && (size_t)k < m_container.size())
+      k++;
+    return k;
+  }
 
   void print()
   {
@@ -99,7 +120,7 @@ public:
 
   size_t maxLevel()
   {
-    index_t k=0;
+    size_t k=0;
     for (typename std::vector<gsAPALMData<T,solution_t>>::iterator it=m_container.begin(); it!=m_container.end(); it++)
       k = it->maxLevel() > k ? it->maxLevel() : k;
     return k;

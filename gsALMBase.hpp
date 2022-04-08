@@ -163,7 +163,7 @@ gsVector<T> gsALMBase<T>::solveSystem(const gsVector<T> & F)
 }
 
 template <class T>
-gsSparseMatrix<T> gsALMBase<T>::_computeJacobian(const gsVector<T> U, const gsVector<T> deltaU)
+gsSparseMatrix<T> gsALMBase<T>::_computeJacobian(const gsVector<T> & U, const gsVector<T> & deltaU)
 {
   // Compute Jacobian
   gsSparseMatrix<T> m;
@@ -174,18 +174,26 @@ gsSparseMatrix<T> gsALMBase<T>::_computeJacobian(const gsVector<T> U, const gsVe
 }
 
 template <class T>
-void gsALMBase<T>::computeJacobian(const gsVector<T> U, const gsVector<T> deltaU)
+gsSparseMatrix<T> gsALMBase<T>::computeJacobian(const gsVector<T> & U, const gsVector<T> & deltaU)
 {
-  m_jacMat = _computeJacobian(U,deltaU);
+  return this->_computeJacobian(U,deltaU);
 }
 
 template <class T>
-void gsALMBase<T>::computeJacobian()
+gsSparseMatrix<T> gsALMBase<T>::computeJacobian(const gsVector<T> & U)
+{
+  gsVector<T> DeltaU(U.rows());
+  DeltaU.setZero();
+  return this->computeJacobian(U,DeltaU);
+}
+
+template <class T>
+gsSparseMatrix<T> gsALMBase<T>::computeJacobian()
 {
   // Compute Jacobian
   if (m_deltaU.rows() == 0)
     m_deltaU = gsVector<T>::Zero(m_DeltaU.rows());
-  this->computeJacobian(m_U + m_DeltaU, m_deltaU);
+  return this->computeJacobian(m_U + m_DeltaU, m_deltaU);
 }
 
 template <class T> void gsALMBase<T>::computeUbar() { m_deltaUbar = this->solveSystem(-m_resVec); }
@@ -1063,7 +1071,7 @@ gsMatrix<T> gsALMBase<T>::computeModes(gsVector<T> x, bool jacobian, T shift)
   if (jacobian)
   {
     gsVector<T> dx = gsVector<T>::Zero(x.size());
-    this->computeJacobian(x,dx);
+    m_jacMat = this->computeJacobian(x,dx);
   } // otherwise the jacobian is already computed (on m_U+m_DeltaU)
 
   gsMatrix<T> result;
@@ -1161,7 +1169,7 @@ bool gsALMBase<T>::testSingularPoint(gsVector<T> U, T L, T tol, index_t kmax, bo
   // Initiate m_V and m_DeltaVDET
 
   if (jacobian)
-    this->computeJacobian(m_U,m_deltaU);
+    m_jacMat = this->computeJacobian(m_U,m_deltaU);
 
   m_V = gsVector<T>::Ones(m_numDof);
   m_V.normalize();
@@ -1197,7 +1205,7 @@ void gsALMBase<T>::computeStability(gsVector<T> x, bool jacobian, T shift)
   if (jacobian)
   {
     gsVector<T> dx = gsVector<T>::Zero(x.size());
-    this->computeJacobian(x,dx);
+    m_jacMat = this->computeJacobian(x,dx);
   } // otherwise the jacobian is already computed (on m_U+m_DeltaU)
 
   // gsInfo<<"x = \n"<<x.transpose()<<"\n";
@@ -1284,7 +1292,7 @@ void gsALMBase<T>::extendedSystemSolve(gsVector<T> U, T L, T tol)
   m_L = L;
   gsInfo<<"Extended iterations --- Starting with U.norm = "<<m_U.norm()<<" and L = "<<m_L<<"\n";
 
-  this->computeJacobian(m_U,m_deltaU); // Jacobian evaluated on m_U
+  m_jacMat = this->computeJacobian(m_U,m_deltaU); // Jacobian evaluated on m_U
   m_basisResidualKTPhi = (m_jacMat*m_V).norm();
 
   m_DeltaV = gsVector<T>::Zero(m_numDof);
@@ -1308,7 +1316,7 @@ void gsALMBase<T>::extendedSystemSolve(gsVector<T> U, T L, T tol)
     // m_resVec = m_residualFun(m_U, m_L, m_forcing);
     // m_residue = m_resVec.norm() / ( m_L * m_forcing.norm() );
     // m_residue = (m_jacobian(m_U).toDense()*m_V).norm() / refError;
-    this->computeJacobian(m_U+m_DeltaU,m_deltaU);
+    m_jacMat = this->computeJacobian(m_U+m_DeltaU,m_deltaU);
     m_residueKTPhi = (m_jacMat*(m_V+m_DeltaV)).norm(); // /m_basisResidualKTPhi;
     m_resVec = m_residualFun(m_U+m_DeltaU,m_L+m_DeltaL,m_forcing);
     computeResidualNorms();
@@ -1356,14 +1364,14 @@ template <class T>
 void gsALMBase<T>::extendedSystemIteration()
 {
   m_resVec = m_residualFun(m_U+m_DeltaU, m_L+m_DeltaL, m_forcing);
-  this->computeJacobian(m_U+m_DeltaU,m_deltaU);
+  m_jacMat = this->computeJacobian(m_U+m_DeltaU,m_deltaU);
   // m_jacMat = m_jacobian(m_U);
 
   m_deltaUt = this->solveSystem(m_forcing); // DeltaV1
   m_deltaUbar = this->solveSystem(-m_resVec); // DeltaV2
 
   real_t eps = 1e-8;
-  gsSparseMatrix<T> jacMatEps = m_jacobian((m_U+m_DeltaU) + eps*(m_V+m_DeltaV));
+  gsSparseMatrix<T> jacMatEps = computeJacobian((m_U+m_DeltaU) + eps*(m_V+m_DeltaV));
   m_note += "J"; // mark jacobian computation
   gsVector<T> h1 = 1/eps * ( jacMatEps * m_deltaUt ) - 1/eps * m_forcing;
   gsVector<T> h2 = m_jacMat * (m_V+m_DeltaV) + 1/eps * ( jacMatEps * m_deltaUbar + m_resVec );

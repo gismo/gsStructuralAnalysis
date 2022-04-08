@@ -312,9 +312,10 @@ protected:
     virtual void computeResidualNorms();
 
     /// Compute the jacobian matrix
-    virtual gsSparseMatrix<T> _computeJacobian(const gsVector<T> U, const gsVector<T> dU);
-    virtual void computeJacobian(const gsVector<T> U, const gsVector<T> dU);
-    virtual void computeJacobian();
+    virtual gsSparseMatrix<T> _computeJacobian(const gsVector<T> & U, const gsVector<T> & dU);
+    virtual gsSparseMatrix<T> computeJacobian(const gsVector<T> & U, const gsVector<T> & dU);
+    virtual gsSparseMatrix<T> computeJacobian(const gsVector<T> & U);
+    virtual gsSparseMatrix<T> computeJacobian();
 
     /// Compute the adaptive arc-length
     virtual void computeLength();

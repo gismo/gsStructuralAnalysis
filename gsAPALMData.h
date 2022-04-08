@@ -28,7 +28,10 @@ class gsAPALMData
 
 public:
 
-  ~gsAPALMData() { }
+  ~gsAPALMData()
+  {
+
+  }
 
   /**
    * @brief      Initializes the hierarchy given the first level of solutions
@@ -119,8 +122,8 @@ protected:
   T m_tolerance;
 
   // solution map, stores the solution per parametric value
-  std::map<T,solution_t>       m_solutions;
-  std::map<T,solution_t * >    m_guesses;
+  std::map<T,std::shared_ptr<solution_t>> m_solutions;
+  std::map<T,std::shared_ptr<solution_t>> m_guesses;
   // map that maps GIVEN a parametric value TO a level
   std::map<T,index_t>          m_levels;
 

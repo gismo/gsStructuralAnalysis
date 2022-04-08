@@ -37,7 +37,7 @@ void gsALMRiks<T>::initMethods()
 template <class T>
 void gsALMRiks<T>::quasiNewtonPredictor()
 {
-  computeJacobian();
+  m_jacMat = computeJacobian();
   computeUt(); // rhs does not depend on solution
   computeUbar(); // rhs contains residual and should be computed every time
 
@@ -46,7 +46,7 @@ void gsALMRiks<T>::quasiNewtonPredictor()
 template <class T>
 void gsALMRiks<T>::quasiNewtonIteration()
 {
-  computeJacobian();
+  m_jacMat = computeJacobian();
   computeUt(); // rhs does not depend on solution
 }
 
@@ -95,7 +95,7 @@ void gsALMRiks<T>::initiateStep()
 template <class T>
 void gsALMRiks<T>::predictor()
 {
-  computeJacobian();
+  m_jacMat = computeJacobian();
 
   // Define scaling
   if (m_numDof ==1)
@@ -135,7 +135,7 @@ void gsALMRiks<T>::predictorGuess()
 {
   GISMO_ASSERT(m_Uguess.rows()!=0 && m_Uguess.cols()!=0,"Guess is empty");
 
-  computeJacobian();
+  m_jacMat = computeJacobian();
 
   m_deltaUt = this->solveSystem(m_forcing);
 
@@ -176,7 +176,7 @@ void gsALMRiks<T>::predictorGuess()
 //   {
 //     m_note+= "predictor\t";
 //     T DL = 1.;
-//     computeJacobian();
+//     m_jacMat = computeJacobian();
 //     m_deltaUt = this->solveSystem(m_forcing);
 //     m_deltaU = m_deltaUt / math::sqrt( m_deltaUt.dot(m_deltaUt) + m_DeltaL*DL );
 //     m_deltaL = DL / math::sqrt( m_deltaUt.dot(m_deltaUt) + m_DeltaL*DL );
