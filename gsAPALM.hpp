@@ -235,14 +235,14 @@ void gsAPALM<T>::parallelSolve()
     stepTimes.resize(Nintervals);
     distances.resize(Nintervals+1);
 
-    std::tie(ID,tstart,tend,dL0,start,guess,level) = m_data.branch(branch).pop();
+    std::tie(ID,dL0,start,guess) = m_data.branch(branch).pop();
     std::tie(Uold,Lold) = start;
     std::tie(Uguess,Lguess) = guess;
+    std::tie(tstart,tend) = m_data.branch(branch).jobTimes(ID);
+    level                 = m_data.branch(branch).jobLevel(ID);
 
     gsMatrix<T> Uori = Uold;
     T Lori = Lold;
-
-    gsDebugVar(dL0);
 
     dL0 = dL0 / Nintervals;
     dL  = dL0;
@@ -259,8 +259,9 @@ void gsAPALM<T>::parallelSolve()
 
 
     T s = 0;
+    T time = tstart;
 
-    gsInfo<<"Starting with ID "<<ID<<" from (|U|,L) = ("<<Uold.norm()<<","<<Lold<<"), curve time = "<<tstart<<"\n";
+    gsInfo<<"Starting with ID "<<ID<<" from (|U|,L) = ("<<Uold.norm()<<","<<Lold<<"), curve time = "<<time<<"\n";
     for (index_t k = 0; k!=Nintervals; k++)
     {
       gsDebug<<"Interval "<<k+1<<" of "<<Nintervals<<"\n";
@@ -280,15 +281,15 @@ void gsAPALM<T>::parallelSolve()
       GISMO_ENSURE(m_ALM->converged(),"Loop terminated, arc length method did not converge.\n");
 
       std::pair<gsVector<T>,T> pair = std::make_pair(m_ALM->solutionU(),m_ALM->solutionL());
-      T time = tstart + dL;
       stepSolutions.at(k) = pair;
-      stepTimes.at(k) = time;
       DeltaU = m_ALM->solutionU() - Uold;
       DeltaL = m_ALM->solutionL() - Lold;
 
       distances.at(k) = m_ALM->distance(DeltaU,DeltaL);
 
       s += distances.at(k);
+      time += distances.at(k);
+      stepTimes.at(k) = time;
 
       Uold = m_ALM->solutionU();
       Lold = m_ALM->solutionL();

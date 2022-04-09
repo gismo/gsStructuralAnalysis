@@ -66,8 +66,8 @@ public:
 
   gsOptionList & options() { return m_options; }
 
-  //         ID,      tstart, tend, dt, start     , guess,      level
-  std::tuple<index_t, T     , T   , T , solution_t, solution_t, index_t> pop();
+  //         ID,      dt, start     , guess
+  std::tuple<index_t, T , solution_t, solution_t> pop();
 
   bool getReferenceByTime(T time, solution_t & result);
 
@@ -88,9 +88,11 @@ public:
 
   void finishJob(index_t ID);
 
-  void printActiveJobs();
+  std::pair<T,T> jobTimes(index_t ID);
+  std::pair<T,T> jobPars(index_t ID);
+  index_t jobLevel(index_t ID);
 
-  void removeJob(index_t ID);
+  void printActiveJobs();
 
   bool empty();
 
@@ -102,7 +104,7 @@ public:
 
   void printKnots();
 
-  size_t nActive() { return m_tmp.size(); }
+  size_t nActive() { return m_jobs.size(); }
   size_t nWaiting() { return m_queue.size(); }
 
   size_t maxLevel() { return m_maxLevel; }
@@ -147,8 +149,6 @@ protected:
   mutable index_t                           m_ID = (0);
 
   gsOptionList m_options;
-
-  std::map<index_t,std::vector<T>> m_tmp;
 
 };
 

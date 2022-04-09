@@ -134,7 +134,7 @@ void gsAPALMData<T,solution_t>::init(const std::vector<T> & times,const  std::ve
 }
 
 template <class T, class solution_t >
-std::tuple<index_t, T     , T   , T , solution_t, solution_t, index_t> gsAPALMData<T,solution_t>::pop()
+std::tuple<index_t, T     , solution_t, solution_t> gsAPALMData<T,solution_t>::pop()
 {
   GISMO_ASSERT(m_initialized,"Structure is not initialized");
   GISMO_ASSERT(!m_queue.empty(),"The queue is empty! Something went wrong.");
@@ -159,7 +159,7 @@ std::tuple<index_t, T     , T   , T , solution_t, solution_t, index_t> gsAPALMDa
   m_jobs[m_ID++] = std::make_tuple(xilow,xiupp,level);
   if (m_verbose==2) gsInfo<<"Got active job (ID="<<m_ID-1<<") on interval = ["<<xilow<<","<<xiupp<<"] = ["<<tlow<<","<<tupp<<"] with level "<<level<<"\n";
 
-  return std::make_tuple(m_ID-1,tlow, tupp, dt, start, guess, level);
+  return std::make_tuple(m_ID-1, dt, start, guess);
 }
 
 template <class T, class solution_t >
@@ -341,25 +341,41 @@ void gsAPALMData<T,solution_t>::submit(index_t ID, const std::vector<T> & distan
 }
 
 template <class T, class solution_t >
-void gsAPALMData<T,solution_t>::finishJob(index_t ID)
+std::pair<T,T> gsAPALMData<T,solution_t>::jobTimes(index_t ID)
 {
-  // GISMO_ASSERT(m_tmp[ID].size()==m_steps,"Too early to finish; I only have "<<m_tmp[ID].size()<<" points for ID "<<ID<<" but I need "<<m_steps<<" points");
-  m_tmp.erase(ID);
+  T xilow,xiupp;
+  std::tie(xilow,xiupp,std::ignore) = m_jobs[ID];
+  return std::make_pair(m_tmap[xilow],m_tmap[xiupp]);
+
+}
+
+template <class T, class solution_t >
+std::pair<T,T> gsAPALMData<T,solution_t>::jobPars(index_t ID)
+{
+  T xilow,xiupp;
+  std::tie(xilow,xiupp,std::ignore) = m_jobs[ID];
+  return std::make_pair(xilow,xiupp);
+}
+
+template <class T, class solution_t >
+index_t gsAPALMData<T,solution_t>::jobLevel(index_t ID)
+{
+  index_t level;
+  std::tie(std::ignore,std::ignore,level) = m_jobs[ID];
+  return level;
 }
 
 template <class T, class solution_t >
 void gsAPALMData<T,solution_t>::printActiveJobs()
 {
-  // GISMO_ASSERT(m_tmp[ID].size()==m_steps,"Too early to finish; I only have "<<m_tmp[ID].size()<<" points for ID "<<ID<<" but I need "<<m_steps<<" points");
-  for (typename std::map<index_t,std::vector<T>>::const_iterator it = m_tmp.cbegin(); it!= m_tmp.cend(); it++)
+  for (typename std::map<index_t,std::tuple<T,T,index_t>>::const_iterator it = m_jobs.cbegin(); it!= m_jobs.cend(); it++)
   {
-    std::string tmp = it->second.size()==0 ? "unfinished " : "finished ";
-    gsInfo<<"ID = "<<it->first<<": "<<tmp<<"\n";
+    gsInfo<<"ID = "<<it->first<<": xilow = "<<std::get<0>(it->second)<<"; xiupp = "<<std::get<1>(it->second)<<"; level = "<<std::get<2>(it->second)<<"\n";
   }
 }
 
 template <class T, class solution_t >
-void gsAPALMData<T,solution_t>::removeJob(index_t ID)
+void gsAPALMData<T,solution_t>::finishJob(index_t ID)
 {
   // Remove ID
   if (m_verbose==2) gsInfo<<"Erasing finished job on level = "<<std::get<0>(m_jobs[ID])
