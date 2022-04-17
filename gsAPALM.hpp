@@ -31,6 +31,7 @@ m_dataEmpty(Data)
 template <class T>
 void gsAPALM<T>::_defaultOptions()
 {
+  m_options.addInt("MaxIt","Maximum number of steps",1000);
   m_options.addSwitch("Verbose","Verbosity",false);
   m_options.addInt("SubIntervals","Number of subintervals",2);
   m_options.addSwitch("SingularPoint","Enable singular point detection",false);
@@ -41,6 +42,7 @@ void gsAPALM<T>::_defaultOptions()
 template <class T>
 void gsAPALM<T>::_getOptions()
 {
+  m_maxIterations = m_options.getInt("MaxIt");
   m_verbose = m_options.getSwitch("Verbose");
   m_subIntervals = m_options.getInt("SubIntervals");
   m_singularPoint = m_options.getSwitch("SingularPoint");
@@ -136,8 +138,7 @@ void gsAPALM<T>::serialSolve(index_t Nsteps)
       if (!(m_ALM->converged()))
       {
         if (m_verbose) gsInfo<<"Error: Loop terminated, arc length method did not converge.\n";
-        dL = dL / 2.;
-        m_ALM->setLength(dL);
+        m_ALM->reduceLength();
         m_ALM->setSolution(Uold,Lold);
         bisected = true;
         k -= 1;
@@ -180,8 +181,7 @@ void gsAPALM<T>::serialSolve(index_t Nsteps)
 
       if (!bisected)
       {
-        dL = dL0;
-        m_ALM->setLength(dL);
+        m_ALM->resetLength();
       }
       bisected = false;
       k++;
@@ -210,7 +210,6 @@ void gsAPALM<T>::parallelSolve()
   T tend = 0;
   T dL, dL0;
   index_t it = 0;
-  index_t itmax = 100;
   gsVector<T> DeltaU;
   T DeltaL;
   index_t Nintervals = m_subIntervals;
@@ -226,7 +225,7 @@ void gsAPALM<T>::parallelSolve()
   index_t level;
   index_t branch;
   m_data.print();
-  while (!m_data.empty() && it < itmax)
+  while (!m_data.empty() && it < m_maxIterations)
   {
     branch = m_data.getFirstNonEmptyBranch();
     Nintervals = m_subIntervals;

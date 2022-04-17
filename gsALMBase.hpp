@@ -105,6 +105,20 @@ void gsALMBase<T>::computeLength()
 }
 
 template <class T>
+void gsALMBase<T>::reduceLength(T fac)
+{
+  m_arcLength *= fac;
+}
+
+template <class T>
+void gsALMBase<T>::resetLength()
+{
+  m_arcLength = m_arcLength_prev;
+  if (m_adaptiveLength)
+    computeLength();
+}
+
+template <class T>
 void gsALMBase<T>::computeResidual()
 {
   m_resVec = m_residualFun(m_U + m_DeltaU, m_L + m_DeltaL, m_forcing);

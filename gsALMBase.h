@@ -264,6 +264,12 @@ public:
     /// Switches branches
     virtual void switchBranch();
 
+    /// Reduce the length by multiplication with a factor \a fac
+    virtual void reduceLength(T fac = 0.5);
+
+    /// Reset the length
+    virtual void resetLength();
+
 protected:
     /// Perform an extended system iteration
     virtual void extendedSystemIteration();

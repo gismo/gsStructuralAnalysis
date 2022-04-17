@@ -132,6 +132,8 @@ protected:
   bool m_singularPoint;
   T m_branchLengthMult;
   T m_bifLengthMult;
+
+  index_t m_maxIterations;
 };
 
 }
