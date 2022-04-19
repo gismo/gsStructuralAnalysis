@@ -51,7 +51,8 @@ public:
 
         // initialize variables
         m_numIterations = 0;
-        m_arcLength = m_arcLength_prev = 1e-2;
+        this->defaultOptions();
+        this->setLength(1e-2);
         m_converged = false;
 
         // initialize errors
@@ -70,7 +71,8 @@ public:
 
         // initialize variables
         m_numIterations = 0;
-        m_arcLength = m_arcLength_prev = 1e-2;
+        this->defaultOptions();
+        this->setLength(1e-2);
         m_converged = false;
 
         // initialize errors
@@ -101,14 +103,13 @@ public:
     virtual void setLength(T length)
     {
       m_options.setReal("Length",length);
-      m_arcLength = m_arcLength_prev = m_options.getReal("Length");
+      m_arcLength = m_arcLength_prev = m_arcLength_ori = m_options.getReal("Length");
     }
 
     /// Set arc length to \a length, enables \a adaptive steps
     virtual void setLength(T length, bool adaptive)
     {
-      m_arcLength_prev = m_arcLength;
-      m_arcLength = length;
+      this->setLength(length);
       m_adaptiveLength = adaptive;
       m_desiredIterations = 10; // number of desired iterations defaults to 10
     }
@@ -116,16 +117,14 @@ public:
     /// Set arc length to \a length, enables \a adaptive steps aiming for \a iterations number of iterations per step
     virtual void setLength(T length, bool adaptive, index_t iterations)
     {
-      m_arcLength_prev = m_arcLength;
-      m_arcLength = length;
+      this->setLength(length);
       m_adaptiveLength = adaptive;
       m_desiredIterations = iterations;
     }
     /// Set arc length to \a length, enables adaptive steps aiming for \a iterations number of iterations per step
     virtual void setLength(T length, index_t iterations)
     {
-      m_arcLength_prev = m_arcLength;
-      m_arcLength = length;
+      this->setLength(length);
       m_adaptiveLength = true;
       m_desiredIterations = iterations;
     }
@@ -414,6 +413,7 @@ protected:
     /// Length of the step in the u,f plane
     T m_arcLength;
     T m_arcLength_prev;
+    T m_arcLength_ori;
     bool m_adaptiveLength;
 
     /// Tolerance value to decide convergence
