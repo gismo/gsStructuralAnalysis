@@ -534,7 +534,6 @@ int main (int argc, char** argv)
     mesher.getOptions();
     for (index_t k=0; k<step; k++)
     {
-
       gsArcLengthIterator<real_t>arcLength(Jacobian, ALResidual, Force);
       arcLength.options() = ALMoptions;
       arcLength.applyOptions();
@@ -611,7 +610,7 @@ int main (int argc, char** argv)
         real_t crsTol = 1e-6; // coarsen if error is below
         GISMO_ENSURE(refTol >= crsTol,"Refinement tolerance should be bigger than the coarsen tolerance");
         real_t error = 1;
-        index_t maxIt = 1;
+        index_t maxIt = 5;
 
         for (index_t it = 0; it!=maxIt; it++)
         {
@@ -636,7 +635,6 @@ int main (int argc, char** argv)
             gsInfo << "Solving dual (H), size = "<<assembler->matrixH().rows()<<","<<assembler->matrixH().cols()<<"... "<< std::flush;
             solver.compute(assembler->matrixH());
             solVector = solver.solve(assembler->dualH());
-            gsDebugVar("DUAL");
             assembler->constructMultiPatchH(solVector,dualH);
             gsInfo << "done.\n";
 
@@ -659,18 +657,14 @@ int main (int argc, char** argv)
             mesher.mark(elErrors);
             if (error > refTol)
             {
-                gsDebugVar(mp.patch(0).coefs().rows());
                 gsInfo<<"Error is too big!\n";
                 // mesher.flatten(2);
                 mesher.refine();
-                gsDebugVar(mp.patch(0).coefs().rows());
             }
             else if (error < crsTol)
             {
-                gsDebugVar(mp.patch(0).coefs().rows());
                 gsInfo<<"Error is too small!\n";
                 mesher.unrefine();
-                gsDebugVar(mp.patch(0).coefs().rows());
             }
             else
             {
@@ -708,8 +702,6 @@ int main (int argc, char** argv)
         dUold = assembler->constructSolutionVectorL(dUold_patch);
 
         assembler->constructSolutionL(Uold,mp_def);
-        gsDebugVar(mp_def.patch(0).coefs().rows());
-
 
         assembler->assembleL();
         Force = assembler->primalL();
