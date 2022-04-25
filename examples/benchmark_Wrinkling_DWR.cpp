@@ -114,6 +114,7 @@ int main (int argc, char** argv)
     int numElevate  = 2;
     int numHref     = 5;
     bool plot       = false;
+    bool plotError  = false;
     bool mesh = false;
     bool stress       = false;
     bool SingularPoint = false;
@@ -195,6 +196,7 @@ int main (int argc, char** argv)
     cmd.addSwitch("bifurcation", "Compute singular points and bifurcation paths", SingularPoint);
     cmd.addSwitch("quasi", "Use the Quasi Newton method", quasiNewton);
     cmd.addSwitch("plot", "Plot result in ParaView format", plot);
+    cmd.addSwitch("plotError", "Plot error in ParaView format", plotError);
     cmd.addSwitch("mesh", "Plot mesh?", mesh);
     cmd.addSwitch("stress", "Plot stress in ParaView format", stress);
     cmd.addSwitch("write", "Write output to file", write);
@@ -506,7 +508,6 @@ int main (int argc, char** argv)
     gsInfo<<ALMoptions;
 
     gsParaviewCollection collection(dirname + "/" + output);
-    gsParaviewCollection errors(dirname + "/" + "error");
     gsParaviewCollection Smembrane(dirname + "/" + "membrane");
     gsParaviewCollection Sflexural(dirname + "/" + "flexural");
     gsParaviewCollection Smembrane_p(dirname + "/" + "membrane_p");
@@ -530,7 +531,7 @@ int main (int argc, char** argv)
     mesher.options().setReal("RefineParam",adaptRefParam);
     mesher.options().setInt("CoarsenExtension",crsExt);
     mesher.options().setInt("RefineExtension",refExt);
-    mesher.options().setInt("MaxLevel",4);
+    mesher.options().setInt("MaxLevel",6);
     mesher.getOptions();
     for (index_t k=0; k<step; k++)
     {
@@ -610,8 +611,9 @@ int main (int argc, char** argv)
         real_t crsTol = 1e-6; // coarsen if error is below
         GISMO_ENSURE(refTol >= crsTol,"Refinement tolerance should be bigger than the coarsen tolerance");
         real_t error = 1;
-        index_t maxIt = 5;
+        index_t maxIt = 10;
 
+        gsParaviewCollection errors(dirname + "/" + "error" + util::to_string(k));
         for (index_t it = 0; it!=maxIt; it++)
         {
             gsInfo << "Assembling dual matrix (L)... "<< std::flush;
@@ -643,15 +645,15 @@ int main (int argc, char** argv)
             gsInfo<<"Error = "<<error<<"\n";
             std::vector<real_t> elErrors = assembler->absErrors();
 
-            if (it==0)
+            if (plotError)
             {
                 gsElementErrorPlotter<real_t> err_eh(mp.basis(0),elErrors);
                 const gsField<> elemError_eh( mp.patch(0), err_eh, true );
-                std::string fileName = dirname + "/" + "error" + util::to_string(k);
+                std::string fileName = dirname + "/" + "error" + util::to_string(k) + "_" + util::to_string(it);
                 gsWriteParaview<>(elemError_eh, fileName, 10000,mesh);
-                fileName = "error" + util::to_string(k) + "0";
-                errors.addTimestep(fileName,k,".vts");
-                if (mesh) errors.addTimestep(fileName,k,"_mesh.vtp");
+                fileName = "error" + util::to_string(k)  + "_" + util::to_string(it) + "0";
+                errors.addTimestep(fileName,it,".vts");
+                if (mesh) errors.addTimestep(fileName,it,"_mesh.vtp");
             }
 
             mesher.mark(elErrors);
@@ -681,6 +683,9 @@ int main (int argc, char** argv)
             assembler->setBasisL(basisL);
             assembler->setBasisH(basisH);
         }
+
+        if (plotError)
+            errors.save();
 
         // Project the solution from old mesh to new mesh
         gsMatrix<> coefs;
@@ -802,7 +807,6 @@ int main (int argc, char** argv)
     if (plot)
     {
       collection.save();
-      errors.save();
     }
     if (stress)
     {
