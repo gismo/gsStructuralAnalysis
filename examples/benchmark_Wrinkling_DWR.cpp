@@ -15,6 +15,7 @@
 
 #include <gsKLShell/gsThinShellAssembler.h>
 #include <gsKLShell/gsThinShellAssemblerDWR.h>
+#include <gsKLShell/gsThinShellDWRHelper.h>
 #include <gsKLShell/getMaterialMatrix.h>
 
 // #include <gsThinShell/gsArcLengthIterator.h>
@@ -101,7 +102,7 @@ template <class T>
 void initStepOutput( const std::string name, const gsMatrix<T> & points);
 
 template <class T>
-void writeStepOutput(const gsArcLengthIterator<T> & arcLength, const gsMultiPatch<T> & deformation, const std::string name, const gsMatrix<T> & points, const index_t extreme=-1, const index_t kmax=100);
+void writeStepOutput(const gsMatrix<T> & U, const T L, const T indicator, const gsMultiPatch<T> & deformation, const std::string name, const gsMatrix<T> & points, const index_t extreme=-1, const index_t kmax=100);
 
 void initSectionOutput( const std::string dirname, bool undeformed=false);
 
@@ -454,26 +455,28 @@ int main (int argc, char** argv)
     typedef std::function<gsSparseMatrix<real_t> (gsVector<real_t> const &)>                                Jacobian_t;
     typedef std::function<gsVector<real_t> (gsVector<real_t> const &, real_t, gsVector<real_t> const &) >   ALResidual_t;
     // Function for the Jacobian
-    Jacobian_t Jacobian = [&time,&stopwatch,&assembler,&mp_def](gsVector<real_t> const &x)
+    Jacobian_t Jacobian = [&time,&stopwatch,&assembler](gsVector<real_t> const &x)
     {
-      stopwatch.restart();
-      assembler->constructSolutionL(x,mp_def);
-      assembler->assembleMatrixL(mp_def);
-      time += stopwatch.stop();
+        gsMultiPatch<> def;
+        stopwatch.restart();
+        assembler->constructSolutionL(x,def);
+        assembler->assembleMatrixL(def);
+        time += stopwatch.stop();
 
-      gsSparseMatrix<real_t> m = assembler->matrixL();
-      return m;
+        gsSparseMatrix<real_t> m = assembler->matrixL();
+        return m;
     };
     // Function for the Residual
-    ALResidual_t ALResidual = [&time,&stopwatch,&assembler,&mp_def](gsVector<real_t> const &x, real_t lam, gsVector<real_t> const &force)
+    ALResidual_t ALResidual = [&time,&stopwatch,&assembler](gsVector<real_t> const &x, real_t lam, gsVector<real_t> const &force)
     {
-      stopwatch.restart();
-      assembler->constructSolutionL(x,mp_def);
-      assembler->assemblePrimalL(mp_def);
-      gsVector<real_t> Fint = -(assembler->primalL() - force);
-      gsVector<real_t> result = Fint - lam * force;
-      time += stopwatch.stop();
-      return result; // - lam * force;
+        gsMultiPatch<> def;
+        stopwatch.restart();
+        assembler->constructSolutionL(x,def);
+        assembler->assemblePrimalL(def);
+        gsVector<real_t> Fint = -(assembler->primalL() - force);
+        gsVector<real_t> result = Fint - lam * force;
+        time += stopwatch.stop();
+        return result; // - lam * force;
     };
     // Assemble linear system to obtain the force vector
     assembler->assembleL();
@@ -514,12 +517,17 @@ int main (int argc, char** argv)
     gsMultiPatch<> deformation = mp;
 
     // Make objects for previous solutions
-    real_t Lold = 0, dLold = 0;
-    gsMatrix<> Uold(Force.size(),1), dUold(Force.size(),1);
+    real_t Lold = 0, deltaLold = 0;
+    real_t L = 0, deltaL = 0;
+    gsMatrix<> U(Force.size(),1), deltaU(Force.size(),1);
+    U.setZero();
+    deltaU.setZero();
+    gsMatrix<> Uold(Force.size(),1), deltaUold(Force.size(),1);
     Uold.setZero();
-    dUold.setZero();
+    deltaUold.setZero();
 
     gsMatrix<> solVector;
+    real_t indicator_prev = 0.0;
     real_t indicator = 0.0;
     bool bisected = false;
     real_t dLb0 = dLb;
@@ -533,274 +541,249 @@ int main (int argc, char** argv)
     mesher.options().setInt("RefineExtension",refExt);
     mesher.options().setInt("MaxLevel",6);
     mesher.getOptions();
+
     for (index_t k=0; k<step; k++)
     {
-      gsArcLengthIterator<real_t>arcLength(Jacobian, ALResidual, Force);
-      arcLength.options() = ALMoptions;
-      arcLength.applyOptions();
-      arcLength.initialize();
-      arcLength.setIndicator(indicator); // RESET INDICATOR
-      arcLength.setSolution(Uold,Lold);
-      arcLength.setSolutionStep(Uold,Lold);
-
-      gsInfo<<"Load step "<< k<<"; \tSystem size = "<<Uold.size()<<" x "<<Uold.size()<<"\n";
-      arcLength.step();
-
-      if (!(arcLength.converged()))
-      {
-        gsInfo<<"Error: Loop terminated, arc length method did not converge.\n";
-        dLb = dLb / 2.;
-        arcLength.setLength(dLb);
-        arcLength.setSolution(Uold,Lold);
-        bisected = true;
-        k -= 1;
-        continue;
-      }
-
-      gsInfo<<"indicator = "<<indicator<<"\n";
-      gsInfo<<"indicator = "<<arcLength.indicator()<<"\n";
-
-      if (SingularPoint)
-      {
-        arcLength.computeStability(arcLength.solutionU(),quasiNewton);
-        if (arcLength.stabilityChange())
-        {
-          gsInfo<<"Bifurcation spotted!"<<"\n";
-          arcLength.computeSingularPoint(1e-4, 5, Uold, Lold, 1e-7, 0, false);
-          arcLength.switchBranch();
-          dLb0 = dLb = dL;
-          arcLength.setLength(dLb);
-
-          if (writeP)
-          {
-            gsMultiPatch<> mp_perturbation;
-            assembler->constructSolutionL(arcLength.solutionV(),mp_perturbation);
-            gsWrite(mp_perturbation,dirname + "/" +"perturbation");
-            gsInfo<<"Perturbation written in: " + dirname + "/" + "perturbation.xml\n";
-          }
-          indicator = 0;
-
-          // gsDebugVar(arcLength.solutionU());
-          // gsDebugVar(arcLength.solutionV());
-
-        }
-        else
-          indicator = arcLength.indicator();
-      }
-
-      /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-      // Refinement
-      /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-      if (adaptiveMesh && !arcLength.stabilityChange())
-      {
-        gsMultiPatch<> primalL, dualL, dualH;
-        gsMultiPatch<> Uold_patch, dUold_patch;
-        Uold = arcLength.solutionU();
-        dUold = arcLength.solutionDU();
-        assembler->constructMultiPatchL(Uold,Uold_patch);
-        assembler->constructMultiPatchL(dUold,dUold_patch);
-
-        assembler->constructSolutionL(Uold,mp_def);
-        assembler->constructMultiPatchL(Uold,primalL);
-
-        /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-        // ADAPTIVE MESHING PART
-        /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+        gsInfo<<"Load step "<< k<<"; \tSystem size = "<<Uold.size()<<" x "<<Uold.size()<<"\n";
+        gsParaviewCollection errors(dirname + "/" + "error" + util::to_string(k));
         real_t refTol = 1e-4; // refine if error is above
         real_t crsTol = 1e-6; // coarsen if error is below
         GISMO_ENSURE(refTol >= crsTol,"Refinement tolerance should be bigger than the coarsen tolerance");
         real_t error = 1;
         index_t maxIt = 10;
+        index_t it = 0;
+        bool unstable = false;
 
-        gsParaviewCollection errors(dirname + "/" + "error" + util::to_string(k));
-        for (index_t it = 0; it!=maxIt; it++)
+        gsMultiPatch<> primalL, dualL, dualH;
+        gsMultiPatch<> U_patch, deltaU_patch;
+        gsMultiPatch<> Uold_patch, deltaUold_patch;
+
+        assembler->constructMultiPatchL(Uold,Uold_patch);
+        assembler->constructMultiPatchL(deltaUold,deltaUold_patch);
+
+        while ((error < crsTol || error > refTol) && it < maxIt && !unstable)
         {
-            gsInfo << "Assembling dual matrix (L)... "<< std::flush;
-            assembler->assembleMatrixL(mp_def);
-            gsInfo << "done.\n";
-            gsInfo << "Assembling dual vector (L)... "<< std::flush;
-            assembler->assembleDualL(primalL,mp_def);
-            gsInfo << "done.\n";
-            gsInfo << "Solving dual (L), size = "<<assembler->matrixL().rows()<<","<<assembler->matrixL().cols()<<"... "<< std::flush;
-            solver.compute(assembler->matrixL());
-            solVector = solver.solve(assembler->dualL());
-            assembler->constructMultiPatchL(solVector,dualL);
-            gsInfo << "done.\n";
+            assembler->assembleL();
+            Force = assembler->primalL();
+            Uold = assembler->constructSolutionVectorL(Uold_patch);
+            deltaUold = assembler->constructSolutionVectorL(deltaUold_patch);
 
-            gsInfo << "Assembling dual matrix (H)... "<< std::flush;
-            assembler->assembleMatrixH(mp_def);
-            gsInfo << "done.\n";
-            gsInfo << "Assembling dual vector (H)... "<< std::flush;
-            assembler->assembleDualH(primalL,mp_def);
-            gsInfo << "done.\n";
-            gsInfo << "Solving dual (H), size = "<<assembler->matrixH().rows()<<","<<assembler->matrixH().cols()<<"... "<< std::flush;
-            solver.compute(assembler->matrixH());
-            solVector = solver.solve(assembler->dualH());
-            assembler->constructMultiPatchH(solVector,dualH);
-            gsInfo << "done.\n";
+            gsArcLengthIterator<real_t>arcLength(Jacobian, ALResidual, Force);
+            arcLength.options() = ALMoptions;
+            arcLength.applyOptions();
+            arcLength.initialize();
+            arcLength.setIndicator(indicator); // RESET INDICATOR
+            arcLength.setSolution(Uold,Lold);
+            arcLength.setSolutionStep(deltaUold,deltaLold);
+            arcLength.setLength(dLb);
 
-            assembler->computeErrorElements(dualL,dualH,mp_def);
-            error = std::abs(assembler->error());
-            gsInfo<<"Error = "<<error<<"\n";
-            std::vector<real_t> elErrors = assembler->absErrors();
+            arcLength.step();
 
-            if (plotError)
+            if (!(arcLength.converged()))
             {
-                gsElementErrorPlotter<real_t> err_eh(mp.basis(0),elErrors);
-                const gsField<> elemError_eh( mp.patch(0), err_eh, true );
-                std::string fileName = dirname + "/" + "error" + util::to_string(k) + "_" + util::to_string(it);
-                gsWriteParaview<>(elemError_eh, fileName, 10000,mesh);
-                fileName = "error" + util::to_string(k)  + "_" + util::to_string(it) + "0";
-                errors.addTimestep(fileName,it,".vts");
-                if (mesh) errors.addTimestep(fileName,it,"_mesh.vtp");
+              gsInfo<<"Error: Loop terminated, arc length method did not converge.\n";
+              dLb = dLb / 2.;
+              arcLength.setLength(dLb);
+              arcLength.setSolution(Uold,Lold);
+              bisected = true;
+              k -= 1;
+              continue;
             }
 
-            mesher.mark(elErrors);
-            if (error > refTol)
+            gsInfo<<"indicator = "<<indicator_prev<<"\n";
+            gsInfo<<"indicator = "<<arcLength.indicator()<<"\n";
+
+            if (SingularPoint)
             {
-                gsInfo<<"Error is too big!\n";
-                // mesher.flatten(2);
-                mesher.refine();
-            }
-            else if (error < crsTol)
-            {
-                gsInfo<<"Error is too small!\n";
-                mesher.unrefine();
-            }
-            else
-            {
-                gsInfo<<"Error is in the range "<<crsTol<<" < "<<error<<" < "<<refTol<<"\n";
-                break;
+              arcLength.computeStability(arcLength.solutionU(),quasiNewton);
+              unstable = arcLength.stabilityChange();
+              if (unstable)
+              {
+                gsInfo<<"Bifurcation spotted!"<<"\n";
+                arcLength.computeSingularPoint(1e-4, 5, Uold, Lold, 1e-7, 0, false);
+                arcLength.switchBranch();
+                dLb0 = dLb = dL;
+                arcLength.setLength(dLb);
+
+                if (writeP)
+                {
+                  gsMultiPatch<> mp_perturbation;
+                  assembler->constructSolutionL(arcLength.solutionV(),mp_perturbation);
+                  gsWrite(mp_perturbation,dirname + "/" +"perturbation");
+                  gsInfo<<"Perturbation written in: " + dirname + "/" + "perturbation.xml\n";
+                }
+                indicator = 0;
+
+                // gsDebugVar(arcLength.solutionU());
+                // gsDebugVar(arcLength.solutionV());
+
+              }
             }
 
-            // mp_def = mp;
+            L = arcLength.solutionL();
+            deltaL = arcLength.solutionDL();
+            U = arcLength.solutionU();
+            deltaU = arcLength.solutionDU();
 
-            basisL = gsMultiBasis<>(mp);
-            basisH = basisL;
-            basisH.degreeElevate(1);
+            assembler->constructSolutionL(U,mp_def);
+            assembler->constructMultiPatchL(U,primalL);
 
-            assembler->setBasisL(basisL);
-            assembler->setBasisH(basisH);
+            /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+            // ADAPTIVE MESHING PART
+            /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+            gsThinShellDWRHelper<real_t> helper(assembler);
+
+            {
+                helper.computeError(mp_def,primalL);
+                error = std::abs(helper.error());
+                gsInfo<<"Error = "<<error<<"\n";
+                std::vector<real_t> elErrors = helper.absErrors();
+
+                if (plotError)
+                {
+                    gsElementErrorPlotter<real_t> err_eh(mp.basis(0),elErrors);
+                    const gsField<> elemError_eh( mp.patch(0), err_eh, true );
+                    std::string fileName = dirname + "/" + "error" + util::to_string(k) + "_" + util::to_string(it);
+                    gsWriteParaview<>(elemError_eh, fileName, 10000,mesh);
+                    fileName = "error" + util::to_string(k)  + "_" + util::to_string(it) + "0";
+                    errors.addTimestep(fileName,it,".vts");
+                    if (mesh) errors.addTimestep(fileName,it,"_mesh.vtp");
+                }
+
+                mesher.mark(elErrors);
+                if (error > refTol)
+                {
+                    gsInfo<<"Error is too big!\n";
+                    // mesher.flatten(2);
+                    mesher.refine();
+                }
+                else if (error < crsTol)
+                {
+                    gsInfo<<"Error is too small!\n";
+                    mesher.unrefine();
+                }
+                else
+                {
+                    gsInfo<<"Error is in the range "<<crsTol<<" < "<<error<<" < "<<refTol<<"\n";
+                    break;
+                }
+
+                // mp_def = mp;
+
+                basisL = gsMultiBasis<>(mp);
+                basisH = basisL;
+                basisH.degreeElevate(1);
+
+                assembler->setBasisL(basisL);
+                assembler->setBasisH(basisH);
+
+                // Project the solution from old mesh to new mesh
+                gsMatrix<> coefs;
+
+                gsQuasiInterpolate<real_t>::localIntpl(basisL.basis(0), Uold_patch.patch(0), coefs);
+                Uold_patch.patch(0) = *basisL.basis(0).makeGeometry(give(coefs));
+
+                gsQuasiInterpolate<real_t>::localIntpl(basisL.basis(0), deltaUold_patch.patch(0), coefs);
+                deltaUold_patch.patch(0) = *basisL.basis(0).makeGeometry(give(coefs));
+
+                assembler->setBasisL(basisL);
+                assembler->setBasisH(basisH);
+                assembler->setUndeformed(mp);
+            }
+            it++;
         }
 
         if (plotError)
             errors.save();
 
-        // Project the solution from old mesh to new mesh
-        gsMatrix<> coefs;
+        Uold = U;
+        Lold = L;
+        deltaUold = deltaU;
+        deltaLold = deltaL;
 
-        gsQuasiInterpolate<real_t>::localIntpl(basisL.basis(0), Uold_patch.patch(0), coefs);
-        Uold_patch.patch(0) = *basisL.basis(0).makeGeometry(give(coefs));
+        indicator_prev = indicator;
 
-        gsQuasiInterpolate<real_t>::localIntpl(basisL.basis(0), dUold_patch.patch(0), coefs);
-        dUold_patch.patch(0) = *basisL.basis(0).makeGeometry(give(coefs));
+        /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-        assembler->setBasisL(basisL);
-        assembler->setBasisH(basisH);
-        assembler->setUndeformed(mp);
+        /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-        gsDebugVar(basisL.basis(0));
-        gsDebugVar(basisH.basis(0));
+        assembler->constructSolutionL(U,mp_def);
+        deformation = mp_def;
 
-        Uold = assembler->constructSolutionVectorL(Uold_patch);
-        dUold = assembler->constructSolutionVectorL(dUold_patch);
+        deformation.patch(0).coefs() -= mp.patch(0).coefs();// assuming 1 patch here
 
-        assembler->constructSolutionL(Uold,mp_def);
+        gsInfo<<"Total ellapsed assembly time: "<<time<<" s\n";
 
-        assembler->assembleL();
-        Force = assembler->primalL();
-    }
-    else
-    {
-        solVector = arcLength.solutionU();
-        Uold = solVector;
-        Lold = arcLength.solutionL();
-        dUold = arcLength.solutionDU();
-        dLold = arcLength.solutionDL();
-        assembler->constructSolutionL(solVector,mp_def);
-    }
+        if (plot)
+        {
+            gsField<> solField;
+            if (deformed)
+              solField= gsField<>(mp_def,deformation);
+            else
+              solField= gsField<>(mp,deformation);
 
-    /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+            std::string fileName = dirname + "/" + output + util::to_string(k);
+            gsWriteParaview<>(solField, fileName, 1000,mesh);
+            fileName = output + util::to_string(k) + "0";
+            collection.addTimestep(fileName,k,".vts");
+            if (mesh) collection.addTimestep(fileName,k,"_mesh.vtp");
+        }
+        if (stress)
+        {
+            gsField<> membraneStress, flexuralStress, membraneStress_p;
 
-    /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+            gsPiecewiseFunction<> membraneStresses;
+            assembler->constructStress(mp_def,membraneStresses,stress_type::membrane);
+            if (deformed)
+              membraneStress = gsField<>(mp_def,membraneStresses,true);
+            else
+              membraneStress = gsField<>(mp,membraneStresses,true);
 
-    deformation = mp_def;
+            gsPiecewiseFunction<> flexuralStresses;
+            assembler->constructStress(mp_def,flexuralStresses,stress_type::flexural);
+            if (deformed)
+              flexuralStress = gsField<>(mp_def,flexuralStresses, true);
+            else
+              flexuralStress = gsField<>(mp,flexuralStresses, true);
 
-    deformation.patch(0).coefs() -= mp.patch(0).coefs();// assuming 1 patch here
+            gsPiecewiseFunction<> membraneStresses_p;
+            assembler->constructStress(mp_def,membraneStresses_p,stress_type::principal_stress_membrane);
+            if (deformed)
+              membraneStress_p = gsField<>(mp_def,membraneStresses_p, true);
+            else
+              membraneStress_p = gsField<>(mp,membraneStresses_p, true);
 
-    gsInfo<<"Total ellapsed assembly time: "<<time<<" s\n";
+            std::string fileName;
+            fileName = dirname + "/" + "membrane" + util::to_string(k);
+            gsWriteParaview( membraneStress, fileName, 1000);
+            fileName = "membrane" + util::to_string(k) + "0";
+            Smembrane.addTimestep(fileName,k,".vts");
 
-    if (plot)
-    {
-        gsField<> solField;
-        if (deformed)
-          solField= gsField<>(mp_def,deformation);
-        else
-          solField= gsField<>(mp,deformation);
+            fileName = dirname + "/" + "flexural" + util::to_string(k);
+            gsWriteParaview( flexuralStress, fileName, 1000);
+            fileName = "flexural" + util::to_string(k) + "0";
+            Sflexural.addTimestep(fileName,k,".vts");
 
-        std::string fileName = dirname + "/" + output + util::to_string(k);
-        gsWriteParaview<>(solField, fileName, 1000,mesh);
-        fileName = output + util::to_string(k) + "0";
-        collection.addTimestep(fileName,k,".vts");
-        if (mesh) collection.addTimestep(fileName,k,"_mesh.vtp");
-    }
-    if (stress)
-    {
-        gsField<> membraneStress, flexuralStress, membraneStress_p;
-
-        gsPiecewiseFunction<> membraneStresses;
-        assembler->constructStress(mp_def,membraneStresses,stress_type::membrane);
-        if (deformed)
-          membraneStress = gsField<>(mp_def,membraneStresses,true);
-        else
-          membraneStress = gsField<>(mp,membraneStresses,true);
-
-        gsPiecewiseFunction<> flexuralStresses;
-        assembler->constructStress(mp_def,flexuralStresses,stress_type::flexural);
-        if (deformed)
-          flexuralStress = gsField<>(mp_def,flexuralStresses, true);
-        else
-          flexuralStress = gsField<>(mp,flexuralStresses, true);
-
-        gsPiecewiseFunction<> membraneStresses_p;
-        assembler->constructStress(mp_def,membraneStresses_p,stress_type::principal_stress_membrane);
-        if (deformed)
-          membraneStress_p = gsField<>(mp_def,membraneStresses_p, true);
-        else
-          membraneStress_p = gsField<>(mp,membraneStresses_p, true);
-
-        std::string fileName;
-        fileName = dirname + "/" + "membrane" + util::to_string(k);
-        gsWriteParaview( membraneStress, fileName, 1000);
-        fileName = "membrane" + util::to_string(k) + "0";
-        Smembrane.addTimestep(fileName,k,".vts");
-
-        fileName = dirname + "/" + "flexural" + util::to_string(k);
-        gsWriteParaview( flexuralStress, fileName, 1000);
-        fileName = "flexural" + util::to_string(k) + "0";
-        Sflexural.addTimestep(fileName,k,".vts");
-
-        fileName = dirname + "/" + "membrane_p" + util::to_string(k);
-        gsWriteParaview( membraneStress_p, fileName, 1000);
-        fileName = "membrane_p" + util::to_string(k) + "0";
-        Smembrane_p.addTimestep(fileName,k,".vts");
-    }
+            fileName = dirname + "/" + "membrane_p" + util::to_string(k);
+            gsWriteParaview( membraneStress_p, fileName, 1000);
+            fileName = "membrane_p" + util::to_string(k) + "0";
+            Smembrane_p.addTimestep(fileName,k,".vts");
+        }
 
 
 
-    if (write)
-        writeStepOutput(arcLength,deformation, dirname + "/" + wn, writePoints,1, 201);
+        if (write)
+            writeStepOutput(U,L,indicator,deformation, dirname + "/" + wn, writePoints,1, 201);
 
-    if (crosssection && cross_coordinate!=-1)
-        writeSectionOutput(deformation,dirname,cross_coordinate,cross_val,201,false);
+        if (crosssection && cross_coordinate!=-1)
+            writeSectionOutput(deformation,dirname,cross_coordinate,cross_val,201,false);
 
-    if (!bisected)
-    {
-        dLb = dLb0;
-        arcLength.setLength(dLb);
-    }
-    bisected = false;
+        // if (!bisected)
+        // {
+        //     dLb = dLb0;
+        //     arcLength.setLength(dLb);
+        // }
+        // bisected = false;
 
     }
 
@@ -932,7 +915,7 @@ void initStepOutput(const std::string name, const gsMatrix<T> & points)
 }
 
 template <class T>
-void writeStepOutput(const gsArcLengthIterator<T> & arcLength, const gsMultiPatch<T> & deformation, const std::string name, const gsMatrix<T> & points, const index_t extreme, const index_t kmax) // extreme: the column of point indices to compute the extreme over (default -1)
+void writeStepOutput(const gsMatrix<T> & U, const T L, const T indicator, const gsMultiPatch<T> & deformation, const std::string name, const gsMatrix<T> & points, const index_t extreme, const index_t kmax) // extreme: the column of point indices to compute the extreme over (default -1)
 {
   gsMatrix<T> P(2,1), Q(2,1);
   gsMatrix<T> out(3,points.cols());
@@ -950,7 +933,7 @@ void writeStepOutput(const gsArcLengthIterator<T> & arcLength, const gsMultiPatc
   if (extreme==-1)
   {
     file  << std::setprecision(6)
-          << arcLength.solutionU().norm() << ",";
+          << U.norm() << ",";
           for (index_t p=0; p!=points.cols(); p++)
           {
             file<< out(0,p) << ","
@@ -958,8 +941,8 @@ void writeStepOutput(const gsArcLengthIterator<T> & arcLength, const gsMultiPatc
                 << out(2,p) << ",";
           }
 
-    file  << arcLength.solutionL() << ","
-          << arcLength.indicator() << ","
+    file  << L << ","
+          << indicator << ","
           << "\n";
   }
   else if (extreme==0 || extreme==1)
@@ -977,7 +960,7 @@ void writeStepOutput(const gsArcLengthIterator<T> & arcLength, const gsMultiPatc
     }
 
     file  << std::setprecision(6)
-          << arcLength.solutionU().norm() << ",";
+          << U.norm() << ",";
           for (index_t p=0; p!=points.cols(); p++)
           {
             file<< out(0,p) << ","
@@ -985,8 +968,8 @@ void writeStepOutput(const gsArcLengthIterator<T> & arcLength, const gsMultiPatc
                 << std::max(abs(out2.col(p).maxCoeff()),abs(out2.col(p).minCoeff())) << ",";
           }
 
-    file  << arcLength.solutionL() << ","
-          << arcLength.indicator() << ","
+    file  << L << ","
+          << indicator << ","
           << "\n";
   }
   else
