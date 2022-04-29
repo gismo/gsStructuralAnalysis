@@ -539,7 +539,8 @@ int main (int argc, char** argv)
     mesher.options().setReal("RefineParam",adaptRefParam);
     mesher.options().setInt("CoarsenExtension",crsExt);
     mesher.options().setInt("RefineExtension",refExt);
-    mesher.options().setInt("MaxLevel",6);
+    mesher.options().setInt("MaxLevel",3);
+    mesher.options().setInt("Verbose",1);
     mesher.getOptions();
 
     for (index_t k=0; k<step; k++)
@@ -561,7 +562,9 @@ int main (int argc, char** argv)
         assembler->constructMultiPatchL(Uold,Uold_patch);
         assembler->constructMultiPatchL(deltaUold,deltaUold_patch);
 
-        while ((error < crsTol || error > refTol) && it < maxIt && !unstable)
+        bool refined = true;
+        bool coarsened = true;
+        while ((error < crsTol || error > refTol) && it < maxIt && !unstable && (refined || coarsened))
         {
             assembler->assembleL();
             Force = assembler->primalL();
@@ -576,6 +579,8 @@ int main (int argc, char** argv)
             arcLength.setSolution(Uold,Lold);
             arcLength.setSolutionStep(deltaUold,deltaLold);
             arcLength.setLength(dLb);
+
+            gsInfo<<"Basis = "<<mp.basis(0)<<"\n";
 
             arcLength.step();
 
@@ -651,16 +656,17 @@ int main (int argc, char** argv)
                 }
 
                 mesher.mark(elErrors);
+                gsDebugVar(mp.basis(0).numElements());
                 if (error > refTol)
                 {
                     gsInfo<<"Error is too big!\n";
                     // mesher.flatten(2);
-                    mesher.refine();
+                    refined = mesher.refine();
                 }
                 else if (error < crsTol)
                 {
                     gsInfo<<"Error is too small!\n";
-                    mesher.unrefine();
+                    coarsened = mesher.unrefine();
                 }
                 else
                 {
