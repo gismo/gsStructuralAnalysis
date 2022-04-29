@@ -577,6 +577,7 @@ int main (int argc, char** argv)
             arcLength.setSolutionStep(deltaUold,deltaLold);
             arcLength.setLength(dLb);
 
+	    gsInfo<<"Starting from U.norm()="<<Uold.norm()<<", L="<<Lold<<"\n";
             arcLength.step();
 
             if (!(arcLength.converged()))
@@ -613,6 +614,13 @@ int main (int argc, char** argv)
                   gsInfo<<"Perturbation written in: " + dirname + "/" + "perturbation.xml\n";
                 }
                 indicator = 0;
+
+		L = arcLength.solutionL();
+	        deltaL = arcLength.solutionDL();
+                U = arcLength.solutionU();
+                deltaU = arcLength.solutionDU();
+		break;
+
 
                 // gsDebugVar(arcLength.solutionU());
                 // gsDebugVar(arcLength.solutionV());
