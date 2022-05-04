@@ -141,7 +141,6 @@ void gsAPALM<T>::serialSolve(index_t Nsteps)
         m_ALM->reduceLength();
         m_ALM->setSolution(Uold,Lold);
         bisected = true;
-        k -= 1;
         continue;
       }
 
@@ -204,7 +203,7 @@ void gsAPALM<T>::serialSolve(index_t Nsteps)
 template <class T>
 void gsAPALM<T>::parallelSolve()
 {
-  solution_t start, guess, reference;
+  solution_t start, prev, next, reference;
   index_t ID;
   T tstart = 0;
   T tend = 0;
@@ -220,8 +219,8 @@ void gsAPALM<T>::parallelSolve()
   bool bisected = false;
   T dL_rem = 0;
 
-  T Lguess, Lold;
-  gsMatrix<T> Uguess,Uold;
+  T Lprev, Lnext, Lold;
+  gsMatrix<T> Uprev, Unext,Uold;
   index_t level;
   index_t branch;
   m_data.print();
@@ -234,9 +233,10 @@ void gsAPALM<T>::parallelSolve()
     stepTimes.resize(Nintervals);
     distances.resize(Nintervals+1);
 
-    std::tie(ID,dL0,start,guess) = m_data.branch(branch).pop();
+    std::tie(ID,dL0,start,prev,next) = m_data.branch(branch).pop();
     std::tie(Uold,Lold) = start;
-    std::tie(Uguess,Lguess) = guess;
+    std::tie(Uprev,Lprev) = prev;
+    std::tie(Unext,Lnext) = next;
     std::tie(tstart,tend) = m_data.branch(branch).jobTimes(ID);
     level                 = m_data.branch(branch).jobLevel(ID);
 
@@ -249,12 +249,13 @@ void gsAPALM<T>::parallelSolve()
     m_ALM->setLength(dL);
     m_ALM->setSolution(Uold,Lold);
     // m_ALM->resetStep();
-    m_ALM->setPrevious(Uguess,Lguess);
+    m_ALM->setPrevious(Uprev,Lprev);
     gsDebug<<"Start - ||u|| = "<<Uold.norm()<<", L = "<<Lold<<"\n";
-    gsDebug<<"Guess - ||u|| = "<<Uguess.norm()<<", L = "<<Lguess<<"\n";
+    gsDebug<<"Prev  - ||u|| = "<<Uprev.norm()<<", L = "<<Lprev<<"\n";
+    gsDebug<<"Next  - ||u|| = "<<Unext.norm()<<", L = "<<Lnext<<"\n";
 
-    gsVector<T> tmpU = Uold-Uguess;
-    T tmpL = Lold-Lguess;
+    gsVector<T> tmpU = Uold-Uprev;
+    T tmpL = Lold-Lprev;
 
 
     T s = 0;
@@ -332,6 +333,8 @@ void gsAPALM<T>::parallelSolve()
     DeltaU = stepSolutions.back().first - Uori;
     DeltaL = stepSolutions.back().second - Lori;
     lowerDistance = m_ALM->distance(DeltaU,DeltaL);
+
+    if (upperDistance > 0.1)
 
   /////////////////////////////////////////////////////////////////////////////////////////////
   /////////////////////////////////////////////////////////////////////////////////////////////

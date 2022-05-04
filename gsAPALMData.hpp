@@ -107,16 +107,20 @@ void gsAPALMData<T,solution_t>::setData(const std::vector<T> & times,const  std:
   auto sol0 = std::make_shared<solution_t>(solutions.at(0));
   m_solutions.insert({m_xi.at(0),sol0});
   m_levels.insert({m_xi.at(0),0});
-  auto guess0 = std::make_shared<solution_t>(*(m_solutions[m_xi.at(0)]).get());
-  m_guesses  .insert({m_xi.at(0),guess0});
+  auto prev0 = std::make_shared<solution_t>(*(m_solutions[m_xi.at(0)]).get());
+  m_prevs  .insert({m_xi.at(0),prev0});
   for (size_t k=1; k!=m_xi.size(); ++k)
   {
     auto solk = std::make_shared<solution_t>(solutions.at(k));
     m_solutions.insert({m_xi.at(k),solk});
     m_levels.insert({m_xi.at(k),0});
-    auto guessk = std::make_shared<solution_t>(*(m_solutions[m_xi.at(k-1)]).get());
-    m_guesses  .insert({m_xi.at(k),guessk});
+    auto prevk = std::make_shared<solution_t>(*(m_solutions[m_xi.at(k-1)]).get());
+    m_prevs .insert({m_xi.at(k),prevk});
+    auto nextk = std::make_shared<solution_t>(*(m_solutions[m_xi.at(k)]).get());
+    m_nexts .insert({m_xi.at(k-1),nextk});
   }
+  auto nextN = std::make_shared<solution_t>(*(m_solutions[m_xi.last()]).get());
+  m_nexts  .insert({m_xi.last(),nextN});
 }
 
 // template <class T, class solution_t >
@@ -134,7 +138,7 @@ void gsAPALMData<T,solution_t>::init(const std::vector<T> & times,const  std::ve
 }
 
 template <class T, class solution_t >
-std::tuple<index_t, T     , solution_t, solution_t> gsAPALMData<T,solution_t>::pop()
+std::tuple<index_t, T     , solution_t, solution_t, solution_t> gsAPALMData<T,solution_t>::pop()
 {
   GISMO_ASSERT(m_initialized,"Structure is not initialized");
   GISMO_ASSERT(!m_queue.empty(),"The queue is empty! Something went wrong.");
@@ -149,17 +153,19 @@ std::tuple<index_t, T     , solution_t, solution_t> gsAPALMData<T,solution_t>::p
   T dt  = (tupp-tlow);
 
   GISMO_ASSERT(m_solutions.count(xilow)!=0,"Cannot find start point at tstart = "<<tlow<<"\n");
-  GISMO_ASSERT(m_guesses  .count(xilow)!=0,"Cannot find end point at tend = "<<tupp<<"\n");
+  GISMO_ASSERT(m_prevs  .count(xilow)!=0,"Cannot find previous solution for tstart = "<<tlow<<"\n");
+  GISMO_ASSERT(m_nexts  .count(xilow)!=0,"Cannot find previous solution for tstart = "<<tlow<<"\n");
 
   solution_t start = *(m_solutions[xilow].get());
 
-  solution_t guess = *(m_guesses[xilow].get());
+  solution_t prev = *(m_prevs[xilow].get());
+  solution_t next = *(m_nexts[xilow].get());
 
   // add the job to the active jobs
   m_jobs[m_ID++] = std::make_tuple(xilow,xiupp,level);
   if (m_verbose==2) gsInfo<<"Got active job (ID="<<m_ID-1<<") on interval = ["<<xilow<<","<<xiupp<<"] = ["<<tlow<<","<<tupp<<"] with level "<<level<<"\n";
 
-  return std::make_tuple(m_ID-1, dt, start, guess);
+  return std::make_tuple(m_ID-1, dt, start, prev, next);
 }
 
 template <class T, class solution_t >
@@ -331,12 +337,17 @@ void gsAPALMData<T,solution_t>::submit(index_t ID, const std::vector<T> & distan
     m_levels[xi.at(k)] = level;
   }
 
-  // The guess for the first computed point (xi[1]) is the solution on xi[0]
-  m_guesses[xi.at(1)] = std::make_shared<solution_t>(*(m_solutions[xi.at(0)].get()));
-  for (size_t k=2; k!=xi.size(); k++) // add only INTERIOR solutions
+  // The previous solution for the first computed point (xi[1]) is the solution on xi[0]
+  for (size_t k=1; k!=xi.size()-1; k++) // add only INTERIOR solutions
   {
-    if (m_verbose==2) gsInfo<<"Added a guess on time = "<<m_tmap[xi.at(k)]<<" (parametric time = "<<xi.at(k)<<")\n";
-    m_guesses[xi.at(k)] = std::make_shared<solution_t>(*(m_solutions[xi.at(k-1)].get()));
+    if (m_verbose==2) gsInfo<<"Added a previous solution on time = "<<m_tmap[xi.at(k)]<<" (parametric time = "<<xi.at(k)<<")\n";
+    m_prevs[xi.at(k)] = std::make_shared<solution_t>(*(m_solutions[xi.at(k-1)].get()));
+  }
+
+  for (size_t k=1; k!=xi.size()-1; k++) // add only INTERIOR solutions
+  {
+    if (m_verbose==2) gsInfo<<"Added a next solution on time = "<<m_tmap[xi.at(k)]<<" (parametric time = "<<xi.at(k)<<")\n";
+    m_nexts[xi.at(k)] = std::make_shared<solution_t>(*(m_solutions[xi.at(k+1)].get()));
   }
 }
 
@@ -412,7 +423,10 @@ std::tuple<std::vector<T>,std::vector<solution_t>,std::vector<index_t>> gsAPALMD
       times.push_back(m_tmap[it->first]);
       solutions.push_back(*(it->second.get()));
       levels.push_back(m_levels[it->first]);
+      gsDebugVar(it->first);
+      gsDebugVar(m_tmap[it->first]);
     }
+
   }
 
   return std::make_tuple(times,solutions,levels);

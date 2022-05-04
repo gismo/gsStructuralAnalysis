@@ -66,8 +66,8 @@ public:
 
   gsOptionList & options() { return m_options; }
 
-  //         ID,      dt, start     , guess
-  std::tuple<index_t, T , solution_t, solution_t> pop();
+  //         ID,      dt, start     , next      , prev
+  std::tuple<index_t, T , solution_t, solution_t, solution_t> pop();
 
   bool getReferenceByTime(T time, solution_t & result);
 
@@ -125,7 +125,8 @@ protected:
 
   // solution map, stores the solution per parametric value
   std::map<T,std::shared_ptr<solution_t>> m_solutions;
-  std::map<T,std::shared_ptr<solution_t>> m_guesses;
+  std::map<T,std::shared_ptr<solution_t>> m_nexts;
+  std::map<T,std::shared_ptr<solution_t>> m_prevs;
   // map that maps GIVEN a parametric value TO a level
   std::map<T,index_t>          m_levels;
 

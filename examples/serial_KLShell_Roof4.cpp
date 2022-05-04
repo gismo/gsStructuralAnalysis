@@ -295,9 +295,13 @@ int main (int argc, char** argv)
   Gs[0] = Gs[1] = Gs[2] = &Gfun;
 
   gsConstantFunction<> phi1,phi2,phi3;
-  phi1.setValue(pi/2,3);
-  phi2.setValue(0,3);
-  phi3.setValue(pi/2,3);
+  // phi1.setValue(pi/2,3);
+  // phi2.setValue(0,3);
+  // phi3.setValue(pi/2,3);
+
+  phi1.setValue(0,3);
+  phi2.setValue(pi/2,3);
+  phi3.setValue(0,3);
 
   Phis[0] = &phi1;
   Phis[1] = &phi2;
@@ -446,7 +450,7 @@ int main (int argc, char** argv)
     gsField<> solField;
     gsMultiPatch<> mp_tmp;
     std::vector<std::string> pointheaders = {"u_x","u_y","u_z"};
-    std::vector<std::string> otherheaders = {"lambda","level"};
+    std::vector<std::string> otherheaders = {"lambda","time","level"};
 
     gsParaviewCollection dataCollection(dirname + "/" + "data_serial");
     gsStructuralAnalysisOutput<real_t> data(dirname + "/data_serial.csv",refPoints);
@@ -466,12 +470,12 @@ int main (int argc, char** argv)
       if (write)
         if (refPoints.cols()!=0)
         {
-            gsVector<> otherData(2);
-            otherData<<Lold,levels[k];
-            gsMatrix<> pointResults(mp.geoDim(),refPoints.cols());
-            for (index_t p=0; p!=refPoints.cols(); p++)
-                pointResults.col(p) = solField.value(refPoints.col(p),refPatches(0,p));
-            data.add(pointResults,otherData);
+          gsVector<> otherData(3);
+          otherData<<Lold,times[k],levels[k];
+          gsMatrix<> pointResults(mp.geoDim(),refPoints.cols());
+          for (index_t p=0; p!=refPoints.cols(); p++)
+              pointResults.col(p) = solField.value(refPoints.col(p),refPatches(0,p));
+          data.add(pointResults,otherData);
         }
 
       if (plot)
@@ -517,7 +521,7 @@ int main (int argc, char** argv)
     gsField<> solField;
     gsMultiPatch<> mp_tmp;
     std::vector<std::string> pointheaders = {"u_x","u_y","u_z"};
-    std::vector<std::string> otherheaders = {"lambda","level"};
+    std::vector<std::string> otherheaders = {"lambda","time","level"};
 
     gsParaviewCollection dataCollection2(dirname + "/" + "data_parallel");
     gsStructuralAnalysisOutput<real_t> data2(dirname + "/data_parallel.csv",refPoints);
@@ -537,8 +541,8 @@ int main (int argc, char** argv)
       if (write)
         if (refPoints.cols()!=0)
         {
-          gsVector<> otherData(2);
-          otherData<<Lold,levels[k];
+          gsVector<> otherData(3);
+          otherData<<Lold,times[k],levels[k];
           gsMatrix<> pointResults(mp.geoDim(),refPoints.cols());
           for (index_t p=0; p!=refPoints.cols(); p++)
               pointResults.col(p) = solField.value(refPoints.col(p),refPatches(0,p));

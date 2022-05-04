@@ -232,9 +232,12 @@ int main (int argc, char** argv)
     Gs[0] = Gs[1] = Gs[2] = &Gfun;
 
     gsConstantFunction<> phi1,phi2,phi3;
-    phi1.setValue(pi/2,3);
-    phi2.setValue(0,3);
-    phi3.setValue(pi/2,3);
+    // phi1.setValue(pi/2,3);
+    // phi2.setValue(0,3);
+    // phi3.setValue(pi/2,3);
+    phi1.setValue(0,3);
+    phi2.setValue(pi/2,3);
+    phi3.setValue(0,3);
 
     Phis[0] = &phi1;
     Phis[1] = &phi2;
