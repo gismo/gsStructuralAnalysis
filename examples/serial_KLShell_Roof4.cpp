@@ -56,7 +56,7 @@ public:
     gsMultiPatch<T> deformation,mp_tmp, mp;
     deformation = mp = m_assembler->geometry();
     std::vector<std::string> pointheaders = {"u_x","u_y","u_z"};
-    std::vector<std::string> otherheaders = {"lambda","level"};
+    std::vector<std::string> otherheaders = {"U-norm","lambda","time","level"};
 
     data.init(pointheaders,otherheaders);
 
@@ -69,8 +69,8 @@ public:
 
       if (m_refPoints.cols()!=0)
       {
-          gsVector<> otherData(2);
-          otherData<<stepSolutions[k].second,level;
+          gsVector<> otherData(4);
+          otherData<<stepSolutions[k].first.norm(),stepSolutions[k].second,stepTimes[k],level;
           gsMatrix<> pointResults(mp.geoDim(),m_refPoints.cols());
           for (index_t p=0; p!=m_refPoints.cols(); p++)
               pointResults.col(p) = solField.value(m_refPoints.col(p),m_refPatches.at(p));
@@ -450,7 +450,7 @@ int main (int argc, char** argv)
     gsField<> solField;
     gsMultiPatch<> mp_tmp;
     std::vector<std::string> pointheaders = {"u_x","u_y","u_z"};
-    std::vector<std::string> otherheaders = {"lambda","time","level"};
+    std::vector<std::string> otherheaders = {"U-norm","lambda","time","level"};
 
     gsParaviewCollection dataCollection(dirname + "/" + "data_serial");
     gsStructuralAnalysisOutput<real_t> data(dirname + "/data_serial.csv",refPoints);
@@ -470,8 +470,8 @@ int main (int argc, char** argv)
       if (write)
         if (refPoints.cols()!=0)
         {
-          gsVector<> otherData(3);
-          otherData<<Lold,times[k],levels[k];
+          gsVector<> otherData(4);
+          otherData<<Uold.norm(),Lold,times[k],levels[k];
           gsMatrix<> pointResults(mp.geoDim(),refPoints.cols());
           for (index_t p=0; p!=refPoints.cols(); p++)
               pointResults.col(p) = solField.value(refPoints.col(p),refPatches(0,p));
@@ -521,7 +521,7 @@ int main (int argc, char** argv)
     gsField<> solField;
     gsMultiPatch<> mp_tmp;
     std::vector<std::string> pointheaders = {"u_x","u_y","u_z"};
-    std::vector<std::string> otherheaders = {"lambda","time","level"};
+    std::vector<std::string> otherheaders = {"U-norm","lambda","time","level"};
 
     gsParaviewCollection dataCollection2(dirname + "/" + "data_parallel");
     gsStructuralAnalysisOutput<real_t> data2(dirname + "/data_parallel.csv",refPoints);
@@ -541,8 +541,8 @@ int main (int argc, char** argv)
       if (write)
         if (refPoints.cols()!=0)
         {
-          gsVector<> otherData(3);
-          otherData<<Lold,times[k],levels[k];
+          gsVector<> otherData(4);
+          otherData<<Uold.norm(),Lold,times[k],levels[k];
           gsMatrix<> pointResults(mp.geoDim(),refPoints.cols());
           for (index_t p=0; p!=refPoints.cols(); p++)
               pointResults.col(p) = solField.value(refPoints.col(p),refPatches(0,p));

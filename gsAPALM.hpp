@@ -261,6 +261,8 @@ void gsAPALM<T>::parallelSolve()
     T s = 0;
     T time = tstart;
 
+    gsDebugVar(dL);
+
     gsInfo<<"Starting with ID "<<ID<<" from (|U|,L) = ("<<Uold.norm()<<","<<Lold<<"), curve time = "<<time<<"\n";
     for (index_t k = 0; k!=Nintervals; k++)
     {
@@ -318,6 +320,7 @@ void gsAPALM<T>::parallelSolve()
 
     bool success = m_data.branch(branch).getReferenceByID(ID,reference);
     GISMO_ASSERT(success,"Reference not found");
+    gsDebug<<"Ref   - ||u|| = "<<reference.first.norm()<<", L = "<<reference.second<<"\n";
 
     GISMO_ASSERT((reference.first.normalized()).dot(m_ALM->solutionU().normalized())>-0.8,
                   "Reference is almost in the opposite direction of the solution. Are branches mirrored? result:" << (reference.first.normalized()).dot(m_ALM->solutionU().normalized()));
@@ -343,6 +346,13 @@ void gsAPALM<T>::parallelSolve()
 
     m_data.branch(branch).submit(ID,distances,stepSolutions,upperDistance,lowerDistance);
     m_data.branch(branch).finishJob(ID);
+
+    std::pair<gsVector<T>,T> front = std::make_pair(start.first,start.second);
+    stepSolutions.insert(stepSolutions.begin(),front);
+    std::pair<gsVector<T>,T> back  = std::make_pair(reference.first,reference.second);
+    stepSolutions.push_back(back);
+    stepTimes.insert(stepTimes.begin(),tstart);
+    stepTimes.push_back(tend);
 
     this->parallelIntervalOutput(stepSolutions,stepTimes,level,ID);
 
