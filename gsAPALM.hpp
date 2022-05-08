@@ -138,7 +138,7 @@ void gsAPALM<T>::serialSolve(index_t Nsteps)
       if (!(m_ALM->converged()))
       {
         if (m_verbose) gsInfo<<"Error: Loop terminated, arc length method did not converge.\n";
-        m_ALM->reduceLength();
+        dL = m_ALM->reduceLength();
         m_ALM->setSolution(Uold,Lold);
         bisected = true;
         continue;

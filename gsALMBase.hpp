@@ -105,17 +105,19 @@ void gsALMBase<T>::computeLength()
 }
 
 template <class T>
-void gsALMBase<T>::reduceLength(T fac)
+T gsALMBase<T>::reduceLength(T fac)
 {
   m_arcLength *= fac;
+  return m_arcLength;
 }
 
 template <class T>
-void gsALMBase<T>::resetLength()
+T gsALMBase<T>::resetLength()
 {
   m_arcLength = m_arcLength_prev = m_arcLength_ori;
   if (m_adaptiveLength)
     computeLength();
+  return m_arcLength;
 }
 
 template <class T>
