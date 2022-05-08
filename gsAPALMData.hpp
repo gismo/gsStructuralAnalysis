@@ -213,7 +213,7 @@ void gsAPALMData<T,solution_t>::submit(index_t ID, const std::vector<T> & distan
   //  <d(xilow,xin)                                            >
   //  <d(xilow,xi1)> <d(xi1,xi2) > <d(xi2,Dxin-1)> <d(xin-1,xin)> <d(xin,xiupp)>
   // |--------------|-------------|..............|--------------|--------------|
-  // xilow        xi1          xi2          xin-1        xin          xiupp
+  // xilow         xi1           xi2           xin-1           xin           xiupp
 
   // All distances d(.,.) are measured in the solution space (not the parametric space!).
   // D(.,.) is the sum of intervals
@@ -250,8 +250,6 @@ void gsAPALMData<T,solution_t>::submit(index_t ID, const std::vector<T> & distan
   for (size_t k=0; k!=distances.size(); k++)
     t.at(k+1) = t.at(k) + distances.at(k);
 
-  gsDebugVar(gsAsVector<T>(t));
-
   // check if the total distance matches the original time step
   T dt_tmp = std::accumulate(distances.begin(), std::prev(distances.end()), 0.0);
   GISMO_ASSERT((Dt-dt_tmp)/Dt<1e-12,"Total distance of the computed intervals should be equal to the original interval length ("<<dt_tmp<<"!="<<Dt<<")");
@@ -265,6 +263,13 @@ void gsAPALMData<T,solution_t>::submit(index_t ID, const std::vector<T> & distan
   T totalError = dt-upperDistance;
   T lowerError = Dt-lowerDistance;
   T upperError = totalError-lowerError;
+
+  // T lowerError = Dt-lowerDistance;
+  // T upperError = upperDistance-Dt;
+  // T totalError = upperError+lowerError;
+  // gsDebugVar(totalError);
+  // gsDebugVar(lowerError);
+  // gsDebugVar(upperError);
 
   // Fill and scale xi vector
   xi.resize(solutions.size()+2);

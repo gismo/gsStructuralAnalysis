@@ -94,13 +94,14 @@ void gsAPALM<T>::serialSolve(index_t Nsteps)
   T Lold, L0;
   gsMatrix<T> Uold, U0;
   T dL, dL0;
-  bool bisected, finished;
+  bool bisected, finished, diverged;
   std::vector<solution_t>   solutions;
   std::vector<T>            times;
   std::vector<index_t>      levels;
   while (!m_starts.empty())
   {
     finished = false;
+    diverged = false;
     solutions.clear();
     times.clear();
     levels.clear();
@@ -130,17 +131,17 @@ void gsAPALM<T>::serialSolve(index_t Nsteps)
 
     while (k<Nsteps && !finished)
     {
-      if (m_verbose) gsInfo<<"Load step "<< k<<"\t"<<"dL = "<<dL<<"; curve time = "<<s<<"\n";
+      if (m_verbose) gsInfo<<"Load step "<< k<<"\t"<<"dL = "<<m_ALM->getLength()<<"; curve time = "<<s<<"\n";
 
       // Set a step
       m_ALM->step();
       // If not converged, bisect the arc-length
-      if (!(m_ALM->converged()))
+      if (diverged = !(m_ALM->converged()))
       {
         if (m_verbose) gsInfo<<"Error: Loop terminated, arc length method did not converge.\n";
         dL = m_ALM->reduceLength();
         m_ALM->setSolution(Uold,Lold);
-        bisected = true;
+        // bisected = true;
         continue;
       }
 
@@ -178,11 +179,11 @@ void gsAPALM<T>::serialSolve(index_t Nsteps)
         m_starts.push(std::make_tuple(std::make_pair(m_ALM->solutionU(),m_ALM->solutionL()),dL0*m_branchLengthMult,true));
       }
 
-      if (!bisected)
+      if (!diverged)
       {
-        m_ALM->resetLength();
+        dL = m_ALM->resetLength();
       }
-      bisected = false;
+      diverged = false;
       k++;
     } // end of steps
 
@@ -261,8 +262,6 @@ void gsAPALM<T>::parallelSolve()
     T s = 0;
     T time = tstart;
 
-    gsDebugVar(dL);
-
     gsInfo<<"Starting with ID "<<ID<<" from (|U|,L) = ("<<Uold.norm()<<","<<Lold<<"), curve time = "<<time<<"\n";
     for (index_t k = 0; k!=Nintervals; k++)
     {
@@ -336,8 +335,6 @@ void gsAPALM<T>::parallelSolve()
     DeltaU = stepSolutions.back().first - Uori;
     DeltaL = stepSolutions.back().second - Lori;
     lowerDistance = m_ALM->distance(DeltaU,DeltaL);
-
-    if (upperDistance > 0.1)
 
   /////////////////////////////////////////////////////////////////////////////////////////////
   /////////////////////////////////////////////////////////////////////////////////////////////
