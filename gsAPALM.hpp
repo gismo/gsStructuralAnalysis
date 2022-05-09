@@ -180,9 +180,14 @@ void gsAPALM<T>::serialSolve(index_t Nsteps)
       }
 
       if (!diverged)
-      {
-        dL = m_ALM->resetLength();
-      }
+        if (k==1)
+        {
+          m_ALM->setLength(dL0);
+          dL = dL0; // set the length to the length that we want after the first iteration
+        }
+        else
+          dL = m_ALM->resetLength();
+
       diverged = false;
       k++;
     } // end of steps
