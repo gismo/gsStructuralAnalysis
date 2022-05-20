@@ -18,6 +18,10 @@
 #include <gsStructuralAnalysis/gsALMBase.h>
 #include <gsStructuralAnalysis/gsAPALMDataContainer.h>
 
+#ifdef GISMO_WITH_MPI
+#include <gsMpi/gsMpi.h>
+#endif
+
 namespace gismo
 {
 
@@ -94,7 +98,7 @@ public:
   std::vector<std::vector<solution_t>> getSolutionsPerLevel(index_t branch = 0)
   {
     std::vector<std::vector<solution_t>> result(m_lvlSolutions[branch].size());
-    for (index_t l=0; l!=m_lvlSolutions[branch].size(); l++)
+    for (size_t l=0; l!=m_lvlSolutions[branch].size(); l++)
       for (typename std::vector<solution_t *>::iterator it=m_lvlSolutions[branch][l].begin(); it!=m_lvlSolutions[branch][l].end(); it++)
         result[l].push_back(**it);
     return result;
@@ -103,11 +107,38 @@ public:
   std::vector<std::vector<T>> getTimesPerLevel(index_t branch = 0)
   {
     std::vector<std::vector<T>> result(m_lvlTimes[branch].size());
-    for (index_t l=0; l!=m_lvlSolutions[branch].size(); l++)
+    for (size_t l=0; l!=m_lvlSolutions[branch].size(); l++)
       for (typename std::vector<T *>::iterator it=m_lvlTimes[branch][l].begin(); it!=m_lvlTimes[branch][l].end(); it++)
         result[l].push_back(**it);
     return result;
   }
+
+protected:
+
+#ifdef GISMO_WITH_MPI
+  void _mpiSend();
+
+  void _mpiRecv();
+#endif
+
+  template <bool _hasWorkers>
+  typename std::enable_if< _hasWorkers, void>::type
+  parallelSolve_impl();
+
+  template <bool _hasWorkers>
+  typename std::enable_if<!_hasWorkers, void>::type
+  parallelSolve_impl();
+
+  void _parallelSolve_worker(   const std::tuple<index_t, T     , solution_t, solution_t, solution_t> & dataEntry,
+                                        const std::pair<T,T> &  dataInterval,
+                                        const index_t &         dataLevel,
+                                        const solution_t &      dataReference,
+                                        std::vector<T> &        distances,
+                                        std::vector<solution_t>&stepSolutions,
+                                        T &                     upperDistance,
+                                        T &                     lowerDistance   );
+  void _parallelSolve_main(     gsAPALMDataContainer<T,solution_t> & data       );
+
 
 protected:
 
@@ -134,6 +165,13 @@ protected:
   T m_bifLengthMult;
 
   index_t m_maxIterations;
+
+  // Conditional compilation
+#ifdef GISMO_WITH_MPI
+  gsMpiComm m_comm ;
+  index_t m_proc_count, m_rank;
+  std::queue<index_t> m_workers;
+#endif
 };
 
 }

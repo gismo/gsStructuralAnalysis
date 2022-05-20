@@ -26,6 +26,20 @@ m_dataEmpty(Data)
   GISMO_ASSERT(m_dataEmpty.empty(),"gsAPALMData must be empty; it will be used to define the options!");
   this->_defaultOptions();
   this->_getOptions();
+
+#ifdef GISMO_WITH_MPI
+  gsInfo << "Gismo was compiled with MPI support.\n";
+
+  // Initialize the MPI environment
+  // Get the world communicator
+  const gsMpi & mpi = gsMpi::init();
+  m_comm = mpi.worldComm();
+  // MPI_Request req;
+
+  //Get size and rank of the processor
+  m_proc_count = m_comm.size();
+  m_rank = m_comm.rank();
+#endif
 }
 
 template <class T>
@@ -136,7 +150,7 @@ void gsAPALM<T>::serialSolve(index_t Nsteps)
       // Set a step
       m_ALM->step();
       // If not converged, bisect the arc-length
-      if (diverged = !(m_ALM->converged()))
+      if ((diverged = !(m_ALM->converged())))
       {
         if (m_verbose) gsInfo<<"Error: Loop terminated, arc length method did not converge.\n";
         dL = m_ALM->reduceLength();
@@ -180,6 +194,7 @@ void gsAPALM<T>::serialSolve(index_t Nsteps)
       }
 
       if (!diverged)
+      {
         if (k==1)
         {
           m_ALM->setLength(dL0);
@@ -187,6 +202,7 @@ void gsAPALM<T>::serialSolve(index_t Nsteps)
         }
         else
           dL = m_ALM->resetLength();
+      }
 
       diverged = false;
       k++;
@@ -205,158 +221,193 @@ void gsAPALM<T>::serialSolve(index_t Nsteps)
 
 }
 
+
 // NOTE: This does not make new branches!
 template <class T>
 void gsAPALM<T>::parallelSolve()
 {
-  solution_t start, prev, next, reference;
-  index_t ID;
-  T tstart = 0;
-  T tend = 0;
-  T dL, dL0;
-  index_t it = 0;
-  gsVector<T> DeltaU;
-  T DeltaL;
-  index_t Nintervals = m_subIntervals;
-  std::vector<solution_t> stepSolutions;
-  std::vector<T> stepTimes;
-  std::vector<T> distances;
-  T lowerDistance, upperDistance;
-  bool bisected = false;
-  T dL_rem = 0;
+#ifdef GISMO_WITH_MPI
+  if (m_comm.size()==1)
+    this->parallelSolve_impl<false>();
+  else
+    this->parallelSolve_impl<true>();
+#else
+    this->parallelSolve_impl<false>();
+#endif
+}
 
-  T Lprev, Lnext, Lold;
-  gsMatrix<T> Uprev, Unext,Uold;
-  index_t level;
+template <class T>
+template <bool _hasWorkers>
+typename std::enable_if< _hasWorkers, void>::type
+gsAPALM<T>::parallelSolve_impl()
+{
+#ifdef GISMO_WITH_MPI
+  GISMO_ASSERT(m_comm.size()>1,"Something went wrong. This implementation only works when >1 processes are availbale, but nprocesses = "<<m_comm.size());
+
+  if (m_rank==0)
+  {
+    solution_t reference;
+    index_t ID;
+    index_t it = 0;
+    std::vector<T> distances;
+    std::vector<solution_t> stepSolutions;
+    T lowerDistance, upperDistance;
+    index_t branch;
+    index_t njobs = 0;
+
+    gsInfo<<"[MPI process "<<my_rank<<"] Adding workers...\n";
+    for (index_t w = 1; w!=proc_count; w++)
+      m_workers.push(w);
+
+    while (!m_data.empty() && it < m_maxIterations && !m_workers.empty())
+    {
+      branch = m_data.getFirstNonEmptyBranch();
+      gsInfo<<"There are "<<m_data.branch(branch).nActive()<<" active jobs and "<<m_data.branch(branch).nWaiting()<<" jobs in the queue of branch "<<branch<<"\n";
+
+      dataEntry = m_data.branch(branch).pop();
+      ID = std::get<0>(dataEntry);
+      bool success = m_data.branch(branch).getReferenceByID(ID,reference);
+      GISMO_ASSERT(success,"Reference not found");
+
+      // this->_parallelSolve_worker(dataEntry,
+      //                             m_data.branch(branch).jobTimes(ID),
+      //                             m_data.branch(branch).jobLevel(ID),
+      //                             reference,
+      //                             distances,
+      //                             stepSolutions,
+      //                             upperDistance,
+      //                             lowerDistance
+      //                             );
+
+      // gsDebugVar(distances.size());
+      // gsDebugVar(stepSolutions.size());
+
+      // m_data.branch(branch).submit(ID,distances,stepSolutions,upperDistance,lowerDistance);
+      // m_data.branch(branch).finishJob(ID);
+
+      SEND_SOMETHING_TO(m_workers.front());
+
+      m_workers.pop();
+      it++;
+      njobs++;
+    }
+
+    while (njobs > 0)
+    {
+      gsInfo<<"[MPI process "<<my_rank<<"] "<<njobs<<" job(s) running\n";
+
+      index_t SAME_SOURCE = MPI_ANY_SOURCE;
+
+      RECEIVE_SOMETHING_FROM(SAME_SOURCE);
+
+
+
+
+      DO_STUFF;
+      /*
+       m_data.branch(branch).submit(ID,distances,stepSolutions,upperDistance,lowerDistance);
+       m_data.branch(branch).finishJob(ID);
+      */
+
+      // Remove job
+      njobs--;
+      // Add worker to pool
+      m_workers.push(status.MPI_SOURCE);
+
+      // As long as the queue is not empty, the iterations are lower than the max number and the pool of workers is not empty
+      while (!m_data.empty() && it < m_maxIterations && !m_workers.empty())
+      {
+        // SAME WHILE LOOP AS ABOVE!!!!!!!!
+        branch = m_data.getFirstNonEmptyBranch();
+        gsInfo<<"There are "<<m_data.branch(branch).nActive()<<" active jobs and "<<m_data.branch(branch).nWaiting()<<" jobs in the queue of branch "<<branch<<"\n";
+
+        dataEntry = m_data.branch(branch).pop();
+        ID = std::get<0>(dataEntry);
+        bool success = m_data.branch(branch).getReferenceByID(ID,reference);
+        GISMO_ASSERT(success,"Reference not found");
+
+        // this->_parallelSolve_worker(dataEntry,
+        //                             m_data.branch(branch).jobTimes(ID),
+        //                             m_data.branch(branch).jobLevel(ID),
+        //                             reference,
+        //                             distances,
+        //                             stepSolutions,
+        //                             upperDistance,
+        //                             lowerDistance
+        //                             );
+
+        // gsDebugVar(distances.size());
+        // gsDebugVar(stepSolutions.size());
+
+        // m_data.branch(branch).submit(ID,distances,stepSolutions,upperDistance,lowerDistance);
+        // m_data.branch(branch).finishJob(ID);
+
+        SEND_SOMETHING_TO(m_workers.front());
+
+        m_workers.pop();
+        it++;
+        njobs++;
+      }
+    }
+  }
+  else
+  {
+    while (true) // until loop breaks due to stop signal
+    {
+
+
+    }
+  }
+
+
+#else
+  GISMO_NO_IMPLEMENTATION;
+#endif
+
+    // #ifdef GISMO_WITH_MPI
+    //   gsInfo<<"[MPI Process "<<m_rank<<" of "<<m_comm.size()<<"] Hi!\n";
+    // #endif
+}
+
+template <class T>
+template <bool _hasWorkers>
+typename std::enable_if<!_hasWorkers, void>::type
+gsAPALM<T>::parallelSolve_impl()
+{
+  solution_t reference;
+  index_t ID;
+  index_t it = 0;
+  std::vector<T> distances;
+  std::vector<solution_t> stepSolutions;
+  T lowerDistance, upperDistance;
   index_t branch;
+
   m_data.print();
+  std::tuple<index_t, T     , solution_t, solution_t, solution_t> dataEntry;
   while (!m_data.empty() && it < m_maxIterations)
   {
     branch = m_data.getFirstNonEmptyBranch();
-    Nintervals = m_subIntervals;
     gsInfo<<"There are "<<m_data.branch(branch).nActive()<<" active jobs and "<<m_data.branch(branch).nWaiting()<<" jobs in the queue of branch "<<branch<<"\n";
-    stepSolutions.resize(Nintervals);
-    stepTimes.resize(Nintervals);
-    distances.resize(Nintervals+1);
 
-    std::tie(ID,dL0,start,prev,next) = m_data.branch(branch).pop();
-    std::tie(Uold,Lold) = start;
-    std::tie(Uprev,Lprev) = prev;
-    std::tie(Unext,Lnext) = next;
-    std::tie(tstart,tend) = m_data.branch(branch).jobTimes(ID);
-    level                 = m_data.branch(branch).jobLevel(ID);
-
-    gsMatrix<T> Uori = Uold;
-    T Lori = Lold;
-
-    dL0 = dL0 / Nintervals;
-    dL  = dL0;
-
-    m_ALM->setLength(dL);
-    m_ALM->setSolution(Uold,Lold);
-    // m_ALM->resetStep();
-    m_ALM->setPrevious(Uprev,Lprev);
-    gsDebug<<"Start - ||u|| = "<<Uold.norm()<<", L = "<<Lold<<"\n";
-    gsDebug<<"Prev  - ||u|| = "<<Uprev.norm()<<", L = "<<Lprev<<"\n";
-    gsDebug<<"Next  - ||u|| = "<<Unext.norm()<<", L = "<<Lnext<<"\n";
-
-    gsVector<T> tmpU = Uold-Uprev;
-    T tmpL = Lold-Lprev;
-
-
-    T s = 0;
-    T time = tstart;
-
-    gsInfo<<"Starting with ID "<<ID<<" from (|U|,L) = ("<<Uold.norm()<<","<<Lold<<"), curve time = "<<time<<"\n";
-    for (index_t k = 0; k!=Nintervals; k++)
-    {
-      gsDebug<<"Interval "<<k+1<<" of "<<Nintervals<<"\n";
-      gsDebug<<"Start - ||u|| = "<<Uold.norm()<<", L = "<<Lold<<"\n";
-      m_ALM->step();
-      if (!(m_ALM->converged()))
-      {
-        gsInfo<<"Error: Loop terminated, arc length method did not converge.\n";
-        dL = dL / 2.;
-        dL_rem += dL; // add the remainder of the interval to dL_rem
-        m_ALM->setLength(dL);
-        m_ALM->setSolution(Uold,Lold);
-        bisected = true;
-        k -= 1;
-        continue;
-      }
-      GISMO_ENSURE(m_ALM->converged(),"Loop terminated, arc length method did not converge.\n");
-
-      std::pair<gsVector<T>,T> pair = std::make_pair(m_ALM->solutionU(),m_ALM->solutionL());
-      stepSolutions.at(k) = pair;
-      DeltaU = m_ALM->solutionU() - Uold;
-      DeltaL = m_ALM->solutionL() - Lold;
-
-      distances.at(k) = m_ALM->distance(DeltaU,DeltaL);
-
-      s += distances.at(k);
-      time += distances.at(k);
-      stepTimes.at(k) = time;
-
-      Uold = m_ALM->solutionU();
-      Lold = m_ALM->solutionL();
-
-      if (!bisected) // if bisected = false
-        dL = dL0;
-      else
-      {
-        // if the current interval has finished, but was refined before.
-        // The next interval should have the remaining length.
-        // Also, Nintervals should increase
-        //
-        dL = dL_rem;
-        Nintervals++;
-        stepSolutions.resize(Nintervals);
-        stepTimes.resize(Nintervals);
-        distances.resize(Nintervals+1);
-      }
-
-      this->parallelStepOutput(pair,time,k);
-
-      m_ALM->setLength(dL);
-      dL_rem = 0;
-      bisected = false;
-    }
-
+    dataEntry = m_data.branch(branch).pop();
+    ID = std::get<0>(dataEntry);
     bool success = m_data.branch(branch).getReferenceByID(ID,reference);
     GISMO_ASSERT(success,"Reference not found");
-    gsDebug<<"Ref   - ||u|| = "<<reference.first.norm()<<", L = "<<reference.second<<"\n";
+    this->_parallelSolve_worker(dataEntry,
+                                m_data.branch(branch).jobTimes(ID),
+                                m_data.branch(branch).jobLevel(ID),
+                                reference,
+                                distances,
+                                stepSolutions,
+                                upperDistance,
+                                lowerDistance
+                                );
 
-    GISMO_ASSERT((reference.first.normalized()).dot(m_ALM->solutionU().normalized())>-0.8,
-                  "Reference is almost in the opposite direction of the solution. Are branches mirrored? result:" << (reference.first.normalized()).dot(m_ALM->solutionU().normalized()));
-
-    DeltaU = reference.first - m_ALM->solutionU();
-    DeltaL = reference.second - m_ALM->solutionL();
-    distances.back() = m_ALM->distance(DeltaU,DeltaL);
-
-    DeltaU = reference.first - Uori;
-    DeltaL = reference.second - Lori;
-    upperDistance = m_ALM->distance(DeltaU,DeltaL);
-
-    DeltaU = stepSolutions.back().first - Uori;
-    DeltaL = stepSolutions.back().second - Lori;
-    lowerDistance = m_ALM->distance(DeltaU,DeltaL);
-
-  /////////////////////////////////////////////////////////////////////////////////////////////
-  /////////////////////////////////////////////////////////////////////////////////////////////
-  /////////////////////////////////////////////////////////////////////////////////////////////
-  /////////////////////////////////////////////////////////////////////////////////////////////
+    gsDebugVar(distances.size());
+    gsDebugVar(stepSolutions.size());
 
     m_data.branch(branch).submit(ID,distances,stepSolutions,upperDistance,lowerDistance);
     m_data.branch(branch).finishJob(ID);
-
-    std::pair<gsVector<T>,T> front = std::make_pair(start.first,start.second);
-    stepSolutions.insert(stepSolutions.begin(),front);
-    std::pair<gsVector<T>,T> back  = std::make_pair(reference.first,reference.second);
-    stepSolutions.push_back(back);
-    stepTimes.insert(stepTimes.begin(),tstart);
-    stepTimes.push_back(tend);
-
-    this->parallelIntervalOutput(stepSolutions,stepTimes,level,ID);
 
     it++;
   }
@@ -388,8 +439,220 @@ void gsAPALM<T>::parallelSolve()
       m_lvlTimes[b][m_levels[b][k]].push_back(&(m_times[b][k]));
     }
   }
+}
+
+// template <class T>
+// void gsAPALM<T>::_parallelSolve_main(gsAPALMDataContainer<T,solution_t> & data)
+// {
+//   solution_t reference;
+//   index_t ID;
+//   std::vector<T> distances;
+//   std::vector<solution_t> stepSolutions;
+//   T lowerDistance, upperDistance;
+//   index_t branch;
+//   std::tuple<index_t, T     , solution_t, solution_t, solution_t> dataEntry;
+
+//   branch = data.getFirstNonEmptyBranch();
+//   gsInfo<<"There are "<<data.branch(branch).nActive()<<" active jobs and "<<data.branch(branch).nWaiting()<<" jobs in the queue of branch "<<branch<<"\n";
+
+//   dataEntry = data.branch(branch).pop();
+//   ID = std::get<0>(dataEntry);
+//   bool success = data.branch(branch).getReferenceByID(ID,reference);
+//   GISMO_ASSERT(success,"Reference not found");
+
+//   SEND_STUFF(dataEntry,
+//                               data.branch(branch).jobTimes(ID),
+//                               data.branch(branch).jobLevel(ID),
+//                               reference)
+
+
+
+//   this->_parallelSolve_worker(dataEntry,
+//                               data.branch(branch).jobTimes(ID),
+//                               data.branch(branch).jobLevel(ID),
+//                               reference,
+//                               distances,
+//                               stepSolutions,
+//                               upperDistance,
+//                               lowerDistance
+//                               );
+
+//   gsDebugVar(distances.size());
+//   gsDebugVar(stepSolutions.size());
+
+//   data.branch(branch).submit(ID,distances,stepSolutions,upperDistance,lowerDistance);
+//   data.branch(branch).finishJob(ID);
+
+// }
+
+
+// NOTE: This does not make new branches!
+template <class T>
+void gsAPALM<T>::_parallelSolve_worker( const std::tuple<index_t, T     , solution_t, solution_t, solution_t> & dataEntry,
+                                        const std::pair<T,T> &  dataInterval,
+                                        const index_t &         dataLevel,
+                                        const solution_t &      dataReference,
+                                        std::vector<T> &        distances,
+                                        std::vector<solution_t>&stepSolutions,
+                                        T &                     upperDistance,
+                                        T &                     lowerDistance )
+{
+
+#ifdef GISMO_WITH_MPI
+  gsInfo<<"[MPI Process "<<m_rank<<"] Hi!\n";
+#endif
+
+  solution_t start, prev, next, reference;
+  index_t ID;
+  T tstart = 0;
+  T tend = 0;
+  T dL, dL0;
+  gsVector<T> DeltaU;
+  T DeltaL;
+  index_t Nintervals = m_subIntervals;
+  bool bisected = false;
+  T dL_rem = 0;
+
+  T Lprev, Lnext, Lold;
+  gsMatrix<T> Uprev, Unext,Uold;
+
+  /// Worker
+  std::vector<solution_t> stepSolutionsExport(Nintervals+2);
+  stepSolutions.resize(Nintervals);
+  std::vector<T> stepTimes(Nintervals);
+  distances.resize(Nintervals+1);
+
+  std::tie(ID,dL0,start,prev,next) = dataEntry;
+  std::tie(Uold,Lold) = start;
+  std::tie(Uprev,Lprev) = prev;
+  std::tie(Unext,Lnext) = next;
+  std::tie(tstart,tend) = dataInterval;
+
+  gsMatrix<T> Uori = Uold;
+  T Lori = Lold;
+
+  dL0 = dL0 / Nintervals;
+  dL  = dL0;
+
+  m_ALM->setLength(dL);
+  m_ALM->setSolution(Uold,Lold);
+  // m_ALM->resetStep();
+  m_ALM->setPrevious(Uprev,Lprev);
+  gsDebug<<"Start - ||u|| = "<<Uold.norm()<<", L = "<<Lold<<"\n";
+  gsDebug<<"Prev  - ||u|| = "<<Uprev.norm()<<", L = "<<Lprev<<"\n";
+  gsDebug<<"Next  - ||u|| = "<<Unext.norm()<<", L = "<<Lnext<<"\n";
+
+  gsVector<T> tmpU = Uold-Uprev;
+
+  T s = 0;
+  T time = tstart;
+
+  gsInfo<<"Starting with ID "<<ID<<" from (|U|,L) = ("<<Uold.norm()<<","<<Lold<<"), curve time = "<<time<<"\n";
+  for (index_t k = 0; k!=Nintervals; k++)
+  {
+    gsDebug<<"Interval "<<k+1<<" of "<<Nintervals<<"\n";
+    gsDebug<<"Start - ||u|| = "<<Uold.norm()<<", L = "<<Lold<<"\n";
+    m_ALM->step();
+    if (!(m_ALM->converged()))
+    {
+      gsInfo<<"Error: Loop terminated, arc length method did not converge.\n";
+      dL = dL / 2.;
+      dL_rem += dL; // add the remainder of the interval to dL_rem
+      m_ALM->setLength(dL);
+      m_ALM->setSolution(Uold,Lold);
+      bisected = true;
+      k -= 1;
+      continue;
+    }
+    GISMO_ENSURE(m_ALM->converged(),"Loop terminated, arc length method did not converge.\n");
+
+    std::pair<gsVector<T>,T> pair = std::make_pair(m_ALM->solutionU(),m_ALM->solutionL());
+    stepSolutions.at(k) = pair;
+    DeltaU = m_ALM->solutionU() - Uold;
+    DeltaL = m_ALM->solutionL() - Lold;
+
+    distances.at(k) = m_ALM->distance(DeltaU,DeltaL);
+
+    s += distances.at(k);
+    time += distances.at(k);
+    stepTimes.at(k) = time;
+
+    Uold = m_ALM->solutionU();
+    Lold = m_ALM->solutionL();
+
+    if (!bisected) // if bisected = false
+      dL = dL0;
+    else
+    {
+      // if the current interval has finished, but was refined before.
+      // The next interval should have the remaining length.
+      // Also, Nintervals should increase
+      //
+      dL = dL_rem;
+      Nintervals++;
+      stepSolutions.resize(Nintervals);
+      stepTimes.resize(Nintervals);
+      distances.resize(Nintervals+1);
+    }
+
+    this->parallelStepOutput(pair,time,k);
+
+    m_ALM->setLength(dL);
+    dL_rem = 0;
+    bisected = false;
+  }
+
+  gsDebug<<"Ref   - ||u|| = "<<dataReference.first.norm()<<", L = "<<dataReference.second<<"\n";
+
+  GISMO_ASSERT((dataReference.first.normalized()).dot(m_ALM->solutionU().normalized())>-0.8,
+                "Reference is almost in the opposite direction of the solution. Are branches mirrored? result:" << (reference.first.normalized()).dot(m_ALM->solutionU().normalized()));
+
+  DeltaU = dataReference.first - m_ALM->solutionU();
+  DeltaL = dataReference.second - m_ALM->solutionL();
+  distances.back() = m_ALM->distance(DeltaU,DeltaL);
+
+  DeltaU = dataReference.first - Uori;
+  DeltaL = dataReference.second - Lori;
+  upperDistance = m_ALM->distance(DeltaU,DeltaL);
+
+  DeltaU = stepSolutions.back().first - Uori;
+  DeltaL = stepSolutions.back().second - Lori;
+  lowerDistance = m_ALM->distance(DeltaU,DeltaL);
+
+  // Export parallel interval output
+  std::pair<gsVector<T>,T> front = std::make_pair(start.first,start.second);
+  stepSolutionsExport.front() = front;
+  std::pair<gsVector<T>,T> back  = std::make_pair(dataReference.first,dataReference.second);
+  stepSolutionsExport.back() = back;
+
+  // Temporarily swap the interval solutions
+  for (index_t k=0; k!=Nintervals; k++)
+    std::swap(stepSolutions.at(k),stepSolutionsExport.at(k+1));
+  this->parallelIntervalOutput(stepSolutionsExport,stepTimes,dataLevel,ID);
+
+  // And swap them back
+  for (index_t k=0; k!=Nintervals; k++)
+    std::swap(stepSolutionsExport.at(k+1),stepSolutions.at(k));
+}
+
+
+// -----------------------------------------------------------------------------------------------------
+// MPI functions
+// -----------------------------------------------------------------------------------------------------
+#ifdef GISMO_WITH_MPI
+template <class T>
+void gsAPALM<T>::_mpiSend()
+{
 
 
 }
 
+template <class T>
+void gsAPALM<T>::_mpiRecv()
+{
+
+
+}
+#endif
+// -----------------------------------------------------------------------------------------------------
 } // namespace gismo
