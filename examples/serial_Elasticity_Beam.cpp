@@ -64,7 +64,7 @@ public:
     gsStructuralAnalysisOutput<real_t> data(m_dirname + "/interval_"+std::to_string(ID)+".csv",m_refPoints);
     gsMultiPatch<T> deformation,mp_tmp, mp, mp_def;
     std::vector<std::string> pointheaders = {"u_x","u_y","u_z"};
-    std::vector<std::string> otherheaders = {"lambda","level"};
+    std::vector<std::string> otherheaders = {"U-norm","lambda","time","level"};
 
     data.init(pointheaders,otherheaders);
 
@@ -77,8 +77,8 @@ public:
 
       if (m_refPoints.cols()!=0)
       {
-          gsVector<> otherData(2);
-          otherData<<stepSolutions[k].second,level;
+          gsVector<> otherData(4);
+          otherData<<stepSolutions[k].first.norm(),stepSolutions[k].second,stepTimes[k],level;
           gsMatrix<> pointResults(mp.geoDim(),m_refPoints.cols());
           for (index_t p=0; p!=m_refPoints.cols(); p++)
               pointResults.col(p) = solField.value(m_refPoints.col(p),m_refPatches.at(p));
@@ -100,8 +100,8 @@ int main (int argc, char** argv)
 {
 
   // Input options
-  int numElevate    = 1;
-  int numHref       = 1;
+  int numElevate    = 2;
+  int numHref       = 5;
   bool plot         = false;
   bool make_fit     = false;
   bool mesh         = false;
@@ -110,7 +110,7 @@ int main (int argc, char** argv)
   bool quasiNewton  = false;
   int quasiNewtonInt= -1;
   bool adaptive     = false;
-  int step          = 10;
+  int step          = 4;
   int SubIntervals  = 2;
   int method        = 2; // (0: Load control; 1: Riks' method; 2: Crisfield's method; 3: consistent crisfield method; 4: extended iterations)
   bool deformed     = false;
@@ -119,7 +119,7 @@ int main (int argc, char** argv)
 
   real_t relax      = 1.0;
 
-  int testCase      = 2;
+  int testCase      = 3;
 
   int result        = 0;
 
@@ -128,11 +128,11 @@ int main (int argc, char** argv)
   index_t maxit     = 20;
   // index_t iniLevels  = 2;
   // index_t maxLevels  = 4;
-  index_t maxLevel  = 2;
+  index_t maxLevel  = 6;
 
   // Arc length method options
-  real_t dL         = 0; // General arc length
-  real_t dLb        = 0.5; // Arc length to find bifurcation
+  real_t dL         = 5e0 ; // General arc length
+  real_t dLb        = 5e-1; // Arc length to find bifurcation
   real_t tol        = 1e-6;
   real_t tolU       = 1e-6;
   real_t tolF       = 1e-3;
@@ -155,8 +155,6 @@ int main (int argc, char** argv)
   cmd.addInt("m","Method", "Arc length method; 1: Crisfield's method; 2: RIks' method.", method);
   cmd.addReal("L","dLb", "arc length", dLb);
   cmd.addReal("l","dL", "arc length after bifurcation", dL);
-  // cmd.addInt("I","inilvl", "Initial levels", iniLevels);
-  // cmd.addInt("M","maxlvl", "Max levels", maxLevels);
   cmd.addInt("d","level", "Max level", maxLevel);
   cmd.addReal("A","relaxation", "Relaxation factor for arc length method", relax);
 
@@ -196,19 +194,12 @@ int main (int argc, char** argv)
     Case 3: Clamped beam (left) under horizontal compressive end load     --- Validation settings: -L 5e-5 -l 1e-1 -M 0 -N 100 -r 4 -e 2
                                                                               Fig 5  from: Pagani, A., & Carrera, E. (2018). Unified formulation of geometrically nonlinear refined beam theories. Mechanics of Advanced Materials and Structures, 25(1), 15–31. https://doi.org/10.1080/15376494.2016.1232458
   */
-  if (testCase==2 || testCase==3)
-  {
-    E_modulus = 1.;
-    H = 0.01;
-    PoissonRatio = 0.0;
-    L = 1.0;
-    B = 0.01;
-    mp = BrickDomain(numHref, 0, 0, numElevate, 1, 1, L, B,H);
-  }
-  else
-  {
-    gsInfo<<"No geometry found\n";
-  }
+  E_modulus = 1.;
+  H = 0.01;
+  PoissonRatio = 0.0;
+  L = 1.0;
+  B = 0.01;
+  mp = BrickDomain(numHref, 0, 0, numElevate, 1, 1, L, B,H);
 
   gsMultiBasis<> dbasis(mp);
   gsInfo<<"Basis (patch 0): "<< mp.patch(0).basis() << "\n";
@@ -408,14 +399,14 @@ int main (int argc, char** argv)
   gsAPALMData<real_t,solution_t> apalmData;
   apalmData.options().setInt("MaxLevel",maxLevel);
   apalmData.options().setInt("Verbose",1);
-  apalmData.options().setReal("Tolerance",1e-2);
+  apalmData.options().setReal("Tolerance",1e-3);
 
   gsAPALMBeam<real_t> apalm(arcLength,apalmData,assembler,dirname,refPoints,refPatches);
   apalm.options().setSwitch("Verbose",true);
   apalm.options().setInt("SubIntervals",SubIntervals);
   apalm.options().setSwitch("SingularPoint",true);
   apalm.options().setReal("BranchLengthMultiplier",dL/dLb);
-  apalm.options().setReal("BifLengthMultiplier",0.5*dLb/dL);
+  apalm.options().setReal("BifLengthMultiplier",0.05*dLb/dL);
   apalm.initialize();
   apalm.serialSolve(step+1);
 
@@ -424,7 +415,7 @@ int main (int argc, char** argv)
     gsField<> solField, stressField;
     gsMultiPatch<> mp_tmp;
     std::vector<std::string> pointheaders = {"u_x","u_y","u_z"};
-    std::vector<std::string> otherheaders = {"lambda","level"};
+    std::vector<std::string> otherheaders = {"U-norm","lambda","time","level"};
     gsPiecewiseFunction<> stresses;
 
     for (index_t b=0; b!=apalm.getHierarchy().nBranches(); b++)
@@ -450,8 +441,8 @@ int main (int argc, char** argv)
         if (write)
           if (refPoints.cols()!=0)
           {
-              gsVector<> otherData(2);
-              otherData<<Lold,levels[k];
+              gsVector<> otherData(4);
+              otherData<<Uold.norm(),Lold,times[k],levels[k];
               gsMatrix<> pointResults(mp.geoDim(),refPoints.cols());
               for (index_t p=0; p!=refPoints.cols(); p++)
                   pointResults.col(p) = solField.value(refPoints.col(p),refPatches(0,p));
@@ -493,7 +484,7 @@ int main (int argc, char** argv)
     gsField<> solField, stressField;
     gsMultiPatch<> mp_tmp;
     std::vector<std::string> pointheaders = {"u_x","u_y","u_z"};
-    std::vector<std::string> otherheaders = {"lambda","level"};
+    std::vector<std::string> otherheaders = {"U-norm","lambda","time","level"};
     gsPiecewiseFunction<> stresses;
 
     for (index_t b=0; b!=apalm.getHierarchy().nBranches(); b++)
@@ -519,8 +510,8 @@ int main (int argc, char** argv)
         if (write)
           if (refPoints.cols()!=0)
           {
-              gsVector<> otherData(2);
-              otherData<<Lold,levels[k];
+              gsVector<> otherData(4);
+              otherData<<Uold.norm(),Lold,times[k],levels[k];
               gsMatrix<> pointResults(mp.geoDim(),refPoints.cols());
               for (index_t p=0; p!=refPoints.cols(); p++)
                   pointResults.col(p) = solField.value(refPoints.col(p),refPatches(0,p));

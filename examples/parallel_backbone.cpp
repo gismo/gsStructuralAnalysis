@@ -152,9 +152,9 @@ index_t main(index_t argc, char **argv)
   // typedef std::tuple<index_t,index_t,real_t,bool> send_tuple_t;
   // typedef std::tuple<index_t,index_t,real_t,real_t> recv_tuple_t;
 
-  typedef std::pair<gsVector<real_t,3>,real_t> solution_t; // fix size to real_t,3
+  typedef std::pair<gsVector<real_t>,real_t> solution_t; // fix size to real_t,3
   //                 ID, start time, time step, start, guess, stop?
-  typedef std::tuple<index_t,real_t,real_t,real_t,solution_t,solution_t,bool> send_tuple_t;
+  typedef std::tuple<index_t,real_t,real_t,real_t,gsVector<real_t>,real_t,gsVector<real_t>,real_t,bool> send_tuple_t;
   // ID, solutions, times, distances
   typedef std::tuple<index_t,std::vector<solution_t>,std::vector<real_t>,std::vector<real_t>> recv_tuple_t;
 
@@ -165,12 +165,22 @@ index_t main(index_t argc, char **argv)
   ////////////////////////////////////////////////////////////////////////////////////////////////
   // INIT
   ////////////////////////////////////////////////////////////////////////////////////////////////
-  //                    ID,      tstart, tend,   dt,     start     , guess
-  std::queue<std::tuple<index_t, real_t, real_t, real_t, solution_t, solution_t,bool>> m_queue; // xi,exact
+  //                    ID,      tstart, tend,   dt,     start                   , guess
+  std::queue<std::tuple<index_t, real_t, real_t, real_t, gsVector<real_t>, real_t, gsVector<real_t>, real_t,bool>> m_queue; // xi,exact
 
 
 
   bool message = true;
+  gsVector<real_t> coords(3), nextcoords(3);
+  real_t angle, nextangle, dangle;
+  real_t t, tpp, dt;
+  bool stop;
+  index_t ID;
+
+  std::vector<real_t>           times;
+  std::vector<gsVector<real_t>> solutions;
+  std::vector<real_t>           angles;
+  std::vector<real_t>           distances;
 
   if ( my_rank == 0 )
   {
@@ -178,12 +188,8 @@ index_t main(index_t argc, char **argv)
     recv_tuple_t recv;
 
     gsInfo<<"[MPI process "<<my_rank<<"] Making queue ...";
-    gsVector<real_t> coords(3);
-    real_t angle, nextangle, dangle;
-    real_t t, tpp, dt;
-    solution_t solution, refsolution;
 
-    std::tuple<index_t, real_t, real_t, real_t, solution_t, solution_t, bool> item;
+    std::tuple<index_t, real_t, real_t, real_t, gsVector<real_t>, real_t, gsVector<real_t>, real_t, bool> item;
     for (index_t k = 0; k!= N0+1; k++)
     {
       dt = dt0;
@@ -194,7 +200,6 @@ index_t main(index_t argc, char **argv)
       y = math::sin(angle);
       z = x*y;
       coords<<x,y,z;
-      solution = std::make_pair(coords,angle);
 
       tpp = t+dt;
       nextangle = tpp * 2 * M_PI;
@@ -202,10 +207,9 @@ index_t main(index_t argc, char **argv)
       x = math::cos(nextangle) - math::sin(nextangle)*dangle;
       y = math::sin(nextangle) + math::cos(nextangle)*dangle;
       z = x * y;
-      coords<<x,y,z;
-      refsolution = std::make_pair(coords,nextangle);
+      nextcoords<<x,y,z;
 
-      item = std::make_tuple(globalID,t, tpp, dt0, solution, refsolution,false);
+      item = std::make_tuple(globalID,t, tpp, dt0, coords, angle, nextcoords, nextangle,false);
 
       m_queue.push(item);
       globalID++;
@@ -221,32 +225,70 @@ index_t main(index_t argc, char **argv)
       send = m_queue.front();
       m_queue.pop();
 
-      gsInfo<<"[MPI process "<<my_rank<<"] Sending a job to "<<m_workers.front()<<": ID: "<<std::get<0>(send)
-                                      <<"; t = "<<std::get<1>(send)
-                                      <<"; t+1 = "<<std::get<2>(send)
-                                      <<"; dt = "<<std::get<3>(send)
-                                      <<"; x(t) = "<<std::get<4>(send).first.at(0)
-                                      <<"; y(t) = "<<std::get<4>(send).first.at(1)
-                                      <<"; z(t) = "<<std::get<4>(send).first.at(2)
-                                      <<"; x'(t) = "<<std::get<5>(send).first.at(0)
-                                      <<"; y'(t) = "<<std::get<5>(send).first.at(1)
-                                      <<"; z'(t) = "<<std::get<5>(send).first.at(2)
+      std::tie(ID,t, tpp, dt0, coords, angle, nextcoords, nextangle,stop) = send;
+
+      gsInfo<<"[MPI process "<<my_rank<<"] Sending a job to "<<m_workers.front()<<": ID: "<<ID
+                                      <<"; t = "<<t
+                                      <<"; t+1 = "<<tpp
+                                      <<"; dt = "<<dt0
+                                      <<"; x(t) = "<<coords.at(0)
+                                      <<"; y(t) = "<<coords.at(1)
+                                      <<"; z(t) = "<<coords.at(2)
+                                      <<"; x'(t) = "<<nextcoords.at(0)
+                                      <<"; y'(t) = "<<nextcoords.at(1)
+                                      <<"; z'(t) = "<<nextcoords.at(2)
                                       <<"\n";
 
 
-      comm.isend(&send, 1, m_workers.front(),&req,tag);
-        gsDebugVar(std::get<4>(send).first);
+      comm.isend(&ID, 1, m_workers.front(),&req,0);
+      comm.isend(&t, 1, m_workers.front(),&req,1);
+      comm.isend(&tpp, 1, m_workers.front(),&req,2);
+      comm.isend(&dt0, 1, m_workers.front(),&req,3);
+      comm.isend(coords.data(), coords.size(), m_workers.front(),&req,4);
+      comm.isend(&angle, 1, m_workers.front(),&req,5);
+      comm.isend(nextcoords.data(), nextcoords.size(), m_workers.front(),&req,6);
+      comm.isend(&nextangle, 1, m_workers.front(),&req,7);
+      comm.isend(&stop, 1, m_workers.front(),&req,8);
       m_workers.pop();
       njobs++;
     }
 
+    index_t size;
     while (njobs > 0)
     {
       gsInfo<<"[MPI process "<<my_rank<<"] "<<njobs<<" job(s) running\n";
-  gsDebugVar("hi");
-      comm.recv(&recv,1,MPI_ANY_SOURCE,tag,&status);
-  gsDebugVar("hi");
-      gsInfo<<"[MPI process "<<my_rank<<"] Received a job from "<<status.MPI_SOURCE<<": ID: "<<std::get<0>(recv)<<"; solutions.size() = "<<std::get<1>(recv).size()<<"; times.size() = "<<std::get<2>(recv).size()<<"; distances.size() = "<<std::get<3>(recv).size()<<"\n";
+
+      index_t SAME_SOURCE = MPI_ANY_SOURCE;
+
+      // ID
+      comm.recv(&ID,    1,SAME_SOURCE,0,&status);
+      // Size of solutions
+      comm.recv(&size,  1,SAME_SOURCE,1,&status);
+
+      times.resize(size);
+      solutions.resize(size);
+      angles.resize(size);
+      distances.resize(size+1);
+
+      for (index_t k=0; k!=size; k++)
+      {
+        comm.recv(&(times.at(k))    ,1,SAME_SOURCE,4*k+2+0,&status);
+        index_t solsize;
+        comm.recv(&solsize,  1,SAME_SOURCE,4*k+2+1);
+        gsVector<> solution(solsize);
+        comm.recv(solution.data(),solsize,SAME_SOURCE,4*k+2+2,&status);
+        solutions.at(k) = solution;
+        comm.recv(&(angles.at(k))   ,1,SAME_SOURCE,4*k+2+3,&status);
+        comm.recv(&(distances.at(k)),1,SAME_SOURCE,4*k+2+4,&status);
+      }
+      comm.recv(&(distances.at(size)),1,SAME_SOURCE,4*size+2+0,&status);
+
+      gsInfo<<"[MPI process "<<my_rank<<"] Received a job from "<<status.MPI_SOURCE<<": ID: "<<ID<<"; size = "<<size<<"\n";
+      gsInfo<<"\t\t"<<"time\tsolution\tangle\tdistance\n";
+      for (index_t k=0; k!=solutions.size(); k++)
+        gsInfo<<"\t\t"<<times.at(k)<<"\t"<<solutions.at(k).transpose()<<"\t"<<angles.at(k)<<"\t"<<distances.at(k)<<"\n";
+      gsInfo<<"\t\t\t\t\t\t\t\t"<<distances.back()<<"\n";
+
       njobs--;
       m_workers.push(status.MPI_SOURCE);
 
@@ -260,88 +302,89 @@ index_t main(index_t argc, char **argv)
       {
         // push
         send = m_queue.front();
-
         m_queue.pop();
-        // Question 1a: How to send the tuple <index_t,index_t,real_t> to slave?
-        // Question 2 : How to send the job to ANY slave (i.e. the first available one)
 
-        gsInfo<<"[MPI process "<<my_rank<<"] Sending a job to "<<m_workers.front()<<": ID: "<<std::get<0>(send)
-                                        <<"; t = "<<std::get<1>(send)
-                                        <<"; t+1 = "<<std::get<2>(send)
-                                        <<"; dt = "<<std::get<3>(send)
-                                        <<"; x(t) = "<<std::get<4>(send).first.at(0)
-                                        <<"; y(t) = "<<std::get<4>(send).first.at(1)
-                                        <<"; z(t) = "<<std::get<4>(send).first.at(2)
-                                        <<"; x'(t) = "<<std::get<5>(send).first.at(0)
-                                        <<"; y'(t) = "<<std::get<5>(send).first.at(1)
-                                        <<"; z'(t) = "<<std::get<5>(send).first.at(2)
+        index_t ID;
+        bool stop;
+        std::tie(ID,t, tpp, dt0, coords, angle, nextcoords, nextangle,stop) = send;
+
+        gsInfo<<"[MPI process "<<my_rank<<"] Sending a job to "<<m_workers.front()<<": ID: "<<ID
+                                        <<"; t = "<<t
+                                        <<"; t+1 = "<<tpp
+                                        <<"; dt = "<<dt0
+                                        <<"; x(t) = "<<coords.at(0)
+                                        <<"; y(t) = "<<coords.at(1)
+                                        <<"; z(t) = "<<coords.at(2)
+                                        <<"; x'(t) = "<<nextcoords.at(0)
+                                        <<"; y'(t) = "<<nextcoords.at(1)
+                                        <<"; z'(t) = "<<nextcoords.at(2)
                                         <<"\n";
-        comm.isend(&send, 1, m_workers.front(),&req,tag);
+
+
+
+        comm.isend(&ID, 1, m_workers.front(),&req,0);
+        comm.isend(&t, 1, m_workers.front(),&req,1);
+        comm.isend(&tpp, 1, m_workers.front(),&req,2);
+        comm.isend(&dt0, 1, m_workers.front(),&req,3);
+        comm.isend(coords.data(), coords.size(), m_workers.front(),&req,4);
+        comm.isend(&angle, 1, m_workers.front(),&req,5);
+        comm.isend(nextcoords.data(), nextcoords.size(), m_workers.front(),&req,6);
+        comm.isend(&nextangle, 1, m_workers.front(),&req,7);
+        comm.isend(&stop, 1, m_workers.front(),&req,8);
         m_workers.pop();
         njobs++;
       }
     }
 
-    std::get<6>(send) = true;
+    stop = true;
     for (index_t w = 1; w!=proc_count; w++)
-      comm.isend(&send, 1,w,&req,tag);
+      comm.isend(&stop, 1,w,&req,8);
   }
   else
   {
     while (true)
     {
-  gsDebugVar("hi");
       recv_tuple_t send;
       send_tuple_t recv;
       index_t Nintervals = 2;
-      std::vector<real_t> times(Nintervals);
-      std::vector<solution_t> solutions(Nintervals);
-      std::vector<real_t> distances(Nintervals+1);
 
+      index_t ID;
       gsVector<real_t> coords(3), coordsprev(3);
-      real_t x, y, z, xpp, ypp, zpp, xref, yref, zref, t, tpp, dt0, dt;
+      real_t t, tpp, dt0, dt;
+      real_t x, y, z, xpp, ypp, zpp, xref, yref, zref;
       real_t angle, nextangle;
 
-  gsDebugVar("hi");
-      comm.recv(&recv,1,0,tag,MPI_STATUS_IGNORE);
-  gsDebugVar("hi");
+      comm.recv(&stop,        1, 0, 8, MPI_STATUS_IGNORE);
+      gsInfo<<"[MPI process "<<my_rank<<"] stop = "<<stop<<"\n";
 
-      gsDebugVar(std::get<4>(recv).second);
-      gsDebugVar(std::get<4>(recv).first);
-
-      if (std::get<6>(recv))
+      if (stop)
       {
         gsInfo<<"[MPI process "<<my_rank<<"] I have to stop!!"<<"\n";
         break;
       }
-  gsDebugVar("hi");
 
-      t = std::get<1>(recv);
-  gsDebugVar("hi");
-      tpp = std::get<2>(recv);
-  gsDebugVar("hi");
-      dt0 = std::get<3>(recv);
-  gsDebugVar("hi");
-  coordsprev = std::get<4>(recv).first;
-  gsDebugVar("hi");
+      times.resize(Nintervals);
+      solutions.resize(Nintervals);
+      angles.resize(Nintervals);
+      distances.resize(Nintervals+1);
+
+      comm.recv(&ID,          1, 0, 0, MPI_STATUS_IGNORE);
+      comm.recv(&t,           1, 0, 1, MPI_STATUS_IGNORE);
+      comm.recv(&tpp,         1, 0, 2, MPI_STATUS_IGNORE);
+      comm.recv(&dt0,         1, 0, 3, MPI_STATUS_IGNORE);
+      comm.recv(coordsprev.data(),  coordsprev.size(), 0, 4, MPI_STATUS_IGNORE);
+      comm.recv(&angle,       1, 0, 5, MPI_STATUS_IGNORE);
+      comm.recv(coords.data()    ,  coords.size()    , 0, 6, MPI_STATUS_IGNORE);
+      comm.recv(&nextangle,   1, 0, 7, MPI_STATUS_IGNORE);
+
       x = coordsprev.at(0);
-  gsDebugVar("hi");
       y = coordsprev.at(1);
-  gsDebugVar("hi");
       z = coordsprev.at(2);
-  gsDebugVar("hi");
-  coords = std::get<5>(recv).first;
-  gsDebugVar("hi");
-      xref = coords.at(0);
-  gsDebugVar("hi");
-      yref = coords.at(1);
-  gsDebugVar("hi");
-      zref = coords.at(2);
-  gsDebugVar("hi");
-      gsInfo<<"[MPI process "<<my_rank<<"] Received a job from "<<0<<": ID: "<<std::get<0>(recv)<<"; t = "<<t<<"; t+1 = "<<tpp<<"; dt = "<<dt<<"; x(t) = "<<x<<"; y(t) = "<<y<<"; z(t) = "<<z<<"; x'(t) = "<<xref<<"; y'(t) = "<<yref<<"; z'(t) = "<<zref<<"\n";
-  gsDebugVar("hi");
 
-      coordsprev<<x,y,z;
+      xref = coords.at(0);
+      yref = coords.at(1);
+      zref = coords.at(2);
+      gsInfo<<"[MPI process "<<my_rank<<"] Received a job from "<<0<<": ID: "<<ID<<"; t = "<<t<<"; t+1 = "<<tpp<<"; dt = "<<dt<<"; x(t) = "<<x<<"; y(t) = "<<y<<"; z(t) = "<<z<<"; x'(t) = "<<xref<<"; y'(t) = "<<yref<<"; z'(t) = "<<zref<<"\n";
 
       dt = dt0/Nintervals;
       for (index_t k = 0; k!=Nintervals; k++)
@@ -356,7 +399,8 @@ index_t main(index_t argc, char **argv)
         coords<<xpp,ypp,zpp;
 
         times.at(k) = t+k*dt;
-        solutions.at(k) = std::make_pair(coords,nextangle);
+        solutions.at(k) = coords;
+        angles.at(k) = nextangle;
         distances.at(k) = (coords-coordsprev).norm();
 
         coordsprev = coords;
@@ -364,20 +408,35 @@ index_t main(index_t argc, char **argv)
       coords<<xref,yref,zref;
       distances.at(Nintervals) = (coords-coordsprev).norm();
 
-
-      std::get<0>(send) = std::get<0>(recv); // ID
-      std::get<1>(send) = solutions; // ID
-      std::get<2>(send) = times; // ID
-      std::get<3>(send) = distances; // ID
-
       real_t maxSleep = 1;
       real_t sleepTime = maxSleep * next_random();
 
       sleep(sleepTime);
       gsInfo<<"[MPI process "<<my_rank<<"] slept for "<<sleepTime<<" seconds\n";
 
-      gsInfo<<"[MPI process "<<my_rank<<"] Sending a job to    "<<0<<": ID: "<<std::get<0>(send)<<"; solutions.size() = "<<std::get<1>(send).size()<<"; times.size() = "<<std::get<2>(send).size()<<"; distances.size() = "<<std::get<3>(send).size()<<"\n";
-      comm.send(&send,1,0,tag);
+      gsInfo<<"[MPI process "<<my_rank<<"] Sending a job to    "<<0<<": ID: "<<ID<<"; size = "<<solutions.size()<<"\n";
+      gsInfo<<"\t\t"<<"time\tsolution\tangle\tdistance\n";
+      for (index_t k=0; k!=solutions.size(); k++)
+        gsInfo<<"\t\t"<<times.at(k)<<"\t"<<solutions.at(k).transpose()<<"\t"<<angles.at(k)<<"\t"<<distances.at(k)<<"\n";
+      gsInfo<<"\t\t\t\t\t\t\t\t"<<distances.back()<<"\n";
+
+      index_t size = solutions.size();
+
+      // ID
+      comm.send(&ID,1,0,0);
+      // Number of objects to send
+      comm.send(&size,1,0,1);
+      for (index_t k=0; k!=solutions.size(); k++)
+      {
+        comm.send(&(times.at(k))    ,1,0,4*k+2+0);
+        index_t solsize = solutions.at(k).size();
+        comm.send(&solsize,1,0,4*k+2+1);
+        comm.send(solutions.at(k).data(),solsize,0,4*k+2+2);
+        comm.send(&(angles.at(k))   ,1,0,4*k+2+3);
+        comm.send(&(distances.at(k)),1,0,4*k+2+4);
+      }
+      comm.send(&(distances.at(solutions.size())),1,0,4*solutions.size()+2+0);
+
     }
   }
 
