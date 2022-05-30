@@ -25,6 +25,9 @@
 namespace gismo
 {
 
+#define gsMPIInfo(rank) gsInfo<<"[MPI process "<<rank<<"]: "
+#define gsMPIDebug(rank) gsDebug<<"[MPI process "<<rank<<"]: "
+
 template<class T>
 class gsAPALM
 {
@@ -113,12 +116,58 @@ public:
     return result;
   }
 
+  bool isMain() {return (m_rank==0); }
+
 protected:
 
 #ifdef GISMO_WITH_MPI
-  void _mpiSend();
+  // For data
+  void _sendMainToWorker( const index_t &         workerID,
+                          const index_t &         branch,
+                          const std::tuple<index_t, T     , solution_t, solution_t, solution_t> & dataEntry,
+                          const std::pair<T,T> &  dataInterval,
+                          const index_t &         dataLevel,
+                          const solution_t &      dataReference );
 
-  void _mpiRecv();
+  // For stop signal
+  void _sendMainToWorker( const index_t &   workerID,
+                          const bool &      stop      );
+  void _sendMainToAll(    const bool &      stop      );
+
+  // For data
+  void _recvMainToWorker( const index_t &         sourceID,
+                                index_t &         branch,
+                                std::tuple<index_t, T     , solution_t, solution_t, solution_t> & dataEntry,
+                                std::pair<T,T> &  dataInterval,
+                                index_t &         dataLevel,
+                                solution_t &      dataReference,
+                                MPI_Status *      status = NULL);
+
+  // For stop signal
+  void _recvMainToWorker(   const index_t &   sourceID,
+                                  bool &      stop,
+                                  MPI_Status *status = NULL );
+
+  // For data
+  void _sendWorkerToMain( const index_t &                   mainID,
+                          const index_t &                   branch,
+                          const index_t &                   jobID,
+                          const std::vector<T> &            distances,
+                          const std::vector<solution_t> &   stepSolutions,
+                          const T &                         upperDistance,
+                          const T &                         lowerDistance );
+
+  // For data
+  void _recvWorkerToMain( index_t &                   sourceID, // source ID will change to MPI
+                          index_t &                   branch,
+                          index_t &                   jobID,
+                          std::vector<T> &            distances,
+                          std::vector<solution_t>&    stepSolutions,
+                          T &                         upperDistance,
+                          T &                         lowerDistance,
+                          MPI_Status *                status = NULL);
+
+  gsMpiComm & comm() { return m_comm; }
 #endif
 
   template <bool _hasWorkers>
@@ -168,7 +217,7 @@ protected:
 
   // Conditional compilation
 #ifdef GISMO_WITH_MPI
-  gsMpiComm m_comm ;
+  mutable gsMpiComm m_comm ;
   index_t m_proc_count, m_rank;
   std::queue<index_t> m_workers;
 #endif

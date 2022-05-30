@@ -165,6 +165,12 @@ std::tuple<index_t, T     , solution_t, solution_t, solution_t> gsAPALMData<T,so
   m_jobs[m_ID++] = std::make_tuple(xilow,xiupp,level);
   if (m_verbose==2) gsInfo<<"Got active job (ID="<<m_ID-1<<") on interval = ["<<xilow<<","<<xiupp<<"] = ["<<tlow<<","<<tupp<<"] with level "<<level<<"\n";
 
+  for (typename std::map<index_t,std::tuple<T,T,index_t>>::const_iterator it = m_jobs.begin(); it!=m_jobs.end(); it++)
+  {
+    std::tie(xilow,xiupp,level) = it->second;
+    gsDebug<<"job "<<it->first<<" on ["<<xilow<<","<<xiupp<<"] = ["<<tlow<<","<<tupp<<"] with level "<<level<<"\n";
+  }
+
   return std::make_tuple(m_ID-1, dt, start, prev, next);
 }
 
@@ -233,7 +239,6 @@ void gsAPALMData<T,solution_t>::submit(index_t ID, const std::vector<T> & distan
   std::vector<T> t,xi;
   index_t level;
 
-
   // Compute interval (xi and t)
   std::tie(xilow,xiupp,level) = m_jobs[ID];
   tlow = m_tmap[xilow];
@@ -276,7 +281,7 @@ void gsAPALMData<T,solution_t>::submit(index_t ID, const std::vector<T> & distan
   xi.front() = xilow;
   xi.back() = xiupp;
   for (size_t k=1; k!=xi.size()-1; k++)
-      xi.at(k) = xilow + dxi * ( t.at(k) - t.front() ) / dt;
+    xi.at(k) = xilow + dxi * ( t.at(k) - t.front() ) / dt;
 
   // If the upper error is small enough, we don't store the solution
   // Also in this case, the lower error is likely to be small as well

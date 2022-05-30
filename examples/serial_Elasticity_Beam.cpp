@@ -137,7 +137,9 @@ int main (int argc, char** argv)
   real_t tolU       = 1e-6;
   real_t tolF       = 1e-3;
 
-  index_t deg_z = 2;
+
+  index_t verbose = 0;
+
 
   std::string wn("data.csv");
 
@@ -161,7 +163,8 @@ int main (int argc, char** argv)
   cmd.addInt("q","QuasiNewtonInt","Use the Quasi Newton method every INT iterations",quasiNewtonInt);
   cmd.addInt("N", "maxsteps", "Maximum number of steps", step);
   cmd.addInt("n", "SubIntervals", "Number of steps in subintervals", SubIntervals);
-  cmd.addInt("z", "degz", "Degree of fitting splin", deg_z);
+
+  cmd.addInt("v", "verbose", "verbose", verbose);
 
   cmd.addSwitch("adaptive", "Adaptive length ", adaptive);
   cmd.addSwitch("quasi", "Use the Quasi Newton method", quasiNewton);
@@ -352,7 +355,7 @@ int main (int argc, char** argv)
   arcLength->options().setReal("TolU",tolU);
   arcLength->options().setReal("TolF",tolF);
   arcLength->options().setInt("MaxIter",maxit);
-  arcLength->options().setSwitch("Verbose",true);
+  arcLength->options().setSwitch("Verbose",(verbose>0));
   arcLength->options().setReal("Relaxation",relax);
   if (quasiNewtonInt>0)
   {
@@ -398,11 +401,11 @@ int main (int argc, char** argv)
 
   gsAPALMData<real_t,solution_t> apalmData;
   apalmData.options().setInt("MaxLevel",maxLevel);
-  apalmData.options().setInt("Verbose",1);
+  apalmData.options().setInt("Verbose",verbose);
   apalmData.options().setReal("Tolerance",1e-3);
 
   gsAPALMBeam<real_t> apalm(arcLength,apalmData,assembler,dirname,refPoints,refPatches);
-  apalm.options().setSwitch("Verbose",true);
+  apalm.options().setSwitch("Verbose",(verbose>0));
   apalm.options().setInt("SubIntervals",SubIntervals);
   apalm.options().setSwitch("SingularPoint",true);
   apalm.options().setReal("BranchLengthMultiplier",dL/dLb);
@@ -410,64 +413,66 @@ int main (int argc, char** argv)
   apalm.initialize();
   apalm.serialSolve(step+1);
 
-  if (plot || write)
+  if (apalm.isMain())
   {
-    gsField<> solField, stressField;
-    gsMultiPatch<> mp_tmp;
-    std::vector<std::string> pointheaders = {"u_x","u_y","u_z"};
-    std::vector<std::string> otherheaders = {"U-norm","lambda","time","level"};
-    gsPiecewiseFunction<> stresses;
-
-    for (index_t b=0; b!=apalm.getHierarchy().nBranches(); b++)
+    if (plot || write)
     {
-      solutions = apalm.getFlatSolutions(b);
-      times     = apalm.getFlatTimes(b);
-      levels    = apalm.getFlatLevels(b);
+      gsField<> solField, stressField;
+      gsMultiPatch<> mp_tmp;
+      std::vector<std::string> pointheaders = {"u_x","u_y","u_z"};
+      std::vector<std::string> otherheaders = {"U-norm","lambda","time","level"};
+      gsPiecewiseFunction<> stresses;
 
-      gsParaviewCollection dataCollection(dirname + "/" + "data_serial_branch"+std::to_string(b));
-      gsStructuralAnalysisOutput<real_t> data(dirname + "/data_serial_branch"+std::to_string(b)+".csv",refPoints);
-      if (write)
-          data.init(pointheaders,otherheaders);
-      for (size_t k=0; k!= solutions.size(); k++)
+      for (index_t b=0; b!=apalm.getHierarchy().nBranches(); b++)
       {
-        Lold = solutions[k].second;
-        Uold = solutions[k].first;
+        solutions = apalm.getFlatSolutions(b);
+        times     = apalm.getFlatTimes(b);
+        levels    = apalm.getFlatLevels(b);
 
-        assembler.constructSolution(Uold,fixedDofs,mp_def);
-        solField = gsField<>(assembler.patches(),mp_def);
-        assembler.constructCauchyStresses(mp_def,stresses,stress_components::von_mises);
-        stressField = gsField<>(assembler.patches(),stresses,true);
-
+        gsParaviewCollection dataCollection(dirname + "/" + "data_serial_branch"+std::to_string(b));
+        gsStructuralAnalysisOutput<real_t> data(dirname + "/data_serial_branch"+std::to_string(b)+".csv",refPoints);
         if (write)
-          if (refPoints.cols()!=0)
-          {
-              gsVector<> otherData(4);
-              otherData<<Uold.norm(),Lold,times[k],levels[k];
-              gsMatrix<> pointResults(mp.geoDim(),refPoints.cols());
-              for (index_t p=0; p!=refPoints.cols(); p++)
-                  pointResults.col(p) = solField.value(refPoints.col(p),refPatches(0,p));
-              data.add(pointResults,otherData);
-          }
+            data.init(pointheaders,otherheaders);
+        for (size_t k=0; k!= solutions.size(); k++)
+        {
+          Lold = solutions[k].second;
+          Uold = solutions[k].first;
 
+          assembler.constructSolution(Uold,fixedDofs,mp_def);
+          solField = gsField<>(assembler.patches(),mp_def);
+          assembler.constructCauchyStresses(mp_def,stresses,stress_components::von_mises);
+          stressField = gsField<>(assembler.patches(),stresses,true);
+
+          if (write)
+            if (refPoints.cols()!=0)
+            {
+                gsVector<> otherData(4);
+                otherData<<Uold.norm(),Lold,times[k],levels[k];
+                gsMatrix<> pointResults(mp.geoDim(),refPoints.cols());
+                for (index_t p=0; p!=refPoints.cols(); p++)
+                    pointResults.col(p) = solField.value(refPoints.col(p),refPatches(0,p));
+                data.add(pointResults,otherData);
+            }
+
+          if (plot)
+          {
+            std::string fileName = dirname + "/" + "data_serial_branch"+std::to_string(b) + util::to_string(k);
+            std::map<std::string,const gsField<> *> fields;
+            fields["Deformation"] = &solField;
+            fields["Stress"] = &stressField;
+            gsWriteParaviewMultiPhysics(fields,fileName,1000,true);
+            fileName = "data_serial_branch"+std::to_string(b) + util::to_string(k) + "0";
+            dataCollection.addTimestep(fileName,times[k],".vts");
+            if (mesh) dataCollection.addTimestep(fileName,times[k],"_mesh.vtp");
+          }
+        }
         if (plot)
         {
-          std::string fileName = dirname + "/" + "data_serial_branch"+std::to_string(b) + util::to_string(k);
-          std::map<std::string,const gsField<> *> fields;
-          fields["Deformation"] = &solField;
-          fields["Stress"] = &stressField;
-          gsWriteParaviewMultiPhysics(fields,fileName,1000,true);
-          fileName = "data_serial_branch"+std::to_string(b) + util::to_string(k) + "0";
-          dataCollection.addTimestep(fileName,times[k],".vts");
-          if (mesh) dataCollection.addTimestep(fileName,times[k],"_mesh.vtp");
+          dataCollection.save();
         }
-      }
-      if (plot)
-      {
-        dataCollection.save();
       }
     }
   }
-
 
   /////////////////////////////////////////////////////////////////////////////////////////////
   /////////////////////////////////////////////////////////////////////////////////////////////
@@ -479,60 +484,63 @@ int main (int argc, char** argv)
   /////////////////////////////////////////////////////////////////////////////////////////////
   /////////////////////////////////////////////////////////////////////////////////////////////
 
-  if (plot || write)
+  if (apalm.isMain())
   {
-    gsField<> solField, stressField;
-    gsMultiPatch<> mp_tmp;
-    std::vector<std::string> pointheaders = {"u_x","u_y","u_z"};
-    std::vector<std::string> otherheaders = {"U-norm","lambda","time","level"};
-    gsPiecewiseFunction<> stresses;
-
-    for (index_t b=0; b!=apalm.getHierarchy().nBranches(); b++)
+    if (plot || write)
     {
-      solutions = apalm.getFlatSolutions(b);
-      times     = apalm.getFlatTimes(b);
-      levels    = apalm.getFlatLevels(b);
+      gsField<> solField, stressField;
+      gsMultiPatch<> mp_tmp;
+      std::vector<std::string> pointheaders = {"u_x","u_y","u_z"};
+      std::vector<std::string> otherheaders = {"U-norm","lambda","time","level"};
+      gsPiecewiseFunction<> stresses;
 
-      gsParaviewCollection dataCollection(dirname + "/" + "data_parallel_branch"+std::to_string(b));
-      gsStructuralAnalysisOutput<real_t> data(dirname + "/data_parallel_branch"+std::to_string(b)+".csv",refPoints);
-      if (write)
-          data.init(pointheaders,otherheaders);
-      for (size_t k=0; k!= solutions.size(); k++)
+      for (index_t b=0; b!=apalm.getHierarchy().nBranches(); b++)
       {
-        Lold = solutions[k].second;
-        Uold = solutions[k].first;
+        solutions = apalm.getFlatSolutions(b);
+        times     = apalm.getFlatTimes(b);
+        levels    = apalm.getFlatLevels(b);
 
-        assembler.constructSolution(Uold,fixedDofs,mp_def);
-        solField = gsField<>(assembler.patches(),mp_def);
-        assembler.constructCauchyStresses(mp_def,stresses,stress_components::von_mises);
-        stressField = gsField<>(assembler.patches(),stresses,true);
-
+        gsParaviewCollection dataCollection(dirname + "/" + "data_parallel_branch"+std::to_string(b));
+        gsStructuralAnalysisOutput<real_t> data(dirname + "/data_parallel_branch"+std::to_string(b)+".csv",refPoints);
         if (write)
-          if (refPoints.cols()!=0)
-          {
-              gsVector<> otherData(4);
-              otherData<<Uold.norm(),Lold,times[k],levels[k];
-              gsMatrix<> pointResults(mp.geoDim(),refPoints.cols());
-              for (index_t p=0; p!=refPoints.cols(); p++)
-                  pointResults.col(p) = solField.value(refPoints.col(p),refPatches(0,p));
-              data.add(pointResults,otherData);
-          }
+            data.init(pointheaders,otherheaders);
+        for (size_t k=0; k!= solutions.size(); k++)
+        {
+          Lold = solutions[k].second;
+          Uold = solutions[k].first;
 
+          assembler.constructSolution(Uold,fixedDofs,mp_def);
+          solField = gsField<>(assembler.patches(),mp_def);
+          assembler.constructCauchyStresses(mp_def,stresses,stress_components::von_mises);
+          stressField = gsField<>(assembler.patches(),stresses,true);
+
+          if (write)
+            if (refPoints.cols()!=0)
+            {
+                gsVector<> otherData(4);
+                otherData<<Uold.norm(),Lold,times[k],levels[k];
+                gsMatrix<> pointResults(mp.geoDim(),refPoints.cols());
+                for (index_t p=0; p!=refPoints.cols(); p++)
+                    pointResults.col(p) = solField.value(refPoints.col(p),refPatches(0,p));
+                data.add(pointResults,otherData);
+            }
+
+          if (plot)
+          {
+            std::string fileName = dirname + "/" + "data_parallel_branch"+std::to_string(b) + util::to_string(k);
+            std::map<std::string,const gsField<> *> fields;
+            fields["Deformation"] = &solField;
+            fields["Stress"] = &stressField;
+            gsWriteParaviewMultiPhysics(fields,fileName,1000,true);
+            fileName = "data_parallel_branch"+std::to_string(b) + util::to_string(k) + "0";
+            dataCollection.addTimestep(fileName,times[k],".vts");
+            if (mesh) dataCollection.addTimestep(fileName,times[k],"_mesh.vtp");
+          }
+        }
         if (plot)
         {
-          std::string fileName = dirname + "/" + "data_parallel_branch"+std::to_string(b) + util::to_string(k);
-          std::map<std::string,const gsField<> *> fields;
-          fields["Deformation"] = &solField;
-          fields["Stress"] = &stressField;
-          gsWriteParaviewMultiPhysics(fields,fileName,1000,true);
-          fileName = "data_parallel_branch"+std::to_string(b) + util::to_string(k) + "0";
-          dataCollection.addTimestep(fileName,times[k],".vts");
-          if (mesh) dataCollection.addTimestep(fileName,times[k],"_mesh.vtp");
+          dataCollection.save();
         }
-      }
-      if (plot)
-      {
-        dataCollection.save();
       }
     }
   }
