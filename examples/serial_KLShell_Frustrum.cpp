@@ -81,8 +81,6 @@ public:
       deformation.patch(0).coefs() -= mp.patch(0).coefs();// assuming 1 patch here
       gsField<T> solField(mp,deformation);
 
-      gsDebugVar(deformation);
-
       if (m_refPoints.cols()!=0)
       {
           gsVector<> otherData(2);
@@ -468,6 +466,11 @@ int main (int argc, char** argv)
     std::vector<index_t> levels;
 
     index_t level = 0;
+
+    gsInfo<<"------------------------------------------------------------------------------------\n";
+    gsInfo<<"\t\t\tLevel "<<level<<" (dL = "<<dL<<") -- Coarse grid \n";
+    gsInfo<<"------------------------------------------------------------------------------------\n";
+
     gsVector<> refPoints(2);
     gsVector<index_t> refPatches(1);
     refPoints<<1.0,1.0;
