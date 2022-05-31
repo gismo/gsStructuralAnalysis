@@ -118,8 +118,10 @@ public:
 
 #ifdef GISMO_WITH_MPI
   bool isMain() {return (m_rank==0); }
+  index_t rank() {return (m_rank); }
 #else
   bool isMain() {return true; }
+  index_t rank() {return 0; }
 #endif
 
 protected:

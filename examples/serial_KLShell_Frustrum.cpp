@@ -494,12 +494,12 @@ int main (int argc, char** argv)
       if (write)
         initStepOutput(dirname + "/" + wn, writePoints);
 
-    solutions = apalm.getFlatSolutions();
-    times     = apalm.getFlatTimes();
-    levels    = apalm.getFlatLevels();
-
     if (apalm.isMain())
     {
+      solutions = apalm.getFlatSolutions();
+      times     = apalm.getFlatTimes();
+      levels    = apalm.getFlatLevels();
+
       if (plot || write)
       {
         gsField<> solField;
@@ -555,17 +555,16 @@ int main (int argc, char** argv)
 
     apalm.parallelSolve();
 
-    solutions = apalm.getFlatSolutions();
-    times     = apalm.getFlatTimes();
-    levels    = apalm.getFlatLevels();
-
-
     /////////////////////////////////////////////////////////////////////////////////////////////
     /////////////////////////////////////////////////////////////////////////////////////////////
     /////////////////////////////////////////////////////////////////////////////////////////////
 
     if (apalm.isMain())
     {
+      solutions = apalm.getFlatSolutions();
+      times     = apalm.getFlatTimes();
+      levels    = apalm.getFlatLevels();
+
       if (plot || write)
       {
         gsField<> solField;
