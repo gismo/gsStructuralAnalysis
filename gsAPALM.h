@@ -116,7 +116,11 @@ public:
     return result;
   }
 
+#ifdef GISMO_WITH_MPI
   bool isMain() {return (m_rank==0); }
+#else
+  bool isMain() {return true; }
+#endif
 
 protected:
 
@@ -218,9 +222,10 @@ protected:
   // Conditional compilation
 #ifdef GISMO_WITH_MPI
   mutable gsMpiComm m_comm ;
-  index_t m_proc_count, m_rank;
   std::queue<index_t> m_workers;
 #endif
+
+  index_t m_proc_count, m_rank;
 };
 
 }
