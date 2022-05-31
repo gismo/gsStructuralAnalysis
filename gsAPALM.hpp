@@ -521,7 +521,6 @@ void gsAPALM<T>::_parallelSolve_worker( const std::tuple<index_t, T     , soluti
   gsMatrix<T> Uprev, Unext,Uold;
 
   /// Worker
-  std::vector<solution_t> stepSolutionsExport(Nintervals+2);
   stepSolutions.resize(Nintervals);
   std::vector<T> stepTimes(Nintervals);
   distances.resize(Nintervals+1);
@@ -625,6 +624,7 @@ void gsAPALM<T>::_parallelSolve_worker( const std::tuple<index_t, T     , soluti
   DeltaL = stepSolutions.back().second - Lori;
   lowerDistance = m_ALM->distance(DeltaU,DeltaL);
 
+  std::vector<solution_t> stepSolutionsExport(Nintervals+2);
   // Export parallel interval output
   std::pair<gsVector<T>,T> front = std::make_pair(start.first,start.second);
   stepSolutionsExport.front() = front;
