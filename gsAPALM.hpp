@@ -616,6 +616,7 @@ void gsAPALM<T>::_parallelSolve_worker( const std::tuple<index_t, T     , soluti
 
   gsMPIDebug(m_rank)<<"Ref   - ||u|| = "<<dataReference.first.norm()<<", L = "<<dataReference.second<<"\n";
 
+  GISMO_ASSERT(dataReference.first.normalized().size()==m_ALM->solutionU().normalized().size(),"Reference solution and current solution have different size! ref.size() = "<<dataReference.first.normalized().size()<<"; sol.size() = "<<m_ALM->solutionU().normalized().size());
   GISMO_ASSERT((dataReference.first.normalized()).dot(m_ALM->solutionU().normalized())>-0.8,
                 "Reference is almost in the opposite direction of the solution. Are branches mirrored? result:" << (reference.first.normalized()).dot(m_ALM->solutionU().normalized()));
 
