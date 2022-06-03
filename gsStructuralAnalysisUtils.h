@@ -24,7 +24,9 @@ public:
     gsStructuralAnalysisOutput(const std::string name)
     :
     m_fname(name),
-    m_precision(5)
+    m_precision(5),
+    m_nPointHeaders(0),
+    m_nOtherHeaders(0)
     {
 
     }

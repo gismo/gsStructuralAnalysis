@@ -378,6 +378,8 @@ gsAPALM<T>::parallelSolve_impl()
     }
     stop = true;
     this->_sendMainToAll(stop);
+
+    this->_parallelSolve_finalize();
   }
   else
   {
@@ -465,7 +467,12 @@ gsAPALM<T>::parallelSolve_impl()
 
     it++;
   }
+  this->_parallelSolve_finalize();
+}
 
+template <class T>
+void gsAPALM<T>::_parallelSolve_finalize()
+{
   std::vector<solution_t>   solutions;
   std::vector<T>            times;
   std::vector<index_t>      levels;
@@ -625,20 +632,32 @@ void gsAPALM<T>::_parallelSolve_worker( const std::tuple<index_t, T     , soluti
   lowerDistance = m_ALM->distance(DeltaU,DeltaL);
 
   std::vector<solution_t> stepSolutionsExport(Nintervals+2);
+  std::vector<T> stepTimesExport(Nintervals+2);
   // Export parallel interval output
+  // Solutions
   std::pair<gsVector<T>,T> front = std::make_pair(start.first,start.second);
   stepSolutionsExport.front() = front;
   std::pair<gsVector<T>,T> back  = std::make_pair(dataReference.first,dataReference.second);
   stepSolutionsExport.back() = back;
+  // Times
+  stepTimesExport.front() = tstart;
+  stepTimesExport.back() = tend;
 
-  // Temporarily swap the interval solutions
+  // Temporarily swap the interval solutions and times
   for (index_t k=0; k!=Nintervals; k++)
+  {
     std::swap(stepSolutions.at(k),stepSolutionsExport.at(k+1));
-  this->parallelIntervalOutput(stepSolutionsExport,stepTimes,dataLevel,ID);
+    std::swap(stepTimes.at(k),stepTimesExport.at(k+1));
+  }
+
+  this->parallelIntervalOutput(stepSolutionsExport,stepTimesExport,dataLevel,ID);
 
   // And swap them back
   for (index_t k=0; k!=Nintervals; k++)
+  {
     std::swap(stepSolutionsExport.at(k+1),stepSolutions.at(k));
+    std::swap(stepTimesExport.at(k+1),stepTimes.at(k));
+  }
 }
 
 

@@ -433,12 +433,8 @@ std::tuple<std::vector<T>,std::vector<solution_t>,std::vector<index_t>> gsAPALMD
       times.push_back(m_tmap[it->first]);
       solutions.push_back(*(it->second.get()));
       levels.push_back(m_levels[it->first]);
-      gsDebugVar(it->first);
-      gsDebugVar(m_tmap[it->first]);
     }
-
   }
-
   return std::make_tuple(times,solutions,levels);
 }
 

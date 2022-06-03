@@ -194,6 +194,7 @@ protected:
                                         T &                     lowerDistance   );
   void _parallelSolve_main(     gsAPALMDataContainer<T,solution_t> & data       );
 
+  void _parallelSolve_finalize();
 
 protected:
 
