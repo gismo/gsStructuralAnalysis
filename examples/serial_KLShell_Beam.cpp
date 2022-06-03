@@ -45,7 +45,7 @@ public:
   gsAPALMBeam(gsALMBase<T> * ALM,
               const gsAPALMData<T,solution_t> & Data,
               const gsThinShellAssemblerBase<T> * assembler,
-              std::string dirname,
+              std::string & dirname,
               const gsMatrix<T> & refPoints,
               const gsVector<index_t> & refPatches          )
   :
@@ -64,7 +64,7 @@ public:
     gsMultiPatch<T> deformation,mp_tmp, mp;
     deformation = mp = m_assembler->geometry();
     std::vector<std::string> pointheaders = {"u_x","u_y","u_z"};
-    std::vector<std::string> otherheaders = {"lambda","level"};
+    std::vector<std::string> otherheaders = {"U-norm","lambda","time","level"};
 
     data.init(pointheaders,otherheaders);
 
@@ -77,14 +77,13 @@ public:
 
       if (m_refPoints.cols()!=0)
       {
-          gsVector<> otherData(2);
-          otherData<<stepSolutions[k].second,level;
+          gsVector<> otherData(4);
+          otherData<<stepSolutions[k].first.norm(),stepSolutions[k].second,stepTimes[k],level;
           gsMatrix<> pointResults(mp.geoDim(),m_refPoints.cols());
           for (index_t p=0; p!=m_refPoints.cols(); p++)
               pointResults.col(p) = solField.value(m_refPoints.col(p),m_refPatches.at(p));
           data.add(pointResults,otherData);
       }
-
     }
   }
 
@@ -156,8 +155,6 @@ int main (int argc, char** argv)
   cmd.addInt("m","Method", "Arc length method; 1: Crisfield's method; 2: RIks' method.", method);
   cmd.addReal("L","dLb", "arc length", dLb);
   cmd.addReal("l","dL", "arc length after bifurcation", dL);
-  // cmd.addInt("I","inilvl", "Initial levels", iniLevels);
-  // cmd.addInt("M","maxlvl", "Max levels", maxLevels);
   cmd.addInt("d","level", "Max level", maxLevel);
   cmd.addReal("A","relaxation", "Relaxation factor for arc length method", relax);
 
@@ -199,15 +196,12 @@ int main (int argc, char** argv)
     Case 3: Clamped beam (left) under horizontal compressive end load     --- Validation settings: -L 5e-5 -l 1e-1 -M 0 -N 100 -r 4 -e 2
                                                                               Fig 5  from: Pagani, A., & Carrera, E. (2018). Unified formulation of geometrically nonlinear refined beam theories. Mechanics of Advanced Materials and Structures, 25(1), 15–31. https://doi.org/10.1080/15376494.2016.1232458
   */
-  if (testCase==2 || testCase==3)
-  {
-    E_modulus = 75e6;
-    thickness = 0.01;
-    PoissonRatio = 0.0;
-    aDim = 1.0;
-    bDim = 0.01;
-    mp = RectangularDomain(numHref, 0, numElevate+2, 2, aDim, bDim);
-  }
+  E_modulus = 75e6;
+  thickness = 0.01;
+  PoissonRatio = 0.0;
+  aDim = 1.0;
+  bDim = 0.01;
+  mp = RectangularDomain(numHref, 0, numElevate+2, 2, aDim, bDim);
 
   gsMultiBasis<> dbasis(mp);
   gsInfo<<"Basis (patch 0): "<< mp.patch(0).basis() << "\n";
@@ -363,7 +357,7 @@ int main (int argc, char** argv)
   arcLength->options().setReal("TolU",tolU);
   arcLength->options().setReal("TolF",tolF);
   arcLength->options().setInt("MaxIter",maxit);
-  arcLength->options().setSwitch("Verbose",true);
+  arcLength->options().setSwitch("Verbose",(verbose>0));
   arcLength->options().setReal("Relaxation",relax);
   if (quasiNewtonInt>0)
   {
@@ -409,15 +403,15 @@ int main (int argc, char** argv)
 
   gsAPALMData<real_t,solution_t> apalmData;
   apalmData.options().setInt("MaxLevel",maxLevel);
-  apalmData.options().setInt("Verbose",1);
-  apalmData.options().setReal("Tolerance",1e-2);
+  apalmData.options().setInt("Verbose",verbose);
+  apalmData.options().setReal("Tolerance",1e-3);
 
   gsAPALMBeam<real_t> apalm(arcLength,apalmData,assembler,dirname,refPoints,refPatches);
-  apalm.options().setSwitch("Verbose",true);
+  apalm.options().setSwitch("Verbose",(verbose>0));
   apalm.options().setInt("SubIntervals",SubIntervals);
   apalm.options().setSwitch("SingularPoint",true);
   apalm.options().setReal("BranchLengthMultiplier",dL/dLb);
-  apalm.options().setReal("BifLengthMultiplier",0.5*dLb/dL);
+  apalm.options().setReal("BifLengthMultiplier",0.05);
   apalm.initialize();
   apalm.serialSolve(step+1);
 
@@ -428,7 +422,7 @@ int main (int argc, char** argv)
       gsField<> solField;
       gsMultiPatch<> mp_tmp;
       std::vector<std::string> pointheaders = {"u_x","u_y","u_z"};
-      std::vector<std::string> otherheaders = {"lambda","level"};
+      std::vector<std::string> otherheaders = {"U-norm","lambda","time","level"};
 
       for (index_t b=0; b!=apalm.getHierarchy().nBranches(); b++)
       {
@@ -453,8 +447,8 @@ int main (int argc, char** argv)
           if (write)
             if (refPoints.cols()!=0)
             {
-                gsVector<> otherData(2);
-                otherData<<Lold,levels[k];
+                gsVector<> otherData(4);
+                otherData<<Uold.norm(),Lold,times[k],levels[k];
                 gsMatrix<> pointResults(mp.geoDim(),refPoints.cols());
                 for (index_t p=0; p!=refPoints.cols(); p++)
                     pointResults.col(p) = solField.value(refPoints.col(p),refPatches(0,p));
@@ -497,7 +491,7 @@ int main (int argc, char** argv)
       gsField<> solField;
       gsMultiPatch<> mp_tmp;
       std::vector<std::string> pointheaders = {"u_x","u_y","u_z"};
-      std::vector<std::string> otherheaders = {"lambda","level"};
+      std::vector<std::string> otherheaders = {"U-norm","lambda","time","level"};
 
       for (index_t b=0; b!=apalm.getHierarchy().nBranches(); b++)
       {
@@ -522,8 +516,8 @@ int main (int argc, char** argv)
           if (write)
             if (refPoints.cols()!=0)
             {
-                gsVector<> otherData(2);
-                otherData<<Lold,levels[k];
+                gsVector<> otherData(4);
+                otherData<<Uold.norm(),Lold,times[k],levels[k];
                 gsMatrix<> pointResults(mp.geoDim(),refPoints.cols());
                 for (index_t p=0; p!=refPoints.cols(); p++)
                     pointResults.col(p) = solField.value(refPoints.col(p),refPatches(0,p));
@@ -547,6 +541,7 @@ int main (int argc, char** argv)
     }
   }
 
+  delete assembler;
   delete materialMatrix;
   delete arcLength;
   return result;
