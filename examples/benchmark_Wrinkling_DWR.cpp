@@ -123,6 +123,7 @@ int main (int argc, char** argv)
     int quasiNewtonInt = -1;
     bool adaptive = false;
     bool adaptiveMesh = false;
+    bool admissible = false;
     int step = 10;
     int method = 2; // (0: Load control; 1: Riks' method; 2: Crisfield's method; 3: consistent crisfield method; 4: extended iterations)
     bool symmetry = false;
@@ -153,10 +154,12 @@ int main (int argc, char** argv)
     real_t tolU = 1e-6;
     real_t tolF = 1e-3;
 
+    real_t target   =1e-4;
+    real_t bandwidth=1e-1;
+
     // Adaptive refinement options
-    bool alternate = false;
-    index_t refExt = -1;
-    index_t crsExt = -1;
+    index_t refExt = 0;
+    index_t crsExt = 0;
 
     index_t markstrat = 2;
     real_t adaptRefParam = 0.9;
@@ -188,12 +191,15 @@ int main (int argc, char** argv)
 
     cmd.addInt("E", "refExt", "Refinement extension", refExt);
     cmd.addInt("C", "crsExt", "Coarsening extension", crsExt);
-    cmd.addSwitch("alternate", "Alternate the refinement/coarsening ", alternate);
     cmd.addReal("a", "refparam", "Controls the adaptive refinement parameter", adaptRefParam);
     cmd.addInt("u","rule", "Adaptive refinement rule; 1: ... ; 2: PUCA; 3: BULK", markstrat);
 
+    cmd.addReal("T","target", "Refinement target error", target);
+    cmd.addReal("B","band", "Refinement target error bandwidth", bandwidth);
+
     cmd.addSwitch("adaptive", "Adaptive length ", adaptive);
     cmd.addSwitch("adaptiveMesh", "Adaptive mesh ", adaptiveMesh);
+    cmd.addSwitch("admissible", "Admissible refinement", admissible);
     cmd.addSwitch("bifurcation", "Compute singular points and bifurcation paths", SingularPoint);
     cmd.addSwitch("quasi", "Use the Quasi Newton method", quasiNewton);
     cmd.addSwitch("plot", "Plot result in ParaView format", plot);
@@ -539,31 +545,32 @@ int main (int argc, char** argv)
     mesher.options().setReal("RefineParam",adaptRefParam);
     mesher.options().setInt("CoarsenExtension",crsExt);
     mesher.options().setInt("RefineExtension",refExt);
-    mesher.options().setInt("MaxLevel",3);
-    mesher.options().setInt("Verbose",1);
+    mesher.options().setInt("MaxLevel",4);
+    mesher.options().setSwitch("Admissible",admissible);
     mesher.getOptions();
+
+    gsHBoxContainer<2,real_t> markRef, markCrs;
+
+    gsMultiPatch<> U_patch, deltaU_patch;
+    gsMultiPatch<> Uold_patch, deltaUold_patch;
+
+    assembler->constructMultiPatchL(Uold,Uold_patch);
+    assembler->constructMultiPatchL(deltaUold,deltaUold_patch);
 
     for (index_t k=0; k<step; k++)
     {
         gsInfo<<"Load step "<< k<<"; \tSystem size = "<<Uold.size()<<" x "<<Uold.size()<<"\n";
         gsParaviewCollection errors(dirname + "/" + "error" + util::to_string(k));
-        real_t refTol = 1e-4; // refine if error is above
-        real_t crsTol = 1e-6; // coarsen if error is below
+        real_t refTol = target + bandwidth; // refine if error is above
+        real_t crsTol = target - bandwidth; // coarsen if error is below
         GISMO_ENSURE(refTol >= crsTol,"Refinement tolerance should be bigger than the coarsen tolerance");
         real_t error = 1;
         index_t maxIt = 10;
         index_t it = 0;
         bool unstable = false;
-
-        gsMultiPatch<> primalL, dualL, dualH;
-        gsMultiPatch<> U_patch, deltaU_patch;
-        gsMultiPatch<> Uold_patch, deltaUold_patch;
-
-        assembler->constructMultiPatchL(Uold,Uold_patch);
-        assembler->constructMultiPatchL(deltaUold,deltaUold_patch);
-
         bool refined = true;
         bool coarsened = true;
+
         while ((error < crsTol || error > refTol) && it < maxIt && !unstable && (refined || coarsened))
         {
             assembler->assembleL();
@@ -630,8 +637,12 @@ int main (int argc, char** argv)
             U = arcLength.solutionU();
             deltaU = arcLength.solutionDU();
 
+            // Deformed geometry
             assembler->constructSolutionL(U,mp_def);
-            assembler->constructMultiPatchL(U,primalL);
+            // Deformation (primal)
+            assembler->constructMultiPatchL(U,U_patch);
+            // delta Deformation
+            assembler->constructMultiPatchL(U,deltaU_patch);
 
             /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
             // ADAPTIVE MESHING PART
@@ -639,7 +650,7 @@ int main (int argc, char** argv)
             gsThinShellDWRHelper<real_t> helper(assembler);
 
             {
-                helper.computeError(mp_def,primalL);
+                helper.computeError(mp_def,U_patch);
                 error = std::abs(helper.error());
                 gsInfo<<"Error = "<<error<<"\n";
                 std::vector<real_t> elErrors = helper.absErrors();
@@ -655,23 +666,27 @@ int main (int argc, char** argv)
                     if (mesh) errors.addTimestep(fileName,it,"_mesh.vtp");
                 }
 
-                mesher.mark(elErrors);
-                gsDebugVar(mp.basis(0).numElements());
+
                 if (error > refTol)
                 {
                     gsInfo<<"Error is too big!\n";
-                    // mesher.flatten(2);
-                    refined = mesher.refine();
+                    mesher.markRef_into(elErrors,markRef);
+                    refined = mesher.refine(markRef);
                 }
                 else if (error < crsTol)
                 {
                     gsInfo<<"Error is too small!\n";
-                    coarsened = mesher.unrefine();
+                    mesher.markCrs_into(elErrors,markCrs);
+                    coarsened = mesher.unrefine(markCrs);
                 }
                 else
                 {
                     gsInfo<<"Error is in the range "<<crsTol<<" < "<<error<<" < "<<refTol<<"\n";
-                    break;
+                    mesher.markRef_into(elErrors,markRef);
+                    mesher.markCrs_into(elErrors,markRef,markCrs);
+                    refined = mesher.refine(markRef);
+                    coarsened = mesher.unrefine(markCrs);
+                    // break; // only needed when no refinement is performed
                 }
 
                 // mp_def = mp;
@@ -680,11 +695,19 @@ int main (int argc, char** argv)
                 basisH = basisL;
                 basisH.degreeElevate(1);
 
-                assembler->setBasisL(basisL);
-                assembler->setBasisH(basisH);
-
                 // Project the solution from old mesh to new mesh
                 gsMatrix<> coefs;
+
+                // Which of those are needed?
+
+                gsQuasiInterpolate<real_t>::localIntpl(basisL.basis(0), mp_def.patch(0), coefs);
+                mp_def.patch(0) = *basisL.basis(0).makeGeometry(give(coefs));
+
+                gsQuasiInterpolate<real_t>::localIntpl(basisL.basis(0), U_patch.patch(0), coefs);
+                U_patch.patch(0) = *basisL.basis(0).makeGeometry(give(coefs));
+
+                gsQuasiInterpolate<real_t>::localIntpl(basisL.basis(0), deltaU_patch.patch(0), coefs);
+                deltaU_patch.patch(0) = *basisL.basis(0).makeGeometry(give(coefs));
 
                 gsQuasiInterpolate<real_t>::localIntpl(basisL.basis(0), Uold_patch.patch(0), coefs);
                 Uold_patch.patch(0) = *basisL.basis(0).makeGeometry(give(coefs));
@@ -695,6 +718,11 @@ int main (int argc, char** argv)
                 assembler->setBasisL(basisL);
                 assembler->setBasisH(basisH);
                 assembler->setUndeformed(mp);
+
+                mesher.rebuild();
+
+                // assembler->constructSolutionL(U,mp_def);
+
             }
             it++;
         }
@@ -702,10 +730,17 @@ int main (int argc, char** argv)
         if (plotError)
             errors.save();
 
-        Uold = U;
+        // Update Uold
+        Uold_patch = U_patch;
+        deltaUold_patch = deltaU_patch;
         Lold = L;
-        deltaUold = deltaU;
         deltaLold = deltaL;
+
+        // not needed??
+        // Uold = U;
+        // Lold = L;
+        // deltaUold = deltaU;
+        // deltaLold = deltaL;
 
         indicator_prev = indicator;
 
@@ -713,7 +748,9 @@ int main (int argc, char** argv)
 
         /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-        assembler->constructSolutionL(U,mp_def);
+        // gsDebugVar(U);
+
+        // assembler->constructSolutionL(U,mp_def);
         deformation = mp_def;
 
         deformation.patch(0).coefs() -= mp.patch(0).coefs();// assuming 1 patch here
