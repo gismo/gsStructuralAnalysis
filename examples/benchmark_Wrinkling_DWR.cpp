@@ -276,8 +276,8 @@ int main (int argc, char** argv)
     mp.patch(0).coefs().col(1) *= bDim/2.;
     mp.embed(3);
 
-    for(index_t i = 0; i< numElevate; ++i)
-      mp.patch(0).degreeElevate();    // Elevate the degree
+    for (index_t i = 0; i< numElevate; ++i)
+        mp.patch(0).degreeElevate();    // Elevate the degree
 
     // Cast all patches of the mp object to THB splines
     if (adaptiveMesh)
@@ -289,14 +289,22 @@ int main (int argc, char** argv)
             if(gsTensorBSpline<2,real_t> *geo = dynamic_cast< gsTensorBSpline<2,real_t> * > (&mp.patch(k)))
             {
                 thb = gsTHBSpline<2,real_t>(geo->basis().source(),geo->coefs());
+                gsMatrix<> bbox = geo->support();
+                for (index_t i = 0; i< numHref; ++i)
+                    thb.refineElements(mp.basis(0).asElements(bbox));
+
                 mp_thb.addPatch(thb);
             }
         }
         mp = mp_thb;
+        // h-refine
     }
-    // h-refine
-    for(index_t i = 0; i< numHref; ++i)
-      mp.patch(0).uniformRefine();
+    else
+    {
+        for (index_t i = 0; i< numHref; ++i)
+            mp.patch(0).uniformRefine();
+    }
+
 
     // addClamping(mp,0,sides, 1e-2);
     mp_def = mp;
