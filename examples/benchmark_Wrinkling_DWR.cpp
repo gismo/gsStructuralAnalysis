@@ -606,36 +606,34 @@ int main (int argc, char** argv)
 
             if (SingularPoint)
             {
-              arcLength.computeStability(arcLength.solutionU(),quasiNewton);
-              unstable = arcLength.stabilityChange();
-              if (unstable)
-              {
-                gsInfo<<"Bifurcation spotted!"<<"\n";
-                arcLength.computeSingularPoint(1e-4, 5, Uold, Lold, 1e-7, 0, false);
-                arcLength.switchBranch();
-                dLb0 = dLb = dL;
-                arcLength.setLength(dLb);
-
-                if (writeP)
+                arcLength.computeStability(arcLength.solutionU(),quasiNewton);
+                unstable = arcLength.stabilityChange();
+                if (unstable)
                 {
-                  gsMultiPatch<> mp_perturbation;
-                  assembler->constructSolutionL(arcLength.solutionV(),mp_perturbation);
-                  gsWrite(mp_perturbation,dirname + "/" +"perturbation");
-                  gsInfo<<"Perturbation written in: " + dirname + "/" + "perturbation.xml\n";
+                    gsInfo<<"Bifurcation spotted!"<<"\n";
+                    arcLength.computeSingularPoint(1e-4, 5, Uold, Lold, 1e-7, 0, false);
+                    arcLength.switchBranch();
+                    dLb0 = dLb = dL;
+                    arcLength.setLength(dLb);
+
+                    if (writeP)
+                    {
+                        gsMultiPatch<> mp_perturbation;
+                        assembler->constructSolutionL(arcLength.solutionV(),mp_perturbation);
+                        gsWrite(mp_perturbation,dirname + "/" +"perturbation");
+                        gsInfo<<"Perturbation written in: " + dirname + "/" + "perturbation.xml\n";
+                    }
+                    indicator = 0;
+
+                    L = arcLength.solutionL();
+                    deltaL = arcLength.solutionDL();
+                    U = arcLength.solutionU();
+                    deltaU = arcLength.solutionDU();
+                    break;
+
+                    // gsDebugVar(arcLength.solutionU());
+                    // gsDebugVar(arcLength.solutionV());
                 }
-                indicator = 0;
-
-		L = arcLength.solutionL();
-	        deltaL = arcLength.solutionDL();
-                U = arcLength.solutionU();
-                deltaU = arcLength.solutionDU();
-		break;
-
-
-                // gsDebugVar(arcLength.solutionU());
-                // gsDebugVar(arcLength.solutionV());
-
-              }
             }
 
             L = arcLength.solutionL();
