@@ -291,7 +291,7 @@ int main (int argc, char** argv)
                 thb = gsTHBSpline<2,real_t>(geo->basis().source(),geo->coefs());
                 gsMatrix<> bbox = geo->support();
                 for (index_t i = 0; i< numHref; ++i)
-                    thb.refineElements(mp.basis(0).asElements(bbox));
+                    thb.refineElements(thb.basis().asElements(bbox));
 
                 mp_thb.addPatch(thb);
             }
