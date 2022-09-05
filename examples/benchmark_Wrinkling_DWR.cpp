@@ -569,8 +569,8 @@ int main (int argc, char** argv)
     {
         gsInfo<<"Load step "<< k<<"; \tSystem size = "<<Uold.size()<<" x "<<Uold.size()<<"\n";
         gsParaviewCollection errors(dirname + "/" + "error" + util::to_string(k));
-        real_t refTol = target + bandwidth; // refine if error is above
-        real_t crsTol = target - bandwidth; // coarsen if error is below
+        real_t refTol = target / bandwidth; // refine if error is above
+        real_t crsTol = target * bandwidth; // coarsen if error is below
         GISMO_ENSURE(refTol >= crsTol,"Refinement tolerance should be bigger than the coarsen tolerance");
         real_t error = 1;
         index_t maxIt = 10;
