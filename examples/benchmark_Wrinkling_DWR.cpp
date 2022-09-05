@@ -167,9 +167,11 @@ int main (int argc, char** argv)
     std::string wn("data.csv");
 
     std::string assemberOptionsFile("options/solver_options.xml");
+    std::string mesherOptionsFile("options/mesher_options.xml");
 
     gsCmdLine cmd("Wrinkling analysis with thin shells.");
-    cmd.addString( "f", "file", "Input XML file for assembler options", assemberOptionsFile );
+    cmd.addString( "o", "assemblerOpt", "Input XML file for assembler options", assemberOptionsFile );
+    cmd.addString( "O", "mesherOpt", "Input XML file for mesher options", mesherOptionsFile );
 
     cmd.addInt("r","hRefine", "Number of dyadic h-refinement (bisection) steps to perform before solving", numHref);
     cmd.addInt("e","degreeElevation", "Number of degree elevation steps to perform on the Geometry's basis before solving", numElevate);
@@ -224,10 +226,6 @@ int main (int argc, char** argv)
         adaptRefCrit = BULK;
     else
         GISMO_ERROR("MarkingStrategy Unknown");
-
-    gsFileData<> fd(assemberOptionsFile);
-    gsOptionList opts;
-    fd.getFirst<gsOptionList>(opts);
 
     if (dL==0)
     {
@@ -458,9 +456,11 @@ int main (int argc, char** argv)
     assembler = new gsThinShellAssemblerDWR<3, real_t, true >(mp,basisL,basisH,BCs,force,materialMatrix);
     assembler->setGoal(GoalFunction::MembranePStress,0);
 
-
     // Construct assembler object
-    assembler->setOptions(opts);
+    gsFileData<> fd_assembler(assemberOptionsFile);
+    gsOptionList assemblerOpts;
+    fd_assembler.getFirst<gsOptionList>(assemblerOpts);
+    assembler->setOptions(assemblerOpts);
     assembler->setPointLoads(pLoads);
 
     gsStopwatch stopwatch;
@@ -546,15 +546,11 @@ int main (int argc, char** argv)
     bool bisected = false;
     real_t dLb0 = dLb;
 
+    gsFileData<> fd_mesher(mesherOptionsFile);
+    gsOptionList mesherOpts;
+    fd_mesher.getFirst<gsOptionList>(mesherOpts);
     gsAdaptiveMeshing<real_t> mesher(mp);
-    mesher.options().setInt("CoarsenRule",markstrat);
-    mesher.options().setInt("RefineRule",markstrat);
-    mesher.options().setReal("CoarsenParam",adaptRefParam);
-    mesher.options().setReal("RefineParam",adaptRefParam);
-    mesher.options().setInt("CoarsenExtension",crsExt);
-    mesher.options().setInt("RefineExtension",refExt);
-    mesher.options().setInt("MaxLevel",4);
-    mesher.options().setSwitch("Admissible",admissible);
+    mesher.options() = mesherOpts;
     mesher.getOptions();
 
     gsHBoxContainer<2,real_t> markRef, markCrs;
