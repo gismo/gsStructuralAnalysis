@@ -544,6 +544,7 @@ int main (int argc, char** argv)
     real_t indicator_prev = 0.0;
     real_t indicator = 0.0;
     bool bisected = false;
+    bool unstable_prev = false;
     real_t dLb0 = dLb;
 
     gsFileData<> fd_mesher(mesherOptionsFile);
@@ -591,7 +592,7 @@ int main (int argc, char** argv)
             arcLength.setSolutionStep(deltaUold,deltaLold);
             arcLength.setLength(dLb);
 
-	    gsInfo<<"Starting from U.norm()="<<Uold.norm()<<", L="<<Lold<<"\n";
+            gsInfo<<"Starting from U.norm()="<<Uold.norm()<<", L="<<Lold<<"\n";
             arcLength.step();
 
             if (!(arcLength.converged()))
@@ -604,9 +605,8 @@ int main (int argc, char** argv)
               k -= 1;
               continue;
             }
-
-            gsInfo<<"indicator = "<<indicator_prev<<"\n";
-            gsInfo<<"indicator = "<<arcLength.indicator()<<"\n";
+            indicator = arcLength.indicator();
+            gsInfo<<"indicator: (old = )"<<indicator_prev<<"; (new = )"<<indicator<<"\n";
 
             if (SingularPoint)
             {
@@ -614,6 +614,7 @@ int main (int argc, char** argv)
                 unstable = arcLength.stabilityChange();
                 if (unstable)
                 {
+                    unstable_prev = true;
                     gsInfo<<"Bifurcation spotted!"<<"\n";
                     arcLength.computeSingularPoint(1e-4, 5, Uold, Lold, 1e-7, 0, false);
                     arcLength.switchBranch();
@@ -633,6 +634,14 @@ int main (int argc, char** argv)
                     deltaL = arcLength.solutionDL();
                     U = arcLength.solutionU();
                     deltaU = arcLength.solutionDU();
+
+                    // Deformed geometry
+                    assembler->constructSolutionL(U,mp_def);
+                    // Deformation (primal)
+                    assembler->constructMultiPatchL(U,U_patch);
+                    // delta Deformation
+                    assembler->constructMultiPatchL(U,deltaU_patch);
+
                     break;
 
                     // gsDebugVar(arcLength.solutionU());
@@ -657,24 +666,25 @@ int main (int argc, char** argv)
             /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
             gsThinShellDWRHelper<real_t> helper(assembler);
 
+
+            helper.computeError(mp_def,U_patch);
+            error = std::abs(helper.error());
+            gsInfo<<"Error = "<<error<<"\n";
+            std::vector<real_t> elErrors = helper.absErrors();
+
+            if (plotError)
             {
-                helper.computeError(mp_def,U_patch);
-                error = std::abs(helper.error());
-                gsInfo<<"Error = "<<error<<"\n";
-                std::vector<real_t> elErrors = helper.absErrors();
+                gsElementErrorPlotter<real_t> err_eh(mp.basis(0),elErrors);
+                const gsField<> elemError_eh( mp.patch(0), err_eh, true );
+                std::string fileName = dirname + "/" + "error" + util::to_string(k) + "_" + util::to_string(it);
+                gsWriteParaview<>(elemError_eh, fileName, 10000,mesh);
+                fileName = "error" + util::to_string(k)  + "_" + util::to_string(it) + "0";
+                errors.addTimestep(fileName,it,".vts");
+                if (mesh) errors.addTimestep(fileName,it,"_mesh.vtp");
+            }
 
-                if (plotError)
-                {
-                    gsElementErrorPlotter<real_t> err_eh(mp.basis(0),elErrors);
-                    const gsField<> elemError_eh( mp.patch(0), err_eh, true );
-                    std::string fileName = dirname + "/" + "error" + util::to_string(k) + "_" + util::to_string(it);
-                    gsWriteParaview<>(elemError_eh, fileName, 10000,mesh);
-                    fileName = "error" + util::to_string(k)  + "_" + util::to_string(it) + "0";
-                    errors.addTimestep(fileName,it,".vts");
-                    if (mesh) errors.addTimestep(fileName,it,"_mesh.vtp");
-                }
-
-
+            if (!unstable_prev)
+            {
                 if (error > refTol)
                 {
                     gsInfo<<"Error is too big!\n";
@@ -730,6 +740,7 @@ int main (int argc, char** argv)
                 mesher.rebuild();
 
                 // assembler->constructSolutionL(U,mp_def);
+                unstable_prev = false;
 
             }
             it++;
