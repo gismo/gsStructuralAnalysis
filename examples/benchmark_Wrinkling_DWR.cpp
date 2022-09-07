@@ -676,13 +676,19 @@ int main (int argc, char** argv)
 
             if (plotError)
             {
-                gsElementErrorPlotter<real_t> err_eh(mp.basis(0),elErrors);
-                const gsField<> elemError_eh( mp.patch(0), err_eh, true );
-                std::string fileName = dirname + "/" + "error" + util::to_string(k) + "_" + util::to_string(it);
-                gsWriteParaview<>(elemError_eh, fileName, 10000,mesh);
-                fileName = "error" + util::to_string(k)  + "_" + util::to_string(it) + "0";
-                errors.addTimestep(fileName,it,".vts");
-                if (mesh) errors.addTimestep(fileName,it,"_mesh.vtp");
+                for (size_t p=0; p!=mp.nPatches(); p++)
+                {
+                    gsElementErrorPlotter<real_t> err_eh(mp.basis(p),elErrors);
+                    const gsField<> elemError_eh( mp.patch(p), err_eh, true );
+                    std::string fileName = dirname + "/" + "error" + util::to_string(k) + "_" + util::to_string(it);
+                    writeSinglePatchField<>(mp.patch(p), err_eh, true, fileName + "_" + util::to_string(p), 1000);
+                    if (mesh)
+                        writeSingleCompMesh<>(mp.basis(p), mp.patch(p),fileName + "_mesh" + "_" + util::to_string(p));
+                    fileName = "error" + util::to_string(k) + "_" + util::to_string(it) ;
+                    errors.addTimestep(fileName + "_",p,it,".vts");
+                    if (mesh)
+                        errors.addTimestep(fileName + "_mesh_",p,it,".vtp");
+                }
             }
 
             if (unstable_prev)
@@ -712,6 +718,12 @@ int main (int argc, char** argv)
                     refined = mesher.refine(markRef);
                     coarsened = mesher.unrefine(markCrs);
                     // break; // only needed when no refinement is performed
+                }
+
+                if (plotError)
+                {
+                    gsWriteParaview<>(markRef,"refined_" + util::to_string(k) + "_" + util::to_string(it));
+                    gsWriteParaview<>(markCrs,"coarsened_" + util::to_string(k) + "_" + util::to_string(it));
                 }
 
                 // mp_def = mp;
