@@ -166,6 +166,8 @@ int main (int argc, char** argv)
 
     std::string wn("data.csv");
 
+    std::string dirname = "ArcLengthResults";
+
     std::string assemberOptionsFile("options/solver_options.xml");
     std::string mesherOptionsFile("options/mesher_options.xml");
 
@@ -195,6 +197,7 @@ int main (int argc, char** argv)
     cmd.addInt("C", "crsExt", "Coarsening extension", crsExt);
     cmd.addReal("a", "refparam", "Controls the adaptive refinement parameter", adaptRefParam);
     cmd.addInt("u","rule", "Adaptive refinement rule; 1: ... ; 2: PUCA; 3: BULK", markstrat);
+    cmd.addString("U","output", "outputDirectory", dirname);
 
     cmd.addReal("T","target", "Refinement target error", target);
     cmd.addReal("B","band", "Refinement target error bandwidth", bandwidth);
@@ -321,7 +324,6 @@ int main (int argc, char** argv)
     gsPointLoads<real_t> pLoads = gsPointLoads<real_t>();
 
     std::string output = "solution";
-    std::string dirname = "ArcLengthResults";
 
     gsMatrix<> writePoints(2,3);
     writePoints.col(0)<< 0.0,0.5;
@@ -683,7 +685,12 @@ int main (int argc, char** argv)
                 if (mesh) errors.addTimestep(fileName,it,"_mesh.vtp");
             }
 
-            if (!unstable_prev)
+            if (unstable_prev)
+            {
+                unstable_prev = false;
+                break;
+            }
+            else
             {
                 if (error > refTol)
                 {
