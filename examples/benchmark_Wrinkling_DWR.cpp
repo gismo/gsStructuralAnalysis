@@ -704,13 +704,15 @@ int main (int argc, char** argv)
                     mesher.markRef_into(elErrors,markRef);
                     refined = mesher.refine(markRef);
                 }
-                else if (error < crsTol)
+                else// if (error < crsTol)
                 {
-                    gsInfo<<"Error is too small!\n";
+                    //gsInfo<<"Error is too small!\n";
+		    gsInfo<<"Error is small enough\n";
                     mesher.markCrs_into(elErrors,markCrs);
                     coarsened = mesher.unrefine(markCrs);
                 }
-                else
+                /*
+		else
                 {
                     gsInfo<<"Error is in the range "<<crsTol<<" < "<<error<<" < "<<refTol<<"\n";
                     mesher.markRef_into(elErrors,markRef);
@@ -719,7 +721,7 @@ int main (int argc, char** argv)
                     coarsened = mesher.unrefine(markCrs);
                     // break; // only needed when no refinement is performed
                 }
-
+		*/
                 if (plotError)
                 {
                     gsWriteParaview<>(markRef,"refined_" + util::to_string(k) + "_" + util::to_string(it));
