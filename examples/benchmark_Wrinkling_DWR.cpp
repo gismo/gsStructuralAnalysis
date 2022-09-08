@@ -564,6 +564,7 @@ int main (int argc, char** argv)
     assembler->constructMultiPatchL(Uold,Uold_patch);
     assembler->constructMultiPatchL(deltaUold,deltaUold_patch);
 
+    std::vector<std::vector<std::pair<index_t,real_t>>> write_errors; // per load step, iteration, numDoFs, error
     for (index_t k=0; k<step; k++)
     {
         gsInfo<<"Load step "<< k<<"; \tSystem size = "<<Uold.size()<<" x "<<Uold.size()<<"\n";
@@ -578,6 +579,7 @@ int main (int argc, char** argv)
         bool refined = true;
         bool coarsened = true;
 
+        std::vector<std::pair<index_t,real_t>> loadstep_errors;
         while ((error < crsTol || error > refTol) && it < maxIt && !unstable && (refined || coarsened))
         {
             assembler->assembleL();
@@ -644,6 +646,7 @@ int main (int argc, char** argv)
                     // delta Deformation
                     assembler->constructMultiPatchL(U,deltaU_patch);
 
+                    loadstep_errors.push_back(std::make_pair(-1,-1.));
                     break;
 
                     // gsDebugVar(arcLength.solutionU());
@@ -672,6 +675,8 @@ int main (int argc, char** argv)
             helper.computeError(mp_def,U_patch);
             error = std::abs(helper.error());
             gsInfo<<"Error = "<<error<<"\n";
+            loadstep_errors.push_back(std::make_pair(assembler->numDofsL(),error));
+
             std::vector<real_t> elErrors = helper.absErrors();
 
             if (plotError)
@@ -866,6 +871,7 @@ int main (int argc, char** argv)
         // }
         // bisected = false;
 
+        write_errors.push_back(loadstep_errors);
     }
 
     if (plot)
@@ -878,6 +884,15 @@ int main (int argc, char** argv)
       Sflexural.save();
       Smembrane_p.save();
     }
+
+    std::ofstream file;
+    file.open(dirname + "errors.csv",std::ofstream::out);
+    index_t k=0;
+    file<<"load_step,iteration,numDofs,error\n";
+    for (std::vector<std::vector<std::pair<index_t,real_t>>>::const_iterator it = write_errors.begin(); it!=write_errors.end(); it++, k++)
+        for (std::vector<std::pair<index_t,real_t>>::const_iterator iit = it->begin(); iit!=it->end(); iit++)
+            file<<k<<","<<iit->first<<","<<iit->second<<"\n";
+    file.close();
 
   return result;
 }
