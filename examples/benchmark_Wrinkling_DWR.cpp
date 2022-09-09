@@ -727,11 +727,14 @@ int main (int argc, char** argv)
                     // break; // only needed when no refinement is performed
                 }
 		*/
-                if (plotError)
-                {
-                    gsWriteParaview<>(markRef,"refined_" + util::to_string(k) + "_" + util::to_string(it));
-                    gsWriteParaview<>(markCrs,"coarsened_" + util::to_string(k) + "_" + util::to_string(it));
-                }
+                // if (plotError)
+                // {
+                //     if (mesh)
+                //         gsWriteParaview<>(mp.basis(0),"basis");
+                //         // writeSingleCompMesh<>(mp.basis(0), mp.patch(0),"mesh");
+                //     gsWriteParaview<>(markRef,"refined_" + util::to_string(k) + "_" + util::to_string(it));
+                //     gsWriteParaview<>(markCrs,"coarsened_" + util::to_string(k) + "_" + util::to_string(it));
+                // }
 
                 // mp_def = mp;
 
@@ -888,7 +891,7 @@ int main (int argc, char** argv)
     }
 
     std::ofstream file;
-    file.open(dirname + "errors.csv",std::ofstream::out);
+    file.open(dirname + "/" + "errors.csv",std::ofstream::out);
     index_t k=0;
     file<<"load_step,iteration,numDofs,error\n";
     for (std::vector<std::vector<std::pair<index_t,real_t>>>::const_iterator it = write_errors.begin(); it!=write_errors.end(); it++, k++)
