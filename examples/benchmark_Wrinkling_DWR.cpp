@@ -712,7 +712,7 @@ int main (int argc, char** argv)
                 else// if (error < crsTol)
                 {
                     //gsInfo<<"Error is too small!\n";
-		    gsInfo<<"Error is small enough\n";
+                    gsInfo<<"Error is small enough\n";
                     mesher.markCrs_into(elErrors,markCrs);
                     coarsened = mesher.unrefine(markCrs);
                 }
