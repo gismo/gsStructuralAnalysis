@@ -330,9 +330,14 @@ int main (int argc, char** argv)
     writePoints.col(1)<< 0.5,0.5;
     writePoints.col(2)<< 1.0,0.5;
 
+    gsVector<> neu(3);
+    neu<<1e0/bDim,0,0;
+    gsConstantFunction<> neuData(neu,3);
+
     BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0 ,false,0);
 
     BCs.addCondition(boundary::east, condition_type::collapsed, 0, 0 ,false,0);
+    BCs.addCondition(boundary::east, condition_type::neumann, &neuData);
     BCs.addCondition(boundary::east, condition_type::dirichlet, 0, 0 ,false,1);
     BCs.addCondition(boundary::east, condition_type::dirichlet, 0, 0 ,false,2);
 
@@ -342,10 +347,10 @@ int main (int argc, char** argv)
     BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 2 - z.
     BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z.
 
-    real_t Load = 1e0;
-    gsVector<> point(2); point<< 1.0, 0.5 ;
-    gsVector<> load (3); load << Load,0.0, 0.0;
-    pLoads.addLoad(point, load, 0 );
+    // real_t Load = 1e0;
+    // gsVector<> point(2); point<< 1.0, 0.5 ;
+    // gsVector<> load (3); load << Load,0.0, 0.0;
+    // pLoads.addLoad(point, load, 0 );
 
     dirname = dirname + "/QuarterSheet_-r" + std::to_string(numHref) + "-e" + std::to_string(numElevate) + "-M" + std::to_string(material) + "-c" + std::to_string(Compressibility) + "-alpha" + std::to_string(aDim/bDim) + "-beta" + std::to_string(bDim/thickness);
 
@@ -569,6 +574,7 @@ int main (int argc, char** argv)
     {
         gsInfo<<"Load step "<< k<<"; \tSystem size = "<<Uold.size()<<" x "<<Uold.size()<<"\n";
         gsParaviewCollection errors(dirname + "/" + "error" + util::to_string(k));
+        gsParaviewCollection error_fields(dirname + "/" + "error_field" + util::to_string(k));
         real_t refTol = target / bandwidth; // refine if error is above
         real_t crsTol = target * bandwidth; // coarsen if error is below
         GISMO_ENSURE(refTol >= crsTol,"Refinement tolerance should be bigger than the coarsen tolerance");
@@ -671,9 +677,24 @@ int main (int argc, char** argv)
             /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
             gsThinShellDWRHelper<real_t> helper(assembler);
 
+            if (plot)
+            {
+                std::string fileName = dirname + "/" + "error_field" + util::to_string(k) + "_" + util::to_string(it);
+                helper.computeError(mp_def,U_patch,fileName,10000,false,mesh);
+                fileName = "error_field" + util::to_string(k) + "_" + util::to_string(it) ;
+                for (size_t p=0; p!=mp.nPatches(); p++)
+                {
+                    error_fields.addTimestep(fileName + "_",p,it,".vts");
+                    if (mesh)
+                        error_fields.addTimestep(fileName + "_mesh_",p,it,".vtp");
+                }
+            }
+            else
+                helper.computeError(mp_def,U_patch);
 
-            helper.computeError(mp_def,U_patch);
             error = std::abs(helper.error());
+            std::vector<real_t> errorVec = helper.errors();
+
             gsInfo<<"Error = "<<error<<"\n";
             loadstep_errors.push_back(std::make_pair(assembler->numDofsL(),error));
 
@@ -705,14 +726,14 @@ int main (int argc, char** argv)
             {
                 if (error > refTol)
                 {
-                    gsInfo<<"Error is too big!\n";
+                    gsInfo<<"Load Step "<<k<<": Error is too big!\n";
                     mesher.markRef_into(elErrors,markRef);
                     refined = mesher.refine(markRef);
                 }
                 else// if (error < crsTol)
                 {
                     //gsInfo<<"Error is too small!\n";
-                    gsInfo<<"Error is small enough\n";
+                    gsInfo<<"Load Step "<<k<<": Error is small enough\n";
                     mesher.markCrs_into(elErrors,markCrs);
                     coarsened = mesher.unrefine(markCrs);
                 }
@@ -776,7 +797,10 @@ int main (int argc, char** argv)
         }
 
         if (plotError)
+        {
             errors.save();
+            error_fields.save();
+        }
 
         // Update Uold
         Uold_patch = U_patch;
