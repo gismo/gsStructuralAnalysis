@@ -18,8 +18,15 @@
 #include <gsStructuralAnalysis/gsALMBase.h>
 #include <gsStructuralAnalysis/gsAPALMDataContainer.h>
 
+#ifdef GISMO_WITH_MPI
+#include <gsMpi/gsMpi.h>
+#endif
+
 namespace gismo
 {
+
+#define gsMPIInfo(rank) gsInfo<<"[MPI process "<<rank<<"]: "
+#define gsMPIDebug(rank) gsDebug<<"[MPI process "<<rank<<"]: "
 
 template<class T>
 class gsAPALM
@@ -94,7 +101,7 @@ public:
   std::vector<std::vector<solution_t>> getSolutionsPerLevel(index_t branch = 0)
   {
     std::vector<std::vector<solution_t>> result(m_lvlSolutions[branch].size());
-    for (index_t l=0; l!=m_lvlSolutions[branch].size(); l++)
+    for (size_t l=0; l!=m_lvlSolutions[branch].size(); l++)
       for (typename std::vector<solution_t *>::iterator it=m_lvlSolutions[branch][l].begin(); it!=m_lvlSolutions[branch][l].end(); it++)
         result[l].push_back(**it);
     return result;
@@ -103,11 +110,91 @@ public:
   std::vector<std::vector<T>> getTimesPerLevel(index_t branch = 0)
   {
     std::vector<std::vector<T>> result(m_lvlTimes[branch].size());
-    for (index_t l=0; l!=m_lvlSolutions[branch].size(); l++)
+    for (size_t l=0; l!=m_lvlSolutions[branch].size(); l++)
       for (typename std::vector<T *>::iterator it=m_lvlTimes[branch][l].begin(); it!=m_lvlTimes[branch][l].end(); it++)
         result[l].push_back(**it);
     return result;
   }
+
+#ifdef GISMO_WITH_MPI
+  bool isMain() {return (m_rank==0); }
+  index_t rank() {return (m_rank); }
+#else
+  bool isMain() {return true; }
+  index_t rank() {return 0; }
+#endif
+
+protected:
+
+#ifdef GISMO_WITH_MPI
+  // For data
+  void _sendMainToWorker( const index_t &         workerID,
+                          const index_t &         branch,
+                          const std::tuple<index_t, T     , solution_t, solution_t, solution_t> & dataEntry,
+                          const std::pair<T,T> &  dataInterval,
+                          const index_t &         dataLevel,
+                          const solution_t &      dataReference );
+
+  // For stop signal
+  void _sendMainToWorker( const index_t &   workerID,
+                          const bool &      stop      );
+  void _sendMainToAll(    const bool &      stop      );
+
+  // For data
+  void _recvMainToWorker( const index_t &         sourceID,
+                                index_t &         branch,
+                                std::tuple<index_t, T     , solution_t, solution_t, solution_t> & dataEntry,
+                                std::pair<T,T> &  dataInterval,
+                                index_t &         dataLevel,
+                                solution_t &      dataReference,
+                                MPI_Status *      status = NULL);
+
+  // For stop signal
+  void _recvMainToWorker(   const index_t &   sourceID,
+                                  bool &      stop,
+                                  MPI_Status *status = NULL );
+
+  // For data
+  void _sendWorkerToMain( const index_t &                   mainID,
+                          const index_t &                   branch,
+                          const index_t &                   jobID,
+                          const std::vector<T> &            distances,
+                          const std::vector<solution_t> &   stepSolutions,
+                          const T &                         upperDistance,
+                          const T &                         lowerDistance );
+
+  // For data
+  void _recvWorkerToMain( index_t &                   sourceID, // source ID will change to MPI
+                          index_t &                   branch,
+                          index_t &                   jobID,
+                          std::vector<T> &            distances,
+                          std::vector<solution_t>&    stepSolutions,
+                          T &                         upperDistance,
+                          T &                         lowerDistance,
+                          MPI_Status *                status = NULL);
+
+  gsMpiComm & comm() { return m_comm; }
+#endif
+
+  template <bool _hasWorkers>
+  typename std::enable_if< _hasWorkers, void>::type
+  parallelSolve_impl();
+
+  template <bool _hasWorkers>
+  typename std::enable_if<!_hasWorkers, void>::type
+  parallelSolve_impl();
+
+  void _parallelSolve_worker(   const std::tuple<index_t, T     , solution_t, solution_t, solution_t> & dataEntry,
+                                        const std::pair<T,T> &  dataInterval,
+                                        const index_t &         dataLevel,
+                                        const solution_t &      dataReference,
+                                        std::vector<T> &        distances,
+                                        std::vector<solution_t>&stepSolutions,
+                                        T &                     upperDistance,
+                                        T &                     lowerDistance   );
+  void _parallelSolve_main(     gsAPALMDataContainer<T,solution_t> & data       );
+
+  void _parallelSolve_finalize();
 
 protected:
 
@@ -134,6 +221,14 @@ protected:
   T m_bifLengthMult;
 
   index_t m_maxIterations;
+
+  // Conditional compilation
+#ifdef GISMO_WITH_MPI
+  mutable gsMpiComm m_comm ;
+  std::queue<index_t> m_workers;
+#endif
+
+  index_t m_proc_count, m_rank;
 };
 
 }

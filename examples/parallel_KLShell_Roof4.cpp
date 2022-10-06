@@ -52,8 +52,6 @@ public:
 
   void parallelIntervalOutput(const std::vector<std::pair<gsVector<T>,T>> & stepSolutions, const std::vector<T> & stepTimes, index_t level, index_t ID)
   {
-    GISMO_ASSERT(stepSolutions.size()==stepTimes.size(),"Solutions and times must have same size, but solutions.size() = "<<stepSolutions.size()<<" and times.size() = "<<stepTimes.size());
-
     gsStructuralAnalysisOutput<real_t> data(m_dirname + "/interval_"+std::to_string(ID)+".csv",m_refPoints);
     gsMultiPatch<T> deformation,mp_tmp, mp;
     deformation = mp = m_assembler->geometry();
@@ -383,7 +381,7 @@ int main (int argc, char** argv)
   arcLength->options().setReal("TolU",tolU);
   arcLength->options().setReal("TolF",tolF);
   arcLength->options().setInt("MaxIter",maxit);
-  arcLength->options().setSwitch("Verbose",(verbose>0));
+  arcLength->options().setSwitch("Verbose",false);
   arcLength->options().setReal("Relaxation",relax);
   if (quasiNewtonInt>0)
   {
@@ -430,7 +428,7 @@ int main (int argc, char** argv)
 
   gsAPALMData<real_t,solution_t> apalmData;
   apalmData.options().setInt("MaxLevel",maxLevel);
-  apalmData.options().setInt("Verbose",verbose);
+  apalmData.options().setInt("Verbose",0);
   apalmData.options().setReal("Tolerance",1e-2);
 
   // apalmData.initEmptyQueue();
@@ -438,7 +436,7 @@ int main (int argc, char** argv)
 
 
   gsAPALMRoof<real_t> apalm(arcLength,apalmData,assembler,dirname,refPoints,refPatches);
-  apalm.options().setSwitch("Verbose",(verbose>0));
+  apalm.options().setSwitch("Verbose",true);
   apalm.options().setInt("SubIntervals",SubIntervals);
   apalm.initialize();
   apalm.serialSolve(step+1);
@@ -571,7 +569,6 @@ int main (int argc, char** argv)
     }
   }
 
-  delete assembler;
   delete arcLength;
   return result;
 }

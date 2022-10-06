@@ -259,9 +259,10 @@ index_t main(index_t argc, char **argv)
       gsInfo<<"[MPI process "<<my_rank<<"] "<<njobs<<" job(s) running\n";
 
       index_t SAME_SOURCE = MPI_ANY_SOURCE;
-
       // ID
       comm.recv(&ID,    1,SAME_SOURCE,0,&status);
+      SAME_SOURCE = status.MPI_SOURCE;
+
       // Size of solutions
       comm.recv(&size,  1,SAME_SOURCE,1,&status);
 
