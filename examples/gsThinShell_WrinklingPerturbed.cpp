@@ -229,6 +229,9 @@ int main (int argc, char** argv)
           C10 = 6.21485502e4; // c1/2
           C01 = 15.8114570e4; // c2/2
         }
+        else
+          C10 = C01 = 0;
+
         Ratio = C10/C01;
         mu = 2*(C01+C10);
       }
@@ -238,6 +241,8 @@ int main (int argc, char** argv)
           C10 = (0.5)*1e6;
         else if (testCase==3 || testCase==5 || testCase==7)
           C10 = 19.1010178e4;
+        else
+          C10 = 0;
 
         mu = 2*C10;
       }
@@ -525,7 +530,8 @@ int main (int argc, char** argv)
 
     std::string commands = "mkdir -p " + dirname;
     const char *command = commands.c_str();
-    system(command);
+    int systemRet = system(command);
+    GISMO_ASSERT(systemRet!=-1,"Something went wrong with calling the system argument");
 
     // plot geometry
     if (plot)
@@ -557,7 +563,6 @@ int main (int argc, char** argv)
     gsConstantFunction<> foundFun(foundation,3);
     // Initialise solution object
     gsMultiPatch<> mp_def = mp;
-    gsSparseSolver<>::LU solver;
 
     // Linear isotropic material model
     gsConstantFunction<> force(tmp,3);
@@ -712,12 +717,12 @@ int main (int argc, char** argv)
 
     if (!membrane)
     {
-      arcLength->options().setInt("Solver",0); // LDLT solver
+      arcLength->options().setString("Solver","SimplicialLDLT"); // LDLT solver
       arcLength->options().setInt("BifurcationMethod",0); // 0: determinant, 1: eigenvalue
     }
     else
     {
-      arcLength->options().setInt("Solver",1); // CG solver
+      arcLength->options().setString("Solver","CGDiagonal"); // CG solver
       arcLength->options().setInt("BifurcationMethod",1); // 0: determinant, 1: eigenvalue
     }
 
@@ -900,6 +905,10 @@ int main (int argc, char** argv)
       Smembrane_p.save();
     }
 
+  delete materialMatrix;
+  delete assembler;
+  delete arcLength;
+
   return result;
 }
 
@@ -981,7 +990,6 @@ void addClamping(gsMultiPatch<T>& mp, index_t patch, std::vector<boxSide> sides,
     gsTensorBSpline<2,T> *geo = dynamic_cast< gsTensorBSpline<2,real_t> * > (&mp.patch(patch));
 
     T dknot0 = geo->basis().component(0).knots().minIntervalLength();
-    T dknot1 = geo->basis().component(1).knots().minIntervalLength();
 
     gsInfo<<"sides.size() = "<<sides.size()<<"\n";
 

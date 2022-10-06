@@ -12,18 +12,22 @@
 */
 
 #pragma once
+
+#ifdef GISMO_WITH_SPECTRA
 #include <gsSpectra/gsSpectra.h>
+#endif
+
 #include <gsStructuralAnalysis/gsALMBase.h>
 
 namespace gismo
 {
 
 /**
-    @brief Performs the arc length method to solve a nonlinear equation system.
+    @brief Performs the Crisfield arc length method to solve a nonlinear equation system.
 
     \tparam T coefficient type
 
-    \ingroup gsStructuralAnalysis
+    \ingroup gsALMBase
 */
 template <class T>
 class gsALMCrisfield : public gsALMBase<T>
@@ -47,7 +51,7 @@ protected:
 
 public:
 
-    /// Constructor giving access to the gsShellAssembler object to create a linear system per iteration
+    /// Constructor
     gsALMCrisfield( std::function < gsSparseMatrix<T> ( gsVector<T> const & ) > &Jacobian,
                     std::function < gsVector<T> ( gsVector<T> const &, T, gsVector<T> const & ) > &Residual,
                     gsVector<T> &Force )
@@ -59,36 +63,62 @@ public:
         initMethods();
     }
 
+    /// Constructor using the jacobian that takes the solution and the solution step
+    gsALMCrisfield( std::function < gsSparseMatrix<T> ( gsVector<T> const &, gsVector<T> const & ) > &dJacobian,
+                    std::function < gsVector<T> ( gsVector<T> const &, T, gsVector<T> const & ) > &Residual,
+                    gsVector<T> &Force )
+    : Base(dJacobian,Residual,Force)
+    {
+        defaultOptions();
+        getOptions();
+
+        initMethods();
+    }
+
 protected:
 
-// Implementations for virtual functions
+    /// See gsALMBase
     void initMethods();
+    /// See gsALMBase
     void initiateStep();
+    /// See gsALMBase
     void iterationFinish();
 
+    /// See gsALMBase
     void quasiNewtonPredictor();
+    /// See gsALMBase
     void quasiNewtonIteration();
 
+    /// See gsALMBase
     void predictor();
+    /// See gsALMBase
     void iteration();
 
+    /// See gsALMBase
     void initOutput();
+    /// See gsALMBase
     void stepOutput();
 
-// Additional internal functions
+    /// See gsALMBase
     void defaultOptions();
+    /// See gsALMBase
     void getOptions();
 
+    /// Compute the load factors
     void computeLambdas();
+    /// Compute the load factors
     void computeLambdasSimple();
+    /// Compute the load factors
     void computeLambdasModified();
+    /// Compute the load factors
     void computeLambdasComplex();
+    /// Compute the load factors
     void computeLambdasEta();
-
+    /// Compute the load factors
     void computeLambdaDET();
-
+    /// Compute the load factors
     void computeLambdaDOT();
-
+    /// Compute the load factors
     void computeLambdaMU();
 
 protected:
@@ -97,6 +127,7 @@ protected:
     using Base::m_numDof;
 
     using Base::m_jacobian;
+    using Base::m_djacobian;
     using Base::m_residualFun;
     using Base::m_forcing;
 

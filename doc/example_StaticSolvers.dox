@@ -1,0 +1,17 @@
+namespace gismo {
+/**
+
+\page example_StaticSolvers example_StaticSolvers.cpp
+
+Static simulations of a shell
+
+\section example_StaticSolvers_Annotated Annotated source file
+
+Here is the full file \c examples/example_StaticSolvers.cpp. Clicking on a function
+or class name will lead you to its reference documentation.
+
+\include example_StaticSolvers.cpp
+
+*/
+
+}

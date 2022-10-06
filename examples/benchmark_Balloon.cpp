@@ -4,8 +4,10 @@
 
     Figure 4 from Kiendl et al 2015
 
-    Kiendl, J., Hsu, M.-C., Wu, M. C. H., & Reali, A. (2015). Isogeometric Kirchhoff–Love shell formulations for general hyperelastic materials. Computer Methods in Applied Mechanics and Engineering, 291, 280–303. https://doi.org/10.1016/J.CMA.2015.03.010
-
+    Kiendl, J., Hsu, M.-C., Wu, M. C. H., & Reali, A. (2015).
+    Isogeometric Kirchhoff–Love shell formulations for general hyperelastic materials.
+    Computer Methods in Applied Mechanics and Engineering, 291, 280–303.
+    https://doi.org/10.1016/J.CMA.2015.03.010
 
     This file is part of the G+Smo library.
 
@@ -58,7 +60,7 @@ int main (int argc, char** argv)
 
     std::string wn("data.csv");
 
-    gsCmdLine cmd("Arc-length analysis for thin shells.");
+    gsCmdLine cmd("Example for an inflating balloon.");
 
     cmd.addInt("r","hRefine", "Number of dyadic h-refinement (bisection) steps to perform before solving", numRefine);
     cmd.addInt("e","degreeElevation", "Number of degree elevation steps to perform on the Geometry's basis before solving", numElevate);
@@ -114,12 +116,13 @@ int main (int argc, char** argv)
 
     gsInfo<<"mu = "<<E_modulus / (2 * (1 + PoissonRatio))<<"\n";
 
-    gsMultiBasis<> dbasis(mp);
+    gsMultiBasis<> dbasis(mp,true);
     gsInfo<<"Basis (patch 0): "<< mp.patch(0).basis() << "\n";
     mp_def = mp;
 
     // Boundary conditions
     gsBoundaryConditions<> BCs;
+    BCs.setGeoMap(mp);
 
     BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 0 ); // unknown 2 - z
     BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 2 - z
@@ -137,6 +140,8 @@ int main (int argc, char** argv)
     BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 1 );
     BCs.addCondition(boundary::west, condition_type::clamped, 0, 0, false, 2 );
 
+    BCs.setGeoMap(mp);
+
     // Pressure
     real_t pressure = 1e3;
 
@@ -146,7 +151,9 @@ int main (int argc, char** argv)
 
     std::string commands = "mkdir -p " + dirname;
     const char *command = commands.c_str();
-    system(command);
+    int systemRet = system(command);
+    GISMO_ASSERT(systemRet!=-1,"Something went wrong with calling the system argument");
+
 
     // plot geometry
     if (plot)
@@ -292,7 +299,7 @@ int main (int argc, char** argv)
     else
       GISMO_ERROR("Method "<<method<<" unknown");
 
-    arcLength->options().setInt("Solver",1); // CG solver
+    arcLength->options().setString("Solver","SimplicialLDLT");
     arcLength->options().setInt("BifurcationMethod",1); // 0: determinant, 1: eigenvalue
     arcLength->options().setReal("Length",dL);
     arcLength->options().setInt("AngleMethod",0); // 0: step, 1: iteration
@@ -325,7 +332,6 @@ int main (int argc, char** argv)
     gsMultiPatch<> deformation = mp;
 
     // Make objects for previous solutions
-    real_t Lold = 0;
     gsMatrix<> Uold = Force;
     Uold.setZero();
 
@@ -345,7 +351,6 @@ int main (int argc, char** argv)
 
       solVector = arcLength->solutionU();
       Uold = solVector;
-      Lold = arcLength->solutionL();
 
       assembler->constructSolution(solVector,mp_def);
 
@@ -420,6 +425,10 @@ int main (int argc, char** argv)
       Sflexural.save();
       Smembrane_p.save();
     }
+
+  delete materialMatrix;
+  delete assembler;
+  delete arcLength;
 
   return result;
 }

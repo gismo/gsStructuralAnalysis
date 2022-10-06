@@ -1,0 +1,29 @@
+namespace gismo {
+/**
+
+\page benchmark_FrustrumALM benchmark_FrustrumALM.cpp
+
+
+Benchmark for the collapsing frustrum with Displacement Control (DC)
+
+Reproduces figure 7 of:
+Verhelst, H. M., Möller, M., Den Besten, J. H., Mantzaflaris, A., & Kaminski, M. L. (2021).
+Stretch-Based Hyperelastic Material Formulations for Isogeometric Kirchhoff–Love Shells with Application to Wrinkling.
+Computer-Aided Design, 139, 103075.
+https://doi.org/10.1016/j.cad.2021.103075
+
+Based on:
+Başar, Y., & Itskov, M. (1998). Finite element formulation of the Ogden material model with application to ruber-like shells.
+International Journal for Numerical Methods in Engineering. https://doi.org/10.1002/(SICI)1097-0207(19980815)42:7<1279::AID-NME437>3.0.CO;2-I
+
+
+\section benchmark_FrustrumALM_Annotated Annotated source file
+
+Here is the full file \c examples/benchmark_FrustrumALM.cpp. Clicking on a function
+or class name will lead you to its reference documentation.
+
+\include benchmark_FrustrumALM.cpp
+
+*/
+
+}

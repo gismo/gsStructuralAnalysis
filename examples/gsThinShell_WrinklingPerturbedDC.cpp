@@ -1,6 +1,6 @@
-/** @file gsThinShell_WrinklingPerturbed.cpp
+/** @file gsThinShell_WrinklingPerturbedDC.cpp
 
-    @brief Performs wrinkling simulations of different cases USING A PERTURBATION from a multipatch
+    @brief Performs wrinkling simulations of different cases USING A PERTURBATION from a multipatch using Displacement Control (DC)
 
     This file is part of the G+Smo library.
 
@@ -201,6 +201,9 @@ int main (int argc, char** argv)
           C10 = 6.21485502e4; // c1/2
           C01 = 15.8114570e4; // c2/2
         }
+        else
+          C10 = C01 = 0;
+
         Ratio = C10/C01;
         mu = 2*(C01+C10);
       }
@@ -210,6 +213,8 @@ int main (int argc, char** argv)
           C10 = (0.5)*1e6;
         else if (testCase==3 || testCase==5 || testCase==7)
           C10 = 19.1010178e4;
+        else
+          C10 = 0;
 
         mu = 2*C10;
       }
@@ -296,7 +301,7 @@ int main (int argc, char** argv)
     gsTHBSpline<2,real_t> thb;
     if (THB)
     {
-      for (index_t k=0; k!=mpBspline.nPatches(); ++k)
+      for (size_t k=0; k!=mpBspline.nPatches(); ++k)
       {
           gsTensorBSpline<2,real_t> *geo = dynamic_cast< gsTensorBSpline<2,real_t> * > (&mpBspline.patch(k));
           thb = gsTHBSpline<2,real_t>(*geo);
@@ -475,7 +480,8 @@ int main (int argc, char** argv)
 
     std::string commands = "mkdir -p " + dirname;
     const char *command = commands.c_str();
-    system(command);
+    int systemRet = system(command);
+    GISMO_ASSERT(systemRet!=-1,"Something went wrong with calling the system argument");
 
     // plot geometry
     if (plot)
@@ -745,6 +751,9 @@ int main (int argc, char** argv)
     if (plot)
       collection.save();
 
+  delete materialMatrix;
+  delete assembler;
+
   return result;
 }
 
@@ -826,7 +835,6 @@ void addClamping(gsMultiPatch<T>& mp, index_t patch, std::vector<boxSide> sides,
     gsTensorBSpline<2,T> *geo = dynamic_cast< gsTensorBSpline<2,real_t> * > (&mp.patch(patch));
 
     T dknot0 = geo->basis().component(0).knots().minIntervalLength();
-    T dknot1 = geo->basis().component(1).knots().minIntervalLength();
 
     gsInfo<<"sides.size() = "<<sides.size()<<"\n";
 

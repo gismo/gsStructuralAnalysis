@@ -1,6 +1,11 @@
-/** @file gsThinShell_ArcLength.cpp
+/** @file benchmark_Roof.cpp
 
-    @brief Code for the arc-length method of a shell based on loads
+    @brief Collapse of a cylindrical roof, from
+
+    Guo, Y., Do, H., & Ruess, M. (2019). Isogeometric stability analysis of thin shells:
+    From simple geometries to engineering models.
+    International Journal for Numerical Methods in Engineering.
+    https://doi.org/10.1002/nme.6020
 
     This file is part of the G+Smo library.
 
@@ -68,7 +73,7 @@ int main (int argc, char** argv)
 
     std::string assemberOptionsFile("options/solver_options.xml");
 
-    gsCmdLine cmd("Arc-length analysis for thin shells.");
+    gsCmdLine cmd("Arc-length analysis of a collapsing roof.");
     cmd.addString( "f", "file", "Input XML file for assembler options", assemberOptionsFile );
 
     cmd.addInt("t", "testcase", "Test case: 0: clamped-clamped, 1: pinned-pinned, 2: clamped-free", testCase);
@@ -100,9 +105,6 @@ int main (int argc, char** argv)
     fd.getFirst<gsOptionList>(opts);
 
     gsMultiPatch<> mp;
-    real_t aDim;
-    real_t bDim;
-
 
     real_t thickness;
     real_t Exx, Eyy, Gxy;
@@ -150,6 +152,7 @@ int main (int argc, char** argv)
 
     // Boundary conditions
     gsBoundaryConditions<> BCs;
+    BCs.setGeoMap(mp);
     gsPointLoads<real_t> pLoads = gsPointLoads<real_t>();
 
     // Initiate Surface forces
@@ -184,6 +187,8 @@ int main (int argc, char** argv)
     BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 1 - y
     BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z
 
+    BCs.setGeoMap(mp);
+
     Load = -1e1;
     // Point loads
     gsVector<> point(2);
@@ -198,7 +203,9 @@ int main (int argc, char** argv)
 
     std::string commands = "mkdir -p " + dirname;
     const char *command = commands.c_str();
-    system(command);
+    int systemRet = system(command);
+    GISMO_ASSERT(systemRet!=-1,"Something went wrong with calling the system argument");
+
 
     // plot geometry
     if (plot)
@@ -310,7 +317,7 @@ int main (int argc, char** argv)
     else
       GISMO_ERROR("Method unknown");
 
-    arcLength->options().setInt("Solver",0); // LDLT solver
+    arcLength->options().setString("Solver","SimplicialLDLT"); // LDLT solver
     arcLength->options().setInt("BifurcationMethod",0); // 0: determinant, 1: eigenvalue
     arcLength->options().setReal("Length",dL);
     // arcLength->options().setInt("AngleMethod",0); // 0: step, 1: iteration
@@ -460,7 +467,9 @@ int main (int argc, char** argv)
       Smembrane_p.save();
     }
 
-    delete arcLength;
+  delete materialMatrix;
+  delete assembler;
+  delete arcLength;
 
   return result;
 }

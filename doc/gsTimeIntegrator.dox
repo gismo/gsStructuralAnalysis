@@ -1,0 +1,13 @@
+namespace gismo
+{
+
+/** \defgroup gsTimeIntegrator gsTimeIntegrator
+\ingroup gsStructuralAnalysis
+
+Provides temporal solvers for structural analysis problems
+
+Examples with the use of this class are:
+- \subpage example_DynamicBeam.cpp
+- \subpage example_DynamicShell.cpp
+- \subpage example_DynamicShellNL.cpp
+}

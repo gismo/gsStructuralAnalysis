@@ -17,7 +17,7 @@ namespace gismo
 {
 
 /**
-    @brief Performs the arc length method to solve a nonlinear equation system.
+    @brief Base class for simple continuation schemes
 
     \tparam T coefficient type
 
@@ -26,10 +26,8 @@ namespace gismo
 template <class T>
 class gsContinuationBase
 {
-
-    virtual ~gsContinuationBase() {};
-
 public:
+    virtual ~gsContinuationBase() {};
 
     virtual void step(T dL) = 0;
     virtual gsVector<T> solutionU() = 0;

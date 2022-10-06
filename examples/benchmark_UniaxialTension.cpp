@@ -55,7 +55,7 @@ int main (int argc, char** argv)
 
     std::string wn("data.csv");
 
-    gsCmdLine cmd("Arc-length analysis for thin shells.");
+    gsCmdLine cmd("Uniaxially stretched sheet.");
 
     cmd.addInt("r","hRefine", "Number of dyadic h-refinement (bisection) steps to perform before solving", numRefine);
     cmd.addInt("e","degreeElevation", "Number of degree elevation steps to perform on the Geometry's basis before solving", numElevate);
@@ -118,11 +118,14 @@ int main (int argc, char** argv)
 
     // Boundary conditions
     gsBoundaryConditions<> BCs;
+    BCs.setGeoMap(mp);
     gsPointLoads<real_t> pLoads = gsPointLoads<real_t>();
 
     BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 0 );
     BCs.addCondition(boundary::east, condition_type::collapsed, 0, 0, false, 0 );
     BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 1 );
+
+    BCs.setGeoMap(mp);
 
     real_t Load = 1e0;
     gsVector<> point(2);
@@ -137,7 +140,9 @@ int main (int argc, char** argv)
 
     std::string commands = "mkdir -p " + dirname;
     const char *command = commands.c_str();
-    system(command);
+    int systemRet = system(command);
+    GISMO_ASSERT(systemRet!=-1,"Something went wrong with calling the system argument");
+
 
     // plot geometry
     if (plot)
@@ -281,7 +286,7 @@ int main (int argc, char** argv)
     else
       GISMO_ERROR("Method "<<method<<" unknown");
 
-    arcLength->options().setInt("Solver",0); // CG solver
+    arcLength->options().setString("Solver","SimplicialLDLT"); // LDLT solver
     arcLength->options().setInt("BifurcationMethod",0); // 0: determinant, 1: eigenvalue
     arcLength->options().setReal("Length",dL);
     arcLength->options().setInt("AngleMethod",0); // 0: step, 1: iteration
@@ -412,6 +417,10 @@ int main (int argc, char** argv)
       Sflexural.save();
       Smembrane_p.save();
     }
+
+  delete materialMatrix;
+  delete assembler;
+  delete arcLength;
 
   return result;
 }

@@ -1,0 +1,22 @@
+namespace gismo {
+/**
+
+\page benchmark_Roof benchmark_Roof.cpp
+
+Collapse of a cylindrical roof, from
+
+Guo, Y., Do, H., & Ruess, M. (2019). Isogeometric stability analysis of thin shells:
+From simple geometries to engineering models.
+International Journal for Numerical Methods in Engineering.
+https://doi.org/10.1002/nme.6020
+
+\section benchmark_Roof_Annotated Annotated source file
+
+Here is the full file \c examples/benchmark_Roof.cpp. Clicking on a function
+or class name will lead you to its reference documentation.
+
+\include benchmark_Roof.cpp
+
+*/
+
+}

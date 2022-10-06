@@ -13,78 +13,135 @@
 
 #include <gsStructuralAnalysis/gsEigenProblemBase.h>
 
+#ifdef GISMO_WITH_SPECTRA
+#include <gsSpectra/gsSpectra.h>
+#endif
+
 #pragma once
 
 namespace gismo
 {
 
 /**
-    @brief Performs the arc length method to solve a nonlinear equation system.
+    @brief Performs linear buckling analysis given a matrix or functions of a matrix
 
-    \tparam T coefficient type
+    \tparam T           coefficient type
 
-    \ingroup ThinShell
+    \ingroup gsBucklingSolver
 */
-template <class T, Spectra::GEigsMode GEigsMode = Spectra::GEigsMode::Cholesky>
-class gsBucklingSolver : public gsEigenProblemBase<T,GEigsMode>
+template <class T>
+class gsBucklingSolver : public gsEigenProblemBase<T>
 {
 protected:
 
-    typedef gsEigenProblemBase<T,GEigsMode> Base;
+    typedef gsEigenProblemBase<T> Base;
 
 public:
 
-    /// Constructor giving access to the gsShellAssembler object to create a linear system per iteration
-    gsBucklingSolver(     gsSparseMatrix<T> &linear,
+    /**
+     * @brief      Constructor
+     *
+     * @param      linear     The linear stiffness matrix
+     * @param      rhs        The external force vector for linearization
+     * @param      nonlinear  The Jacobian
+     * @param[in]  scaling    A scaling factor (optional)
+     */
+    gsBucklingSolver(   gsSparseMatrix<T> &linear,
                         gsVector<T> &rhs,
                         std::function < gsSparseMatrix<T> ( gsVector<T> const & ) > &nonlinear,
                         T scaling = 1.0) :
-        m_rhs(rhs),
-        m_nonlinearFun(nonlinear),
-        m_scaling(scaling)
+    m_rhs(rhs),
+    m_nonlinear(nonlinear),
+    m_scaling(scaling)
+  {
+    m_A = linear;
+    m_dnonlinear = [this](gsVector<T> const & x, gsVector<T> const & dx)
     {
-        m_A = linear;
-        m_verbose = false;
-        this->initializeMatrix();
-    }
+        return m_nonlinear(x);
+    };
 
-    /// Constructor giving access to the gsShellAssembler object to create a linear system per iteration
-    gsBucklingSolver(   gsSparseMatrix<T> &linear,
+    m_solver = gsSparseSolver<T>::get( "SimplicialLDLT" );
+
+    this->initializeMatrix();
+  }
+
+  /**
+   * @brief      Constructor
+   *
+   * @param      linear     The linear stiffness matrix
+   * @param      rhs        The external force vector for linearization
+   * @param      nonlinear  The Jacobian taking the solution and the update as argument
+   * @param[in]  scaling    A scaling factor (optional)
+   */
+  gsBucklingSolver(     gsSparseMatrix<T> &linear,
+                        gsVector<T> &rhs,
+                        std::function < gsSparseMatrix<T> ( gsVector<T> const &, gsVector<T> const & ) > &dnonlinear,
+                        T scaling = 1.0) :
+    m_rhs(rhs),
+    m_dnonlinear(dnonlinear),
+    m_scaling(scaling)
+  {
+    m_A = linear;
+
+    m_solver = gsSparseSolver<T>::get( "SimplicialLDLT" );
+
+    this->initializeMatrix();
+  }
+
+
+  /**
+   * @brief      Constructor
+   *
+   * @param      linear     The linear stiffness matrix
+   * @param      nonlinear  The Jacobian which has already been assembled
+   */
+  gsBucklingSolver(     gsSparseMatrix<T> &linear,
                         gsSparseMatrix<T> &nonlinear )
-    {
-        m_A = linear;
-        m_verbose = false;
-        m_B = nonlinear-m_A;
-    }
+  {
+    m_A = linear;
+    m_B = nonlinear-m_A;
+  }
+
+  // todo: add solver option
+  // gsOptionList defaultOptions()
+  // {
+  //   gsOptionList options;
+  //   options = Base::defaultOptions()
+  //   options.addString("Solver","Specify the sparse solver","SimplicialLDLT");
+  //   return options;
+  // }
+
 
 protected:
 
     void initializeMatrix()
     {
-        if (m_verbose) { gsInfo<<"Computing matrices" ; }
-        m_solver.compute(m_A);
-        if (m_verbose) { gsInfo<<"." ; }
-        m_solVec = m_solver.solve(m_scaling*m_rhs);
-        if (m_verbose) { gsInfo<<"." ; }
-        m_B = m_nonlinearFun(m_solVec)-m_A;
-        if (m_verbose) { gsInfo<<"." ; }
-        if (m_verbose) { gsInfo<<"Finished\n" ; }
+        bool verbose = m_options.getSwitch("verbose");
+        if (verbose) { gsInfo<<"Computing matrices" ; }
+        m_solver->compute(m_A);
+        if (verbose) { gsInfo<<"." ; }
+        m_solVec = m_solver->solve(m_scaling*m_rhs);
+        if (verbose) { gsInfo<<"." ; }
+        m_B = m_dnonlinear(m_solVec,gsVector<T>::Zero(m_solVec.rows()))-m_A;
+        if (verbose) { gsInfo<<"." ; }
+        if (verbose) { gsInfo<<"Finished\n" ; }
     }
 
 protected:
 
     using Base::m_A;
     const gsVector<T> m_rhs;
-    const std::function < gsSparseMatrix<T> ( gsVector<T> const & ) > m_nonlinearFun;
+    const std::function < gsSparseMatrix<T> ( gsVector<T> const & ) > m_nonlinear;
+    std::function < gsSparseMatrix<T> ( gsVector<T> const &, gsVector<T> const & ) > m_dnonlinear;
     T m_scaling;
     using Base::m_B;
 
 
     /// Linear solver employed
-    gsSparseSolver<>::SimplicialLDLT  m_solver;
+    mutable typename gsSparseSolver<T>::uPtr m_solver;
     gsVector<> m_solVec;
 
-    using Base::m_verbose;
+    using Base::m_options;
 
 };
 

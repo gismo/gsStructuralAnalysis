@@ -40,7 +40,7 @@ void gsALMBase<T>::defaultOptions()
 
     m_options.addInt ("SingularPointFailure","What to do wne a singular point determination fails?: 0 = Apply solution anyways; 1 = Proceed without singular point",SPfail::With);
 
-    m_options.addInt ("Solver","Linear solver: 0 = LDLT; 1 = CG",solver::CG); // The CG solver is robust for membrane models, where zero-blocks in the matrix might occur.
+    m_options.addString("Solver","Sparse linear solver", "SimplicialLDLT");
 
     m_options.addSwitch ("Verbose","Verbose output",false);
 
@@ -65,11 +65,11 @@ void gsALMBase<T>::getOptions()
     m_quasiNewtonInterval = m_options.getInt ("QuasiIterations");
 
     m_bifurcationMethod   = m_options.getInt ("BifurcationMethod");
-    m_solverType          = m_options.getInt ("Solver");
-    if (m_solverType!=solver::LDLT && m_bifurcationMethod==bifmethod::Determinant)
+    m_solver = gsSparseSolver<T>::get( m_options.getString("Solver") );
+    if  (!dynamic_cast<typename gsSparseSolver<T>::SimplicialLDLT*>(m_solver.get()) && m_bifurcationMethod==bifmethod::Determinant)
     {
-      gsWarn<<"Determinant method cannot be used with solvers other than LDLT. Bifurcation method will be set to 'Eigenvalue'.\n";
-      m_bifurcationMethod = bifmethod::Eigenvalue;
+        gsWarn<<"Determinant method cannot be used with solvers other than LDLT. Bifurcation method will be set to 'Eigenvalue'.\n";
+        m_bifurcationMethod = bifmethod::Eigenvalue;
     }
 
     m_verbose             = m_options.getSwitch ("Verbose");
@@ -148,58 +148,44 @@ void gsALMBase<T>::computeResidualNorms()
 template <class T>
 void gsALMBase<T>::factorizeMatrix(const gsSparseMatrix<T> & M)
 {
-  if (m_solverType==solver::LDLT)
-  {
-    m_LDLTsolver.compute(M);
-    // If 1: matrix is not SPD
-    GISMO_ASSERT(m_LDLTsolver.info()==Eigen::ComputationInfo::Success,"Solver error with code "<<m_LDLTsolver.info()<<". See Eigen documentation on ComputationInfo \n"
-                                                                <<Eigen::ComputationInfo::Success<<": Success"<<"\n"
-                                                                <<Eigen::ComputationInfo::NumericalIssue<<": NumericalIssue"<<"\n"
-                                                                <<Eigen::ComputationInfo::NoConvergence<<": NoConvergence"<<"\n"
-                                                                <<Eigen::ComputationInfo::InvalidInput<<": InvalidInput"<<"\n");
-
-  }
-  else if (m_solverType==solver::CG)
-  {
-    m_CGsolver.compute(M);
-
-    GISMO_ASSERT(m_CGsolver.info()==Eigen::ComputationInfo::Success,"Solver error with code "<<m_CGsolver.info()<<". See Eigen documentation on ComputationInfo \n"
-                                                                <<Eigen::ComputationInfo::Success<<": Success"<<"\n"
-                                                                <<Eigen::ComputationInfo::NumericalIssue<<": NumericalIssue"<<"\n"
-                                                                <<Eigen::ComputationInfo::NoConvergence<<": NoConvergence"<<"\n"
-                                                                <<Eigen::ComputationInfo::InvalidInput<<": InvalidInput"<<"\n");
-
-  }
-  else
-    GISMO_ERROR("Solver type "<<m_solverType<<" unknown.");
-
+  m_solver->compute(M);
+  GISMO_ASSERT(m_solver->info()==Eigen::ComputationInfo::Success,"Solver error with code "<<m_solver->info()<<". See Eigen documentation on ComputationInfo \n"
+                                                              <<Eigen::ComputationInfo::Success<<": Success"<<"\n"
+                                                              <<Eigen::ComputationInfo::NumericalIssue<<": NumericalIssue"<<"\n"
+                                                              <<Eigen::ComputationInfo::NoConvergence<<": NoConvergence"<<"\n"
+                                                              <<Eigen::ComputationInfo::InvalidInput<<": InvalidInput"<<"\n");
 }
 
 template <class T>
 gsVector<T> gsALMBase<T>::solveSystem(const gsVector<T> & F)
 {
-  if (m_solverType==solver::LDLT)
-    return m_LDLTsolver.solve(F);
-  else if (m_solverType==solver::CG)
-    return m_CGsolver.solve(F);
-  else
-    GISMO_ERROR("Solver type "<<m_solverType<<" unknown.");
+  return m_solver->solve(F);
 }
 
 template <class T>
-void gsALMBase<T>::computeJacobian(gsVector<T> U)
+gsSparseMatrix<T> gsALMBase<T>::_computeJacobian(const gsVector<T> U, const gsVector<T> deltaU)
 {
   // Compute Jacobian
-  m_jacMat = m_jacobian(U);
-  this->factorizeMatrix(m_jacMat);
+  gsSparseMatrix<T> m;
+  m = m_djacobian(U,deltaU);
+  this->factorizeMatrix(m);
   m_note += "J";
+  return m;
+}
+
+template <class T>
+void gsALMBase<T>::computeJacobian(const gsVector<T> U, const gsVector<T> deltaU)
+{
+  m_jacMat = _computeJacobian(U,deltaU);
 }
 
 template <class T>
 void gsALMBase<T>::computeJacobian()
 {
   // Compute Jacobian
-  this->computeJacobian(m_U + m_DeltaU);
+  if (m_deltaU.rows() == 0)
+    m_deltaU = gsVector<T>::Zero(m_DeltaU.rows());
+  this->computeJacobian(m_U + m_DeltaU, m_deltaU);
 }
 
 template <class T> void gsALMBase<T>::computeUbar() { m_deltaUbar = this->solveSystem(-m_resVec); }
@@ -1070,7 +1056,11 @@ void gsALMBase<T>::computeSingularPoint(T singTol, index_t kmax, gsVector<T> U, 
 template <class T>
 gsMatrix<T> gsALMBase<T>::computeModes(gsVector<T> x, bool jacobian, T shift)
 {
-  if (jacobian) { this->computeJacobian(x);} // otherwise the jacobian is already computed (on m_U+m_DeltaU)
+  if (jacobian)
+  {
+    gsVector<T> dx = gsVector<T>::Zero(x.size());
+    this->computeJacobian(x,dx);
+  } // otherwise the jacobian is already computed (on m_U+m_DeltaU)
 
   gsMatrix<T> result;
 #ifdef GISMO_WITH_SPECTRA
@@ -1167,7 +1157,7 @@ bool gsALMBase<T>::testSingularPoint(gsVector<T> U, T L, T tol, index_t kmax, bo
   // Initiate m_V and m_DeltaVDET
 
   if (jacobian)
-    this->computeJacobian(U);
+    this->computeJacobian(m_U,m_deltaU);
 
   m_V = gsVector<T>::Ones(m_numDof);
   m_V.normalize();
@@ -1200,18 +1190,27 @@ bool gsALMBase<T>::testSingularPoint(T tol, index_t kmax, bool jacobian)
 template <class T>
 void gsALMBase<T>::computeStability(gsVector<T> x, bool jacobian, T shift)
 {
-  if (jacobian) { this->computeJacobian(x);} // otherwise the jacobian is already computed (on m_U+m_DeltaU)
+  if (jacobian)
+  {
+    gsVector<T> dx = gsVector<T>::Zero(x.size());
+    this->computeJacobian(x,dx);
+  } // otherwise the jacobian is already computed (on m_U+m_DeltaU)
 
   // gsInfo<<"x = \n"<<x.transpose()<<"\n";
   if (m_bifurcationMethod == bifmethod::Determinant)
   {
-    factorizeMatrix(m_jacMat);
-    m_stabilityVec = m_LDLTsolver.vectorD();
+    if ( auto * s = dynamic_cast<typename gsSparseSolver<T>::SimplicialLDLT*>(m_solver.get()) )
+    {
+      factorizeMatrix(m_jacMat);
+      m_stabilityVec = s->vectorD();
+    }
+    else
+      GISMO_ERROR("Determinant stability method only works with SimplicialLDLT solver, current solver is "<<m_options.getString("Solver"));
   }
   else if (m_bifurcationMethod == bifmethod::Eigenvalue)
   {
     #ifdef GISMO_WITH_SPECTRA
-    index_t number = std::min(static_cast<index_t>(std::floor(m_jacMat.cols()/3.)),10);
+    index_t number = std::min(static_cast<index_t>(std::floor(m_jacMat.cols()/5.)),10);
     /*
     // Without shift!
     // This one can sometimes not converge, because spectra is better at finding large values.
@@ -1281,7 +1280,7 @@ void gsALMBase<T>::extendedSystemSolve(gsVector<T> U, T L, T tol)
   m_L = L;
   gsInfo<<"Extended iterations --- Starting with U.norm = "<<m_U.norm()<<" and L = "<<m_L<<"\n";
 
-  this->computeJacobian(m_U); // Jacobian evaluated on m_U
+  this->computeJacobian(m_U,m_deltaU); // Jacobian evaluated on m_U
   m_basisResidualKTPhi = (m_jacMat*m_V).norm();
 
   m_DeltaV = gsVector<T>::Zero(m_numDof);
@@ -1305,7 +1304,7 @@ void gsALMBase<T>::extendedSystemSolve(gsVector<T> U, T L, T tol)
     // m_resVec = m_residualFun(m_U, m_L, m_forcing);
     // m_residue = m_resVec.norm() / ( m_L * m_forcing.norm() );
     // m_residue = (m_jacobian(m_U).toDense()*m_V).norm() / refError;
-    this->computeJacobian(m_U+m_DeltaU);
+    this->computeJacobian(m_U+m_DeltaU,m_deltaU);
     m_residueKTPhi = (m_jacMat*(m_V+m_DeltaV)).norm(); // /m_basisResidualKTPhi;
     m_resVec = m_residualFun(m_U+m_DeltaU,m_L+m_DeltaL,m_forcing);
     computeResidualNorms();
@@ -1353,7 +1352,7 @@ template <class T>
 void gsALMBase<T>::extendedSystemIteration()
 {
   m_resVec = m_residualFun(m_U+m_DeltaU, m_L+m_DeltaL, m_forcing);
-  this->computeJacobian(m_U+m_DeltaU);
+  this->computeJacobian(m_U+m_DeltaU,m_deltaU);
   // m_jacMat = m_jacobian(m_U);
 
   m_deltaUt = this->solveSystem(m_forcing); // DeltaV1
@@ -1490,16 +1489,10 @@ void gsALMBase<T>::switchBranch()
 {
   m_V.normalize();
   real_t lenPhi = m_V.norm();
-  gsDebugVar(lenPhi);
   real_t xi = lenPhi/m_tau;
   // gsInfo<<xi<<"\n";
   m_DeltaU = xi*m_V;
-  gsDebugVar(m_U);
   m_U = m_U + m_DeltaU;
-
-  gsDebugVar(m_DeltaU);
-  gsDebugVar(m_U);
-
 
   m_DeltaLold = 0.0;
   m_DeltaUold.setZero();

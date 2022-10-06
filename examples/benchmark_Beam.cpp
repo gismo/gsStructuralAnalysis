@@ -1,6 +1,9 @@
-/** @file gsThinShell_ArcLength.cpp
+/** @file benchmark_Beam.cpp
 
-    @brief Code for the arc-length method of a shell based on loads
+    @brief Two benchmark cases using arc-length methods for a beam, according to
+
+    Pagani, A., & Carrera, E. (2018). Unified formulation of geometrically nonlinear refined beam theories.
+    Mechanics of Advanced Materials and Structures, 25(1), 15–31. https://doi.org/10.1080/15376494.2016.1232458
 
     This file is part of the G+Smo library.
 
@@ -68,7 +71,7 @@ int main (int argc, char** argv)
     std::string wn("data.csv");
     std::string assemberOptionsFile("options/solver_options.xml");
 
-    gsCmdLine cmd("Arc-length analysis for thin shells.");
+    gsCmdLine cmd("Arc-length analysis with a beam.");
     cmd.addString( "f", "file", "Input XML file for assembler options", assemberOptionsFile );
 
     cmd.addInt("t", "testcase", "Test case: 0: clamped-clamped, 1: pinned-pinned, 2: clamped-free", testCase);
@@ -130,6 +133,7 @@ int main (int argc, char** argv)
 
     // Boundary conditions
     gsBoundaryConditions<> BCs;
+    BCs.setGeoMap(mp);
     gsPointLoads<real_t> pLoads = gsPointLoads<real_t>();
 
     // Initiate Surface forces
@@ -208,7 +212,8 @@ int main (int argc, char** argv)
 
     std::string commands = "mkdir -p " + dirname;
     const char *command = commands.c_str();
-    system(command);
+    int systemRet = system(command);
+    GISMO_ASSERT(systemRet!=-1,"Something went wrong with calling the system argument");
 
     // plot geometry
     if (plot)
@@ -241,7 +246,6 @@ int main (int argc, char** argv)
 
     gsThinShellAssemblerBase<real_t>* assembler;
     assembler = new gsThinShellAssembler<3, real_t, true >(mp,dbasis,BCs,force,materialMatrix);
-
 
     // Construct assembler object
     assembler->setOptions(opts);
@@ -288,7 +292,7 @@ int main (int argc, char** argv)
     else
       GISMO_ERROR("Method "<<method<<" unknown");
 
-    arcLength->options().setInt("Solver",0); // LDLT solver
+    arcLength->options().setString("Solver","SimplicialLDLT"); // LDLT solver
     arcLength->options().setInt("BifurcationMethod",0); // 0: determinant, 1: eigenvalue
     arcLength->options().setReal("Length",dLb);
     arcLength->options().setInt("AngleMethod",0); // 0: step, 1: iteration
@@ -326,8 +330,6 @@ int main (int argc, char** argv)
     gsMatrix<> solVector;
     real_t indicator = 0.0;
     arcLength->setIndicator(indicator); // RESET INDICATOR
-    bool bisected = false;
-    real_t dLb0 = dLb;
     for (index_t k=0; k<step; k++)
     {
       gsInfo<<"Load step "<< k<<"\n";
@@ -340,7 +342,6 @@ int main (int argc, char** argv)
         dLb = dLb / 2.;
         arcLength->setLength(dLb);
         arcLength->setSolution(Uold,Lold);
-        bisected = true;
         k -= 1;
         continue;
       }
@@ -353,7 +354,7 @@ int main (int argc, char** argv)
           gsInfo<<"Bifurcation spotted!"<<"\n";
           arcLength->computeSingularPoint(1e-4, 5, Uold, Lold, 1e-10, 0, false);
           arcLength->switchBranch();
-          dLb0 = dLb = dL;
+          dLb = dL;
           arcLength->setLength(dLb);
         }
       }
@@ -387,6 +388,10 @@ int main (int argc, char** argv)
 
     if (plot)
       collection.save();
+
+    delete materialMatrix;
+    delete assembler;
+    delete arcLength;
 
   return result;
 }
@@ -445,7 +450,7 @@ gsMultiPatch<T> RectangularDomain(int n, int m, int p, int q, T L, T B, bool cla
   // Define a matrix with ones
   gsVector<> temp(len0);
   temp.setOnes();
-  for (index_t k = 0; k < len1; k++)
+  for (size_t k = 0; k < len1; k++)
   {
     // First column contains x-coordinates (length)
     coefs.col(0).segment(k*len0,len0) = coefvec0;

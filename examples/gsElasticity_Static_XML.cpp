@@ -1,6 +1,6 @@
-/** @file gsElasticity_Static.cpp
+/** @file gsElasticity_Static_XML.cpp
 
-    @brief Static simulations of a solid
+    @brief Static simulations of a solid reading from an XML file
 
     This file is part of the G+Smo library.
 
@@ -35,10 +35,7 @@ int main (int argc, char** argv)
     bool plot       = false;
     bool nonlinear  = false;
 
-    real_t E_modulus     = 1;
-    real_t PoissonRatio = 0;
-
-    int testCase = 0;
+    int testCase = 1;
 
     bool write = false;
 
@@ -48,7 +45,7 @@ int main (int argc, char** argv)
     fn2 = "pde/elasticity_brick.xml";
     fn3 = "options/static_solver.xml";
 
-    gsCmdLine cmd("Thin shell plate example.");
+    gsCmdLine cmd("Static analysis using gsElasticity.");
     cmd.addInt("r","hRefine",
        "Number of dyadic h-refinement (bisection) steps to perform before solving",
        numHref);

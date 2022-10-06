@@ -1,0 +1,17 @@
+namespace gismo {
+/**
+
+\page gsThinShell_WrinklingPerturbedDC gsThinShell_WrinklingPerturbedDC.cpp
+
+Performs wrinkling simulations of different cases USING A PERTURBATION from a multipatch using Displacement Control (DC)
+
+\section gsThinShell_WrinklingPerturbedDC_Annotated Annotated source file
+
+Here is the full file \c examples/gsThinShell_WrinklingPerturbedDC.cpp. Clicking on a function
+or class name will lead you to its reference documentation.
+
+\include gsThinShell_WrinklingPerturbedDC.cpp
+
+*/
+
+}

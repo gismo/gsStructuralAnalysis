@@ -2,6 +2,10 @@
 
     @brief Benchmark for the collapsing frustrum with Displacement Control (DC)
 
+    Based on:
+    Başar, Y., & Itskov, M. (1998). Finite element formulation of the Ogden material model with application to ruber-like shells.
+    International Journal for Numerical Methods in Engineering. https://doi.org/10.1002/(SICI)1097-0207(19980815)42:7<1279::AID-NME437>3.0.CO;2-I
+
     This file is part of the G+Smo library.
 
     This Source Code Form is subject to the terms of the Mozilla Public
@@ -55,7 +59,7 @@ int main (int argc, char** argv)
 
     std::string wn("data.csv");
 
-    gsCmdLine cmd("Arc-length analysis for thin shells.");
+    gsCmdLine cmd("Displacement-controlled collapsing frustrum.");
 
     cmd.addInt("t", "testcase", "Test case: 0: free; 1: restrained", testCase);
     cmd.addInt("r","hRefine", "Number of dyadic h-refinement (bisection) steps to perform before solving", numRefine);
@@ -91,7 +95,7 @@ int main (int argc, char** argv)
     // Initialise solution object
     mp_def = mp;
 
-    gsMultiBasis<> dbasis(mp);
+    gsMultiBasis<> dbasis(mp,true);
     gsInfo<<"Basis (patch 0): "<< mp.patch(0).basis() << "\n";
 
     // Boundary conditions
@@ -169,7 +173,8 @@ int main (int argc, char** argv)
 
     std::string commands = "mkdir -p " + dirname;
     const char *command = commands.c_str();
-    system(command);
+    int systemRet = system(command);
+    GISMO_ASSERT(systemRet!=-1,"Something went wrong with calling the system argument");
 
     // plot geometry
     if (plot)
@@ -380,18 +385,11 @@ int main (int argc, char** argv)
       gsVector<real_t> Fint = assembler->boundaryForceVector(mp_def,ps,2);
       real_t Load = Fint.sum() / (0.5*3.14159265358979);
 
-      gsMatrix<> pts(2,1);
-      pts<<0.5,0.5;
-      if (testCase==8 || testCase==9)
-      {
-        pts.resize(2,3);
-        pts.col(0)<<0.0,1.0;
-        pts.col(1)<<0.5,1.0;
-        pts.col(2)<<1.0,1.0;
-      }
-
       deformation = mp_def;
       deformation.patch(0).coefs() -= mp.patch(0).coefs();// assuming 1 patch here
+
+      gsVector<> pt(2);
+      pt<<0.5,1.0;
 
       if (stress)
       {
@@ -430,8 +428,9 @@ int main (int argc, char** argv)
     gsInfo<<"Total ellapsed assembly time: \t\t"<<time<<" s\n";
     gsInfo<<"Total ellapsed solution time (incl. assembly): \t"<<totaltime<<" s\n";
 
-  delete assembler;
   delete materialMatrix;
+  delete assembler;
+
   return result;
 }
 

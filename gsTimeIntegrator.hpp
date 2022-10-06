@@ -13,6 +13,9 @@
 
 #pragma once
 
+#include <gsSolver/gsGMRes.h>
+#include <gsSolver/gsMatrixOp.h>
+
 namespace gismo
 {
 
@@ -38,6 +41,7 @@ namespace gismo
         if (m_method=="ExplEuler" || m_method=="ImplEuler" || m_method=="RK4")
         {
             m_sol = gsMatrix<T>::Zero(2*m_dofs,1);
+            m_aNew = gsMatrix<T>::Zero(m_dofs,1);
         }
         else if ((m_method=="Newmark") || (m_method=="Bathe") || (m_method=="CentralDiff"))
         {
@@ -49,6 +53,23 @@ namespace gismo
         {
             gsInfo<<"Method unknown...";
         }
+    }
+
+    template <class T>
+    void gsTimeIntegrator<T>::resetSolution()
+    {
+        if (m_method=="ExplEuler" || m_method=="ImplEuler" || m_method=="RK4")
+        {
+            m_sol = gsMatrix<T>::Zero(2*m_dofs,1);
+            m_aNew = gsMatrix<T>::Zero(m_dofs,1);
+        }
+        else if ((m_method=="Newmark") || (m_method=="Bathe") || (m_method=="CentralDiff"))
+        {
+            m_uNew = gsMatrix<T>::Zero(m_dofs,1);
+            m_vNew = gsMatrix<T>::Zero(m_dofs,1);
+            m_aNew = gsMatrix<T>::Zero(m_dofs,1);
+        }
+
     }
 
     template <class T>
@@ -73,7 +94,8 @@ namespace gismo
     void gsTimeIntegrator<T>::setAcceleration(gsMatrix<T>& accel)
     {
         if (m_method=="ExplEuler" || m_method=="ImplEuler" || m_method=="RK4")
-            gsWarn<<"Initial acceleration not implemented for method "<<m_method<<"\n";
+            // gsWarn<<"Initial acceleration not implemented for method "<<m_method<<"\n";
+            m_aNew = accel;
         else if ((m_method=="Newmark") || (m_method=="Bathe") || (m_method=="CentralDiff"))
             m_aNew = accel;
     }
@@ -291,8 +313,8 @@ namespace gismo
         m_forceVec = m_forceFun(m_t);
         m_sysvec.bottomRows(m_dofs) = m_dt*m_massInv*m_forceVec;
 
-        m_solver.compute(m_sysmat);
-        m_sol = m_solver.solve(m_sysvec+m_sol);
+        m_solver->compute(m_sysmat);
+        m_sol = m_solver->solve(m_sysvec+m_sol);
         m_t += m_dt;
     }
 
@@ -303,6 +325,7 @@ namespace gismo
         gsMatrix<T> uOld = solOld.topRows(m_dofs);
         gsMatrix<T> vOld = solOld.bottomRows(m_dofs);
         gsMatrix<T> uNew,vNew;
+        gsMatrix<T> du = gsMatrix<T>::Zero(m_dofs,1);
 
         m_sysmat = gsSparseMatrix<T>(2*m_dofs,2*m_dofs);
         m_sysmat.setZero();
@@ -316,11 +339,14 @@ namespace gismo
 
         while ( (m_updateNorm>m_tolerance || m_residue>m_tolerance) && m_numIterations<=m_maxIterations )
         {
-            uNew = m_sol.topRows(m_dofs);
-            vNew = m_sol.bottomRows(m_dofs);
+            uNew    = m_sol.topRows(m_dofs);
+            vNew    = m_sol.bottomRows(m_dofs);
 
             if ( (!m_quasiNewton) || (m_numIterations==0) )
-                m_jacMat = m_jacobian(uNew);
+            {
+                du      = m_dsol.topRows(m_dofs);
+                m_jacMat = m_djacobian(uNew,du);
+            }
 
             m_resVec = m_residualFun(uNew,m_t);
 
@@ -355,8 +381,8 @@ namespace gismo
             }
 
             m_residue = m_sysvec.norm();
-            m_solver.compute(m_sysmat);
-            m_dsol = m_solver.solve(-m_sysvec);
+            m_solver->compute(m_sysmat);
+            m_dsol = m_solver->solve(-m_sysvec);
 
             m_sol += m_dsol;
             m_updateNorm = m_dsol.norm() / m_sol.norm();
@@ -387,9 +413,12 @@ namespace gismo
     void gsTimeIntegrator<T>::stepImplEulerNLOp()
     {
         gsMatrix<T> solOld = m_sol;
+        gsMatrix<T> dsol;
         gsMatrix<T> uOld = solOld.topRows(m_dofs);
         gsMatrix<T> vOld = solOld.bottomRows(m_dofs);
         gsMatrix<T> uNew,vNew;
+        gsMatrix<T> du;
+        m_dsol = gsMatrix<T>::Zero(2*m_dofs,1);
 
         gsBlockOp<>::Ptr Amat=gsBlockOp<>::make(2,2);
 
@@ -408,14 +437,17 @@ namespace gismo
             vNew = m_sol.bottomRows(m_dofs);
 
             if ( (!m_quasiNewton) || (m_numIterations==0) )
-                m_jacMat = m_jacobian(uNew);
+            {
+                du = m_dsol.topRows(m_dofs);
+                m_jacMat = m_djacobian(uNew,du);
+            }
 
             m_resVec = m_residualFun(uNew,m_t);
 
             m_sysvec.topRows(m_dofs) = uNew - uOld - m_dt*vNew;
             m_sysvec.bottomRows(m_dofs) = m_mass*(vNew - vOld) + m_dt * m_damp * vNew + m_dt*(-m_resVec);
 
-            m_jacMat = m_jacobian(uNew);
+            // m_jacMat = m_djacobian(uNew,du);
 
             Amat->addOperator(0,0,gsIdentityOp<T>::make(m_dofs) );
             Amat->addOperator(0,1,makeMatrixOp(-m_dt*eye) );
@@ -423,10 +455,12 @@ namespace gismo
             Amat->addOperator(1,1,makeMatrixOp(m_mass + m_dt*m_damp) );
 
             m_residue= m_sysvec.norm();
-            gmres.solve(-m_sysvec,m_dsol);
+            gmres.solve(-m_sysvec,dsol);
+
+            m_dsol = dsol;
 
             m_sol += m_dsol;
-            m_updateNorm = m_dsol.norm() / m_sol.norm();
+            m_updateNorm = dsol.norm() / m_sol.norm();
 
             if (m_verbose)
             {
@@ -450,8 +484,6 @@ namespace gismo
         resetIteration();
     }
 
-
-
     template <class T>
     void gsTimeIntegrator<T>::stepNewmark()
     {
@@ -468,8 +500,8 @@ namespace gismo
         gsSparseMatrix<> lhs = m_stif + 4/(math::pow(gamma*m_dt,2))*m_mass + 2/(gamma*m_dt)*m_damp;
         gsMatrix<> rhs = m_forceVec + m_mass*(4/(math::pow(gamma*m_dt,2))*(uOld)+4/(gamma*m_dt)*vOld+aOld) + m_damp*(2/(gamma*m_dt)*(uOld)+vOld);
 
-        m_solver.compute(lhs);
-        m_sol = m_solver.solve(rhs);
+        m_solver->compute(lhs);
+        m_sol = m_solver->solve(rhs);
 
         m_uNew = m_sol;
 
@@ -487,6 +519,8 @@ namespace gismo
         uOld = m_uNew;
         vOld = m_vNew;
         aOld = m_aNew;
+        gsMatrix<T> du;
+        m_dsol = gsMatrix<T>::Zero(m_dofs,1);
 
 
         gsMatrix<> rhs;
@@ -499,11 +533,14 @@ namespace gismo
         while ( (m_updateNorm>m_tolerance || m_residue/res0>m_tolerance) && m_numIterations<=m_maxIterations )
         {
             if ( (!m_quasiNewton) || (m_numIterations==0) )
-                m_jacMat = m_jacobian(m_uNew);
+            {
+                du = m_dsol.topRows(m_dofs);
+                m_jacMat = m_djacobian(m_uNew,du);
+            }
 
             lhs = m_jacMat + 4/(math::pow(gamma*m_dt,2))*m_mass + 2/(gamma*m_dt)*m_damp;
-            m_solver.compute(lhs);
-            m_dsol = m_solver.solve(rhs);
+            m_solver->compute(lhs);
+            m_dsol = m_solver->solve(rhs);
             m_updateNorm = m_dsol.norm()/m_uNew.norm();
             m_uNew += m_dsol;
 
@@ -550,8 +587,8 @@ namespace gismo
 
         gsSparseMatrix<> lhs = m_stif + 4/(math::pow(gamma*m_dt,2))*m_mass + 2/(gamma*m_dt)*m_damp;
         gsMatrix<> rhs = m_forceVec + m_mass*(4/(math::pow(gamma*m_dt,2))*(uOld)+4/(gamma*m_dt)*vOld+aOld) + m_damp*(2/(gamma*m_dt)*(uOld)+vOld);;
-        m_solver.compute(lhs);
-        m_sol = m_solver.solve(rhs);
+        m_solver->compute(lhs);
+        m_sol = m_solver->solve(rhs);
         m_uNew = m_sol;
 
         m_vNew = 2/(gamma*m_dt)*(m_uNew-uOld) - vOld;
@@ -569,8 +606,8 @@ namespace gismo
 
         lhs = m_stif + c3*c3*m_mass + c3*m_damp;
         rhs = m_forceVec - m_mass*(c1*vOld+c2*vStep+c1*c3*uOld+c3*c2*uStep) - m_damp*(c2*uStep+c1*uOld);
-        m_solver.compute(lhs);
-        m_sol = m_solver.solve(rhs);
+        m_solver->compute(lhs);
+        m_sol = m_solver->solve(rhs);
         m_uNew = m_sol;
         m_residue = rhs.norm();
 
@@ -590,6 +627,8 @@ namespace gismo
         uOld = m_uNew;
         vOld = m_vNew;
         aOld = m_aNew;
+        gsMatrix<T> du;
+        m_dsol = gsMatrix<T>::Zero(m_dofs,1);
 
         if (m_verbose)
         {
@@ -598,14 +637,17 @@ namespace gismo
         while ( (m_updateNorm>m_tolerance || m_residue>m_tolerance) && m_numIterations<=m_maxIterations )
         {
             if ( (!m_quasiNewton) || (m_numIterations==0) )
-                m_jacMat = m_jacobian(m_uNew);
+            {
+                du = m_dsol.topRows(m_dofs);
+                m_jacMat = m_djacobian(m_uNew,du);
+            }
 
             m_resVec = m_residualFun(m_uNew,m_t);
 
             gsSparseMatrix<> lhs = m_jacMat + 4/(math::pow(gamma*m_dt,2))*m_mass + 2/(gamma*m_dt)*m_damp;
             gsMatrix<> rhs = m_resVec - m_mass*(4/(math::pow(gamma*m_dt,2))*(m_uNew-uOld)-4/(gamma*m_dt)*vOld-aOld) - m_damp*(2/(gamma*m_dt)*(m_uNew-uOld)-vOld);
-            m_solver.compute(lhs);
-            m_dsol = m_solver.solve(rhs);
+            m_solver->compute(lhs);
+            m_dsol = m_solver->solve(rhs);
             m_uNew += m_dsol;
             m_updateNorm = m_dsol.norm() / m_uNew.norm();
             m_residue = rhs.norm();
@@ -641,14 +683,17 @@ namespace gismo
         while ( (m_updateNorm>m_tolerance || m_residue>m_tolerance) && m_numIterations<=m_maxIterations )
         {
             if ( (!m_quasiNewton) || (m_numIterations==0) )
-                m_jacMat = m_jacobian(m_uNew);
+            {
+                du = m_dsol.topRows(m_dofs);
+                m_jacMat = m_djacobian(m_uNew,du);
+            }
 
             m_resVec = m_residualFun(m_uNew,m_t);
 
             gsSparseMatrix<T> lhs = m_jacMat + c3*c3*m_mass + c3*m_damp;
             gsMatrix<T> rhs = m_resVec - m_mass*(c1*vOld+c2*vStep+c1*c3*uOld+c3*c2*uStep+c3*c3*m_uNew) - m_damp*(c1*uOld+c2*uStep+c3*m_uNew);
-            m_solver.compute(lhs);
-            m_dsol = m_solver.solve(rhs);
+            m_solver->compute(lhs);
+            m_dsol = m_solver->solve(rhs);
             m_uNew += m_dsol;
             m_updateNorm = m_dsol.norm() / m_uNew.norm();
             m_residue = rhs.norm();
@@ -865,6 +910,7 @@ namespace gismo
         {
             m_displacements = m_sol.topRows(m_dofs);
             m_velocities = m_sol.bottomRows(m_dofs);
+            m_accelerations = m_aNew;
         }
         else if ((m_method=="Newmark") || (m_method=="Bathe") || (m_method=="CentralDiff"))
         {
