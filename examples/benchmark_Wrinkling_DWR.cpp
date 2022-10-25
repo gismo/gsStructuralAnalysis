@@ -653,6 +653,7 @@ int main (int argc, char** argv)
                     assembler->constructMultiPatchL(U,deltaU_patch);
 
                     loadstep_errors.push_back(std::make_pair(-1,-1.));
+                    SingularPoint=false;
                     break;
 
                     // gsDebugVar(arcLength.solutionU());
@@ -676,11 +677,14 @@ int main (int argc, char** argv)
             // ADAPTIVE MESHING PART
             /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
             gsThinShellDWRHelper<real_t> helper(assembler);
+            typename gsBoxTopology::bContainer goalSides;
+            goalSides.push_back(patchSide(0,boundary::west));
+            gsMatrix<> points;
 
             if (plot)
             {
                 std::string fileName = dirname + "/" + "error_field" + util::to_string(k) + "_" + util::to_string(it);
-                helper.computeError(mp_def,U_patch,fileName,10000,false,mesh);
+                helper.computeError(mp_def,U_patch,goalSides,points,false,fileName,1000,false,mesh);
                 fileName = "error_field" + util::to_string(k) + "_" + util::to_string(it) ;
                 for (size_t p=0; p!=mp.nPatches(); p++)
                 {
@@ -690,7 +694,7 @@ int main (int argc, char** argv)
                 }
             }
             else
-                helper.computeError(mp_def,U_patch);
+                helper.computeError(mp_def,U_patch,goalSides,points,false);
 
             error = std::abs(helper.error());
             std::vector<real_t> errorVec = helper.errors();
