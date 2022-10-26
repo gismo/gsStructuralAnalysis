@@ -728,6 +728,8 @@ int main (int argc, char** argv)
         gsParaviewCollection errors(dirname + "/" + "error" + util::to_string(k));
         gsParaviewCollection error_fields(dirname + "/" + "error_field" + util::to_string(k));
 
+        gsInfo<<"Basis (L): \n"<<mp.basis(0)<<"\n";
+
         error = 1;
         index_t maxIt = 10;
         index_t it = 0;
