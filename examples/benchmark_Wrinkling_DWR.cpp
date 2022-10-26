@@ -136,6 +136,9 @@ int main (int argc, char** argv)
     int method = 2; // (0: Load control; 1: Riks' method; 2: Crisfield's method; 3: consistent crisfield method; 4: extended iterations)
     bool symmetry = false;
     bool deformed = false;
+
+    bool interior = true;
+
     real_t perturbation = 0;
 
     real_t tau = 1e4;
@@ -216,6 +219,7 @@ int main (int argc, char** argv)
     cmd.addSwitch("bifurcation", "Compute singular points and bifurcation paths", SingularPoint);
     cmd.addSwitch("quasi", "Use the Quasi Newton method", quasiNewton);
     cmd.addSwitch("plot", "Plot result in ParaView format", plot);
+    cmd.addSwitch("noInterior", "Error computation not on the interior", interior);
     cmd.addSwitch("plotError", "Plot error in ParaView format", plotError);
     cmd.addSwitch("mesh", "Plot mesh?", mesh);
     cmd.addSwitch("stress", "Plot stress in ParaView format", stress);
@@ -584,13 +588,14 @@ int main (int argc, char** argv)
 
     gsThinShellDWRHelper<real_t> helper(assembler);
     typename gsBoxTopology::bContainer goalSides;
-    goalSides.push_back(patchSide(0,boundary::west));
+    //goalSides.push_back(patchSide(0,boundary::west));
     gsMatrix<> points;
     real_t error = 1;
 
     // PRE-BUCKLING
     bool unstable = false;
     index_t k = 0;
+    gsInfo<<"----------Pre-Buckling-----------\n";
     for ( ; k<step; k++)
     {
         loadstep_errors.clear();
@@ -641,7 +646,7 @@ int main (int argc, char** argv)
         if (plot)
         {
             std::string fileName = dirname + "/" + "error_field" + util::to_string(k) + "_" + util::to_string(it);
-            helper.computeError(mp_def,U_patch,goalSides,points,false,fileName,1000,false,mesh);
+            helper.computeError(mp_def,U_patch,goalSides,points,interior,fileName,1000,false,mesh);
             fileName = "error_field" + util::to_string(k) + "_" + util::to_string(it) ;
             for (size_t p=0; p!=mp.nPatches(); p++)
             {
@@ -651,7 +656,7 @@ int main (int argc, char** argv)
             }
         }
         else
-            helper.computeError(mp_def,U_patch,goalSides,points,false);
+            helper.computeError(mp_def,U_patch,goalSides,points,interior);
 
         error = std::abs(helper.error());
 
@@ -672,6 +677,7 @@ int main (int argc, char** argv)
     }
 
     // BUCKLING
+    gsInfo<<"----------Buckling mode computation-----------\n";
     if (unstable)
     {
         loadstep_errors.clear();
@@ -717,6 +723,7 @@ int main (int argc, char** argv)
         unstable_prev = true;
     }
 
+    gsInfo<<"----------Post-Buckling-----------\n";
     // POST BUCKLING
     real_t refTol = target / bandwidth; // refine if error is above
     real_t crsTol = target * bandwidth; // coarsen if error is below
@@ -729,12 +736,11 @@ int main (int argc, char** argv)
         gsParaviewCollection error_fields(dirname + "/" + "error_field" + util::to_string(k));
 
         gsInfo<<"Basis (L): \n"<<mp.basis(0)<<"\n";
-
-        error = 1;
         index_t maxIt = 10;
         index_t it = 0;
         bool refined = true;
         bool coarsened = true;
+        error = 1;
         while ((error < crsTol || error > refTol) && it < maxIt && (refined || coarsened))
         {
             assembler->assembleL();
