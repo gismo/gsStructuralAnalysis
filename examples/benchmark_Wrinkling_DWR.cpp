@@ -723,6 +723,21 @@ int main (int argc, char** argv)
         unstable_prev = true;
     }
 
+    gsQuasiInterpolate<real_t>::localIntpl(basisL.basis(0), mp_def.patch(0), coefs);
+    mp_def.patch(0) = *basisL.basis(0).makeGeometry(give(coefs));
+
+    gsQuasiInterpolate<real_t>::localIntpl(basisL.basis(0), U_patch.patch(0), coefs);
+    U_patch.patch(0) = *basisL.basis(0).makeGeometry(give(coefs));
+
+    gsQuasiInterpolate<real_t>::localIntpl(basisL.basis(0), deltaU_patch.patch(0), coefs);
+    deltaU_patch.patch(0) = *basisL.basis(0).makeGeometry(give(coefs));
+
+    gsQuasiInterpolate<real_t>::localIntpl(basisL.basis(0), Uold_patch.patch(0), coefs);
+    Uold_patch.patch(0) = *basisL.basis(0).makeGeometry(give(coefs));
+
+    gsQuasiInterpolate<real_t>::localIntpl(basisL.basis(0), deltaUold_patch.patch(0), coefs);
+    deltaUold_patch.patch(0) = *basisL.basis(0).makeGeometry(give(coefs));
+
     gsInfo<<"----------Post-Buckling-----------\n";
     // POST BUCKLING
     real_t refTol = target / bandwidth; // refine if error is above
