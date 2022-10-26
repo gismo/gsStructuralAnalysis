@@ -721,11 +721,6 @@ int main (int argc, char** argv)
     real_t refTol = target / bandwidth; // refine if error is above
     real_t crsTol = target * bandwidth; // coarsen if error is below
     GISMO_ENSURE(refTol >= crsTol,"Refinement tolerance should be bigger than the coarsen tolerance");
-    error = 1;
-    index_t maxIt = 10;
-    index_t it = 0;
-    bool refined = true;
-    bool coarsened = true;
     for ( ; k<step; k++)
     {
         loadstep_errors.clear();
@@ -733,6 +728,11 @@ int main (int argc, char** argv)
         gsParaviewCollection errors(dirname + "/" + "error" + util::to_string(k));
         gsParaviewCollection error_fields(dirname + "/" + "error_field" + util::to_string(k));
 
+        error = 1;
+        index_t maxIt = 10;
+        index_t it = 0;
+        bool refined = true;
+        bool coarsened = true;
         while ((error < crsTol || error > refTol) && it < maxIt && (refined || coarsened))
         {
             assembler->assembleL();
@@ -829,17 +829,27 @@ int main (int argc, char** argv)
             {
                 if (error > refTol)
                 {
-                    gsInfo<<"Load Step "<<k<<": Error is too big!\n";
+                    gsInfo<<"Load Step "<<k<<": Error is too big! Error = "<<error<<", refTol = "<<refTol<<"\n";
                     mesher.markRef_into(elErrors,markRef);
-                    gsInfo<<"Marked "<<markRef.totalSize()<<" elements\n";
+                    gsInfo<<"Marked "<<markRef.totalSize()<<" elements for refinement\n";
                     refined = mesher.refine(markRef);
                 }
-                else// if (error < crsTol)
+                else if (error < refTol && error > crsTol)
+                {
+                    gsInfo<<"Load Step "<<k<<": Error is within bounds!\n";
+                    gsInfo<<"Load Step "<<k<<": Error is within bounds. Error = "<<error<<", refTol = "<<refTol<<", crsTol = "<<crsTol<<"\n";
+                    mesher.markRef_into(elErrors,markRef);
+                    gsInfo<<"Marked "<<markRef.totalSize()<<" elements for refinement\n";
+                    gsInfo<<"Marked "<<markCrs.totalSize()<<" elements for coarsening\n";
+                    mesher.markCrs_into(elErrors,markRef,markCrs);
+                    refined = mesher.refine(markRef);
+                }
+                else if (error < crsTol)
                 {
                     //gsInfo<<"Error is too small!\n";
-                    gsInfo<<"Load Step "<<k<<": Error is small enough\n";
+                    gsInfo<<"Load Step "<<k<<": Error is too small! Error = "<<error<<", crsTol = "<<crsTol<<"\n";
                     mesher.markCrs_into(elErrors,markCrs);
-                    gsInfo<<"Marked "<<markCrs.totalSize()<<" elements\n";
+                    gsInfo<<"Marked "<<markCrs.totalSize()<<" elements for coarsening\n";
                     coarsened = mesher.unrefine(markCrs);
                 }
 
