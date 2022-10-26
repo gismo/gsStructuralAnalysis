@@ -700,10 +700,10 @@ int main (int argc, char** argv)
         }
         indicator = 0;
 
-        L = arcLength.solutionL();
-        deltaL = arcLength.solutionDL();
-        U = arcLength.solutionU();
-        deltaU = arcLength.solutionDU();
+        L = Lold = arcLength.solutionL();
+        deltaL = deltaLold = arcLength.solutionDL();
+        U = Uold = arcLength.solutionU();
+        deltaU = deltaUold = arcLength.solutionDU();
 
         // Deformed geometry
         assembler->constructSolutionL(U,mp_def);
@@ -711,6 +711,10 @@ int main (int argc, char** argv)
         assembler->constructMultiPatchL(U,U_patch);
         // delta Deformation
         assembler->constructMultiPatchL(U,deltaU_patch);
+
+        // Update Uold
+        Uold_patch = U_patch;
+        deltaUold_patch = deltaU_patch;
 
         PlotResults(k,assembler,mp,mp_def,plot,stress,write,mesh,deformed,dirname,output,
                     collection,Smembrane,Sflexural,Smembrane_p);
