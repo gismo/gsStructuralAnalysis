@@ -831,6 +831,7 @@ int main (int argc, char** argv)
                 {
                     gsInfo<<"Load Step "<<k<<": Error is too big!\n";
                     mesher.markRef_into(elErrors,markRef);
+                    gsInfo<<"Marked "<<markRef.totalSize()<<" elements\n";
                     refined = mesher.refine(markRef);
                 }
                 else// if (error < crsTol)
@@ -838,6 +839,7 @@ int main (int argc, char** argv)
                     //gsInfo<<"Error is too small!\n";
                     gsInfo<<"Load Step "<<k<<": Error is small enough\n";
                     mesher.markCrs_into(elErrors,markCrs);
+                    gsInfo<<"Marked "<<markCrs.totalSize()<<" elements\n";
                     coarsened = mesher.unrefine(markCrs);
                 }
 
