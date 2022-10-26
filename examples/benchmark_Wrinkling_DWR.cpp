@@ -79,9 +79,6 @@ private:
 template <class T>
 gsMultiPatch<T> Rectangle(T L, T B);
 
-template <class T>
-void addClamping(gsMultiPatch<T> &mp, index_t patch, std::vector<boxSide> sides, T offset);
-
 void writeToCSVfile(std::string name, gsMatrix<> matrix)
 {
     std::ofstream file(name.c_str());
@@ -108,6 +105,17 @@ void initSectionOutput( const std::string dirname, bool undeformed=false);
 
 template <class T>
 void writeSectionOutput(const gsMultiPatch<T> & mp, const std::string dirname, const index_t coordinate=0, const T coordVal=0.0, const index_t N=100, bool undeformed=false);
+
+template <class T>
+void PlotResults(   index_t k,
+                    gsThinShellAssemblerDWRBase<T> * assembler,
+                    const gsMultiPatch<T> & mp, const gsMultiPatch<T> & mp_def,
+                    bool plot, bool stress, bool write, bool mesh, bool deformed,
+                    const std::string dirname, const std::string output,
+                    gsParaviewCollection & collection,
+                    gsParaviewCollection & Smembrane,
+                    gsParaviewCollection & Sflexural,
+                    gsParaviewCollection & Smembrane_p);
 
 int main (int argc, char** argv)
 {
@@ -306,8 +314,6 @@ int main (int argc, char** argv)
             mp.patch(0).uniformRefine();
     }
 
-
-    // addClamping(mp,0,sides, 1e-2);
     mp_def = mp;
 
     gsInfo<<"alpha = "<<aDim/bDim<<"; beta = "<<bDim/thickness<<"\n";
@@ -570,23 +576,164 @@ int main (int argc, char** argv)
     assembler->constructMultiPatchL(deltaUold,deltaUold_patch);
 
     std::vector<std::vector<std::pair<index_t,real_t>>> write_errors; // per load step, iteration, numDoFs, error
-    for (index_t k=0; k<step; k++)
+    std::vector<std::pair<index_t,real_t>> loadstep_errors;
+    gsArcLengthIterator<real_t>arcLength(Jacobian, ALResidual, Force);
+    arcLength.options() = ALMoptions;
+    arcLength.applyOptions();
+    arcLength.initialize();
+
+    gsThinShellDWRHelper<real_t> helper(assembler);
+    typename gsBoxTopology::bContainer goalSides;
+    goalSides.push_back(patchSide(0,boundary::west));
+    gsMatrix<> points;
+    real_t error = 1;
+
+    // PRE-BUCKLING
+    bool unstable = false;
+    index_t k = 0;
+    for ( ; k<step; k++)
     {
+        loadstep_errors.clear();
         gsInfo<<"Load step "<< k<<"; \tSystem size = "<<Uold.size()<<" x "<<Uold.size()<<"\n";
         gsParaviewCollection errors(dirname + "/" + "error" + util::to_string(k));
         gsParaviewCollection error_fields(dirname + "/" + "error_field" + util::to_string(k));
-        real_t refTol = target / bandwidth; // refine if error is above
-        real_t crsTol = target * bandwidth; // coarsen if error is below
-        GISMO_ENSURE(refTol >= crsTol,"Refinement tolerance should be bigger than the coarsen tolerance");
-        real_t error = 1;
-        index_t maxIt = 10;
-        index_t it = 0;
-        bool unstable = false;
-        bool refined = true;
-        bool coarsened = true;
 
-        std::vector<std::pair<index_t,real_t>> loadstep_errors;
-        while ((error < crsTol || error > refTol) && it < maxIt && !unstable && (refined || coarsened))
+        arcLength.setLength(dLb);
+
+        gsInfo<<"Starting from U.norm()="<<Uold.norm()<<", L="<<Lold<<"\n";
+        arcLength.step();
+
+        if (!(arcLength.converged()))
+        {
+          gsInfo<<"Error: Loop terminated, arc length method did not converge.\n";
+          dLb = dLb / 2.;
+          arcLength.setLength(dLb);
+          arcLength.setSolution(Uold,Lold);
+          bisected = true;
+          k -= 1;
+          continue;
+        }
+        indicator = arcLength.indicator();
+        gsInfo<<"indicator: (old = )"<<indicator_prev<<"; (new = )"<<indicator<<"\n";
+
+        arcLength.computeStability(arcLength.solutionU(),quasiNewton);
+        unstable = arcLength.stabilityChange();
+
+        if (unstable)
+            break;
+
+        L = arcLength.solutionL();
+        deltaL = arcLength.solutionDL();
+        U = arcLength.solutionU();
+        deltaU = arcLength.solutionDU();
+
+        // Deformed geometry
+        assembler->constructSolutionL(U,mp_def);
+        // Deformation (primal)
+        assembler->constructMultiPatchL(U,U_patch);
+        // delta Deformation
+        assembler->constructMultiPatchL(U,deltaU_patch);
+
+        indicator_prev = indicator;
+
+        ///////////////////////////////////////////////////
+        index_t it = 0;
+        if (plot)
+        {
+            std::string fileName = dirname + "/" + "error_field" + util::to_string(k) + "_" + util::to_string(it);
+            helper.computeError(mp_def,U_patch,goalSides,points,false,fileName,1000,false,mesh);
+            fileName = "error_field" + util::to_string(k) + "_" + util::to_string(it) ;
+            for (size_t p=0; p!=mp.nPatches(); p++)
+            {
+                error_fields.addTimestep(fileName + "_",p,it,".vts");
+                if (mesh)
+                    error_fields.addTimestep(fileName + "_mesh_",p,it,".vtp");
+            }
+        }
+        else
+            helper.computeError(mp_def,U_patch,goalSides,points,false);
+
+        error = std::abs(helper.error());
+
+        gsInfo<<"Error = "<<error<<"\n";
+        loadstep_errors.push_back(std::make_pair(assembler->numDofsL(),error));
+        ///////////////////////////////////////////////////
+
+        PlotResults(k,assembler,mp,mp_def,plot,stress,write,mesh,deformed,dirname,output,
+                    collection,Smembrane,Sflexural,Smembrane_p);
+
+        if (write)
+            writeStepOutput(U,L,indicator,deformation, dirname + "/" + wn, writePoints,1, 201);
+
+        if (crosssection && cross_coordinate!=-1)
+            writeSectionOutput(deformation,dirname,cross_coordinate,cross_val,201,false);
+
+        write_errors.push_back(loadstep_errors);
+    }
+
+    // BUCKLING
+    if (unstable)
+    {
+        loadstep_errors.clear();
+        gsInfo<<"Bifurcation spotted!"<<"\n";
+        arcLength.computeSingularPoint(1e-4, 5, Uold, Lold, 1e-7, 0, false);
+        arcLength.switchBranch();
+        dLb0 = dLb = dL;
+        arcLength.setLength(dLb);
+
+        if (writeP)
+        {
+            gsMultiPatch<> mp_perturbation;
+            assembler->constructSolutionL(arcLength.solutionV(),mp_perturbation);
+            gsWrite(mp_perturbation,dirname + "/" +"perturbation");
+            gsInfo<<"Perturbation written in: " + dirname + "/" + "perturbation.xml\n";
+        }
+        indicator = 0;
+
+        L = arcLength.solutionL();
+        deltaL = arcLength.solutionDL();
+        U = arcLength.solutionU();
+        deltaU = arcLength.solutionDU();
+
+        // Deformed geometry
+        assembler->constructSolutionL(U,mp_def);
+        // Deformation (primal)
+        assembler->constructMultiPatchL(U,U_patch);
+        // delta Deformation
+        assembler->constructMultiPatchL(U,deltaU_patch);
+
+        PlotResults(k,assembler,mp,mp_def,plot,stress,write,mesh,deformed,dirname,output,
+                    collection,Smembrane,Sflexural,Smembrane_p);
+
+        if (write)
+            writeStepOutput(U,L,indicator,deformation, dirname + "/" + wn, writePoints,1, 201);
+
+        if (crosssection && cross_coordinate!=-1)
+            writeSectionOutput(deformation,dirname,cross_coordinate,cross_val,201,false);
+
+        loadstep_errors.push_back(std::make_pair(-1,-1.));
+        write_errors.push_back(loadstep_errors);
+        unstable = false;
+        unstable_prev = true;
+    }
+
+    // POST BUCKLING
+    real_t refTol = target / bandwidth; // refine if error is above
+    real_t crsTol = target * bandwidth; // coarsen if error is below
+    GISMO_ENSURE(refTol >= crsTol,"Refinement tolerance should be bigger than the coarsen tolerance");
+    error = 1;
+    index_t maxIt = 10;
+    index_t it = 0;
+    bool refined = true;
+    bool coarsened = true;
+    for ( ; k<step; k++)
+    {
+        loadstep_errors.clear();
+        gsInfo<<"Load step "<< k<<"; \tSystem size = "<<Uold.size()<<" x "<<Uold.size()<<"\n";
+        gsParaviewCollection errors(dirname + "/" + "error" + util::to_string(k));
+        gsParaviewCollection error_fields(dirname + "/" + "error_field" + util::to_string(k));
+
+        while ((error < crsTol || error > refTol) && it < maxIt && (refined || coarsened))
         {
             assembler->assembleL();
             Force = assembler->primalL();
@@ -618,49 +765,6 @@ int main (int argc, char** argv)
             indicator = arcLength.indicator();
             gsInfo<<"indicator: (old = )"<<indicator_prev<<"; (new = )"<<indicator<<"\n";
 
-            if (SingularPoint)
-            {
-                arcLength.computeStability(arcLength.solutionU(),quasiNewton);
-                unstable = arcLength.stabilityChange();
-                if (unstable)
-                {
-                    unstable_prev = true;
-                    gsInfo<<"Bifurcation spotted!"<<"\n";
-                    arcLength.computeSingularPoint(1e-4, 5, Uold, Lold, 1e-7, 0, false);
-                    arcLength.switchBranch();
-                    dLb0 = dLb = dL;
-                    arcLength.setLength(dLb);
-
-                    if (writeP)
-                    {
-                        gsMultiPatch<> mp_perturbation;
-                        assembler->constructSolutionL(arcLength.solutionV(),mp_perturbation);
-                        gsWrite(mp_perturbation,dirname + "/" +"perturbation");
-                        gsInfo<<"Perturbation written in: " + dirname + "/" + "perturbation.xml\n";
-                    }
-                    indicator = 0;
-
-                    L = arcLength.solutionL();
-                    deltaL = arcLength.solutionDL();
-                    U = arcLength.solutionU();
-                    deltaU = arcLength.solutionDU();
-
-                    // Deformed geometry
-                    assembler->constructSolutionL(U,mp_def);
-                    // Deformation (primal)
-                    assembler->constructMultiPatchL(U,U_patch);
-                    // delta Deformation
-                    assembler->constructMultiPatchL(U,deltaU_patch);
-
-                    loadstep_errors.push_back(std::make_pair(-1,-1.));
-                    SingularPoint=false;
-                    break;
-
-                    // gsDebugVar(arcLength.solutionU());
-                    // gsDebugVar(arcLength.solutionV());
-                }
-            }
-
             L = arcLength.solutionL();
             deltaL = arcLength.solutionDL();
             U = arcLength.solutionU();
@@ -676,11 +780,6 @@ int main (int argc, char** argv)
             /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
             // ADAPTIVE MESHING PART
             /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-            gsThinShellDWRHelper<real_t> helper(assembler);
-            typename gsBoxTopology::bContainer goalSides;
-            goalSides.push_back(patchSide(0,boundary::west));
-            gsMatrix<> points;
-
             if (plot)
             {
                 std::string fileName = dirname + "/" + "error_field" + util::to_string(k) + "_" + util::to_string(it);
@@ -741,27 +840,6 @@ int main (int argc, char** argv)
                     mesher.markCrs_into(elErrors,markCrs);
                     coarsened = mesher.unrefine(markCrs);
                 }
-                /*
-		else
-                {
-                    gsInfo<<"Error is in the range "<<crsTol<<" < "<<error<<" < "<<refTol<<"\n";
-                    mesher.markRef_into(elErrors,markRef);
-                    mesher.markCrs_into(elErrors,markRef,markCrs);
-                    refined = mesher.refine(markRef);
-                    coarsened = mesher.unrefine(markCrs);
-                    // break; // only needed when no refinement is performed
-                }
-		*/
-                // if (plotError)
-                // {
-                //     if (mesh)
-                //         gsWriteParaview<>(mp.basis(0),"basis");
-                //         // writeSingleCompMesh<>(mp.basis(0), mp.patch(0),"mesh");
-                //     gsWriteParaview<>(markRef,"refined_" + util::to_string(k) + "_" + util::to_string(it));
-                //     gsWriteParaview<>(markCrs,"coarsened_" + util::to_string(k) + "_" + util::to_string(it));
-                // }
-
-                // mp_def = mp;
 
                 basisL = gsMultiBasis<>(mp);
                 basisH = basisL;
@@ -823,86 +901,14 @@ int main (int argc, char** argv)
         /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
         /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-        // gsDebugVar(U);
-
-        // assembler->constructSolutionL(U,mp_def);
-        deformation = mp_def;
-
-        deformation.patch(0).coefs() -= mp.patch(0).coefs();// assuming 1 patch here
-
-        gsInfo<<"Total ellapsed assembly time: "<<time<<" s\n";
-
-        if (plot)
-        {
-            gsField<> solField;
-            if (deformed)
-              solField= gsField<>(mp_def,deformation);
-            else
-              solField= gsField<>(mp,deformation);
-
-            std::string fileName = dirname + "/" + output + util::to_string(k);
-            gsWriteParaview<>(solField, fileName, 1000,mesh);
-            fileName = output + util::to_string(k) + "0";
-            collection.addTimestep(fileName,k,".vts");
-            if (mesh) collection.addTimestep(fileName,k,"_mesh.vtp");
-        }
-        if (stress)
-        {
-            gsField<> membraneStress, flexuralStress, membraneStress_p;
-
-            gsPiecewiseFunction<> membraneStresses;
-            assembler->constructStress(mp_def,membraneStresses,stress_type::membrane);
-            if (deformed)
-              membraneStress = gsField<>(mp_def,membraneStresses,true);
-            else
-              membraneStress = gsField<>(mp,membraneStresses,true);
-
-            gsPiecewiseFunction<> flexuralStresses;
-            assembler->constructStress(mp_def,flexuralStresses,stress_type::flexural);
-            if (deformed)
-              flexuralStress = gsField<>(mp_def,flexuralStresses, true);
-            else
-              flexuralStress = gsField<>(mp,flexuralStresses, true);
-
-            gsPiecewiseFunction<> membraneStresses_p;
-            assembler->constructStress(mp_def,membraneStresses_p,stress_type::principal_stress_membrane);
-            if (deformed)
-              membraneStress_p = gsField<>(mp_def,membraneStresses_p, true);
-            else
-              membraneStress_p = gsField<>(mp,membraneStresses_p, true);
-
-            std::string fileName;
-            fileName = dirname + "/" + "membrane" + util::to_string(k);
-            gsWriteParaview( membraneStress, fileName, 1000);
-            fileName = "membrane" + util::to_string(k) + "0";
-            Smembrane.addTimestep(fileName,k,".vts");
-
-            fileName = dirname + "/" + "flexural" + util::to_string(k);
-            gsWriteParaview( flexuralStress, fileName, 1000);
-            fileName = "flexural" + util::to_string(k) + "0";
-            Sflexural.addTimestep(fileName,k,".vts");
-
-            fileName = dirname + "/" + "membrane_p" + util::to_string(k);
-            gsWriteParaview( membraneStress_p, fileName, 1000);
-            fileName = "membrane_p" + util::to_string(k) + "0";
-            Smembrane_p.addTimestep(fileName,k,".vts");
-        }
-
-
+        PlotResults(k,assembler,mp,mp_def,plot,stress,write,mesh,deformed,dirname,output,
+                    collection,Smembrane,Sflexural,Smembrane_p);
 
         if (write)
             writeStepOutput(U,L,indicator,deformation, dirname + "/" + wn, writePoints,1, 201);
 
         if (crosssection && cross_coordinate!=-1)
             writeSectionOutput(deformation,dirname,cross_coordinate,cross_val,201,false);
-
-        // if (!bisected)
-        // {
-        //     dLb = dLb0;
-        //     arcLength.setLength(dLb);
-        // }
-        // bisected = false;
 
         write_errors.push_back(loadstep_errors);
     }
@@ -920,56 +926,16 @@ int main (int argc, char** argv)
 
     std::ofstream file;
     file.open(dirname + "/" + "errors.csv",std::ofstream::out);
-    index_t k=0;
+    index_t loadstep=0;
     file<<"load_step,iteration,numDofs,error\n";
-    for (std::vector<std::vector<std::pair<index_t,real_t>>>::const_iterator it = write_errors.begin(); it!=write_errors.end(); it++, k++)
+    for (std::vector<std::vector<std::pair<index_t,real_t>>>::const_iterator it = write_errors.begin(); it!=write_errors.end(); it++, loadstep++)
         for (std::vector<std::pair<index_t,real_t>>::const_iterator iit = it->begin(); iit!=it->end(); iit++)
-            file<<k<<","<<iit->first<<","<<iit->second<<"\n";
+            file<<loadstep<<","<<iit->first<<","<<iit->second<<"\n";
     file.close();
 
   return result;
 }
 
-template <class T>
-void addClamping(gsMultiPatch<T>& mp, index_t patch, std::vector<boxSide> sides, T offset) //, std::vector<boxSide> sides, T offset)
-{
-
-    gsTensorBSpline<2,T> *geo = dynamic_cast< gsTensorBSpline<2,real_t> * > (&mp.patch(patch));
-
-    T dknot0 = geo->basis().component(0).knots().minIntervalLength();
-    T dknot1 = geo->basis().component(1).knots().minIntervalLength();
-
-    gsInfo<<"sides.size() = "<<sides.size()<<"\n";
-
-    index_t k =0;
-
-
-    for (std::vector<boxSide>::iterator it = sides.begin(); it != sides.end(); it++)
-    {
-        gsInfo<<"side = "<<(*it)<<"\n";
-
-      if (*it==boundary::west || *it==boundary::east) // west or east
-      {
-        if (*it==boundary::east) // east, val = 1
-          geo->insertKnot(1 - std::min(offset, dknot0 / 2),0);
-        else if (*it==boundary::west) // west
-          geo->insertKnot(std::min(offset, dknot0 / 2),0);
-      }
-      else if (*it==boundary::south || *it==boundary::north) // west or east
-      {
-       if (*it==boundary::north) // north
-         geo->insertKnot(1 - std::min(offset, dknot1 / 2),1);
-       else if (*it==boundary::south) // south
-         geo->insertKnot(std::min(offset, dknot1 / 2),1);
-      }
-      else if (*it==boundary::none)
-        gsWarn<<*it<<"\n";
-      else
-        GISMO_ERROR("Side unknown, side = " <<*it);
-
-        k++;
-    }
-}
 
 template <class T>
 gsMultiPatch<T> Rectangle(T L, T B) //, int n, int m, std::vector<boxSide> sides, T offset)
@@ -1195,4 +1161,81 @@ void writeSectionOutput(const gsMultiPatch<T> & mp, const std::string dirname, c
     file3.close();
     file4<<'\n';
     file4.close();
+}
+
+template <class T>
+void PlotResults(   index_t k,
+                    gsThinShellAssemblerDWRBase<T> * assembler,
+                    const gsMultiPatch<T> & mp, const gsMultiPatch<T> & mp_def,
+                    bool plot, bool stress, bool write, bool mesh, bool deformed,
+                    const std::string dirname, const std::string output,
+                    gsParaviewCollection & collection,
+                    gsParaviewCollection & Smembrane,
+                    gsParaviewCollection & Sflexural,
+                    gsParaviewCollection & Smembrane_p)
+{
+    /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+    /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    gsMultiPatch<T> deformation = mp_def;
+
+    deformation.patch(0).coefs() -= mp.patch(0).coefs();// assuming 1 patch here
+
+    gsInfo<<"Total ellapsed assembly time: "<<time<<" s\n";
+
+    if (plot)
+    {
+        gsField<T> solField;
+        if (deformed)
+          solField= gsField<>(mp_def,deformation);
+        else
+          solField= gsField<>(mp,deformation);
+
+        std::string fileName = dirname + "/" + output + util::to_string(k);
+        gsWriteParaview<T>(solField, fileName, 1000,mesh);
+        fileName = output + util::to_string(k) + "0";
+        collection.addTimestep(fileName,k,".vts");
+        if (mesh) collection.addTimestep(fileName,k,"_mesh.vtp");
+    }
+    if (stress)
+    {
+        gsField<T> membraneStress, flexuralStress, membraneStress_p;
+
+        gsPiecewiseFunction<T> membraneStresses;
+        assembler->constructStress(mp_def,membraneStresses,stress_type::membrane);
+        if (deformed)
+          membraneStress = gsField<>(mp_def,membraneStresses,true);
+        else
+          membraneStress = gsField<>(mp,membraneStresses,true);
+
+        gsPiecewiseFunction<T> flexuralStresses;
+        assembler->constructStress(mp_def,flexuralStresses,stress_type::flexural);
+        if (deformed)
+          flexuralStress = gsField<>(mp_def,flexuralStresses, true);
+        else
+          flexuralStress = gsField<>(mp,flexuralStresses, true);
+
+        gsPiecewiseFunction<T> membraneStresses_p;
+        assembler->constructStress(mp_def,membraneStresses_p,stress_type::principal_stress_membrane);
+        if (deformed)
+          membraneStress_p = gsField<>(mp_def,membraneStresses_p, true);
+        else
+          membraneStress_p = gsField<>(mp,membraneStresses_p, true);
+
+        std::string fileName;
+        fileName = dirname + "/" + "membrane" + util::to_string(k);
+        gsWriteParaview( membraneStress, fileName, 1000);
+        fileName = "membrane" + util::to_string(k) + "0";
+        Smembrane.addTimestep(fileName,k,".vts");
+
+        fileName = dirname + "/" + "flexural" + util::to_string(k);
+        gsWriteParaview( flexuralStress, fileName, 1000);
+        fileName = "flexural" + util::to_string(k) + "0";
+        Sflexural.addTimestep(fileName,k,".vts");
+
+        fileName = dirname + "/" + "membrane_p" + util::to_string(k);
+        gsWriteParaview( membraneStress_p, fileName, 1000);
+        fileName = "membrane_p" + util::to_string(k) + "0";
+        Smembrane_p.addTimestep(fileName,k,".vts");
+    }
 }
