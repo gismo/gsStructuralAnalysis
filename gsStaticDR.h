@@ -137,8 +137,8 @@ public:
     T residualNorm() const { return m_R.norm(); }
 
 protected:
-    const gsVector<T> m_mass;
-    const gsVector<T> m_forcing;
+    const gsVector<T> m_mass; // TODO: reference?
+    const gsVector<T> m_forcing; // TODO: reference?
     Residual_t m_residualFun;
     const ALResidual_t m_ALresidualFun;
 
