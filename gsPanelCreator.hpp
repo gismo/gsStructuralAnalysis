@@ -229,7 +229,7 @@ gsMultiPatch<T> gsPanelCreator<T>::PanelL(T const & Lp, T const & Wp, T const & 
     std::vector<gsMultiPatch<T>> panels(4);
     panels.at(0) = Plate(Lp,Wp/2,0,-Wp/2.,0);
     panels.at(1) = Plate(Lp,Wf,0,0,0);
-    panels.at(2) = Plate(Lp,Wp/2,0,Wf,0);
+    panels.at(2) = Plate(Lp,Wp/2-Wf,0,Wf,0);
 
     // L-stiffener
     panels.at(3) = LBeam(Lp,Hw,Wf);
