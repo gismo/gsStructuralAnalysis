@@ -313,8 +313,8 @@ namespace gismo
         m_forceVec = m_forceFun(m_t);
         m_sysvec.bottomRows(m_dofs) = m_dt*m_massInv*m_forceVec;
 
-        m_solver.compute(m_sysmat);
-        m_sol = m_solver.solve(m_sysvec+m_sol);
+        m_solver->compute(m_sysmat);
+        m_sol = m_solver->solve(m_sysvec+m_sol);
         m_t += m_dt;
     }
 
@@ -381,8 +381,8 @@ namespace gismo
             }
 
             m_residue = m_sysvec.norm();
-            m_solver.compute(m_sysmat);
-            m_dsol = m_solver.solve(-m_sysvec);
+            m_solver->compute(m_sysmat);
+            m_dsol = m_solver->solve(-m_sysvec);
 
             m_sol += m_dsol;
             m_updateNorm = m_dsol.norm() / m_sol.norm();
@@ -500,8 +500,8 @@ namespace gismo
         gsSparseMatrix<> lhs = m_stif + 4/(math::pow(gamma*m_dt,2))*m_mass + 2/(gamma*m_dt)*m_damp;
         gsMatrix<> rhs = m_forceVec + m_mass*(4/(math::pow(gamma*m_dt,2))*(uOld)+4/(gamma*m_dt)*vOld+aOld) + m_damp*(2/(gamma*m_dt)*(uOld)+vOld);
 
-        m_solver.compute(lhs);
-        m_sol = m_solver.solve(rhs);
+        m_solver->compute(lhs);
+        m_sol = m_solver->solve(rhs);
 
         m_uNew = m_sol;
 
@@ -539,8 +539,8 @@ namespace gismo
             }
 
             lhs = m_jacMat + 4/(math::pow(gamma*m_dt,2))*m_mass + 2/(gamma*m_dt)*m_damp;
-            m_solver.compute(lhs);
-            m_dsol = m_solver.solve(rhs);
+            m_solver->compute(lhs);
+            m_dsol = m_solver->solve(rhs);
             m_updateNorm = m_dsol.norm()/m_uNew.norm();
             m_uNew += m_dsol;
 
@@ -587,8 +587,8 @@ namespace gismo
 
         gsSparseMatrix<> lhs = m_stif + 4/(math::pow(gamma*m_dt,2))*m_mass + 2/(gamma*m_dt)*m_damp;
         gsMatrix<> rhs = m_forceVec + m_mass*(4/(math::pow(gamma*m_dt,2))*(uOld)+4/(gamma*m_dt)*vOld+aOld) + m_damp*(2/(gamma*m_dt)*(uOld)+vOld);;
-        m_solver.compute(lhs);
-        m_sol = m_solver.solve(rhs);
+        m_solver->compute(lhs);
+        m_sol = m_solver->solve(rhs);
         m_uNew = m_sol;
 
         m_vNew = 2/(gamma*m_dt)*(m_uNew-uOld) - vOld;
@@ -606,8 +606,8 @@ namespace gismo
 
         lhs = m_stif + c3*c3*m_mass + c3*m_damp;
         rhs = m_forceVec - m_mass*(c1*vOld+c2*vStep+c1*c3*uOld+c3*c2*uStep) - m_damp*(c2*uStep+c1*uOld);
-        m_solver.compute(lhs);
-        m_sol = m_solver.solve(rhs);
+        m_solver->compute(lhs);
+        m_sol = m_solver->solve(rhs);
         m_uNew = m_sol;
         m_residue = rhs.norm();
 
@@ -646,8 +646,8 @@ namespace gismo
 
             gsSparseMatrix<> lhs = m_jacMat + 4/(math::pow(gamma*m_dt,2))*m_mass + 2/(gamma*m_dt)*m_damp;
             gsMatrix<> rhs = m_resVec - m_mass*(4/(math::pow(gamma*m_dt,2))*(m_uNew-uOld)-4/(gamma*m_dt)*vOld-aOld) - m_damp*(2/(gamma*m_dt)*(m_uNew-uOld)-vOld);
-            m_solver.compute(lhs);
-            m_dsol = m_solver.solve(rhs);
+            m_solver->compute(lhs);
+            m_dsol = m_solver->solve(rhs);
             m_uNew += m_dsol;
             m_updateNorm = m_dsol.norm() / m_uNew.norm();
             m_residue = rhs.norm();
@@ -692,8 +692,8 @@ namespace gismo
 
             gsSparseMatrix<T> lhs = m_jacMat + c3*c3*m_mass + c3*m_damp;
             gsMatrix<T> rhs = m_resVec - m_mass*(c1*vOld+c2*vStep+c1*c3*uOld+c3*c2*uStep+c3*c3*m_uNew) - m_damp*(c1*uOld+c2*uStep+c3*m_uNew);
-            m_solver.compute(lhs);
-            m_dsol = m_solver.solve(rhs);
+            m_solver->compute(lhs);
+            m_dsol = m_solver->solve(rhs);
             m_uNew += m_dsol;
             m_updateNorm = m_dsol.norm() / m_uNew.norm();
             m_residue = rhs.norm();

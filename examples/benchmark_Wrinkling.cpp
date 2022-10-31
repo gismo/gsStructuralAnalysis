@@ -2,6 +2,12 @@
 
     @brief Computes the wrinkling behaviour of a thin sheet
 
+    Fig 12 of:
+
+    Verhelst, H. M., Möller, M., Den Besten, J. H., Mantzaflaris, A., & Kaminski, M. L. (2021).
+    Stretch-Based Hyperelastic Material Formulations for Isogeometric Kirchhoff–Love Shells with Application to Wrinkling.
+    Computer-Aided Design, 139, 103075. https://doi.org/10.1016/j.cad.2021.103075
+
     This file is part of the G+Smo library.
 
     This Source Code Form is subject to the terms of the Mozilla Public
@@ -16,8 +22,10 @@
 #include <gsKLShell/gsThinShellAssembler.h>
 #include <gsKLShell/getMaterialMatrix.h>
 
-// #include <gsThinShell/gsArcLengthIterator.h>
-#include <gsStructuralAnalysis/gsArcLengthIterator.h>
+#include <gsStructuralAnalysis/gsALMBase.h>
+#include <gsStructuralAnalysis/gsALMLoadControl.h>
+#include <gsStructuralAnalysis/gsALMRiks.h>
+#include <gsStructuralAnalysis/gsALMCrisfield.h>
 
 using namespace gismo;
 
@@ -47,7 +55,7 @@ template <class T>
 void initStepOutput( const std::string name, const gsMatrix<T> & points);
 
 template <class T>
-void writeStepOutput(const gsArcLengthIterator<T> & arcLength, const gsMultiPatch<T> & deformation, const std::string name, const gsMatrix<T> & points, const index_t extreme=-1, const index_t kmax=100);
+void writeStepOutput(const gsALMBase<T> * arcLength, const gsMultiPatch<T> & deformation, const std::string name, const gsMatrix<T> & points, const index_t extreme=-1, const index_t kmax=100);
 
 void initSectionOutput( const std::string dirname, bool undeformed=false);
 
@@ -202,6 +210,7 @@ int main (int argc, char** argv)
 
     // Boundary conditions
     gsBoundaryConditions<> BCs;
+    BCs.setGeoMap(mp);
     gsPointLoads<real_t> pLoads = gsPointLoads<real_t>();
 
     std::string output = "solution";
@@ -241,7 +250,9 @@ int main (int argc, char** argv)
 
     std::string commands = "mkdir -p " + dirname;
     const char *command = commands.c_str();
-    system(command);
+    int systemRet = system(command);
+    GISMO_ASSERT(systemRet!=-1,"Something went wrong with calling the system argument");
+
 
     // plot geometry
     if (plot)
@@ -266,8 +277,6 @@ int main (int argc, char** argv)
       gsInfo<<"No cross section can be exported if no coordinate is given...\n";
       crosssection=false;
     }
-
-    gsSparseSolver<>::LU solver;
 
     // Linear isotropic material model
     gsFunctionExpr<> force("0","0","0",3);
@@ -375,34 +384,41 @@ int main (int argc, char** argv)
     assembler->assemble();
     gsVector<> Force = assembler->rhs();
 
-    gsArcLengthIterator<real_t> arcLength(Jacobian, ALResidual, Force);
+    gsALMBase<real_t> * arcLength;
+    if (method==0)
+      arcLength = new gsALMLoadControl<real_t>(Jacobian, ALResidual, Force);
+    else if (method==1)
+      arcLength = new gsALMRiks<real_t>(Jacobian, ALResidual, Force);
+    else if (method==2)
+      arcLength = new gsALMCrisfield<real_t>(Jacobian, ALResidual, Force);
+    else
+      GISMO_ERROR("Method "<<method<<" unknown");
 
-    arcLength.options().setInt("Solver",0); // LDLT solver
-    arcLength.options().setInt("BifurcationMethod",0); // 0: determinant, 1: eigenvalue
-    arcLength.options().setInt("Method",method);
-    arcLength.options().setReal("Length",dLb);
-    arcLength.options().setInt("AngleMethod",0); // 0: step, 1: iteration
-    arcLength.options().setSwitch("AdaptiveLength",adaptive);
-    arcLength.options().setInt("AdaptiveIterations",5);
-    arcLength.options().setReal("Perturbation",tau);
-    arcLength.options().setReal("Scaling",0.0);
-    arcLength.options().setReal("Tol",tol);
-    arcLength.options().setReal("TolU",tolU);
-    arcLength.options().setReal("TolF",tolF);
-    arcLength.options().setInt("MaxIter",maxit);
-    arcLength.options().setSwitch("Verbose",true);
-    arcLength.options().setReal("Relaxation",relax);
+    arcLength->options().setString("Solver","SimplicialLDLT"); // LDLT solver
+    arcLength->options().setInt("BifurcationMethod",0); // 0: determinant, 1: eigenvalue
+    arcLength->options().setReal("Length",dLb);
+    arcLength->options().setInt("AngleMethod",0); // 0: step, 1: iteration
+    arcLength->options().setSwitch("AdaptiveLength",adaptive);
+    arcLength->options().setInt("AdaptiveIterations",5);
+    arcLength->options().setReal("Perturbation",tau);
+    arcLength->options().setReal("Scaling",0.0);
+    arcLength->options().setReal("Tol",tol);
+    arcLength->options().setReal("TolU",tolU);
+    arcLength->options().setReal("TolF",tolF);
+    arcLength->options().setInt("MaxIter",maxit);
+    arcLength->options().setSwitch("Verbose",true);
+    arcLength->options().setReal("Relaxation",relax);
     if (quasiNewtonInt>0)
     {
       quasiNewton = true;
-      arcLength.options().setInt("QuasiIterations",quasiNewtonInt);
+      arcLength->options().setInt("QuasiIterations",quasiNewtonInt);
     }
-    arcLength.options().setSwitch("Quasi",quasiNewton);
+    arcLength->options().setSwitch("Quasi",quasiNewton);
 
 
-    gsInfo<<arcLength.options();
-    arcLength.applyOptions();
-    arcLength.initialize();
+    gsInfo<<arcLength->options();
+    arcLength->applyOptions();
+    arcLength->initialize();
 
     gsParaviewCollection collection(dirname + "/" + output);
     gsParaviewCollection Smembrane(dirname + "/" + "membrane");
@@ -417,20 +433,20 @@ int main (int argc, char** argv)
 
     gsMatrix<> solVector;
     real_t indicator = 0.0;
-    arcLength.setIndicator(indicator); // RESET INDICATOR
+    arcLength->setIndicator(indicator); // RESET INDICATOR
     bool bisected = false;
     real_t dLb0 = dLb;
     for (index_t k=0; k<step; k++)
     {
       gsInfo<<"Load step "<< k<<"\n";
-      arcLength.step();
+      arcLength->step();
 
-      if (!(arcLength.converged()))
+      if (!(arcLength->converged()))
       {
         gsInfo<<"Error: Loop terminated, arc length method did not converge.\n";
         dLb = dLb / 2.;
-        arcLength.setLength(dLb);
-        arcLength.setSolution(Uold,Lold);
+        arcLength->setLength(dLb);
+        arcLength->setSolution(Uold,Lold);
         bisected = true;
         k -= 1;
         continue;
@@ -438,29 +454,29 @@ int main (int argc, char** argv)
 
       if (SingularPoint)
       {
-        arcLength.computeStability(arcLength.solutionU(),quasiNewton);
-        if (arcLength.stabilityChange())
+        arcLength->computeStability(arcLength->solutionU(),quasiNewton);
+        if (arcLength->stabilityChange())
         {
           gsInfo<<"Bifurcation spotted!"<<"\n";
-          arcLength.computeSingularPoint(1e-4, 5, Uold, Lold, 1e-7, 0, false);
-          arcLength.switchBranch();
+          arcLength->computeSingularPoint(1e-4, 5, Uold, Lold, 1e-7, 0, false);
+          arcLength->switchBranch();
           dLb0 = dLb = dL;
-          arcLength.setLength(dLb);
+          arcLength->setLength(dLb);
 
           if (writeP)
           {
             gsMultiPatch<> mp_perturbation;
-            assembler->constructSolution(arcLength.solutionV(),mp_perturbation);
+            assembler->constructSolution(arcLength->solutionV(),mp_perturbation);
             gsWrite(mp_perturbation,dirname + "/" +"perturbation");
             gsInfo<<"Perturbation written in: " + dirname + "/" + "perturbation.xml\n";
           }
         }
       }
-      indicator = arcLength.indicator();
+      indicator = arcLength->indicator();
 
-      solVector = arcLength.solutionU();
+      solVector = arcLength->solutionU();
       Uold = solVector;
-      Lold = arcLength.solutionL();
+      Lold = arcLength->solutionL();
       assembler->constructSolution(solVector,mp_def);
 
       deformation = mp_def;
@@ -535,7 +551,7 @@ int main (int argc, char** argv)
       if (!bisected)
       {
         dLb = dLb0;
-        arcLength.setLength(dLb);
+        arcLength->setLength(dLb);
       }
       bisected = false;
 
@@ -551,6 +567,10 @@ int main (int argc, char** argv)
       Sflexural.save();
       Smembrane_p.save();
     }
+
+  delete materialMatrix;
+  delete assembler;
+  delete arcLength;
 
   return result;
 }
@@ -669,7 +689,7 @@ void initStepOutput(const std::string name, const gsMatrix<T> & points)
 }
 
 template <class T>
-void writeStepOutput(const gsArcLengthIterator<T> & arcLength, const gsMultiPatch<T> & deformation, const std::string name, const gsMatrix<T> & points, const index_t extreme, const index_t kmax) // extreme: the column of point indices to compute the extreme over (default -1)
+void writeStepOutput(const gsALMBase<T> * arcLength, const gsMultiPatch<T> & deformation, const std::string name, const gsMatrix<T> & points, const index_t extreme, const index_t kmax) // extreme: the column of point indices to compute the extreme over (default -1)
 {
   gsMatrix<T> P(2,1), Q(2,1);
   gsMatrix<T> out(3,points.cols());
@@ -687,7 +707,7 @@ void writeStepOutput(const gsArcLengthIterator<T> & arcLength, const gsMultiPatc
   if (extreme==-1)
   {
     file  << std::setprecision(6)
-          << arcLength.solutionU().norm() << ",";
+          << arcLength->solutionU().norm() << ",";
           for (index_t p=0; p!=points.cols(); p++)
           {
             file<< out(0,p) << ","
@@ -695,8 +715,8 @@ void writeStepOutput(const gsArcLengthIterator<T> & arcLength, const gsMultiPatc
                 << out(2,p) << ",";
           }
 
-    file  << arcLength.solutionL() << ","
-          << arcLength.indicator() << ","
+    file  << arcLength->solutionL() << ","
+          << arcLength->indicator() << ","
           << "\n";
   }
   else if (extreme==0 || extreme==1)
@@ -714,7 +734,7 @@ void writeStepOutput(const gsArcLengthIterator<T> & arcLength, const gsMultiPatc
     }
 
     file  << std::setprecision(6)
-          << arcLength.solutionU().norm() << ",";
+          << arcLength->solutionU().norm() << ",";
           for (index_t p=0; p!=points.cols(); p++)
           {
             file<< out(0,p) << ","
@@ -722,8 +742,8 @@ void writeStepOutput(const gsArcLengthIterator<T> & arcLength, const gsMultiPatc
                 << std::max(abs(out2.col(p).maxCoeff()),abs(out2.col(p).minCoeff())) << ",";
           }
 
-    file  << arcLength.solutionL() << ","
-          << arcLength.indicator() << ","
+    file  << arcLength->solutionL() << ","
+          << arcLength->indicator() << ","
           << "\n";
   }
   else

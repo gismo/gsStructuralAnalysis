@@ -19,8 +19,7 @@
 #include <gsKLShell/gsThinShellAssembler.h>
 #include <gsKLShell/getMaterialMatrix.h>
 
-// #include <gsThinShell/gsArcLengthIterator.h>
-#include <gsStructuralAnalysis/gsStaticSolver.h>
+#include <gsStructuralAnalysis/gsStaticNewton.h>
 
 using namespace gismo;
 
@@ -50,7 +49,7 @@ int main (int argc, char** argv)
 
     std::string wn("data.csv");
 
-    gsCmdLine cmd("Wrinkling analysis with thin shells.");
+    gsCmdLine cmd("Convergence of the material test for convergence analysis.");
 
     cmd.addInt("t", "testcase", "Test case: 0: clamped-clamped, 1: pinned-pinned, 2: clamped-free", testCase);
 
@@ -144,6 +143,7 @@ int main (int argc, char** argv)
 
     // Boundary conditions
     gsBoundaryConditions<> BCs;
+    BCs.setGeoMap(mp);
     gsPointLoads<real_t> pLoads = gsPointLoads<real_t>();
 
     BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 0 ); // unknown 2 - z
@@ -295,11 +295,11 @@ int main (int argc, char** argv)
       matrix = assembler->matrix();
       vector = assembler->rhs();
       // Configure Structural Analsysis module
-      gsStaticSolver<real_t> staticSolver(matrix,vector,Jacobian,Residual);
+      gsStaticNewton<real_t> staticSolver(matrix,vector,Jacobian,Residual);
       gsOptionList solverOptions = staticSolver.options();
-      solverOptions.setInt("Verbose",true);
-      solverOptions.setInt("MaxIterations",maxit);
-      solverOptions.setReal("Tolerance",tol);
+      solverOptions.setInt("verbose",true);
+      solverOptions.setInt("maxIt",maxit);
+      solverOptions.setReal("tol",tol);
       staticSolver.setOptions(solverOptions);
       solVector = staticSolver.solveNonlinear();
 
@@ -323,6 +323,8 @@ int main (int argc, char** argv)
       gsInfo<< std::setprecision(12) <<strains.at(k)<<",";
     gsInfo<<"\n";
 
+  delete materialMatrix;
+  delete assembler;
 
   return result;
 }

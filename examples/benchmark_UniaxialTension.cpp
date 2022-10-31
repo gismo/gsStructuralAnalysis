@@ -18,8 +18,11 @@
 
 #include <gsKLShell/gsThinShellAssembler.h>
 #include <gsKLShell/getMaterialMatrix.h>
-// #include <gsThinShell/gsArcLengthIterator.h>
-#include <gsStructuralAnalysis/gsArcLengthIterator.h>
+
+#include <gsStructuralAnalysis/gsALMBase.h>
+#include <gsStructuralAnalysis/gsALMLoadControl.h>
+#include <gsStructuralAnalysis/gsALMRiks.h>
+#include <gsStructuralAnalysis/gsALMCrisfield.h>
 
 using namespace gismo;
 
@@ -52,7 +55,7 @@ int main (int argc, char** argv)
 
     std::string wn("data.csv");
 
-    gsCmdLine cmd("Arc-length analysis for thin shells.");
+    gsCmdLine cmd("Uniaxially stretched sheet.");
 
     cmd.addInt("r","hRefine", "Number of dyadic h-refinement (bisection) steps to perform before solving", numRefine);
     cmd.addInt("e","degreeElevation", "Number of degree elevation steps to perform on the Geometry's basis before solving", numElevate);
@@ -115,11 +118,14 @@ int main (int argc, char** argv)
 
     // Boundary conditions
     gsBoundaryConditions<> BCs;
+    BCs.setGeoMap(mp);
     gsPointLoads<real_t> pLoads = gsPointLoads<real_t>();
 
     BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 0 );
     BCs.addCondition(boundary::east, condition_type::collapsed, 0, 0, false, 0 );
     BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 1 );
+
+    BCs.setGeoMap(mp);
 
     real_t Load = 1e0;
     gsVector<> point(2);
@@ -134,7 +140,9 @@ int main (int argc, char** argv)
 
     std::string commands = "mkdir -p " + dirname;
     const char *command = commands.c_str();
-    system(command);
+    int systemRet = system(command);
+    GISMO_ASSERT(systemRet!=-1,"Something went wrong with calling the system argument");
+
 
     // plot geometry
     if (plot)
@@ -268,33 +276,40 @@ int main (int argc, char** argv)
     assembler->assemble();
     gsVector<> Force = assembler->rhs();
 
-    gsArcLengthIterator<real_t> arcLength(Jacobian, ALResidual, Force);
+    gsALMBase<real_t> * arcLength;
+    if (method==0)
+      arcLength = new gsALMLoadControl<real_t>(Jacobian, ALResidual, Force);
+    else if (method==1)
+      arcLength = new gsALMRiks<real_t>(Jacobian, ALResidual, Force);
+    else if (method==2)
+      arcLength = new gsALMCrisfield<real_t>(Jacobian, ALResidual, Force);
+    else
+      GISMO_ERROR("Method "<<method<<" unknown");
 
-    arcLength.options().setInt("Solver",0); // CG solver
-    arcLength.options().setInt("BifurcationMethod",0); // 0: determinant, 1: eigenvalue
-    arcLength.options().setInt("Method",method);
-    arcLength.options().setReal("Length",dL);
-    arcLength.options().setInt("AngleMethod",0); // 0: step, 1: iteration
-    arcLength.options().setSwitch("AdaptiveLength",adaptive);
-    arcLength.options().setInt("AdaptiveIterations",5);
-    arcLength.options().setReal("Scaling",0.0);
-    arcLength.options().setReal("Tol",tol);
-    arcLength.options().setReal("TolU",tolU);
-    arcLength.options().setReal("TolF",tolF);
-    arcLength.options().setInt("MaxIter",maxit);
-    arcLength.options().setSwitch("Verbose",true);
-    arcLength.options().setReal("Relaxation",relax);
+    arcLength->options().setString("Solver","SimplicialLDLT"); // LDLT solver
+    arcLength->options().setInt("BifurcationMethod",0); // 0: determinant, 1: eigenvalue
+    arcLength->options().setReal("Length",dL);
+    arcLength->options().setInt("AngleMethod",0); // 0: step, 1: iteration
+    arcLength->options().setSwitch("AdaptiveLength",adaptive);
+    arcLength->options().setInt("AdaptiveIterations",5);
+    arcLength->options().setReal("Scaling",0.0);
+    arcLength->options().setReal("Tol",tol);
+    arcLength->options().setReal("TolU",tolU);
+    arcLength->options().setReal("TolF",tolF);
+    arcLength->options().setInt("MaxIter",maxit);
+    arcLength->options().setSwitch("Verbose",true);
+    arcLength->options().setReal("Relaxation",relax);
     if (quasiNewtonInt>0)
     {
       quasiNewton = true;
-      arcLength.options().setInt("QuasiIterations",quasiNewtonInt);
+      arcLength->options().setInt("QuasiIterations",quasiNewtonInt);
     }
-    arcLength.options().setSwitch("Quasi",quasiNewton);
+    arcLength->options().setSwitch("Quasi",quasiNewton);
 
 
-    gsDebug<<arcLength.options();
-    arcLength.applyOptions();
-    arcLength.initialize();
+    gsDebug<<arcLength->options();
+    arcLength->applyOptions();
+    arcLength->initialize();
 
 
     gsParaviewCollection collection(dirname + "/" + output);
@@ -310,7 +325,7 @@ int main (int argc, char** argv)
 
     gsMatrix<> solVector;
     real_t indicator = 0.0;
-    arcLength.setIndicator(indicator); // RESET INDICATOR
+    arcLength->setIndicator(indicator); // RESET INDICATOR
 
     gsMatrix<> lambdas(3,step);
     gsVector<> S(step);
@@ -318,14 +333,14 @@ int main (int argc, char** argv)
     for (index_t k=0; k<step; k++)
     {
       gsInfo<<"Load step "<< k<<"\n";
-      arcLength.step();
+      arcLength->step();
 
-      if (!(arcLength.converged()))
+      if (!(arcLength->converged()))
         GISMO_ERROR("Loop terminated, arc length method did not converge.\n");
 
-      solVector = arcLength.solutionU();
+      solVector = arcLength->solutionU();
       Uold = solVector;
-      Lold = arcLength.solutionL();
+      Lold = arcLength->solutionL();
 
       assembler->constructSolution(solVector,mp_def);
 
@@ -402,6 +417,10 @@ int main (int argc, char** argv)
       Sflexural.save();
       Smembrane_p.save();
     }
+
+  delete materialMatrix;
+  delete assembler;
+  delete arcLength;
 
   return result;
 }

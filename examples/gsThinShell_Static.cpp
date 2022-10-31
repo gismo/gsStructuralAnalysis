@@ -18,7 +18,7 @@
 
 #include <gsElasticity/gsWriteParaviewMultiPhysics.h>
 
-#include <gsStructuralAnalysis/gsStaticSolver.h>
+#include <gsStructuralAnalysis/gsStaticNewton.h>
 
 //#include <gsThinShell/gsNewtonIterator.h>
 
@@ -67,7 +67,6 @@ int main(int argc, char *argv[])
     bool weak = false;
     bool MIP = false;
 
-
     std::string assemberOptionsFile("options/solver_options.xml");
 
     real_t E_modulus = 1.0;
@@ -95,7 +94,7 @@ int main(int argc, char *argv[])
     cmd.addSwitch("stress", "Create a ParaView visualization file with the stresses", stress);
     cmd.addSwitch("membrane", "Use membrane model (no bending)", membrane);
     cmd.addSwitch("weak", "Impose boundary conditions weakly", weak);
-    cmd.addSwitch("MIP", "Use mixed integration point method", MIP);
+    cmd.addSwitch("MIP", "Use the Mixed Integration Point strategy", MIP);
 
 
     try { cmd.getValues(argc,argv); } catch (int rv) { return rv; }
@@ -108,7 +107,19 @@ int main(int argc, char *argv[])
 
     gsMultiPatch<> mp;
     gsMultiPatch<> mp_def;
-    if (testCase == 1 )
+
+    real_t aDim = 0;
+    real_t bDim = 0;
+    if (testCase == -1)
+    {
+        aDim = 10.0;
+        bDim = 1.0;
+        mp = Rectangle(aDim, bDim);
+        E_modulus = 210e9;
+        thickness = 1.0;
+        PoissonRatio = 0.0;
+    }
+    else if (testCase == 1 )
     {
         thickness = 0.25;
         E_modulus = 4.32E8;
@@ -132,8 +143,8 @@ int main(int argc, char *argv[])
     }
     else if (testCase == 4)
     {
-        real_t L = 1.0;
-        real_t B = 1.0;
+        aDim = 1.0;
+        bDim = 1.0;
         real_t mu = 1.5e6;
         thickness = 0.001;
         if (!Compressibility)
@@ -142,7 +153,7 @@ int main(int argc, char *argv[])
           PoissonRatio = 0.45;
         E_modulus = 2*mu*(1+PoissonRatio);
         // PoissonRatio = 0;
-        mp = Rectangle(L, B);
+        mp = Rectangle(aDim, bDim);
 
         gsInfo<<"mu = "<<E_modulus / (2 * (1 + PoissonRatio))<<"\n";
     }
@@ -207,8 +218,8 @@ int main(int argc, char *argv[])
         // real_t bDim = thickness / 1.9e-3;
         // real_t aDim = 2*bDim;
 
-        real_t bDim = 1;
-        real_t aDim = 1;
+        bDim = 1;
+        aDim = 1;
 
 
         // Ratio = 2.5442834138486314;
@@ -306,8 +317,10 @@ int main(int argc, char *argv[])
 
     gsBoundaryConditions<> bc;
     bc.setGeoMap(mp);
-    gsVector<> tmp(3);
-    tmp << 0, 0, 0;
+
+    std::string fx = "0";
+    std::string fy = "0";
+    std::string fz = "0";
 
     gsVector<> neu(3);
     neu << 0, 0, 0;
@@ -326,7 +339,50 @@ int main(int argc, char *argv[])
     gsConstantFunction<> weak_drch(weak_D,3);
     gsConstantFunction<> weak_clmp(weak_C,3);
     real_t pressure = 0.0;
-    if (testCase == 0)
+    if (testCase == -1)
+    {
+        // Pinned-Pinned beam with Manufactured Solution
+        real_t A  = bDim * thickness;
+        real_t EA = E_modulus * A;
+        real_t EI = E_modulus * bDim * math::pow(thickness,3) / 12.0;
+        real_t q = 1e6;
+
+        gsDebugVar(EI);
+        gsDebugVar(EA);
+
+        std::string uinix("0");
+        std::string uiniz("0");
+        char buffer_u_inix[200];
+        sprintf(buffer_u_inix,"%e*%e^2*(%e^3 - 6*%e*x^2 + 4*x^3)*x*(%e - x)/(48*%e^2)",EA,q,aDim,aDim,aDim,EI);
+        fx = buffer_u_inix;
+
+        fy = "0";
+
+        char buffer_u_iniz[200];
+        sprintf(buffer_u_iniz,"((x*%e*(%e - x)*(%e - 2*x)^2*(%e^2 + 2*%e*x - 2*x^2)^2*%e^2 + 768*%e^3)*%e)/(768*%e^3)",EA,aDim,aDim,aDim,aDim,q,EI,q,EI);
+        fz = buffer_u_iniz;
+
+        bc.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false,0 ); // unknown 0 - x
+        bc.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 1 - y
+        bc.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z
+
+        bc.addCondition(boundary::east, condition_type::dirichlet, 0, 0, false, 0 ); // unknown 0 - x
+        bc.addCondition(boundary::east, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 1 - y
+        bc.addCondition(boundary::east, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z
+
+        char buffer_ex[200];
+        std::string ex_x, ex_y, ex_z;
+        ex_x = "0";
+        ex_y = "0";
+        sprintf(buffer_ex,"%e * x * (%e^3 - 2*%e*x^2 + x^3) / (24 * %e)",q,aDim,aDim,EI);
+        ex_z = buffer_ex;
+
+        gsFunctionExpr<> ex(ex_x,ex_y,ex_z,3);
+        gsField<> exf(mp,ex);
+        gsWriteParaview<>(exf,"exact",1000);
+
+    }
+    else if (testCase == 0)
     {
         if (weak)
         {
@@ -347,7 +403,8 @@ int main(int argc, char *argv[])
             }
         }
 
-        tmp << 0,0,-100;
+        fx = fy = "0";
+        fz = "-1";
     }
     else if (testCase == 1)
     {
@@ -375,7 +432,8 @@ int main(int argc, char *argv[])
         bc.addCornerValue(boundary::southwest, 0.0, 0, 0); // (corner,value, patch, unknown)
 
         // Surface forces
-        tmp << 0, 0, -90;
+        fx = fy = "0";
+        fz = "-90";
     }
     else if (testCase == 2)
     {
@@ -416,8 +474,7 @@ int main(int argc, char *argv[])
         }
 
         // Surface forces
-        tmp.setZero();
-
+        fx = fy = fz = "0";
         // Point loads
         gsVector<> point(2);
         gsVector<> load (3);
@@ -474,7 +531,7 @@ int main(int argc, char *argv[])
         }
 
         // Surface forces
-        tmp.setZero();
+        fx = fy = fz = "0";
 
         // Point loads
         gsVector<> point(2); point<< 1.0, 1.0 ;
@@ -517,6 +574,10 @@ int main(int argc, char *argv[])
 
         bc.addCondition(boundary::east, condition_type::neumann, &neuData ); // unknown 1 - y
 
+        // Surface forces
+        fx = fy = fz = "0";
+
+        // Point loads
         gsVector<> point(2);
         gsVector<> load (3);
         point<< 1.0, 0.5 ;
@@ -542,6 +603,9 @@ int main(int argc, char *argv[])
                 bc.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, i );
             }
         }
+
+        // Surface forces
+        fx = fy = fz = "0";
 
         // Point loads
         gsVector<> point(2); point<< 0.5,0.5 ;
@@ -802,7 +866,9 @@ int main(int argc, char *argv[])
             bc.addCondition(boundary::west, condition_type::clamped, 0, 0 ,false,2);
         }
 
-        tmp<<0,0,-1;
+        // Surface forces
+        fx = fy = "0";
+        fz = "-1";
     }
     else if (testCase == 12)
     {
@@ -865,7 +931,8 @@ int main(int argc, char *argv[])
             bc.addCondition(boundary::west, condition_type::clamped, 0, 0 ,false,2);
         }
 
-        tmp << 0,0,-1;
+        fx = fy = "0";
+        fz = "-1";
     }
     else if (testCase == 14)
     {
@@ -889,7 +956,8 @@ int main(int argc, char *argv[])
             bc.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z
             bc.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z
         }
-        tmp << 0,0,-1;
+        fx = fy = "0";
+        fz = "-1";
 
         bc.addCondition(boundary::east, condition_type::collapsed, 0, 0 ,false,0);
         bc.addCondition(boundary::east, condition_type::collapsed, 0, 0, false, 2 );
@@ -917,7 +985,8 @@ int main(int argc, char *argv[])
             bc.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z
         }
 
-        tmp << 0,0,-1;
+        fx = fy = "0";
+        fz = "-1";
 
         bc.addCondition(boundary::east, condition_type::collapsed, 0, 0 ,false,0);
         bc.addCondition(boundary::east, condition_type::collapsed, 0, 0, false, 2 );
@@ -1023,7 +1092,7 @@ int main(int argc, char *argv[])
         std::string nz = "0";
         neuDataFun1 = gsFunctionExpr<>(nx,ny,nz,3);
 
-        // for (index_t p=0; p!=mp.nPatches(); p++)
+        // for (index_t p=0; p!=mp.nPatches p++)
         // {
         //     // bc.addCondition(p,boundary::west, condition_type::neumann, &neuDataFun1 ); // unknown 0 - x
         //     bc.addCondition(p,boundary::west, condition_type::neumann, &neuData ); // unknown 0 - x
@@ -1065,14 +1134,16 @@ int main(int argc, char *argv[])
         bc.addCondition(3,boundary::north, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 0 - x
 
 
-        tmp << 0,0,-1e-6;
+        fx = fy = "0";
+        fz = "-1e-6";
     }
 
     gsDebugVar(bc);
     //! [Refinement]
 
     // Linear isotropic material model
-    gsConstantFunction<> force(tmp,3);
+    gsFunctionExpr<> force(fx,fy,fz,3);
+    gsConstantFunction<> pressFun(pressure,3);
     gsFunctionExpr<> t(std::to_string(thickness), 3);
     gsFunctionExpr<> E(std::to_string(E_modulus),3);
     gsFunctionExpr<> nu(std::to_string(PoissonRatio),3);
@@ -1178,6 +1249,7 @@ int main(int argc, char *argv[])
     // Construct assembler object
     assembler->setOptions(opts);
     assembler->setPointLoads(pLoads);
+    assembler->setPressure(pressFun);
 
     // gsVector<> found_vec(3);
     // found_vec<<0,0,2;
@@ -1189,10 +1261,10 @@ int main(int argc, char *argv[])
     real_t totaltime = 0.0;
 
     // Function for the Jacobian
-    typedef std::function<gsSparseMatrix<real_t> (gsVector<real_t> const &)>    Jacobian_t;
-    typedef std::function<gsSparseMatrix<real_t> (gsVector<real_t> const &, gsVector<real_t> const &)>    dJacobian_t;
-    typedef std::function<gsVector<real_t> (gsVector<real_t> const &) >         Residual_t;
-    Jacobian_t Jacobian = [&MIP,&time,&stopwatch,&assembler,&mp_def](gsVector<real_t> const &x)
+    typedef std::function<gsSparseMatrix<real_t> (gsVector<real_t> const &)>                            Jacobian_t;
+    typedef std::function<gsSparseMatrix<real_t> (gsVector<real_t> const &,gsVector<real_t> const &)>   dJacobian_t;
+    typedef std::function<gsVector<real_t> (gsVector<real_t> const &) >                                 Residual_t;
+    Jacobian_t Jacobian = [&time,&stopwatch,&assembler,&mp_def](gsVector<real_t> const &x)
     {
         stopwatch.restart();
         assembler->constructSolution(x,mp_def);
@@ -1244,18 +1316,17 @@ int main(int argc, char *argv[])
     gsVector<> vector = assembler->rhs();
 
     // Configure Structural Analsysis module
-    gsStaticSolver<real_t> staticSolver(matrix,vector,dJacobian,Residual);
+    gsStaticNewton<real_t> staticSolver(matrix,vector,dJacobian,Residual);
     gsOptionList solverOptions = staticSolver.options();
-    solverOptions.setInt("Verbose",verbose);
-    solverOptions.setInt("MaxIterations",10);
-    solverOptions.setReal("Tolerance",1e-6);
+    solverOptions.setInt("verbose",verbose);
+    solverOptions.setInt("maxIt",10);
+    solverOptions.setReal("tol",1e-6);
     staticSolver.setOptions(solverOptions);
 
-    real_t OMPtime = omp_get_wtime();
 
     // Solve (non-) linear problem
     /*
-        NOTE: Performs solveLinear inside. It can also be done differently (below). Inside the gsStaticSolver, the solVector is initialized slightly different, hence something different is fed into the nonlinear iterations.
+        NOTE: Performs solveLinear inside. It can also be done differently (below). Inside gsStaticNewton, the solVector is initialized slightly different, hence something different is fed into the nonlinear iterations.
 
         solVector = staticSolver.solveLinear();
         if (nonlinear)
@@ -1268,28 +1339,6 @@ int main(int argc, char *argv[])
         solVector = staticSolver.solveNonlinear();
 
 
-#ifdef _OPENMP
-    gsInfo<<"OMP wall time: "<<omp_get_wtime() - OMPtime<<"\n";
-#endif
-
-/*
-    // We need this because we need to (manually) get the update from the newton solver each iteration.
-    if (nonlinear)
-    {
-        staticSolver.init();
-        index_t it = staticSolver.iterations();
-        index_t maxIt = 10;
-        upVec = staticSolver.update();
-        real_t tol = staticSolver.tolerance();
-        while ((it+1 != maxIt) && (upVec.norm() > tol))
-        {
-            staticSolver.step();
-            upVec = staticSolver.update();
-        }
-
-        solVector = staticSolver.solution();
-    }
- */
 
     totaltime += stopwatch2.stop();
 
@@ -1394,6 +1443,9 @@ int main(int argc, char *argv[])
     }
     gsInfo<<"Total ellapsed assembly time: \t\t"<<time<<" s\n";
     gsInfo<<"Total ellapsed solution time (incl. assembly): \t"<<totaltime<<" s\n";
+
+    delete materialMatrix;
+    delete assembler;
 
     return EXIT_SUCCESS;
 

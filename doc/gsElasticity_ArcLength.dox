@@ -1,0 +1,17 @@
+namespace gismo {
+/**
+
+\page gsElasticity_ArcLength gsElasticity_ArcLength.cpp
+
+Code for the arc-length method of a solid based on loads
+
+\section gsElasticity_ArcLength_Annotated Annotated source file
+
+Here is the full file \c examples/gsElasticity_ArcLength.cpp. Clicking on a function
+or class name will lead you to its reference documentation.
+
+\include gsElasticity_ArcLength.cpp
+
+*/
+
+}

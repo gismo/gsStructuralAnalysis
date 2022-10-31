@@ -1,0 +1,17 @@
+namespace gismo {
+/**
+
+\page gsThinShell_ArcLength gsThinShell_ArcLength.cpp
+
+Code for the arc-length method of a shell based on loads
+
+\section gsThinShell_ArcLength_Annotated Annotated source file
+
+Here is the full file \c examples/gsThinShell_ArcLength.cpp. Clicking on a function
+or class name will lead you to its reference documentation.
+
+\include gsThinShell_ArcLength.cpp
+
+*/
+
+}

@@ -1,0 +1,24 @@
+namespace gismo {
+/**
+
+\page benchmark_UniaxialTension benchmark_UniaxialTension.cpp
+
+
+Uniaxial Tension Test benchmark
+
+e.g. Section 8.1. from Kiendl et al 2015
+Kiendl, J., Hsu, M.-C., Wu, M. C. H., & Reali, A. (2015).
+Isogeometric Kirchhoff–Love shell formulations for general hyperelastic materials.
+Computer Methods in Applied Mechanics and Engineering, 291, 280–303.
+https://doi.org/10.1016/J.CMA.2015.03.010
+
+\section benchmark_UniaxialTension_Annotated Annotated source file
+
+Here is the full file \c examples/benchmark_UniaxialTension.cpp. Clicking on a function
+or class name will lead you to its reference documentation.
+
+\include benchmark_UniaxialTension.cpp
+
+*/
+
+}

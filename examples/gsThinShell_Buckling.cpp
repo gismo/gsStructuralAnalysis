@@ -83,7 +83,8 @@ int main (int argc, char** argv)
     bool write = false;
 
     bool MIP = false;
-    index_t nmodes = 10;
+
+    index_t nmodes = 1;
 
     std::string assemberOptionsFile("options/solver_options.xml");
 
@@ -272,6 +273,7 @@ int main (int argc, char** argv)
 
     // Boundary conditions
     gsBoundaryConditions<> BCs;
+    BCs.setGeoMap(mp);
     gsPointLoads<real_t> pLoads = gsPointLoads<real_t>();
 
     // Initiate Surface forces
@@ -468,6 +470,9 @@ int main (int argc, char** argv)
       BCs.addCondition(boundary::north, condition_type::dirichlet, 0, 0 ,false,1);
       BCs.addCondition(boundary::north, condition_type::dirichlet, 0, 0 ,false,2);
 
+      BCs.addCondition(boundary::east, condition_type::dirichlet, 0, 0 ,false,2);
+      BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0 ,false,2);
+
       Load = 1e3;
       gsVector<> point(2); point<< 1.0, 1.0 ;
       gsVector<> load (3); load << Load,0.0, 0.0;
@@ -504,7 +509,6 @@ int main (int argc, char** argv)
     gsConstantFunction<> pressFun(pressure,3);
     // Initialise solution object
     gsMultiPatch<> mp_def = mp;
-    gsSparseSolver<>::LU solver;
 
     // Linear isotropic material model
     gsConstantFunction<> force(tmp,3);
@@ -637,19 +641,21 @@ int main (int argc, char** argv)
       return m;
     };
 
-      gsBucklingSolver<real_t,Spectra::GEigsMode::ShiftInvert> buckling(K_L,rhs,dK_NL);
-      buckling.verbose();
-      // buckling.computePower();
+    gsBucklingSolver<real_t> buckling(K_L,rhs,dK_NL);
+    buckling.options().setInt("solver",2);
+    buckling.options().setInt("selectionRule",0);
+    buckling.options().setInt("sortRule",4);
+    buckling.options().setSwitch("verbose",true);
+    buckling.options().setInt("ncvFac",2);
+    // buckling.computePower();
 
-      if (!sparse)
-        buckling.compute();
-      else
-        buckling.computeSparse(shift,nmodes,2,Spectra::SortRule::LargestMagn,Spectra::SortRule::SmallestMagn);
+    if (!sparse)
+      buckling.compute();
+    else
+      buckling.computeSparse(shift,nmodes);//,2,Spectra::SortRule::LargestMagn,Spectra::SortRule::SmallestMagn);
 
-      gsMatrix<> values = buckling.values();
-      gsMatrix<> vectors = buckling.vectors();
-
-      gsDebugVar(buckling.values().size());
+    gsMatrix<> values = buckling.values();
+    gsMatrix<> vectors = buckling.vectors();
 
     gsInfo<< "First 10 eigenvalues:\n";
     for (index_t k = 0; k<10; k++)
@@ -664,7 +670,9 @@ int main (int argc, char** argv)
     if (plot)
     {
         gsInfo<<"Plotting in Paraview...\n";
-        system("mkdir -p BucklingResults");
+        int systemRet = system("mkdir -p BucklingResults");
+        GISMO_ASSERT(systemRet!=-1,"Something went wrong with calling the system argument");
+
         gsMultiPatch<> deformation = solution;
         gsMatrix<> modeShape;
         gsParaviewCollection collection("BucklingResults/modes");
@@ -676,7 +684,7 @@ int main (int argc, char** argv)
         {
 
           // Compute solution based on eigenmode with number 'mode'
-          modeShape = vectors.col(m);//solver.solve( assembler->rhs() );
+          modeShape = vectors.col(m);
           assembler->constructSolution(modeShape, solution);
 
           // compute the deformation spline
@@ -706,10 +714,14 @@ int main (int argc, char** argv)
 
     if (write)
     {
-        system("mkdir -p BucklingResults");
+        int systemRet = system("mkdir -p BucklingResults");
+        GISMO_ASSERT(systemRet!=-1,"Something went wrong with calling the system argument");
         std::string wnM = "BucklingResults/eigenvalues.txt";
         writeToCSVfile(wnM,values);
     }
+
+    delete materialMatrix;
+    delete assembler;
 
     return result;
 }
@@ -760,7 +772,7 @@ gsMultiPatch<T> RectangularDomain(int n, int m, int p, int q, T L, T B)
   // Define a matrix with ones
   gsVector<> temp(len0);
   temp.setOnes();
-  for (index_t k = 0; k < len1; k++)
+  for (size_t k = 0; k < len1; k++)
   {
     // First column contains x-coordinates (length)
     coefs.col(0).segment(k*len0,len0) = coefvec0;
@@ -877,6 +889,5 @@ gsMultiPatch<T> AnnularDomain(int n, int p, T R1, T R2)
     for(index_t i = 2; i< p; ++i)
         mp.patch(0).degreeElevate();    // Elevate the degree
   }
-
   return mp;
 }

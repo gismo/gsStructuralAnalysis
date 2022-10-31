@@ -1,0 +1,17 @@
+namespace gismo {
+/**
+
+\page gsThinShell_Static_XML gsThinShell_Static_XML.cpp
+
+Static simulations of a shell given a XML file
+
+\section gsThinShell_Static_XML_Annotated Annotated source file
+
+Here is the full file \c examples/gsThinShell_Static_XML.cpp. Clicking on a function
+or class name will lead you to its reference documentation.
+
+\include gsThinShell_Static_XML.cpp
+
+*/
+
+}

@@ -1,0 +1,17 @@
+namespace gismo {
+/**
+
+\page gsThinShell_Modal gsThinShell_Modal.cpp
+
+Example to compute eigenvalues and eigenmodes of a vibrating shell
+
+\section gsThinShell_Modal_Annotated Annotated source file
+
+Here is the full file \c examples/gsThinShell_Modal.cpp. Clicking on a function
+or class name will lead you to its reference documentation.
+
+\include gsThinShell_Modal.cpp
+
+*/
+
+}
