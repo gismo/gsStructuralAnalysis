@@ -793,7 +793,7 @@ int main (int argc, char** argv)
               arcLength.setLength(dLb);
               arcLength.setSolution(Uold,Lold);
               bisected = true;
-              k -= 1;
+              it -= 1;
               continue;
             }
             indicator = arcLength.indicator();
