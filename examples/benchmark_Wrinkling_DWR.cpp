@@ -19,9 +19,11 @@
 #include <gsKLShell/getMaterialMatrix.h>
 
 // #include <gsThinShell/gsArcLengthIterator.h>
-#include <gsStructuralAnalysis/gsArcLengthIterator.h>
+// #include <gsStructuralAnalysis/gsArcLengthIterator.h>
 #include <gsAssembler/gsAdaptiveRefUtils.h>
 #include <gsAssembler/gsAdaptiveMeshing.h>
+
+#include <gsStructuralAnalysis/gsALMCrisfield.h>
 
 using namespace gismo;
 
@@ -513,33 +515,6 @@ int main (int argc, char** argv)
     assembler->assembleL();
     gsVector<> Force = assembler->primalL();
 
-    gsArcLengthIterator<real_t> arcLength0(Jacobian, ALResidual, Force);
-    gsOptionList ALMoptions = arcLength0.options();
-
-    ALMoptions.setInt("Solver",0); // LDLT solver
-    ALMoptions.setInt("BifurcationMethod",0); // 0: determinant, 1: eigenvalue
-    ALMoptions.setInt("Method",method);
-    ALMoptions.setReal("Length",dLb);
-    ALMoptions.setInt("AngleMethod",0); // 0: step, 1: iteration
-    ALMoptions.setSwitch("AdaptiveLength",adaptive);
-    ALMoptions.setInt("AdaptiveIterations",5);
-    ALMoptions.setReal("Perturbation",tau);
-    ALMoptions.setReal("Scaling",0.0);
-    ALMoptions.setReal("Tol",tol);
-    ALMoptions.setReal("TolU",tolU);
-    ALMoptions.setReal("TolF",tolF);
-    ALMoptions.setInt("MaxIter",maxit);
-    ALMoptions.setSwitch("Verbose",true);
-    ALMoptions.setReal("Relaxation",relax);
-    if (quasiNewtonInt>0)
-    {
-      quasiNewton = true;
-      ALMoptions.setInt("QuasiIterations",quasiNewtonInt);
-    }
-    ALMoptions.setSwitch("Quasi",quasiNewton);
-
-
-    gsInfo<<ALMoptions;
 
     gsParaviewCollection collection(dirname + "/" + output);
     gsParaviewCollection Smembrane(dirname + "/" + "membrane");
@@ -581,7 +556,34 @@ int main (int argc, char** argv)
 
     std::vector<std::vector<std::pair<index_t,real_t>>> write_errors; // per load step, iteration, numDoFs, error
     std::vector<std::pair<index_t,real_t>> loadstep_errors;
-    gsArcLengthIterator<real_t>arcLength(Jacobian, ALResidual, Force);
+
+    gsALMCrisfield<real_t> arcLength(Jacobian, ALResidual, Force);
+    gsOptionList ALMoptions = arcLength.options();
+
+    ALMoptions.setInt("Solver",0); // LDLT solver
+    ALMoptions.setInt("BifurcationMethod",0); // 0: determinant, 1: eigenvalue
+    ALMoptions.setInt("Method",method);
+    ALMoptions.setReal("Length",dLb);
+    ALMoptions.setInt("AngleMethod",0); // 0: step, 1: iteration
+    ALMoptions.setSwitch("AdaptiveLength",adaptive);
+    ALMoptions.setInt("AdaptiveIterations",5);
+    ALMoptions.setReal("Perturbation",tau);
+    ALMoptions.setReal("Scaling",0.0);
+    ALMoptions.setReal("Tol",tol);
+    ALMoptions.setReal("TolU",tolU);
+    ALMoptions.setReal("TolF",tolF);
+    ALMoptions.setInt("MaxIter",maxit);
+    ALMoptions.setSwitch("Verbose",true);
+    ALMoptions.setReal("Relaxation",relax);
+    if (quasiNewtonInt>0)
+    {
+      quasiNewton = true;
+      ALMoptions.setInt("QuasiIterations",quasiNewtonInt);
+    }
+    ALMoptions.setSwitch("Quasi",quasiNewton);
+
+    gsInfo<<ALMoptions;
+
     arcLength.options() = ALMoptions;
     arcLength.applyOptions();
     arcLength.initialize();
@@ -774,7 +776,7 @@ int main (int argc, char** argv)
             Uold = assembler->constructSolutionVectorL(Uold_patch);
             deltaUold = assembler->constructSolutionVectorL(deltaUold_patch);
 
-            gsArcLengthIterator<real_t>arcLength(Jacobian, ALResidual, Force);
+            gsALMCrisfield<real_t> arcLength(Jacobian, ALResidual, Force);
             arcLength.options() = ALMoptions;
             arcLength.applyOptions();
             arcLength.initialize();

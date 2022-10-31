@@ -1188,7 +1188,7 @@ bool gsALMBase<T>::testSingularPoint(T tol, index_t kmax, bool jacobian)
 
 
 template <class T>
-void gsALMBase<T>::computeStability(gsVector<T> x, bool jacobian, T shift)
+void gsALMBase<T>::computeStability(const gsVector<T> & x, bool jacobian, T shift)
 {
   if (jacobian)
   {

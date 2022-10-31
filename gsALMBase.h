@@ -226,7 +226,7 @@ public:
      * @param[in]  jacobian  Compute the jacobian?
      * @param[in]  shift     The shift to apply
      */
-    virtual void computeStability(gsVector<T> x, bool jacobian=true, T shift = -1e2);
+    virtual void computeStability(const gsVector<T> & x, bool jacobian=true, T shift = -1e2);
 
     /**
      * @brief      Computes the buckling modes at a singular point with solution \a x
