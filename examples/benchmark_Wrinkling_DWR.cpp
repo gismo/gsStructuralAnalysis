@@ -473,7 +473,7 @@ int main (int argc, char** argv)
 
     gsThinShellAssemblerDWRBase<real_t>* assembler;
     assembler = new gsThinShellAssemblerDWR<3, real_t, true >(mp,basisL,basisH,BCs,force,materialMatrix);
-    assembler->setGoal(GoalFunction::MembranePStress,0);
+    assembler->setGoal(GoalFunction::PStress,0);
 
     // Construct assembler object
     gsFileData<> fd_assembler(assemberOptionsFile);
@@ -1265,7 +1265,7 @@ void PlotResults(   index_t k,
           flexuralStress = gsField<>(mp,flexuralStresses, true);
 
         gsPiecewiseFunction<T> membraneStresses_p;
-        assembler->constructStress(mp_def,membraneStresses_p,stress_type::principal_stress_membrane);
+        assembler->constructStress(mp_def,membraneStresses_p,stress_type::principal_stress);
         if (deformed)
           membraneStress_p = gsField<>(mp_def,membraneStresses_p, true);
         else
