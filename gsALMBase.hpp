@@ -36,7 +36,7 @@ void gsALMBase<T>::defaultOptions()
     m_options.addSwitch("Quasi","Use Quasi Newton method",false);
     m_options.addInt ("QuasiIterations","Number of iterations for quasi newton method",-1);
 
-    m_options.addInt ("BifurcationMethod","Bifurcation Identification based on: 0: Determinant;  1: Eigenvalue",bifmethod::Eigenvalue);
+    m_options.addInt ("BifurcationMethod","Bifurcation Identification based on: -1: nothing, 0: Determinant;  1: Eigenvalue",bifmethod::Eigenvalue);
 
     m_options.addInt ("SingularPointFailure","What to do wne a singular point determination fails?: 0 = Apply solution anyways; 1 = Proceed without singular point",SPfail::With);
 
@@ -1236,6 +1236,10 @@ void gsALMBase<T>::computeStability(const gsVector<T> & x, bool jacobian, T shif
     Eigen::SelfAdjointEigenSolver<gsMatrix<T>> es2(m_jacMat);
     m_stabilityVec = es2.eigenvalues();
     #endif
+  }
+  else if (m_bifurcationMethod == bifmethod::Nothing)
+  {
+    m_stabilityVec = gsVector<T>::Zero(x.size());
   }
   else
     gsInfo<<"bifurcation method unknown!";

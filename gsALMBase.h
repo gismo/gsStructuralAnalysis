@@ -342,14 +342,14 @@ protected:
 
     mutable typename gsSparseSolver<T>::uPtr m_solver; // Cholesky by default
 
-protected:
+public:
 
-    mutable gsOptionList m_options;
 
     struct bifmethod
     {
         enum type
         {
+            Nothing = -1,
             Determinant = 0,
             Eigenvalue  = 1,
         };
@@ -374,6 +374,7 @@ protected:
     };
 
   protected:
+    mutable gsOptionList m_options;
 
 
     /// Number of Arc Length iterations performed
