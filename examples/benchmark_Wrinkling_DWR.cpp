@@ -677,6 +677,11 @@ int main (int argc, char** argv)
         loadstep_errors.push_back(std::make_pair(assembler->numDofsL(),error));
         ///////////////////////////////////////////////////
 
+        deformation = mp_def;
+        for (index_t p=0; p!=mp_def.nPatches(); p++)
+            deformation.patch(p).coefs() =- mp.patch(p).coefs();
+
+
         PlotResults(k,assembler,mp,mp_def,plot,stress,write,mesh,deformed,dirname,output,
                     collection,Smembrane,Sflexural,Smembrane_p);
 
@@ -724,6 +729,10 @@ int main (int argc, char** argv)
         // Update Uold
         Uold_patch = U_patch;
         deltaUold_patch = deltaU_patch;
+
+        deformation = mp_def;
+        for (index_t p=0; p!=mp_def.nPatches(); p++)
+            deformation.patch(p).coefs() =- mp.patch(p).coefs();
 
         PlotResults(k,assembler,mp,mp_def,plot,stress,write,mesh,deformed,dirname,output,
                     collection,Smembrane,Sflexural,Smembrane_p);
@@ -967,6 +976,11 @@ int main (int argc, char** argv)
         /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
         /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+        deformation = mp_def;
+        for (index_t p=0; p!=mp_def.nPatches(); p++)
+            deformation.patch(p).coefs() =- mp.patch(p).coefs();
+
         PlotResults(k,assembler,mp,mp_def,plot,stress,write,mesh,deformed,dirname,output,
                     collection,Smembrane,Sflexural,Smembrane_p);
 
