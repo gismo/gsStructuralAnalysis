@@ -564,7 +564,11 @@ int main (int argc, char** argv)
     gsALMCrisfield<real_t> arcLength(Jacobian, ALResidual, Force);
     gsOptionList ALMoptions = arcLength.options();
 
+#ifdef GISMO_WITH_PARDISO
+    ALMoptions.setString("Solver","PardisoLU"); // LDLT solver
+#else
     ALMoptions.setString("Solver","SimplicialLDLT"); // LDLT solver
+#endif
     ALMoptions.setInt("BifurcationMethod",0); // 0: determinant, 1: eigenvalue
     ALMoptions.setReal("Length",dLb);
     ALMoptions.setInt("AngleMethod",0); // 0: step, 1: iteration
@@ -825,7 +829,7 @@ int main (int argc, char** argv)
             if (plot)
             {
                 std::string fileName = dirname + "/" + "error_field" + util::to_string(k) + "_" + util::to_string(it);
-                helper.computeError(mp_def,U_patch,goalSides,points,false,fileName,1000,false,mesh);
+                helper.computeError(mp_def,U_patch,goalSides,points,interior,fileName,1000,false,mesh);
                 fileName = "error_field" + util::to_string(k) + "_" + util::to_string(it) ;
                 for (size_t p=0; p!=mp.nPatches(); p++)
                 {
@@ -835,7 +839,7 @@ int main (int argc, char** argv)
                 }
             }
             else
-                helper.computeError(mp_def,U_patch,goalSides,points,false);
+                helper.computeError(mp_def,U_patch,goalSides,points,interior);
 
             error = std::abs(helper.error());
             gsInfo<<"Error = "<<error<<"\n";
