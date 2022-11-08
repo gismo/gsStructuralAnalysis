@@ -542,9 +542,13 @@ int main (int argc, char** argv)
     gsFileData<> fd_mesher(mesherOptionsFile);
     gsOptionList mesherOpts;
     fd_mesher.getFirst<gsOptionList>(mesherOpts);
-    gsAdaptiveMeshing<real_t> mesher(mp);
-    mesher.options() = mesherOpts;
-    mesher.getOptions();
+    gsAdaptiveMeshing<real_t> mesher;
+    if (adaptiveMesh)
+    {
+        mesher = gsAdaptiveMeshing<real_t>(mp);
+        mesher.options() = mesherOpts;
+        mesher.getOptions();
+    }
 
     gsHBoxContainer<2,real_t> markRef, markCrs;
 
@@ -560,9 +564,8 @@ int main (int argc, char** argv)
     gsALMCrisfield<real_t> arcLength(Jacobian, ALResidual, Force);
     gsOptionList ALMoptions = arcLength.options();
 
-    ALMoptions.setInt("Solver",0); // LDLT solver
+    ALMoptions.setString("Solver","SimplicialLDLT"); // LDLT solver
     ALMoptions.setInt("BifurcationMethod",0); // 0: determinant, 1: eigenvalue
-    ALMoptions.setInt("Method",method);
     ALMoptions.setReal("Length",dLb);
     ALMoptions.setInt("AngleMethod",0); // 0: step, 1: iteration
     ALMoptions.setSwitch("AdaptiveLength",adaptive);
@@ -733,22 +736,25 @@ int main (int argc, char** argv)
         unstable_prev = true;
     }
 
-    gsMatrix<> coefs;
+    if (adaptiveMesh)
+    {
+        gsMatrix<> coefs;
 
-    gsQuasiInterpolate<real_t>::localIntpl(basisL.basis(0), mp_def.patch(0), coefs);
-    mp_def.patch(0) = *basisL.basis(0).makeGeometry(give(coefs));
+        gsQuasiInterpolate<real_t>::localIntpl(basisL.basis(0), mp_def.patch(0), coefs);
+        mp_def.patch(0) = *basisL.basis(0).makeGeometry(give(coefs));
 
-    gsQuasiInterpolate<real_t>::localIntpl(basisL.basis(0), U_patch.patch(0), coefs);
-    U_patch.patch(0) = *basisL.basis(0).makeGeometry(give(coefs));
+        gsQuasiInterpolate<real_t>::localIntpl(basisL.basis(0), U_patch.patch(0), coefs);
+        U_patch.patch(0) = *basisL.basis(0).makeGeometry(give(coefs));
 
-    gsQuasiInterpolate<real_t>::localIntpl(basisL.basis(0), deltaU_patch.patch(0), coefs);
-    deltaU_patch.patch(0) = *basisL.basis(0).makeGeometry(give(coefs));
+        gsQuasiInterpolate<real_t>::localIntpl(basisL.basis(0), deltaU_patch.patch(0), coefs);
+        deltaU_patch.patch(0) = *basisL.basis(0).makeGeometry(give(coefs));
 
-    gsQuasiInterpolate<real_t>::localIntpl(basisL.basis(0), Uold_patch.patch(0), coefs);
-    Uold_patch.patch(0) = *basisL.basis(0).makeGeometry(give(coefs));
+        gsQuasiInterpolate<real_t>::localIntpl(basisL.basis(0), Uold_patch.patch(0), coefs);
+        Uold_patch.patch(0) = *basisL.basis(0).makeGeometry(give(coefs));
 
-    gsQuasiInterpolate<real_t>::localIntpl(basisL.basis(0), deltaUold_patch.patch(0), coefs);
-    deltaUold_patch.patch(0) = *basisL.basis(0).makeGeometry(give(coefs));
+        gsQuasiInterpolate<real_t>::localIntpl(basisL.basis(0), deltaUold_patch.patch(0), coefs);
+        deltaUold_patch.patch(0) = *basisL.basis(0).makeGeometry(give(coefs));
+    }
 
     gsInfo<<"----------Post-Buckling-----------\n";
     // POST BUCKLING
@@ -814,7 +820,7 @@ int main (int argc, char** argv)
             assembler->constructMultiPatchL(U,deltaU_patch);
 
             /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-            // ADAPTIVE MESHING PART
+            // ERROR ESTIMATION PART
             /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
             if (plot)
             {
@@ -832,11 +838,10 @@ int main (int argc, char** argv)
                 helper.computeError(mp_def,U_patch,goalSides,points,false);
 
             error = std::abs(helper.error());
-            std::vector<real_t> errorVec = helper.errors();
-
             gsInfo<<"Error = "<<error<<"\n";
             loadstep_errors.push_back(std::make_pair(assembler->numDofsL(),error));
 
+            std::vector<real_t> errorVec = helper.errors();
             std::vector<real_t> elErrors = helper.absErrors();
 
             if (plotError)
@@ -856,75 +861,83 @@ int main (int argc, char** argv)
                 }
             }
 
-            if (unstable_prev)
+            /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+            // ADAPTIVE MESHING PART
+            /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+            if (adaptiveMesh)
             {
-                unstable_prev = false;
-                break;
+                if (unstable_prev)
+                {
+                    unstable_prev = false;
+                    break;
+                }
+                else
+                {
+                    if (error > refTol)
+                    {
+                        gsInfo<<"Load Step "<<k<<": Error is too big! Error = "<<error<<", refTol = "<<refTol<<"\n";
+                        mesher.markRef_into(elErrors,markRef);
+                        gsInfo<<"Marked "<<markRef.totalSize()<<" elements for refinement\n";
+                        refined = mesher.refine(markRef);
+                    }
+                    else if (error < refTol && error > crsTol)
+                    {
+                        gsInfo<<"Load Step "<<k<<": Error is within bounds!\n";
+                        gsInfo<<"Load Step "<<k<<": Error is within bounds. Error = "<<error<<", refTol = "<<refTol<<", crsTol = "<<crsTol<<"\n";
+                        mesher.markRef_into(elErrors,markRef);
+                        gsInfo<<"Marked "<<markRef.totalSize()<<" elements for refinement\n";
+                        gsInfo<<"Marked "<<markCrs.totalSize()<<" elements for coarsening\n";
+                        mesher.markCrs_into(elErrors,markRef,markCrs);
+                        refined = mesher.refine(markRef);
+                    }
+                    else if (error < crsTol)
+                    {
+                        //gsInfo<<"Error is too small!\n";
+                        gsInfo<<"Load Step "<<k<<": Error is too small! Error = "<<error<<", crsTol = "<<crsTol<<"\n";
+                        mesher.markCrs_into(elErrors,markCrs);
+                        gsInfo<<"Marked "<<markCrs.totalSize()<<" elements for coarsening\n";
+                        coarsened = mesher.unrefine(markCrs);
+                    }
+                    bandtest = (bandwidth==1) ? error > refTol : ((error < crsTol )|| (error >= refTol));
+
+                    basisL = gsMultiBasis<>(mp);
+                    basisH = basisL;
+                    basisH.degreeElevate(1);
+
+                    // Project the solution from old mesh to new mesh
+                    gsMatrix<> coefs;
+
+                    // Which of those are needed?
+
+                    gsQuasiInterpolate<real_t>::localIntpl(basisL.basis(0), mp_def.patch(0), coefs);
+                    mp_def.patch(0) = *basisL.basis(0).makeGeometry(give(coefs));
+
+                    gsQuasiInterpolate<real_t>::localIntpl(basisL.basis(0), U_patch.patch(0), coefs);
+                    U_patch.patch(0) = *basisL.basis(0).makeGeometry(give(coefs));
+
+                    gsQuasiInterpolate<real_t>::localIntpl(basisL.basis(0), deltaU_patch.patch(0), coefs);
+                    deltaU_patch.patch(0) = *basisL.basis(0).makeGeometry(give(coefs));
+
+                    gsQuasiInterpolate<real_t>::localIntpl(basisL.basis(0), Uold_patch.patch(0), coefs);
+                    Uold_patch.patch(0) = *basisL.basis(0).makeGeometry(give(coefs));
+
+                    gsQuasiInterpolate<real_t>::localIntpl(basisL.basis(0), deltaUold_patch.patch(0), coefs);
+                    deltaUold_patch.patch(0) = *basisL.basis(0).makeGeometry(give(coefs));
+
+                    assembler->setBasisL(basisL);
+                    assembler->setBasisH(basisH);
+                    assembler->setUndeformed(mp);
+
+                    mesher.rebuild();
+
+                    // assembler->constructSolutionL(U,mp_def);
+                    unstable_prev = false;
+
+                }
+                it++;
             }
             else
-            {
-                if (error > refTol)
-                {
-                    gsInfo<<"Load Step "<<k<<": Error is too big! Error = "<<error<<", refTol = "<<refTol<<"\n";
-                    mesher.markRef_into(elErrors,markRef);
-                    gsInfo<<"Marked "<<markRef.totalSize()<<" elements for refinement\n";
-                    refined = mesher.refine(markRef);
-                }
-                else if (error < refTol && error > crsTol)
-                {
-                    gsInfo<<"Load Step "<<k<<": Error is within bounds!\n";
-                    gsInfo<<"Load Step "<<k<<": Error is within bounds. Error = "<<error<<", refTol = "<<refTol<<", crsTol = "<<crsTol<<"\n";
-                    mesher.markRef_into(elErrors,markRef);
-                    gsInfo<<"Marked "<<markRef.totalSize()<<" elements for refinement\n";
-                    gsInfo<<"Marked "<<markCrs.totalSize()<<" elements for coarsening\n";
-                    mesher.markCrs_into(elErrors,markRef,markCrs);
-                    refined = mesher.refine(markRef);
-                }
-                else if (error < crsTol)
-                {
-                    //gsInfo<<"Error is too small!\n";
-                    gsInfo<<"Load Step "<<k<<": Error is too small! Error = "<<error<<", crsTol = "<<crsTol<<"\n";
-                    mesher.markCrs_into(elErrors,markCrs);
-                    gsInfo<<"Marked "<<markCrs.totalSize()<<" elements for coarsening\n";
-                    coarsened = mesher.unrefine(markCrs);
-                }
-                bandtest = (bandwidth==1) ? error > refTol : ((error < crsTol )|| (error >= refTol));
-
-                basisL = gsMultiBasis<>(mp);
-                basisH = basisL;
-                basisH.degreeElevate(1);
-
-                // Project the solution from old mesh to new mesh
-                gsMatrix<> coefs;
-
-                // Which of those are needed?
-
-                gsQuasiInterpolate<real_t>::localIntpl(basisL.basis(0), mp_def.patch(0), coefs);
-                mp_def.patch(0) = *basisL.basis(0).makeGeometry(give(coefs));
-
-                gsQuasiInterpolate<real_t>::localIntpl(basisL.basis(0), U_patch.patch(0), coefs);
-                U_patch.patch(0) = *basisL.basis(0).makeGeometry(give(coefs));
-
-                gsQuasiInterpolate<real_t>::localIntpl(basisL.basis(0), deltaU_patch.patch(0), coefs);
-                deltaU_patch.patch(0) = *basisL.basis(0).makeGeometry(give(coefs));
-
-                gsQuasiInterpolate<real_t>::localIntpl(basisL.basis(0), Uold_patch.patch(0), coefs);
-                Uold_patch.patch(0) = *basisL.basis(0).makeGeometry(give(coefs));
-
-                gsQuasiInterpolate<real_t>::localIntpl(basisL.basis(0), deltaUold_patch.patch(0), coefs);
-                deltaUold_patch.patch(0) = *basisL.basis(0).makeGeometry(give(coefs));
-
-                assembler->setBasisL(basisL);
-                assembler->setBasisH(basisH);
-                assembler->setUndeformed(mp);
-
-                mesher.rebuild();
-
-                // assembler->constructSolutionL(U,mp_def);
-                unstable_prev = false;
-
-            }
-            it++;
+                break;
         }
 
         if (plotError)
