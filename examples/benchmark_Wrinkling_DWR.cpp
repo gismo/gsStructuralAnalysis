@@ -647,9 +647,9 @@ int main (int argc, char** argv)
             fileName = "error_field" + util::to_string(k) + "_" + util::to_string(it) ;
             for (size_t p=0; p!=mp.nPatches(); p++)
             {
-                error_fields.addTimestep(fileName + "_",p,it,".vts");
+                error_fields.addTimestep(fileName+std::to_string(p),it,".vts");
                 if (mesh)
-                    error_fields.addTimestep(fileName + "_mesh_",p,it,".vtp");
+                    error_fields.addTimestep(fileName + "_mesh"+std::to_string(p),it,".vtp");
             }
         }
         else
@@ -826,9 +826,9 @@ int main (int argc, char** argv)
                 fileName = "error_field" + util::to_string(k) + "_" + util::to_string(it) ;
                 for (size_t p=0; p!=mp.nPatches(); p++)
                 {
-                    error_fields.addTimestep(fileName + "_",p,it,".vts");
+                    error_fields.addTimestep(fileName+std::to_string(p),it,".vts");
                     if (mesh)
-                        error_fields.addTimestep(fileName + "_mesh_",p,it,".vtp");
+                        error_fields.addTimestep(fileName + "_mesh"+std::to_string(p),it,".vtp");
                 }
             }
             else
@@ -852,9 +852,9 @@ int main (int argc, char** argv)
                     if (mesh)
                         writeSingleCompMesh<>(mp.basis(p), mp.patch(p),fileName + "_mesh" + "_" + util::to_string(p));
                     fileName = "error" + util::to_string(k) + "_" + util::to_string(it) ;
-                    errors.addTimestep(fileName + "_",p,it,".vts");
+                    errors.addTimestep(fileName,p,it,".vts");
                     if (mesh)
-                        errors.addTimestep(fileName + "_mesh_",p,it,".vtp");
+                        errors.addTimestep(fileName + "_mesh",p,it,".vtp");
                 }
             }
 
@@ -879,13 +879,13 @@ int main (int argc, char** argv)
                     }
                     else if (error < refTol && error > crsTol)
                     {
-                        gsInfo<<"Load Step "<<k<<": Error is within bounds!\n";
                         gsInfo<<"Load Step "<<k<<": Error is within bounds. Error = "<<error<<", refTol = "<<refTol<<", crsTol = "<<crsTol<<"\n";
-                        mesher.markRef_into(elErrors,markRef);
-                        gsInfo<<"Marked "<<markRef.totalSize()<<" elements for refinement\n";
-                        gsInfo<<"Marked "<<markCrs.totalSize()<<" elements for coarsening\n";
-                        mesher.markCrs_into(elErrors,markRef,markCrs);
-                        refined = mesher.refine(markRef);
+                        // mesher.markRef_into(elErrors,markRef);
+                        // gsInfo<<"Marked "<<markRef.totalSize()<<" elements for refinement\n";
+                        // gsInfo<<"Marked "<<markCrs.totalSize()<<" elements for coarsening\n";
+                        // mesher.markCrs_into(elErrors,markRef,markCrs);
+                        // refined = mesher.refine(markRef);
+                        gsInfo<<"No elements marked\n";
                     }
                     else if (error < crsTol)
                     {
@@ -993,8 +993,12 @@ int main (int argc, char** argv)
     index_t loadstep=0;
     file<<"load_step,iteration,numDofs,error\n";
     for (std::vector<std::vector<std::pair<index_t,real_t>>>::const_iterator it = write_errors.begin(); it!=write_errors.end(); it++, loadstep++)
-        for (std::vector<std::pair<index_t,real_t>>::const_iterator iit = it->begin(); iit!=it->end(); iit++)
-            file<<loadstep<<","<<iit->first<<","<<iit->second<<"\n";
+    {
+        index_t iteration=0;
+        for (std::vector<std::pair<index_t,real_t>>::const_iterator iit = it->begin(); iit!=it->end(); iit++, iteration++)
+            file<<loadstep<<","<<iteration<<","<<iit->first<<","<<iit->second<<"\n";
+
+    }
     file.close();
 
   return result;

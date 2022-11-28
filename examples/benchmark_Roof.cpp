@@ -50,6 +50,7 @@ int main (int argc, char** argv)
     int step          = 10;
     int method        = 2; // (0: Load control; 1: Riks' method; 2: Crisfield's method; 3: consistent crisfield method)
     bool deformed     = false;
+    bool symmetry = false;
 
     bool composite = false;
 
@@ -97,6 +98,7 @@ int main (int argc, char** argv)
     cmd.addSwitch("membrane", "Use membrane model (no bending)", membrane);
     cmd.addSwitch("deformed", "plot on deformed shape", deformed);
     cmd.addSwitch("write", "write to file", write);
+    cmd.addSwitch("symmetry", "Apply symmetry?", symmetry);
 
     try { cmd.getValues(argc,argv); } catch (int rv) { return rv; }
 
@@ -138,7 +140,10 @@ int main (int argc, char** argv)
       thickness = 16.75;
     }
 
-    gsReadFile<>("surface/scordelis_lo_roof_shallow.xml", mp);
+    if (!symmetry)
+        gsReadFile<>("surface/scordelis_lo_roof_shallow.xml", mp);
+    else
+        gsReadFile<>("surface/scordelis_lo_roof_shallow_symm.xml", mp);
 
     for(index_t i = 0; i< numElevate; ++i)
       mp.patch(0).degreeElevate();    // Elevate the degree
@@ -172,20 +177,46 @@ int main (int argc, char** argv)
     std::string output = "solution";
     std::string dirname = "ArcLengthResults";
 
-    gsMatrix<> writePoints(2,3);
-    writePoints.col(0)<< 0.0,0.5;
-    writePoints.col(1)<< 0.5,0.5;
-    writePoints.col(2)<< 1.0,0.5;
+    gsMatrix<> writePoints;
+    if (!symmetry)
+    {
+      writePoints.resize(2,3);
+      writePoints.col(0)<< 0.0,0.5;
+      writePoints.col(1)<< 0.5,0.5;
+      writePoints.col(2)<< 1.0,0.5;
+    }
+    else
+    {
+      writePoints.resize(2,2);
+      writePoints.col(0)<< 0.0,0.0;
+      writePoints.col(1)<< 1.0,0.0;
+    }
 
     GISMO_ASSERT(mp.targetDim()==3,"Geometry must be surface (targetDim=3)!");
-    // Diaphragm conditions
-    BCs.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 0 ); // unknown 0 - x
-    BCs.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 1 - y
-    BCs.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z
-    // BCs.addCornerValue(boundary::southwest, 0.0, 0, 0); // (corner,value, patch, unknown)
-    BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 0 ); // unknown 0 - x
-    BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 1 - y
-    BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z
+    if (!symmetry)
+    {
+        BCs.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 0 ); // unknown 0 - x
+        BCs.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 1 - y
+        BCs.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z
+
+        BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 0 ); // unknown 0 - x
+        BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 1 - y
+        BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z
+    }
+    else
+    {
+        BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 0 ); // unknown 0 - x
+        BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 1 - y
+        BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z
+
+        BCs.addCondition(boundary::north, condition_type::clamped, 0, 0, false, 0 ); // unknown 0 - x
+        BCs.addCondition(boundary::north, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 1 - y
+        BCs.addCondition(boundary::north, condition_type::clamped, 0, 0, false, 2 ); // unknown 2 - z
+
+        BCs.addCondition(boundary::east, condition_type::dirichlet, 0, 0, false, 0 ); // unknown 0 - x
+        BCs.addCondition(boundary::east, condition_type::clamped, 0, 0, false, 1 ); // unknown 1 - y
+        BCs.addCondition(boundary::east, condition_type::clamped, 0, 0, false, 2 ); // unknown 2 - z
+    }
 
     BCs.setGeoMap(mp);
 
@@ -193,11 +224,17 @@ int main (int argc, char** argv)
     // Point loads
     gsVector<> point(2);
     gsVector<> load (3);
-    point<< 0.5, 0.5 ;
+    if (!symmetry)
+        point<< 0.5, 0.5 ;
+    else
+        point<< 1.0, 1.0 ;
+
     load << 0.0, 0.0, Load ;
     pLoads.addLoad(point, load, 0 );
 
     dirname = dirname + "/" +  "Roof_t="+ std::to_string(thickness) + "-r=" + std::to_string(numHref) + "-e" + std::to_string(numElevate) +"_solution";
+    if (symmetry)
+        dirname = dirname + "_symm";
     output =  "solution";
     wn = output + "data.txt";
 
@@ -320,10 +357,10 @@ int main (int argc, char** argv)
     arcLength->options().setString("Solver","SimplicialLDLT"); // LDLT solver
     arcLength->options().setInt("BifurcationMethod",0); // 0: determinant, 1: eigenvalue
     arcLength->options().setReal("Length",dL);
-    // arcLength->options().setInt("AngleMethod",0); // 0: step, 1: iteration
+    arcLength->options().setInt("AngleMethod",0); // 0: step, 1: iteration
     arcLength->options().setSwitch("AdaptiveLength",adaptive);
     arcLength->options().setInt("AdaptiveIterations",5);
-    // arcLength->options().setReal("Scaling",0.0);
+    arcLength->options().setReal("Scaling",0.0);
     arcLength->options().setReal("Tol",tol);
     arcLength->options().setReal("TolU",tolU);
     arcLength->options().setReal("TolF",tolF);
