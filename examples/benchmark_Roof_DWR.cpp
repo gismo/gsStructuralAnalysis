@@ -452,17 +452,28 @@ int main (int argc, char** argv)
       return m;
     };
     // Function for the Residual
-    ALResidual_t ALResidual = [&time,&stopwatch,&assembler,&mp_def](gsVector<real_t> const &x, real_t lam, gsVector<real_t> const &force)
+    ALResidual_t ALResidual = [&pLoads,&time,&stopwatch,&assembler,&mp_def](gsVector<real_t> const &x, real_t lam, gsVector<real_t> const &force)
     {
       stopwatch.restart();
+      // assembler->constructSolutionL(x,mp_def);
+      // assembler->assemblePrimalL(mp_def);
+
+      // gsVector<real_t> Fint = -(assembler->primalL() - force);
+      // gsVector<real_t> result = Fint - lam * force;
+      // time += stopwatch.stop();
+      // return result;
+
+      gsPointLoads<real_t> pLoads_tmp = pLoads;
+      pLoads_tmp[0].value *= lam;
+      assembler->setPointLoads(pLoads_tmp);
       assembler->constructSolutionL(x,mp_def);
       assembler->assemblePrimalL(mp_def);
-      gsVector<real_t> Fint = -(assembler->primalL() - force);
-      gsVector<real_t> result = Fint - lam * force;
+
       time += stopwatch.stop();
-      return result; // - lam * force;
+      return -assembler->primalL();
     };
     // Assemble linear system to obtain the force vector
+    assembler->setPointLoads(pLoads);
     assembler->assembleL();
     gsVector<> Force = assembler->primalL();
 
@@ -555,12 +566,11 @@ int main (int argc, char** argv)
     GISMO_ENSURE(refTol >= crsTol,"Refinement tolerance should be bigger than the coarsen tolerance");
     for (index_t k=0; k<step; k++)
     {
-loadstep_errors.clear();
+        loadstep_errors.clear();
         gsInfo<<"Load step "<< k<<"; \tSystem size = "<<Uold.size()<<" x "<<Uold.size()<<"\n";
         gsParaviewCollection errors(dirname + "/" + "error" + util::to_string(k));
         gsParaviewCollection error_fields(dirname + "/" + "error_field" + util::to_string(k));
 
-        gsInfo<<"Basis (L): \n"<<mp.basis(0)<<"\n";
         index_t maxIt = 10;
         index_t it = 0;
         bool refined = true;
@@ -569,6 +579,10 @@ loadstep_errors.clear();
         bool bandtest = (bandwidth==1) ? error > refTol : ((error < crsTol )|| (error >= refTol));
         while (bandtest && it < maxIt && (refined || coarsened))
         {
+            gsInfo<<"Iteration "<<it<<"/"<<maxIt<<", refTol < prev error < crsTol : "<<refTol<<" < "<<error<<" < "<<crsTol<<"\n";
+            gsInfo<<"New basis (L): \n"<<mp.basis(0)<<"\n";
+
+            assembler->setPointLoads(pLoads);
             assembler->assembleL();
             Force = assembler->primalL();
             Uold = assembler->constructSolutionVectorL(Uold_patch);
@@ -617,7 +631,7 @@ loadstep_errors.clear();
             if (plot)
             {
                 std::string fileName = dirname + "/" + "error_field" + util::to_string(k) + "_" + util::to_string(it);
-                helper.computeError(mp_def,U_patch,goalSides,points,interior,fileName,1000,false,mesh);
+                helper.computeError(mp_def,U_patch,goalSides,points,interior,false,fileName,1000,false,mesh);
                 fileName = "error_field" + util::to_string(k) + "_" + util::to_string(it) ;
                 for (size_t p=0; p!=mp.nPatches(); p++)
                 {
@@ -627,7 +641,7 @@ loadstep_errors.clear();
                 }
             }
             else
-                helper.computeError(mp_def,U_patch,goalSides,points,interior);
+                helper.computeError(mp_def,U_patch,goalSides,points,interior,false);
 
             error = std::abs(helper.error());
             gsInfo<<"Error = "<<error<<"\n";
