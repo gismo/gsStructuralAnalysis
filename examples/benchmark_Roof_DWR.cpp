@@ -91,7 +91,7 @@ template <class T>
 void initStepOutput( const std::string name, const gsMatrix<T> & points);
 
 template <class T>
-void writeStepOutput(const gsMatrix<T> & U, const T L, const T indicator, const gsMultiPatch<T> & deformation, const std::string name, const gsMatrix<T> & points, const index_t extreme=-1, const index_t kmax=100);
+void writeStepOutput(const gsMatrix<T> & U, const T L, const T indicator, const gsMultiPatch<T> & deformation, const T error, const index_t nDoFs, const std::string name, const gsMatrix<T> & points, const index_t extreme=-1, const index_t kmax=100);
 
 template <class T>
 void PlotResults(   index_t k,
@@ -562,6 +562,7 @@ int main (int argc, char** argv)
     //goalSides.push_back(patchSide(0,boundary::west));
     gsMatrix<> points;
     real_t error = 1;
+    index_t numDofs = assembler->numDofsL();
 
     real_t refTol = target / bandwidth; // refine if error is above
     real_t crsTol = target * bandwidth; // coarsen if error is below
@@ -646,7 +647,9 @@ int main (int argc, char** argv)
                 helper.computeError(mp_def,U_patch,goalSides,points,interior,false);
 
             error = std::abs(helper.error());
-            gsInfo<<"Error = "<<error<<"\n";
+            numDofs = assembler->numDofsL();
+
+            gsInfo<<"Error = "<<error<<", numDofs = "<<numDofs<<"\n";
             loadstep_errors.push_back(std::make_pair(assembler->numDofsL(),error));
 
             std::vector<real_t> errorVec = helper.errors();
@@ -783,7 +786,7 @@ int main (int argc, char** argv)
                     collection,Smembrane,Sflexural,Smembrane_p);
 
         if (write)
-            writeStepOutput(U,L,indicator,deformation, dirname + "/" + wn, writePoints,1, 201);
+            writeStepOutput(U,L,indicator,deformation, error, numDofs, dirname + "/" + wn, writePoints,1, 201);
 
         write_errors.push_back(loadstep_errors);
     }
@@ -833,7 +836,9 @@ void initStepOutput(const std::string name, const gsMatrix<T> & points)
         }
 
   file  << "Lambda" << ","
-        << "Indicator"
+        << "Indicator" << ","
+        << "NumDofs" << ","
+        << "Error"
         << "\n";
   file.close();
 
@@ -841,7 +846,7 @@ void initStepOutput(const std::string name, const gsMatrix<T> & points)
 }
 
 template <class T>
-void writeStepOutput(const gsMatrix<T> & U, const T L, const T indicator, const gsMultiPatch<T> & deformation, const std::string name, const gsMatrix<T> & points, const index_t extreme, const index_t kmax) // extreme: the column of point indices to compute the extreme over (default -1)
+void writeStepOutput(const gsMatrix<T> & U, const T L, const T indicator, const gsMultiPatch<T> & deformation, const T error, const index_t nDoFs, const std::string name, const gsMatrix<T> & points, const index_t extreme, const index_t kmax) // extreme: the column of point indices to compute the extreme over (default -1)
 {
   gsMatrix<T> P(2,1), Q(2,1);
   gsMatrix<T> out(3,points.cols());
@@ -896,6 +901,8 @@ void writeStepOutput(const gsMatrix<T> & U, const T L, const T indicator, const 
 
     file  << L << ","
           << indicator << ","
+          << nDoFs << ","
+          << error << ","
           << "\n";
   }
   else
