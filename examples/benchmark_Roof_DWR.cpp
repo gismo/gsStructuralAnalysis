@@ -777,7 +777,7 @@ int main (int argc, char** argv)
 
         deformation = mp_def;
         for (index_t p=0; p!=mp_def.nPatches(); p++)
-            deformation.patch(p).coefs() =- mp.patch(p).coefs();
+            deformation.patch(p).coefs() -= mp.patch(p).coefs();
 
         PlotResults(k,assembler,mp,mp_def,plot,stress,write,mesh,deformed,dirname,output,
                     collection,Smembrane,Sflexural,Smembrane_p);
