@@ -206,7 +206,7 @@ int main (int argc, char** argv)
     gsOptionList opts;
     fd.getFirst<gsOptionList>(opts);
 
-    gsMultiPatch<> mp;
+    gsMultiPatch<> mp, mp0;
 
     real_t thickness;
     real_t Exx, Eyy, Gxy;
@@ -245,8 +245,11 @@ int main (int argc, char** argv)
     else
         gsReadFile<>("surface/scordelis_lo_roof_shallow_symm.xml", mp);
 
+    mp0 = mp;
+
     for (index_t i = 0; i< numElevate; ++i)
         mp.patch(0).degreeElevate();    // Elevate the degree
+
 
     // Cast all patches of the mp object to THB splines
     if (adaptiveMesh)
@@ -281,7 +284,6 @@ int main (int argc, char** argv)
 
     // Boundary conditions
     gsBoundaryConditions<> BCs;
-    BCs.setGeoMap(mp);
     gsPointLoads<real_t> pLoads = gsPointLoads<real_t>();
 
     // Initiate Surface forces
@@ -342,7 +344,7 @@ int main (int argc, char** argv)
         BCs.addCondition(boundary::east, condition_type::clamped, 0, 0, false, 2 ); // unknown 2 - z
     }
 
-    BCs.setGeoMap(mp);
+    BCs.setGeoMap(mp0);
 
     Load = -1e1;
     // Point loads
@@ -376,7 +378,7 @@ int main (int argc, char** argv)
       initStepOutput(dirname + "/" + wn, writePoints);
 
     // Initialise solution object
-    gsMultiPatch<> mp_def = mp;
+    gsMultiPatch<> mp_def = mp0;
 
     gsMaterialMatrixBase<real_t>* materialMatrix;
 
@@ -714,6 +716,9 @@ int main (int argc, char** argv)
                     gsMatrix<> coefs;
 
                     // Which of those are needed?
+
+                    gsQuasiInterpolate<real_t>::localIntpl(basisL.basis(0), mp.patch(0), coefs);
+                    mp.patch(0) = *basisL.basis(0).makeGeometry(give(coefs));
 
                     gsQuasiInterpolate<real_t>::localIntpl(basisL.basis(0), mp_def.patch(0), coefs);
                     mp_def.patch(0) = *basisL.basis(0).makeGeometry(give(coefs));
