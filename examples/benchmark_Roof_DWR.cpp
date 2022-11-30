@@ -91,7 +91,7 @@ template <class T>
 void initStepOutput( const std::string name, const gsMatrix<T> & points);
 
 template <class T>
-void writeStepOutput(const gsMatrix<T> & U, const T L, const T indicator, const gsMultiPatch<T> & deformation, const T error, const index_t nDoFs, const std::string name, const gsMatrix<T> & points, const index_t extreme=-1, const index_t kmax=100);
+void writeStepOutput(const T deformationNorm, const T L, const T indicator, const gsMultiPatch<T> & deformation, const T error, const index_t nDoFs, const std::string name, const gsMatrix<T> & points, const index_t extreme=-1, const index_t kmax=100);
 
 template <class T>
 void PlotResults(   index_t k,
@@ -782,11 +782,13 @@ int main (int argc, char** argv)
         for (index_t p=0; p!=mp_def.nPatches(); p++)
             deformation.patch(p).coefs() -= mp.patch(p).coefs();
 
+        real_t deformationNorm = assembler->deformationNorm(deformation);
+
         PlotResults(k,assembler,mp,mp_def,plot,stress,write,mesh,deformed,dirname,output,
                     collection,Smembrane,Sflexural,Smembrane_p);
 
         if (write)
-            writeStepOutput(U,L,indicator,deformation, error, numDofs, dirname + "/" + wn, writePoints,1, 201);
+            writeStepOutput(deformationNorm,L,indicator,deformation, error, numDofs, dirname + "/" + wn, writePoints,1, 201);
 
         write_errors.push_back(loadstep_errors);
     }
@@ -846,7 +848,7 @@ void initStepOutput(const std::string name, const gsMatrix<T> & points)
 }
 
 template <class T>
-void writeStepOutput(const gsMatrix<T> & U, const T L, const T indicator, const gsMultiPatch<T> & deformation, const T error, const index_t nDoFs, const std::string name, const gsMatrix<T> & points, const index_t extreme, const index_t kmax) // extreme: the column of point indices to compute the extreme over (default -1)
+void writeStepOutput(const T deformationNorm, const T L, const T indicator, const gsMultiPatch<T> & deformation, const T error, const index_t nDoFs, const std::string name, const gsMatrix<T> & points, const index_t extreme, const index_t kmax) // extreme: the column of point indices to compute the extreme over (default -1)
 {
   gsMatrix<T> P(2,1), Q(2,1);
   gsMatrix<T> out(3,points.cols());
@@ -864,7 +866,7 @@ void writeStepOutput(const gsMatrix<T> & U, const T L, const T indicator, const 
   if (extreme==-1)
   {
     file  << std::setprecision(6)
-          << U.norm() << ",";
+          << deformationNorm << ",";
           for (index_t p=0; p!=points.cols(); p++)
           {
             file<< out(0,p) << ","
@@ -891,7 +893,7 @@ void writeStepOutput(const gsMatrix<T> & U, const T L, const T indicator, const 
     }
 
     file  << std::setprecision(6)
-          << U.norm() << ",";
+          << deformationNorm << ",";
           for (index_t p=0; p!=points.cols(); p++)
           {
             file<< out(0,p) << ","
