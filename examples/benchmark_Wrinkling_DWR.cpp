@@ -667,7 +667,7 @@ int main (int argc, char** argv)
 
         deformation = mp_def;
         for (index_t p=0; p!=mp_def.nPatches(); p++)
-            deformation.patch(p).coefs() -= mp.patch(p).coefs();
+	    deformation.patch(p).coefs() -= mp.patch(p).coefs();
 
         real_t deformationNorm = assembler->deformationNorm(deformation);
 
@@ -971,7 +971,7 @@ int main (int argc, char** argv)
         /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
         /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
+	//gsInfo<<"deformation.patch(0).coefs().col(2) = "<<deformation.patch(0).coefs().col(2)<<"\n";
         deformation = mp_def;
         for (index_t p=0; p!=mp_def.nPatches(); p++)
             deformation.patch(p).coefs() -= mp.patch(p).coefs();
@@ -1127,6 +1127,7 @@ void writeStepOutput(const T deformationNorm, const T L, const T indicator, cons
   }
   else if (extreme==0 || extreme==1)
   {
+	gsInfo<<"kmax = "<<kmax<<"\n";
     gsMatrix<T> out2(kmax,points.cols()); // evaluation points in the rows, output (per coordinate) in columns
     for (int p = 0; p != points.cols(); p ++)
     {
@@ -1143,6 +1144,7 @@ void writeStepOutput(const T deformationNorm, const T L, const T indicator, cons
           << deformationNorm << ",";
           for (index_t p=0; p!=points.cols(); p++)
           {
+		gsInfo<<"out = "<<out<<"\n";
             file<< out(0,p) << ","
                 << out(1,p) << ","
                 << std::max(abs(out2.col(p).maxCoeff()),abs(out2.col(p).minCoeff())) << ",";
