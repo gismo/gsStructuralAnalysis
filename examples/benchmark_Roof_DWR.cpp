@@ -876,6 +876,8 @@ void writeStepOutput(const T deformationNorm, const T L, const T indicator, cons
 
     file  << L << ","
           << indicator << ","
+          << nDoFs << ","
+          << error << ","
           << "\n";
   }
   else if (extreme==0 || extreme==1)

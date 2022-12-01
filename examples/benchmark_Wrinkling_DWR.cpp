@@ -85,7 +85,7 @@ template <class T>
 void initStepOutput( const std::string name, const gsMatrix<T> & points);
 
 template <class T>
-void writeStepOutput(const gsMatrix<T> & U, const T L, const T indicator, const gsMultiPatch<T> & deformation, const std::string name, const gsMatrix<T> & points, const index_t extreme=-1, const index_t kmax=100);
+void writeStepOutput(const T deformationNorm, const T L, const T indicator, const gsMultiPatch<T> & deformation, const T error, const index_t nDoFs, const std::string name, const gsMatrix<T> & points, const index_t extreme=-1, const index_t kmax=100);
 
 void initSectionOutput( const std::string dirname, bool undeformed=false);
 
@@ -261,7 +261,7 @@ int main (int argc, char** argv)
     E_modulus = 2*mu*(1+PoissonRatio);
     gsDebug<<"E = "<<E_modulus<<"; nu = "<<PoissonRatio<<"; mu = "<<mu<<"; ratio = "<<Ratio<<"\n";
 
-    gsMultiPatch<> mp,mp_def;
+    gsMultiPatch<> mp,mp_def, mp0;
 
     std::vector<boxSide> sides;
     sides.push_back(boundary::west);
@@ -274,6 +274,8 @@ int main (int argc, char** argv)
     mp.patch(0).coefs().col(0) *= aDim/2.;
     mp.patch(0).coefs().col(1) *= bDim/2.;
     mp.embed(3);
+
+    mp0 = mp;
 
     for (index_t i = 0; i< numElevate; ++i)
         mp.patch(0).degreeElevate();    // Elevate the degree
@@ -316,7 +318,7 @@ int main (int argc, char** argv)
 
     // Boundary conditions
     gsBoundaryConditions<> BCs;
-    BCs.setGeoMap(mp);
+    BCs.setGeoMap(mp0);
     gsPointLoads<real_t> pLoads = gsPointLoads<real_t>();
 
     std::string output = "solution";
@@ -584,6 +586,7 @@ int main (int argc, char** argv)
     //goalSides.push_back(patchSide(0,boundary::west));
     gsMatrix<> points;
     real_t error = 1;
+    index_t numDofs = assembler->numDofsL();
 
     // PRE-BUCKLING
     bool unstable = false;
@@ -643,7 +646,7 @@ int main (int argc, char** argv)
         if (plot)
         {
             std::string fileName = dirname + "/" + "error_field" + util::to_string(k) + "_" + util::to_string(it);
-            helper.computeError(mp_def,U_patch,goalSides,points,interior,fileName,1000,false,mesh);
+            helper.computeError(mp_def,U_patch,goalSides,points,interior,false,fileName,1000,false,mesh);
             fileName = "error_field" + util::to_string(k) + "_" + util::to_string(it) ;
             for (size_t p=0; p!=mp.nPatches(); p++)
             {
@@ -656,6 +659,7 @@ int main (int argc, char** argv)
             helper.computeError(mp_def,U_patch,goalSides,points,interior);
 
         error = std::abs(helper.error());
+        numDofs = assembler->numDofsL();
 
         gsInfo<<"Error = "<<error<<"\n";
         loadstep_errors.push_back(std::make_pair(assembler->numDofsL(),error));
@@ -663,14 +667,15 @@ int main (int argc, char** argv)
 
         deformation = mp_def;
         for (index_t p=0; p!=mp_def.nPatches(); p++)
-            deformation.patch(p).coefs() =- mp.patch(p).coefs();
+            deformation.patch(p).coefs() -= mp.patch(p).coefs();
 
+        real_t deformationNorm = assembler->deformationNorm(deformation);
 
         PlotResults(k,assembler,mp,mp_def,plot,stress,write,mesh,deformed,dirname,output,
                     collection,Smembrane,Sflexural,Smembrane_p);
 
         if (write)
-            writeStepOutput(U,L,indicator,deformation, dirname + "/" + wn, writePoints,1, 201);
+            writeStepOutput(deformationNorm,L,indicator,deformation, error, numDofs, dirname + "/" + wn, writePoints,1, 201);
 
         if (crosssection && cross_coordinate!=-1)
             writeSectionOutput(deformation,dirname,cross_coordinate,cross_val,201,false);
@@ -716,13 +721,15 @@ int main (int argc, char** argv)
 
         deformation = mp_def;
         for (index_t p=0; p!=mp_def.nPatches(); p++)
-            deformation.patch(p).coefs() =- mp.patch(p).coefs();
+            deformation.patch(p).coefs() -= mp.patch(p).coefs();
+
+        real_t deformationNorm = assembler->deformationNorm(deformation);
 
         PlotResults(k,assembler,mp,mp_def,plot,stress,write,mesh,deformed,dirname,output,
                     collection,Smembrane,Sflexural,Smembrane_p);
 
         if (write)
-            writeStepOutput(U,L,indicator,deformation, dirname + "/" + wn, writePoints,1, 201);
+            writeStepOutput(deformationNorm,L,indicator,deformation, error, numDofs, dirname + "/" + wn, writePoints,1, 201);
 
         if (crosssection && cross_coordinate!=-1)
             writeSectionOutput(deformation,dirname,cross_coordinate,cross_val,201,false);
@@ -822,7 +829,7 @@ int main (int argc, char** argv)
             if (plot)
             {
                 std::string fileName = dirname + "/" + "error_field" + util::to_string(k) + "_" + util::to_string(it);
-                helper.computeError(mp_def,U_patch,goalSides,points,interior,fileName,1000,false,mesh);
+                helper.computeError(mp_def,U_patch,goalSides,points,interior,false,fileName,1000,false,mesh);
                 fileName = "error_field" + util::to_string(k) + "_" + util::to_string(it) ;
                 for (size_t p=0; p!=mp.nPatches(); p++)
                 {
@@ -835,7 +842,8 @@ int main (int argc, char** argv)
                 helper.computeError(mp_def,U_patch,goalSides,points,interior);
 
             error = std::abs(helper.error());
-            gsInfo<<"Error = "<<error<<"\n";
+            numDofs = assembler->numDofsL();
+            gsInfo<<"Error = "<<error<<", numDofs = "<<numDofs<<"\n";
             loadstep_errors.push_back(std::make_pair(assembler->numDofsL(),error));
 
             std::vector<real_t> errorVec = helper.errors();
@@ -906,6 +914,9 @@ int main (int argc, char** argv)
 
                     // Which of those are needed?
 
+                    gsQuasiInterpolate<real_t>::localIntpl(basisL.basis(0), mp.patch(0), coefs);
+                    mp.patch(0) = *basisL.basis(0).makeGeometry(give(coefs));
+
                     gsQuasiInterpolate<real_t>::localIntpl(basisL.basis(0), mp_def.patch(0), coefs);
                     mp_def.patch(0) = *basisL.basis(0).makeGeometry(give(coefs));
 
@@ -965,11 +976,13 @@ int main (int argc, char** argv)
         for (index_t p=0; p!=mp_def.nPatches(); p++)
             deformation.patch(p).coefs() -= mp.patch(p).coefs();
 
+        real_t deformationNorm = assembler->deformationNorm(deformation);
+
         PlotResults(k,assembler,mp,mp_def,plot,stress,write,mesh,deformed,dirname,output,
                     collection,Smembrane,Sflexural,Smembrane_p);
 
         if (write)
-            writeStepOutput(U,L,indicator,deformation, dirname + "/" + wn, writePoints,1, 201);
+            writeStepOutput(deformationNorm,L,indicator,deformation, error, numDofs, dirname + "/" + wn, writePoints,1, 201);
 
         if (crosssection && cross_coordinate!=-1)
             writeSectionOutput(deformation,dirname,cross_coordinate,cross_val,201,false);
@@ -1070,7 +1083,9 @@ void initStepOutput(const std::string name, const gsMatrix<T> & points)
         }
 
   file  << "Lambda" << ","
-        << "Indicator"
+        << "Indicator" << ","
+        << "NumDofs" << ","
+        << "Error"
         << "\n";
   file.close();
 
@@ -1078,7 +1093,7 @@ void initStepOutput(const std::string name, const gsMatrix<T> & points)
 }
 
 template <class T>
-void writeStepOutput(const gsMatrix<T> & U, const T L, const T indicator, const gsMultiPatch<T> & deformation, const std::string name, const gsMatrix<T> & points, const index_t extreme, const index_t kmax) // extreme: the column of point indices to compute the extreme over (default -1)
+void writeStepOutput(const T deformationNorm, const T L, const T indicator, const gsMultiPatch<T> & deformation, const T error, const index_t nDoFs, const std::string name, const gsMatrix<T> & points, const index_t extreme, const index_t kmax) // extreme: the column of point indices to compute the extreme over (default -1)
 {
   gsMatrix<T> P(2,1), Q(2,1);
   gsMatrix<T> out(3,points.cols());
@@ -1096,7 +1111,7 @@ void writeStepOutput(const gsMatrix<T> & U, const T L, const T indicator, const 
   if (extreme==-1)
   {
     file  << std::setprecision(6)
-          << U.norm() << ",";
+          << deformationNorm << ",";
           for (index_t p=0; p!=points.cols(); p++)
           {
             file<< out(0,p) << ","
@@ -1106,6 +1121,8 @@ void writeStepOutput(const gsMatrix<T> & U, const T L, const T indicator, const 
 
     file  << L << ","
           << indicator << ","
+          << nDoFs << ","
+          << error << ","
           << "\n";
   }
   else if (extreme==0 || extreme==1)
@@ -1123,7 +1140,7 @@ void writeStepOutput(const gsMatrix<T> & U, const T L, const T indicator, const 
     }
 
     file  << std::setprecision(6)
-          << U.norm() << ",";
+          << deformationNorm << ",";
           for (index_t p=0; p!=points.cols(); p++)
           {
             file<< out(0,p) << ","
@@ -1133,6 +1150,8 @@ void writeStepOutput(const gsMatrix<T> & U, const T L, const T indicator, const 
 
     file  << L << ","
           << indicator << ","
+          << nDoFs << ","
+          << error << ","
           << "\n";
   }
   else
