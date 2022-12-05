@@ -486,7 +486,10 @@ int main (int argc, char** argv)
     apalm.options().setInt("SubIntervals",SubIntervals);
     apalm.options().setInt("MaxIt",1000);
     apalm.initialize();
+    real_t serialTime = apalm.wallTime();
     apalm.serialSolve(step+1);
+    serialTime = apalm.wallTime() - serialTime;
+    if (apalm.isMain()) gsInfo<<"Serial time = "<<serialTime<<"\n";
 
     // plot geometry
     if (apalm.isMain())
@@ -556,7 +559,10 @@ int main (int argc, char** argv)
     /////////////////////////////////////////////////////////////////////////////////////////////
     /////////////////////////////////////////////////////////////////////////////////////////////
 
+    real_t parallelTime = apalm.wallTime();
     apalm.parallelSolve();
+    parallelTime = apalm.wallTime() - parallelTime;
+    if (apalm.isMain()) gsInfo<<"Parallel time = "<<parallelTime<<"\n";
 
     /////////////////////////////////////////////////////////////////////////////////////////////
     /////////////////////////////////////////////////////////////////////////////////////////////
@@ -617,7 +623,16 @@ int main (int argc, char** argv)
       }
     }
 
-    delete arcLength;
+  if (apalm.isMain())
+  {
+    std::ofstream file;
+    file.open("times");
+    file<<"serial   time: "<<serialTime<<" s\n";
+    file<<"parallel time: "<<parallelTime<<" s\n";
+    file.close();
+  }
+
+  delete arcLength;
 
   return result;
 }

@@ -22,6 +22,9 @@ gsAPALM<T>::gsAPALM(       gsALMBase<T> * ALM,
 :
 m_ALM(ALM),
 m_dataEmpty(Data)
+#ifdef GISMO_WITH_MPI
+,m_mpi(gsMpi::init())
+#endif
 {
   GISMO_ASSERT(m_dataEmpty.empty(),"gsAPALMData must be empty; it will be used to define the options!");
   this->_defaultOptions();
@@ -32,8 +35,7 @@ m_dataEmpty(Data)
 
   // Initialize the MPI environment
   // Get the world communicator
-  const gsMpi & mpi = gsMpi::init();
-  m_comm = mpi.worldComm();
+  m_comm = m_mpi.worldComm();
   // MPI_Request req;
 
   //Get size and rank of the processor

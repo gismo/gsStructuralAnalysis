@@ -45,7 +45,11 @@ public:
   gsAPALM(      gsALMBase<T> * ALM,
               const gsAPALMData<T,solution_t> & Data);
 
-  gsAPALM() {};
+  gsAPALM()
+#ifdef GISMO_WITH_MPI
+  :m_mpi(gsMpi::init())
+#endif
+  {};
 
 private:
 
@@ -119,6 +123,8 @@ public:
 #ifdef GISMO_WITH_MPI
   bool isMain() {return (m_rank==0); }
   index_t rank() {return (m_rank); }
+  const gsMpi & mpi() { return m_mpi; }
+  real_t wallTime() { return m_mpi.wallTime(); }
 #else
   bool isMain() {return true; }
   index_t rank() {return 0; }
@@ -224,6 +230,7 @@ protected:
 
   // Conditional compilation
 #ifdef GISMO_WITH_MPI
+  const gsMpi & m_mpi;
   mutable gsMpiComm m_comm ;
   std::queue<index_t> m_workers;
 #endif
