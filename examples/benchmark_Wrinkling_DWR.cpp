@@ -583,7 +583,8 @@ int main (int argc, char** argv)
 
     gsThinShellDWRHelper<real_t> helper(assembler);
     typename gsBoxTopology::bContainer goalSides;
-    //goalSides.push_back(patchSide(0,boundary::west));
+    if (!interior)
+        goalSides.push_back(patchSide(0,boundary::west));
     gsMatrix<> points;
     real_t error = 1;
     index_t numDofs = assembler->numDofsL();
