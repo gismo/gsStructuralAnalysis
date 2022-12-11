@@ -125,6 +125,8 @@ public:
   index_t rank() {return (m_rank); }
   const gsMpi & mpi() { return m_mpi; }
   real_t wallTime() { return m_mpi.wallTime(); }
+  index_t size() { return m_proc_count; };
+
 #else
   bool isMain() {return true; }
   index_t rank() {return 0; }

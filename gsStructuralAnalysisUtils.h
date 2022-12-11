@@ -50,7 +50,7 @@ public:
         std::ofstream file;
         file.open(name,std::ofstream::out | std::ofstream::app);
         for (index_t p=0; p!=m_points.cols(); p++)
-            for (index_t h=0; h!=pointHeaders.size(); h++)
+            for (size_t h=0; h!=pointHeaders.size(); h++)
                 file<< "point"<<p<<"-"<<pointHeaders[h]<< ",";
         file.close();
     }
@@ -59,7 +59,7 @@ public:
     {
         std::ofstream file;
         file.open(name,std::ofstream::out | std::ofstream::app);
-        for (index_t h=0; h!=otherHeaders.size(); h++)
+        for (size_t h=0; h!=otherHeaders.size(); h++)
             file<<otherHeaders[h]<< ",";
         file.close();
     }

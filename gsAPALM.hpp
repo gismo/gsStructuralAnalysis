@@ -31,8 +31,6 @@ m_dataEmpty(Data)
   this->_getOptions();
 
 #ifdef GISMO_WITH_MPI
-  gsInfo << "Gismo was compiled with MPI support.\n";
-
   // Initialize the MPI environment
   // Get the world communicator
   m_comm = m_mpi.worldComm();

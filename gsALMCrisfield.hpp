@@ -257,7 +257,7 @@ void gsALMCrisfield<T>::computeLambdasModified()
 
       T eta1 = std::min(etas[0],etas[1]);
       T eta2 = std::max(etas[0],etas[1]);
-      gsInfo<<"eta 1 = "<<eta1<<"\t eta2 = "<<eta2<<"\n";
+      if (m_verbose) {gsInfo<<"eta 1 = "<<eta1<<"\t eta2 = "<<eta2<<"\n";}
 
       // Approach of Zhou 1995
       // m_eta = std::min(1.0,eta2);
@@ -340,7 +340,7 @@ void gsALMCrisfield<T>::computeLambdas()
       // gsInfo<<"2: dL1 = "<<m_deltaLs[0]<<"\tdL2 = "<<m_deltaLs[1]<<"\t eta = "<<m_eta<<"\n";
       computeLambdaDOT();
       // gsInfo<<"2: dL1 = "<<m_deltaL<<"\t m_deltaU.norm = "<<m_deltaU.norm()<<"\t eta = "<<m_eta<<"\n";
-      gsInfo<<"Modified Complex Root Solve\n";
+      if (m_verbose) {gsInfo<<"Modified Complex Root Solve\n";}
     }
     else
     {
@@ -348,7 +348,7 @@ void gsALMCrisfield<T>::computeLambdas()
       m_eta = 1.0;
       computeLambdasComplex();
       // gsInfo<<"3: dL1 = "<<m_deltaL<<"\t m_deltaU.norm = "<<m_deltaU.norm()<<"\t eta = "<<m_eta<<"\n";
-      gsInfo<<"Simplified Complex Root Solve\n";
+      if (m_verbose) {gsInfo<<"Simplified Complex Root Solve\n";}
       // Note: no selection of roots is needed
     }
   }

@@ -140,9 +140,12 @@ int main (int argc, char** argv)
 
     // Arc length method options
     real_t dL         = -1; // General arc length
-    real_t tol        = 1e-6;
-    real_t tolU       = 1e-6;
-    real_t tolF       = 1e-3;
+    real_t ALM_tol    = 1e-6;
+    real_t ALM_tolU   = 1e-6;
+    real_t ALM_tolF   = 1e-3;
+
+    real_t APALM_tol  = 1e-2;
+
 
     index_t verbose = 0;
 
@@ -162,8 +165,9 @@ int main (int argc, char** argv)
     cmd.addInt( "I", "Implementation", "Implementation: 1= analytical, 2= generalized, 3= spectral",  impl );
     cmd.addSwitch("composite", "Composite material", composite);
 
-    cmd.addInt("m","Method", "Arc length method; 1: Crisfield's method; 2: RIks' method.", method);
+    cmd.addInt("m","Method", "Arc length method; 1: Crisfield's method; 2: Riks' method.", method);
     cmd.addReal("L","dL", "arc length", dL);
+    cmd.addReal("T", "APALM_tol", "APALM Tolerance", APALM_tol);
     // cmd.addInt("I","inilvl", "Initial levels", iniLevels);
     // cmd.addInt("M","maxlvl", "Max levels", maxLevels);
     cmd.addInt("l","level", "Max level", maxLevel);
@@ -218,6 +222,7 @@ int main (int argc, char** argv)
 
     std::string output = "solution";
     std::string dirname = "ArcLengthResults";
+    std::string cores;
 
     gsMatrix<> writePoints(2,3);
     writePoints.col(0)<<0.0,1.0;
@@ -228,6 +233,12 @@ int main (int argc, char** argv)
       Case 0: Frustrum with constrained top boundary        (Complete cycle with -N 1200)
       Case 1: Frustrum with unconstrained top boundary      (Complete cycle with -N 850)
     */
+#ifdef GISMO_WITH_MPI
+    const gsMpi & mpi = gsMpi::init();
+    gsMpiComm comm = mpi.worldComm();
+    cores = "_ncores="+std::to_string(comm.size());
+#endif
+
     if (testCase == 0)
     {
       BCs.addCondition(boundary::north, condition_type::neumann, &neuData );
@@ -249,7 +260,7 @@ int main (int argc, char** argv)
       BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 1 );
       BCs.addCondition(boundary::west, condition_type::clamped, 0, 0, false, 2 );
 
-      dirname = dirname + "/" + "Frustrum_-r=" + std::to_string(numHref) + "-e" + std::to_string(numElevate) + "-M" + std::to_string(material) + "_solution";
+      dirname = dirname + "/" + "Frustrum_-r=" + std::to_string(numHref) + "-e" + std::to_string(numElevate) + "-M" + std::to_string(material) + "_solution" + cores;
       if (dL == -1 && material!=3) { dL = 5e-2; }
       if (dL == -1 && material==3) { dL = 4e-2; }
     }
@@ -272,7 +283,7 @@ int main (int argc, char** argv)
       BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 1 );
       BCs.addCondition(boundary::west, condition_type::clamped, 0, 0, false, 2 );
 
-      dirname = dirname + "/" + "Frustrum2_-r=" + std::to_string(numHref) + "-e" + std::to_string(numElevate) + "-M" + std::to_string(material) + "_solution";
+      dirname = dirname + "/" + "Frustrum2_-r=" + std::to_string(numHref) + "-e" + std::to_string(numElevate) + "-M" + std::to_string(material) + "_solution" + cores;
       if (dL == -1) { dL = 4e-2; }
     }
     else
@@ -428,9 +439,9 @@ int main (int argc, char** argv)
     arcLength->options().setSwitch("AdaptiveLength",adaptive);
     arcLength->options().setInt("AdaptiveIterations",5);
     arcLength->options().setReal("Scaling",0.0);
-    arcLength->options().setReal("Tol",tol);
-    arcLength->options().setReal("TolU",tolU);
-    arcLength->options().setReal("TolF",tolF);
+    arcLength->options().setReal("Tol",ALM_tol);
+    arcLength->options().setReal("TolU",ALM_tolU);
+    arcLength->options().setReal("TolF",ALM_tolF);
     arcLength->options().setInt("MaxIter",maxit);
     arcLength->options().setSwitch("Verbose",(verbose>0));
     arcLength->options().setReal("Relaxation",relax);
@@ -479,13 +490,19 @@ int main (int argc, char** argv)
     gsAPALMData<real_t,solution_t> apalmData;
     apalmData.options().setInt("MaxLevel",maxLevel);
     apalmData.options().setInt("Verbose",verbose);
-    apalmData.options().setReal("Tolerance",1e-2);
+    apalmData.options().setReal("Tolerance",APALM_tol);
 
     gsAPALMFrustrum<real_t> apalm(arcLength,apalmData,assembler,dirname,refPoints,refPatches);
+
+#ifdef GISMO_WITH_MPI
+    gsInfo << "Gismo was compiled with MPI support with "<<apalm.size()<<" cores.\n";
+#endif
+
     apalm.options().setSwitch("Verbose",(verbose>0));
     apalm.options().setInt("SubIntervals",SubIntervals);
     apalm.options().setInt("MaxIt",1000);
     apalm.initialize();
+
     real_t serialTime = apalm.wallTime();
     apalm.serialSolve(step+1);
     serialTime = apalm.wallTime() - serialTime;
