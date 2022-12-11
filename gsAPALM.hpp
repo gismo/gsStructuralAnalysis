@@ -450,6 +450,7 @@ gsAPALM<T>::parallelSolve_impl()
 
     dataEntry = m_data.branch(branch).pop();
     ID = std::get<0>(dataEntry);
+    gsInfo<<"ID = "<<ID<<"\n";
     bool success = m_data.branch(branch).getReferenceByID(ID,reference);
     GISMO_ASSERT(success,"Reference not found");
     this->_parallelSolve_worker(dataEntry,
@@ -867,8 +868,8 @@ void gsAPALM<T>::_recvWorkerToMain( index_t &                   sourceID,
   index_t vectorSize;
 
   m_comm.recv(&branch         ,1,sourceID,tag++, status);
-  gsMPIInfo(m_rank)<<"Receiving data on "<<m_rank<<" from "<<sourceID<<"\n";
   if (sourceID==MPI_ANY_SOURCE)  sourceID = status->MPI_SOURCE; // Overwrite source ID to be unique
+  gsMPIInfo(m_rank)<<"Receiving data on "<<m_rank<<" from "<<sourceID<<"\n";
   m_comm.recv(&jobID          ,1,sourceID,tag++, status);
   m_comm.recv(&upperDistance  ,1,sourceID,tag++, status);
   m_comm.recv(&lowerDistance  ,1,sourceID,tag++, status);
