@@ -517,7 +517,7 @@ int main (int argc, char** argv)
           flexuralStress = gsField<>(mp,flexuralStresses, true);
 
         gsPiecewiseFunction<> membraneStresses_p;
-        assembler->constructStress(mp_def,membraneStresses_p,stress_type::principal_stress_membrane);
+        assembler->constructStress(mp_def,membraneStresses_p,stress_type::principal_stress);
         if (deformed)
           membraneStress_p = gsField<>(mp_def,membraneStresses_p, true);
         else

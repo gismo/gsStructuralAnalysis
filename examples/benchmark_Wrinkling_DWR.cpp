@@ -782,6 +782,9 @@ int main (int argc, char** argv)
         bool bandtest = (bandwidth==1) ? error > refTol : ((error < crsTol )|| (error >= refTol));
         while (bandtest && it < maxIt && (refined || coarsened))
         {
+            gsInfo<<"Iteration "<<it<<"/"<<maxIt<<", refTol < prev error < crsTol : "<<refTol<<" < "<<error<<" < "<<crsTol<<"\n";
+            gsInfo<<"New basis (L): \n"<<mp.basis(0)<<"\n";
+
             assembler->assembleL();
             Force = assembler->primalL();
             Uold = assembler->constructSolutionVectorL(Uold_patch);

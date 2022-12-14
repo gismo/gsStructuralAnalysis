@@ -91,7 +91,7 @@ template <class T>
 void initStepOutput( const std::string name, const gsMatrix<T> & points);
 
 template <class T>
-void writeStepOutput(const T deformationNorm, const T L, const T indicator, const gsMultiPatch<T> & deformation, const T error, const index_t nDoFs, const std::string name, const gsMatrix<T> & points, const index_t extreme=-1, const index_t kmax=100);
+void writeStepOutput(const T deformationNorm, const T duNorm, const T duOldNorm, const T L, const T indicator, const gsMultiPatch<T> & deformation, const T error, const index_t nDoFs, const std::string name, const gsMatrix<T> & points, const index_t extreme=-1, const index_t kmax=100);
 
 template <class T>
 void PlotResults(   index_t k,
@@ -626,7 +626,7 @@ int main (int argc, char** argv)
             // Deformation (primal)
             assembler->constructMultiPatchL(U,U_patch);
             // delta Deformation
-            assembler->constructMultiPatchL(U,deltaU_patch);
+            assembler->constructMultiPatchL(deltaU,deltaU_patch);
 
             /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
             // ERROR ESTIMATION PART
@@ -783,13 +783,15 @@ int main (int argc, char** argv)
         for (index_t p=0; p!=mp_def.nPatches(); p++)
             deformation.patch(p).coefs() -= mp.patch(p).coefs();
 
-        real_t deformationNorm = assembler->deformationNorm(deformation);
+        real_t deformationNorm  = assembler->deformationNorm(deformation);
+        real_t duNorm           = assembler->deformationNorm(deltaU_patch);
+        real_t duOldNorm        = assembler->deformationNorm(deltaUold_patch);
 
         PlotResults(k,assembler,mp,mp_def,plot,stress,write,mesh,deformed,dirname,output,
                     collection,Smembrane,Sflexural,Smembrane_p);
 
         if (write)
-            writeStepOutput(deformationNorm,L,indicator,deformation, error, numDofs, dirname + "/" + wn, writePoints,1, 201);
+            writeStepOutput(deformationNorm,duNorm,duOldNorm,L,indicator,deformation, error, numDofs, dirname + "/" + wn, writePoints,1, 201);
 
         write_errors.push_back(loadstep_errors);
     }
@@ -830,7 +832,9 @@ void initStepOutput(const std::string name, const gsMatrix<T> & points)
   std::ofstream file;
   file.open(name,std::ofstream::out);
   file  << std::setprecision(20)
-        << "Deformation norm" << ",";
+        << "Deformation norm" << ","
+        << "DU norm" << ","
+        << "DU old norm" << ",";
         for (index_t k=0; k!=points.cols(); k++)
         {
           file<< "point "<<k<<" - x" << ","
@@ -849,7 +853,7 @@ void initStepOutput(const std::string name, const gsMatrix<T> & points)
 }
 
 template <class T>
-void writeStepOutput(const T deformationNorm, const T L, const T indicator, const gsMultiPatch<T> & deformation, const T error, const index_t nDoFs, const std::string name, const gsMatrix<T> & points, const index_t extreme, const index_t kmax) // extreme: the column of point indices to compute the extreme over (default -1)
+void writeStepOutput(const T deformationNorm, const T duNorm, const T duOldNorm, const T L, const T indicator, const gsMultiPatch<T> & deformation, const T error, const index_t nDoFs, const std::string name, const gsMatrix<T> & points, const index_t extreme, const index_t kmax) // extreme: the column of point indices to compute the extreme over (default -1)
 {
   gsMatrix<T> P(2,1), Q(2,1);
   gsMatrix<T> out(3,points.cols());
