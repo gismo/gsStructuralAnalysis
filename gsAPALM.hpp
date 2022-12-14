@@ -872,7 +872,6 @@ void gsAPALM<T>::_recvWorkerToMain( index_t &                   sourceID,
 
   index_t tag = 0;
   index_t size;
-  index_t vectorSize;
 
   MPI_Status  status;
   MPI_Request req_meta[4];
