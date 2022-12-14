@@ -322,8 +322,6 @@ gsAPALM<T>::parallelSolve_impl()
     {
       gsMPIInfo(m_rank)<<njobs<<" job(s) running\n";
 
-      MPI_Status status;
-
       index_t source = MPI_ANY_SOURCE;
       this->_recvWorkerToMain(source,
                               branch,
@@ -331,8 +329,7 @@ gsAPALM<T>::parallelSolve_impl()
                               distances,
                               stepSolutions,
                               upperDistance,
-                              lowerDistance,
-                              &status);
+                              lowerDistance);
 
       m_data.branch(branch).submit(ID,distances,stepSolutions,upperDistance,lowerDistance);
       m_data.branch(branch).finishJob(ID);
@@ -680,62 +677,58 @@ void gsAPALM<T>::_sendMainToWorker( const index_t &         workerID,
 
   index_t     ID;
   T           dL0;
-  solution_t  start, prev, next;
-  gsVector<T> sol;
-  T           load;
+  solution_t  start,    prev,     next;
+  gsVector<T> startU,   prevU,    nextU,    refU;
+  index_t     startSize,prevSize, nextSize, refSize;
+  T           startL,   prevL,    nextL,    refL;
 
   T           tstart, tend;
-  index_t     level;
-
-  index_t     vectorSize;
-
-  index_t tag = 0;
 
   std::tie(ID,dL0,start,prev,next) = dataEntry;
   std::tie(tstart,tend) = dataInterval;
-  level = dataLevel;
 
-  MPI_Request req;
-  m_comm.isend(&ID        ,1,workerID,&req,tag++);
-  m_comm.isend(&branch    ,1,workerID,&req,tag++);
-  m_comm.isend(&dL0       ,1,workerID,&req,tag++);
-  m_comm.isend(&tstart    ,1,workerID,&req,tag++);
-  m_comm.isend(&tend      ,1,workerID,&req,tag++);
-  m_comm.isend(&dataLevel ,1,workerID,&req,tag++);
+  std::tie(startU,startL) = start;
+  startSize = startU.size();
+  std::tie(prevU,prevL) = prev;
+  prevSize  = prevU.size();
+  std::tie(nextU,nextL) = next;
+  nextSize  = nextU.size();
+  std::tie(refU,refL) = dataReference;
+  refSize   = refU.size();
 
-  std::tie(sol,load) = start;
-  vectorSize = sol.size();
-  m_comm.isend(&vectorSize,1,workerID,        &req,tag++);
-  m_comm.isend(sol.data(),sol.size(),workerID,&req,tag++);
-  m_comm.isend(&load,1,workerID,              &req,tag++);
+  MPI_Request req[18];
+  m_comm.isend(&ID        ,1,workerID,&req[0] ,0 );
+  m_comm.isend(&branch    ,1,workerID,&req[1] ,1 );
+  m_comm.isend(&dL0       ,1,workerID,&req[2] ,2 );
+  m_comm.isend(&tstart    ,1,workerID,&req[3] ,3 );
+  m_comm.isend(&tend      ,1,workerID,&req[4] ,4 );
+  m_comm.isend(&dataLevel ,1,workerID,&req[5] ,5 );
 
-  std::tie(sol,load) = prev;
-  vectorSize = sol.size();
-  m_comm.isend(&vectorSize,1,workerID,        &req,tag++);
-  m_comm.isend(sol.data(),sol.size(),workerID,&req,tag++);
-  m_comm.isend(&load,1,workerID,              &req,tag++);
+  m_comm.isend(&startSize ,1,workerID,&req[6] ,6 );
+  m_comm.isend(&startL    ,1,workerID,&req[7] ,7 );
 
-  std::tie(sol,load) = next;
-  vectorSize = sol.size();
-  m_comm.isend(&vectorSize,1,workerID,        &req,tag++);
-  m_comm.isend(sol.data(),sol.size(),workerID,&req,tag++);
-  m_comm.isend(&load,1,workerID,              &req,tag++);
+  m_comm.isend(&prevSize  ,1,workerID,&req[8] ,8 );
+  m_comm.isend(&prevL     ,1,workerID,&req[9] ,9 );
 
-  std::tie(sol,load) = dataReference;
-  vectorSize = sol.size();
-  m_comm.isend(&vectorSize,1,workerID,        &req,tag++);
-  m_comm.isend(sol.data(),sol.size(),workerID,&req,tag++);
-  m_comm.isend(&load,1,workerID,              &req,tag++);
+  m_comm.isend(&nextSize  ,1,workerID,&req[10],10);
+  m_comm.isend(&nextL     ,1,workerID,&req[11],11);
+
+  m_comm.isend(&refSize   ,1,workerID,&req[12],12);
+  m_comm.isend(&refL      ,1,workerID,&req[13],13);
+
+  m_comm.isend(startU.data(), startSize,workerID,&req[14],14);
+  m_comm.isend(prevU.data(),  prevSize, workerID,&req[15],15);
+  m_comm.isend(nextU.data(),  nextSize, workerID,&req[16],16);
+  m_comm.isend(refU.data(),   refSize,  workerID,&req[17],17);
 }
 
 template <class T>
 void gsAPALM<T>::_sendMainToWorker( const index_t &   workerID,
                                     const bool &      stop )
 {
-  // gsMPIInfo(m_rank)<<"Sending stop signal from "<<m_rank<<" to "<<workerID<<"\n";
-
-  MPI_Request req;
-  m_comm.isend(&stop,1,workerID,&req,0);
+  // when we handle the stop signal with isend/irecv, we get a deadlock
+  gsMPIInfo(m_rank)<<"Sending stop signal from "<<m_rank<<" to "<<workerID<<"\n";
+  m_comm.send(&stop,1,workerID,99);
 }
 
 template <class T>
@@ -751,72 +744,69 @@ void gsAPALM<T>::_recvMainToWorker( const index_t &   sourceID,
                                           std::tuple<index_t, T     , solution_t, solution_t, solution_t> & dataEntry,
                                           std::pair<T,T> &  dataInterval,
                                           index_t &         dataLevel,
-                                          solution_t &      dataReference,
-                                          MPI_Status *      status)
+                                          solution_t &      dataReference)
 {
   gsMPIInfo(m_rank)<<"Receiving data on "<<m_rank<<" from "<<sourceID<<"\n";
 
   index_t     ID;
   T           dL0;
-  solution_t  start, prev, next;
-  gsVector<T> sol;
-  T           load;
+  solution_t  start,    prev,     next;
+  gsVector<T> startU,   prevU,    nextU,    refU;
+  index_t     startSize,prevSize, nextSize, refSize;
+  T           startL,   prevL,    nextL,    refL;
 
   T           tstart, tend;
-  index_t     level;
 
-  index_t     vectorSize;
+  MPI_Request req[14];
+  m_comm.irecv(&ID        ,1,sourceID,&req[0] ,0 );
+  m_comm.irecv(&branch    ,1,sourceID,&req[1] ,1 );
+  m_comm.irecv(&dL0       ,1,sourceID,&req[2] ,2 );
+  m_comm.irecv(&tstart    ,1,sourceID,&req[3] ,3 );
+  m_comm.irecv(&tend      ,1,sourceID,&req[4] ,4 );
+  m_comm.irecv(&dataLevel ,1,sourceID,&req[5] ,5 );
 
-  index_t tag = 0;
+  m_comm.irecv(&startSize ,1,sourceID,&req[6] ,6 );
+  m_comm.irecv(&startL    ,1,sourceID,&req[7] ,7 );
 
-  level = dataLevel;
+  m_comm.irecv(&prevSize  ,1,sourceID,&req[8] ,8 );
+  m_comm.irecv(&prevL     ,1,sourceID,&req[9] ,9 );
 
-  m_comm.recv(&ID        ,1,sourceID,tag++, status);
-  m_comm.recv(&branch    ,1,sourceID,tag++, status);
-  m_comm.recv(&dL0       ,1,sourceID,tag++, status);
+  m_comm.irecv(&nextSize  ,1,sourceID,&req[10],10);
+  m_comm.irecv(&nextL     ,1,sourceID,&req[11],11);
 
-  m_comm.recv(&tstart    ,1,sourceID,tag++, status);
-  m_comm.recv(&tend      ,1,sourceID,tag++, status);
+  m_comm.irecv(&refSize   ,1,sourceID,&req[12],12);
+  m_comm.irecv(&refL      ,1,sourceID,&req[13],13);
 
+  MPI_Waitall( 14, req, MPI_STATUSES_IGNORE );
   dataInterval = std::make_pair(tstart,tend);
-  m_comm.recv(&dataLevel ,1,sourceID,tag++, status);
 
+  startU.resize(startSize);
+  prevU .resize(prevSize);
+  nextU .resize(nextSize);
+  refU  .resize(refSize);
 
-  m_comm.recv(&vectorSize,1,        sourceID,tag++, status);
-  sol.resize(vectorSize);
-  m_comm.recv(sol.data(),sol.size(),sourceID,tag++, status);
-  m_comm.recv(&load,1,              sourceID,tag++, status);
-  start = std::make_pair(sol,load);
+  MPI_Request req_data[4];
+  m_comm.irecv(startU.data(), startU.size(),sourceID,&req_data[0],14);
+  m_comm.irecv(prevU.data(),  prevU.size(), sourceID,&req_data[1],15);
+  m_comm.irecv(nextU.data(),  nextU.size(), sourceID,&req_data[2],16);
+  m_comm.irecv(refU.data(),   refU.size(),  sourceID,&req_data[3],17);
 
-  m_comm.recv(&vectorSize,1,        sourceID,tag++, status);
-  sol.resize(vectorSize);
-  m_comm.recv(sol.data(),sol.size(),sourceID,tag++, status);
-  m_comm.recv(&load,1,              sourceID,tag++, status);
-  prev = std::make_pair(sol,load);
+  MPI_Waitall( 4, req_data, MPI_STATUSES_IGNORE );
 
-  m_comm.recv(&vectorSize,1,        sourceID,tag++, status);
-  sol.resize(vectorSize);
-  m_comm.recv(sol.data(),sol.size(),sourceID,tag++, status);
-  m_comm.recv(&load,1,              sourceID,tag++, status);
-  next = std::make_pair(sol,load);
-
-  m_comm.recv(&vectorSize,1,        sourceID,tag++, status);
-  sol.resize(vectorSize);
-  m_comm.recv(sol.data(),sol.size(),sourceID,tag++, status);
-  m_comm.recv(&load,1,              sourceID,tag++, status);
-  dataReference = std::make_pair(sol,load);
+  start         = std::make_pair(startU,startL);
+  prev          = std::make_pair(prevU ,prevL);
+  next          = std::make_pair(nextU ,nextL);
+  dataReference = std::make_pair(refU  ,refL);
 
   dataEntry = std::make_tuple(ID,dL0,start,prev,next);
 }
 
 template <class T>
 void gsAPALM<T>::_recvMainToWorker(  const  index_t &   sourceID,
-                                            bool &      stop,
-                                            MPI_Status *status   )
+                                            bool &      stop)
 {
-  // gsMPIInfo(m_rank)<<"Receiving stop signal on "<<m_rank<<" from "<<sourceID<<"\n";
-
-  m_comm.recv(&stop,1,sourceID,0,status);
+  // when we handle the stop signal with isend/irecv, we get a deadlock
+  m_comm.recv(&stop,1,sourceID,99);
 }
 
 template <class T>
@@ -833,23 +823,41 @@ void gsAPALM<T>::_sendWorkerToMain( const index_t &                   mainID,
   index_t tag = 0;
   index_t size = stepSolutions.size();
   index_t vectorSize;
+  T load;
 
-  MPI_Request req;
-  m_comm.isend(&branch        ,1,mainID,&req,tag++);
-  m_comm.isend(&jobID         ,1,mainID,&req,tag++);
-  m_comm.isend(&upperDistance ,1,mainID,&req,tag++);
-  m_comm.isend(&lowerDistance ,1,mainID,&req,tag++);
-  m_comm.isend(&size          ,1,mainID,&req,tag++);
+  MPI_Request req_meta[4];
+  m_comm.isend(&branch        ,1, mainID, &req_meta[0], tag++);
+  m_comm.isend(&jobID         ,1, mainID, &req_meta[1], tag++);
+  m_comm.isend(&upperDistance ,1, mainID, &req_meta[2], tag++);
+  m_comm.isend(&lowerDistance ,1, mainID, &req_meta[3], tag++);
 
+  MPI_Request req_solSize;
+  m_comm.isend(&size          ,1, mainID, &req_solSize, tag++);
+
+  MPI_Request req_vecSizes[size];
+  MPI_Request req_loads[size];
+  MPI_Request req_distances[size+1];
   for (index_t k=0; k!=size; k++)
   {
-    m_comm.isend(&(distances.at(k))              ,1            ,mainID,&req,tag++);
-    vectorSize = stepSolutions.at(k).first.size();
-    m_comm.isend(&vectorSize                     ,1            ,mainID,&req,tag++);
-    m_comm.isend(stepSolutions.at(k).first.data(),vectorSize   ,mainID,&req,tag++);
-    m_comm.isend(&(stepSolutions.at(k).second)   ,1            ,mainID,&req,tag++);
+    m_comm.isend(&distances.at(k)   ,1, mainID, &req_distances[k]   , tag++);
+    load      = stepSolutions.at(k).second;
+    m_comm.isend(&load              ,1, mainID, &req_loads[k]       , tag++);
+    vectorSize= stepSolutions.at(k).first.size();
+    m_comm.isend(&vectorSize        ,1, mainID, &req_vecSizes[k]    , tag++);
   }
-  m_comm.isend(&(distances.at(size))             ,1            ,mainID,&req,tag++);
+  m_comm.isend(&(distances.at(size)),1, mainID, &req_distances[size], tag++);
+
+  MPI_Request req_data[size];
+  for (index_t k=0; k!=size; k++)
+    m_comm.isend( stepSolutions.at(k).first.data(),
+                  stepSolutions.at(k).first.size(), mainID, &req_data[k], tag++);
+
+  MPI_Wait(&req_solSize,MPI_STATUS_IGNORE);
+  MPI_Waitall( size, req_vecSizes, MPI_STATUSES_IGNORE );
+  MPI_Waitall( size, req_data, MPI_STATUSES_IGNORE );
+  MPI_Waitall( size, req_loads, MPI_STATUSES_IGNORE );
+  MPI_Waitall( size+1, req_distances, MPI_STATUSES_IGNORE );
+  MPI_Waitall( 4, req_meta, MPI_STATUSES_IGNORE );
 }
 
 template <class T>
@@ -859,38 +867,71 @@ void gsAPALM<T>::_recvWorkerToMain( index_t &                   sourceID,
                                     std::vector<T> &            distances,
                                     std::vector<solution_t> &   stepSolutions,
                                     T &                         upperDistance,
-                                    T &                         lowerDistance,
-                                    MPI_Status *                status)
+                                    T &                         lowerDistance)
 {
 
   index_t tag = 0;
   index_t size;
   index_t vectorSize;
 
-  m_comm.recv(&branch         ,1,sourceID,tag++, status);
-  if (sourceID==MPI_ANY_SOURCE)  sourceID = status->MPI_SOURCE; // Overwrite source ID to be unique
+  MPI_Status  status;
+  MPI_Request req_meta[4];
+  m_comm.irecv(&branch         ,1, sourceID, &req_meta[0], tag++);
+  MPI_Wait ( &req_meta[0], &status );
+  if (sourceID==MPI_ANY_SOURCE)  sourceID = status.MPI_SOURCE; // Overwrite source ID to be unique
   gsMPIInfo(m_rank)<<"Receiving data on "<<m_rank<<" from "<<sourceID<<"\n";
-  m_comm.recv(&jobID          ,1,sourceID,tag++, status);
-  m_comm.recv(&upperDistance  ,1,sourceID,tag++, status);
-  m_comm.recv(&lowerDistance  ,1,sourceID,tag++, status);
-  m_comm.recv(&size           ,1,sourceID,tag++, status);
 
-  stepSolutions.resize(size);
+  // Request metadata
+  m_comm.irecv(&jobID          ,1, sourceID, &req_meta[1], tag++);
+  m_comm.irecv(&upperDistance  ,1, sourceID, &req_meta[2], tag++);
+  m_comm.irecv(&lowerDistance  ,1, sourceID, &req_meta[3], tag++);
+
+  // Request the number of solution intervals
+  MPI_Request req_solSize;
+  m_comm.irecv(&size           ,1, sourceID, &req_solSize, tag++);
+
+  MPI_Wait(&req_solSize,MPI_STATUS_IGNORE);
+
+  // temporary objects to store solutions and the sizes of the solution vectors
+  std::vector<gsVector<T>> Us(size);
+  std::vector<T          > Ls(size);
+  std::vector<index_t    > vectorSizes(size);
+  // final containers for distances and step solutions
   distances.resize(size+1);
+  stepSolutions.resize(size);
 
-  gsVector<T> sol;
-  T load;
+  // Collect distances, solution vector sizes and loads
+  MPI_Request req_vecSizes[size];
+  MPI_Request req_loads[size];
+  MPI_Request req_distances[size+1];
   for (index_t k=0; k!=size; k++)
   {
-    m_comm.recv(&(distances.at(k))  ,1            ,sourceID,tag++, status);
-    m_comm.recv(&vectorSize         ,1            ,sourceID,tag++, status);
-    sol.resize(vectorSize);
-    m_comm.recv(sol.data()          ,vectorSize   ,sourceID,tag++, status);
-    m_comm.recv(&load               ,1            ,sourceID,tag++, status);
-
-    stepSolutions.at(k) = std::make_pair(sol,load);
+    m_comm.irecv(&distances.at(k)   ,1, sourceID, &req_distances[k]   , tag++);
+    m_comm.irecv(&Ls.at(k)          ,1, sourceID, &req_loads[k]       , tag++);
+    m_comm.irecv(&vectorSizes.at(k) ,1, sourceID, &req_vecSizes[k]    , tag++);
   }
-  m_comm.recv(&(distances.at(size)) ,1            ,sourceID,tag++, status);
+  m_comm.irecv(&(distances.at(size)),1, sourceID, &req_distances[size], tag++);
+
+  // When all solution vector sizes are collected, resize the solution vectors
+  MPI_Waitall( size, req_vecSizes, MPI_STATUSES_IGNORE );
+  for (index_t k=0; k!=size; k++)
+    Us[k].resize(vectorSizes.at(k));
+
+  // Collect the solution data
+  MPI_Request req_data[size];
+  for (index_t k=0; k!=size; k++)
+    m_comm.irecv(Us.at(k).data()    ,vectorSizes.at(k)  , sourceID, &req_data[k], tag++);
+
+  // When the solution data and the loads are collected, put them in the stepSolutions container.
+  MPI_Waitall( size, req_data, MPI_STATUSES_IGNORE );
+  MPI_Waitall( size, req_loads, MPI_STATUSES_IGNORE );
+  for (index_t k=0; k!=size; k++)
+    stepSolutions.at(k) = std::make_pair(Us.at(k),Ls.at(k));
+
+  // Wait for the distances to finish
+  MPI_Waitall( size+1, req_distances, MPI_STATUSES_IGNORE );
+  // Wait for the meta data to finish
+  MPI_Waitall( 4, req_meta, MPI_STATUSES_IGNORE );
 }
 
 #endif

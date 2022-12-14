@@ -154,13 +154,11 @@ protected:
                                 std::tuple<index_t, T     , solution_t, solution_t, solution_t> & dataEntry,
                                 std::pair<T,T> &  dataInterval,
                                 index_t &         dataLevel,
-                                solution_t &      dataReference,
-                                MPI_Status *      status = NULL);
+                                solution_t &      dataReference);
 
   // For stop signal
   void _recvMainToWorker(   const index_t &   sourceID,
-                                  bool &      stop,
-                                  MPI_Status *status = NULL );
+                                  bool &      stop);
 
   // For data
   void _sendWorkerToMain( const index_t &                   mainID,
@@ -178,8 +176,7 @@ protected:
                           std::vector<T> &            distances,
                           std::vector<solution_t>&    stepSolutions,
                           T &                         upperDistance,
-                          T &                         lowerDistance,
-                          MPI_Status *                status = NULL);
+                          T &                         lowerDistance);
 
   gsMpiComm & comm() { return m_comm; }
 #endif
