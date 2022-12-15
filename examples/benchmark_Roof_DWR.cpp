@@ -502,7 +502,6 @@ int main (int argc, char** argv)
     gsParaviewCollection Smembrane(dirname + "/" + "membrane");
     gsParaviewCollection Sflexural(dirname + "/" + "flexural");
     gsParaviewCollection Smembrane_p(dirname + "/" + "membrane_p");
-    gsMultiPatch<> deformation = mp;
 
 // Make objects for previous solutions
     real_t Lold = 0, deltaLold = 0;
@@ -749,9 +748,6 @@ int main (int argc, char** argv)
                     gsQuasiInterpolate<real_t>::localIntpl(basisL.basis(0), U_patch.patch(0), coefs);
                     U_patch.patch(0) = *basisL.basis(0).makeGeometry(give(coefs));
 
-                    gsQuasiInterpolate<real_t>::localIntpl(basisL.basis(0), deltaU_patch.patch(0), coefs);
-                    deltaU_patch.patch(0) = *basisL.basis(0).makeGeometry(give(coefs));
-
                     gsQuasiInterpolate<real_t>::localIntpl(basisL.basis(0), Uold_patch.patch(0), coefs);
                     Uold_patch.patch(0) = *basisL.basis(0).makeGeometry(give(coefs));
 
@@ -780,39 +776,34 @@ int main (int argc, char** argv)
             error_fields.save();
         }
 
+        deltaU_patch = U_patch;
+        for (index_t p=0; p!=deltaU_patch.nPatches(); p++)
+            deltaU_patch.patch(p).coefs() -= Uold_patch.patch(p).coefs();
+
+        /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+        /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+        real_t deformationNorm  = assembler->deformationNorm(U_patch,mp);
+        real_t duNorm           = assembler->deformationNorm(deltaU_patch,mp);
+        real_t duOldNorm        = assembler->deformationNorm(deltaUold_patch,mp);
+
+        PlotResults(k,assembler,mp,mp_def,plot,stress,write,mesh,deformed,dirname,output,
+                    collection,Smembrane,Sflexural,Smembrane_p);
+
+        if (write)
+            writeStepOutput(deformationNorm,duNorm,duOldNorm,L,indicator,U_patch, error, numDofs, dirname + "/" + wn, writePoints,1, 201);
+
+        write_errors.push_back(loadstep_errors);
+
         // Update Uold
         Uold_patch = U_patch;
         deltaUold_patch = deltaU_patch;
         Lold = L;
         deltaLold = deltaL;
 
-        // not needed??
-        // Uold = U;
-        // Lold = L;
-        // deltaUold = deltaU;
-        // deltaLold = deltaL;
-
         indicator_prev = indicator;
 
-        /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-        /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-        deformation = mp_def;
-        for (index_t p=0; p!=mp_def.nPatches(); p++)
-            deformation.patch(p).coefs() -= mp.patch(p).coefs();
-
-        real_t deformationNorm  = assembler->deformationNorm(deformation);
-        real_t duNorm           = assembler->deformationNorm(deltaU_patch);
-        real_t duOldNorm        = assembler->deformationNorm(deltaUold_patch);
-
-        PlotResults(k,assembler,mp,mp_def,plot,stress,write,mesh,deformed,dirname,output,
-                    collection,Smembrane,Sflexural,Smembrane_p);
-
-        if (write)
-            writeStepOutput(deformationNorm,duNorm,duOldNorm,L,indicator,deformation, error, numDofs, dirname + "/" + wn, writePoints,1, 201);
-
-        write_errors.push_back(loadstep_errors);
     }
 
     if (plot)
@@ -890,7 +881,9 @@ void writeStepOutput(const T deformationNorm, const T duNorm, const T duOldNorm,
   if (extreme==-1)
   {
     file  << std::setprecision(6)
-          << deformationNorm << ",";
+          << deformationNorm << ","
+          << duNorm << ","
+          << duOldNorm << ",";
           for (index_t p=0; p!=points.cols(); p++)
           {
             file<< out(0,p) << ","
@@ -919,7 +912,9 @@ void writeStepOutput(const T deformationNorm, const T duNorm, const T duOldNorm,
     }
 
     file  << std::setprecision(6)
-          << deformationNorm << ",";
+          << deformationNorm << ","
+          << duNorm << ","
+          << duOldNorm << ",";
           for (index_t p=0; p!=points.cols(); p++)
           {
             file<< out(0,p) << ","
