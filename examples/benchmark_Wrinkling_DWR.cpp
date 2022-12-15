@@ -154,12 +154,8 @@ int main (int argc, char** argv)
     real_t target   =1e-3;
     real_t bandwidth=1;
 
-    // Adaptive refinement options
-    index_t refExt = 0;
-    index_t crsExt = 0;
-
-    index_t markstrat = 2;
-    real_t adaptRefParam = 0.9;
+    index_t goal = 6;
+    index_t component = 0;
 
     std::string wn("data.csv");
 
@@ -190,14 +186,13 @@ int main (int argc, char** argv)
     cmd.addInt("q","QuasiNewtonInt","Use the Quasi Newton method every INT iterations",quasiNewtonInt);
     cmd.addInt("N", "maxsteps", "Maximum number of steps", step);
 
-    cmd.addInt("E", "refExt", "Refinement extension", refExt);
-    cmd.addInt("C", "crsExt", "Coarsening extension", crsExt);
-    cmd.addReal("a", "refparam", "Controls the adaptive refinement parameter", adaptRefParam);
-    cmd.addInt("u","rule", "Adaptive refinement rule; 1: ... ; 2: PUCA; 3: BULK", markstrat);
     cmd.addString("U","output", "outputDirectory", dirname);
 
     cmd.addReal("T","target", "Refinement target error", target);
     cmd.addReal("B","band", "Refinement target error bandwidth", bandwidth);
+
+    cmd.addInt( "g", "goal", "Goal function to use", goal );
+    cmd.addInt( "C", "comp", "Component", component );
 
     cmd.addSwitch("adaptive", "Adaptive length ", adaptive);
     cmd.addSwitch("adaptiveMesh", "Adaptive mesh ", adaptiveMesh);
@@ -350,7 +345,9 @@ int main (int argc, char** argv)
     // gsVector<> load (3); load << Load,0.0, 0.0;
     // pLoads.addLoad(point, load, 0 );
 
-    dirname = dirname + "/QuarterSheet_-r" + std::to_string(numHref) + "-e" + std::to_string(numElevate) + "-M" + std::to_string(material) + "-c" + std::to_string(Compressibility) + "-alpha" + std::to_string(aDim/bDim) + "-beta" + std::to_string(bDim/thickness);
+    dirname = dirname + "/QuarterSheet_-r" + std::to_string(numHref) + "-e" + std::to_string(numElevate) + "-M" + std::to_string(material) + "-c" + std::to_string(Compressibility) + "-alpha" + std::to_string(aDim/bDim) + "-beta" + std::to_string(bDim/thickness) + "-g" + std::to_string(goal) + "-C" + std::to_string(component);
+    if (adaptiveMesh)
+        dirname = dirname + "_adaptive";
 
     output =  "solution";
     wn = output + "data.txt";
@@ -459,7 +456,28 @@ int main (int argc, char** argv)
 
     gsThinShellAssemblerDWRBase<real_t>* assembler;
     assembler = new gsThinShellAssemblerDWR<3, real_t, true >(mp,basisL,basisH,BCs,force,materialMatrix);
-    assembler->setGoal(GoalFunction::PStress,0);
+    if (goal==1)
+        assembler->setGoal(GoalFunction::Displacement,component);
+    else if (goal==2)
+        assembler->setGoal(GoalFunction::Stretch,component);
+    else if (goal==3)
+        assembler->setGoal(GoalFunction::MembraneStrain,component);
+    else if (goal==4)
+        assembler->setGoal(GoalFunction::PStrain,component);
+    else if (goal==5)
+        assembler->setGoal(GoalFunction::MembraneStress,component);
+    else if (goal==6)
+        assembler->setGoal(GoalFunction::PStress,component);
+    else if (goal==7)
+        assembler->setGoal(GoalFunction::MembraneForce,component);
+    else if (goal==8)
+        assembler->setGoal(GoalFunction::FlexuralStrain,component);
+    else if (goal==9)
+        assembler->setGoal(GoalFunction::FlexuralStress,component);
+    else if (goal==10)
+        assembler->setGoal(GoalFunction::FlexuralMoment,component);
+    else
+        GISMO_ERROR("Goal function unknown");
 
     // Construct assembler object
     gsFileData<> fd_assembler(assemberOptionsFile);
