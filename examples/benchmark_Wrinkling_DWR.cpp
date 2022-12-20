@@ -152,6 +152,7 @@ int main (int argc, char** argv)
     real_t tolF = 1e-3;
 
     real_t target   =1e-3;
+    real_t nocrs    =1e-12;
     real_t bandwidth=1;
 
     index_t goal = 6;
@@ -190,6 +191,7 @@ int main (int argc, char** argv)
 
     cmd.addReal("T","target", "Refinement target error", target);
     cmd.addReal("B","band", "Refinement target error bandwidth", bandwidth);
+    cmd.addReal("D","nocrs", "Below this tolerance, there is no coarsening", nocrs);
 
     cmd.addInt( "g", "goal", "Goal function to use", goal );
     cmd.addInt( "C", "comp", "Component", component );
@@ -798,7 +800,7 @@ int main (int argc, char** argv)
         bool coarsened = true;
         error = 1;
         bool bandtest = (bandwidth==1) ? error > refTol : ((error < crsTol )|| (error >= refTol));
-        while (bandtest && it < maxIt && (refined || coarsened))
+        while ((bandtest || error < nocrs) && it < maxIt && (refined || coarsened))
         {
             gsInfo<<"Iteration "<<it<<"/"<<maxIt<<", refTol < prev error < crsTol : "<<refTol<<" < "<<error<<" < "<<crsTol<<"\n";
             gsInfo<<"New basis (L): \n"<<mp.basis(0)<<"\n";
@@ -910,14 +912,13 @@ int main (int argc, char** argv)
                     else if (error < refTol && error > crsTol)
                     {
                         gsInfo<<"Load Step "<<k<<": Error is within bounds. Error = "<<error<<", refTol = "<<refTol<<", crsTol = "<<crsTol<<"\n";
-                        // mesher.markRef_into(elErrors,markRef);
-                        // gsInfo<<"Marked "<<markRef.totalSize()<<" elements for refinement\n";
-                        // gsInfo<<"Marked "<<markCrs.totalSize()<<" elements for coarsening\n";
-                        // mesher.markCrs_into(elErrors,markRef,markCrs);
-                        // refined = mesher.refine(markRef);
-                        gsInfo<<"No elements marked\n";
+                        mesher.markRef_into(elErrors,markRef);
+                        gsInfo<<"Marked "<<markRef.totalSize()<<" elements for refinement\n";
+                        gsInfo<<"Marked "<<markCrs.totalSize()<<" elements for coarsening\n";
+                        mesher.markCrs_into(elErrors,markRef,markCrs);
+                        refined = mesher.refine(markRef);
                     }
-                    else if (error < crsTol)
+                    else if (error < crsTol && error > nocrs)
                     {
                         //gsInfo<<"Error is too small!\n";
                         gsInfo<<"Load Step "<<k<<": Error is too small! Error = "<<error<<", crsTol = "<<crsTol<<"\n";
@@ -925,6 +926,11 @@ int main (int argc, char** argv)
                         gsInfo<<"Marked "<<markCrs.totalSize()<<" elements for coarsening\n";
                         coarsened = mesher.unrefine(markCrs);
                     }
+                    else if (error < nocrs)
+                    {
+                        gsInfo<<"Load Step "<<k<<": Error is too small to coarsen! Error = "<<error<<", no-coarsening-tol = "<<nocrs<<"\n";
+                    }
+
                     bandtest = (bandwidth==1) ? error > refTol : ((error < crsTol )|| (error >= refTol));
 
                     basisL = gsMultiBasis<>(mp);
