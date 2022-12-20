@@ -148,7 +148,7 @@ int main (int argc, char** argv)
     real_t bandwidth=1;
 
     index_t goal = 1;
-    index_t component = 2;
+    index_t component = 9;
 
     std::string wn("data.csv");
 
@@ -353,7 +353,7 @@ int main (int argc, char** argv)
     load << 0.0, 0.0, Load ;
     pLoads.addLoad(point, load, 0 );
 
-    dirname = dirname + "/" +  "Roof_t="+ std::to_string(thickness) + "-r=" + std::to_string(numHref) + "-e" + std::to_string(numElevate) +"_solution";
+    dirname = dirname + "/" +  "Roof_t="+ std::to_string(thickness) + "-r=" + std::to_string(numHref) + "-e" + std::to_string(numElevate) + "-g" + std::to_string(goal) + "-C" + std::to_string(component);
     if (symmetry)
         dirname = dirname + "_symm";
     if (adaptiveMesh)

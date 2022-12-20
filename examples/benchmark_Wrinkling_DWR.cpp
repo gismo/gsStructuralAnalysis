@@ -215,16 +215,6 @@ int main (int argc, char** argv)
 
     try { cmd.getValues(argc,argv); } catch (int rv) { return rv; }
 
-    MarkingStrategy adaptRefCrit;
-    if (markstrat==1)
-        adaptRefCrit = GARU;
-    else if (markstrat==2)
-        adaptRefCrit = PUCA;
-    else if (markstrat==3)
-        adaptRefCrit = BULK;
-    else
-        GISMO_ERROR("MarkingStrategy Unknown");
-
     if (dL==0)
     {
       dL = dLb;
@@ -690,7 +680,7 @@ int main (int argc, char** argv)
         for (index_t p=0; p!=mp_def.nPatches(); p++)
 	    deformation.patch(p).coefs() -= mp.patch(p).coefs();
 
-        real_t deformationNorm = assembler->deformationNorm(deformation);
+        real_t deformationNorm = assembler->deformationNorm(deformation,mp);
 
         PlotResults(k,assembler,mp,mp_def,plot,stress,write,mesh,deformed,dirname,output,
                     collection,Smembrane,Sflexural,Smembrane_p);
@@ -744,7 +734,7 @@ int main (int argc, char** argv)
         for (index_t p=0; p!=mp_def.nPatches(); p++)
             deformation.patch(p).coefs() -= mp.patch(p).coefs();
 
-        real_t deformationNorm = assembler->deformationNorm(deformation);
+        real_t deformationNorm = assembler->deformationNorm(deformation,mp);
 
         PlotResults(k,assembler,mp,mp_def,plot,stress,write,mesh,deformed,dirname,output,
                     collection,Smembrane,Sflexural,Smembrane_p);
@@ -1004,7 +994,7 @@ int main (int argc, char** argv)
         for (index_t p=0; p!=mp_def.nPatches(); p++)
             deformation.patch(p).coefs() -= mp.patch(p).coefs();
 
-        real_t deformationNorm = assembler->deformationNorm(deformation);
+        real_t deformationNorm = assembler->deformationNorm(deformation,mp);
 
         PlotResults(k,assembler,mp,mp_def,plot,stress,write,mesh,deformed,dirname,output,
                     collection,Smembrane,Sflexural,Smembrane_p);
