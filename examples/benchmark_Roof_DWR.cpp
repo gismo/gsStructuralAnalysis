@@ -119,7 +119,7 @@ int main (int argc, char** argv)
     bool adaptive     = false;
     bool adaptiveMesh = false;
     bool admissible = false;
-    int step          = 10;
+    int maxSteps          = 100;
     int method        = 2; // (0: Load control; 1: Riks' method; 2: Crisfield's method; 3: consistent crisfield method)
     bool deformed     = false;
     bool symmetry     = false;
@@ -172,7 +172,7 @@ int main (int argc, char** argv)
     cmd.addReal("A","relaxation", "Relaxation factor for arc length method", relax);
 
     cmd.addInt("q","QuasiNewtonInt","Use the Quasi Newton method every INT iterations",quasiNewtonInt);
-    cmd.addInt("N", "maxsteps", "Maximum number of steps", step);
+    cmd.addInt("N", "maxsteps", "Maximum number of steps", maxSteps);
 
     cmd.addString("U","output", "outputDirectory", dirname);
 
@@ -297,19 +297,21 @@ int main (int argc, char** argv)
 
     std::string output = "solution";
 
-    gsMatrix<> writePoints;
+    gsMatrix<> writePoints, midPoint(2,1);
     if (!symmetry)
     {
       writePoints.resize(2,3);
       writePoints.col(0)<< 0.0,0.5;
       writePoints.col(1)<< 0.5,0.5;
       writePoints.col(2)<< 1.0,0.5;
+      midPoint.col(0)<<0.5,0.5;
     }
     else
     {
       writePoints.resize(2,2);
-      writePoints.col(0)<< 0.0,0.0;
-      writePoints.col(1)<< 1.0,0.0;
+      writePoints.col(0)<< 0.0,1.0;
+      writePoints.col(1)<< 1.0,1.0;
+      midPoint.col(0)<<1.0,1.0;
     }
 
 
@@ -584,11 +586,15 @@ int main (int argc, char** argv)
 
     real_t refTol = target / bandwidth; // refine if error is above
     real_t crsTol = target * bandwidth; // coarsen if error is below
+    real_t Umid = 0;
+    real_t Umidmax =  30;
+    real_t Umidmin = -30;
+    index_t k = 0;
     GISMO_ENSURE(refTol >= crsTol,"Refinement tolerance should be bigger than the coarsen tolerance");
-    for (index_t k=0; k<step; k++)
+    while (Umid < Umidmax && Umid > Umidmin && k < maxSteps)
     {
         loadstep_errors.clear();
-        gsInfo<<"Load step "<< k<<"; \tSystem size = "<<Uold.size()<<" x "<<Uold.size()<<"\n";
+        gsInfo<<"Load step "<< k<<"; \tUmid,L = "<<Umid<<","<<Lold<<"\tSystem size = "<<Uold.size()<<" x "<<Uold.size()<<"\n";
         gsParaviewCollection errors(dirname + "/" + "error" + util::to_string(k));
         gsParaviewCollection error_fields(dirname + "/" + "error_field" + util::to_string(k));
 
@@ -780,6 +786,8 @@ int main (int argc, char** argv)
         for (index_t p=0; p!=deltaU_patch.nPatches(); p++)
             deltaU_patch.patch(p).coefs() -= Uold_patch.patch(p).coefs();
 
+        Umid = U_patch.patch(0).eval(midPoint)(2,0);
+
         /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
         /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -792,7 +800,7 @@ int main (int argc, char** argv)
                     collection,Smembrane,Sflexural,Smembrane_p);
 
         if (write)
-            writeStepOutput(deformationNorm,duNorm,duOldNorm,L,indicator,U_patch, error, numDofs, dirname + "/" + wn, writePoints,1, 201);
+            writeStepOutput(deformationNorm,duNorm,duOldNorm,L,indicator,U_patch, error, numDofs, dirname + "/" + wn, writePoints);
 
         write_errors.push_back(loadstep_errors);
 
@@ -803,7 +811,7 @@ int main (int argc, char** argv)
         deltaLold = deltaL;
 
         indicator_prev = indicator;
-
+        k++;
     }
 
     if (plot)
