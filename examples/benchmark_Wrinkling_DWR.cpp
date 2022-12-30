@@ -118,7 +118,7 @@ int main (int argc, char** argv)
     bool adaptive = false;
     bool adaptiveMesh = false;
     bool admissible = false;
-    int step = 10;
+    int maxSteps = 250;
     int method = 2; // (0: Load control; 1: Riks' method; 2: Crisfield's method; 3: consistent crisfield method; 4: extended iterations)
     bool symmetry = false;
     bool deformed = false;
@@ -185,7 +185,7 @@ int main (int argc, char** argv)
 
     cmd.addReal("F","factor", "factor for bifurcation perturbation", tau);
     cmd.addInt("q","QuasiNewtonInt","Use the Quasi Newton method every INT iterations",quasiNewtonInt);
-    cmd.addInt("N", "maxsteps", "Maximum number of steps", step);
+    cmd.addInt("N", "maxsteps", "Maximum number of steps", maxSteps);
 
     cmd.addString("U","output", "outputDirectory", dirname);
 
@@ -310,10 +310,12 @@ int main (int argc, char** argv)
 
     std::string output = "solution";
 
-    gsMatrix<> writePoints(2,3);
+    gsMatrix<> writePoints(2,3), epsPoint(2,1);
     writePoints.col(0)<< 0.0,0.5;
     writePoints.col(1)<< 0.5,0.5;
     writePoints.col(2)<< 1.0,0.5;
+
+    epsPoint.col(0)<<1.0,0;
 
     gsVector<> neu(3);
     neu<<1e0/bDim,0,0;
@@ -603,10 +605,13 @@ int main (int argc, char** argv)
     bool unstable = false;
     index_t k = 0;
     gsInfo<<"----------Pre-Buckling-----------\n";
-    for ( ; k<step; k++)
+    real_t eps = 0;
+    real_t epsmax = 0.3;
+    real_t epsmin = -1e-4;
+    while (eps < epsmax && eps > epsmin && k < maxSteps)
     {
         loadstep_errors.clear();
-        gsInfo<<"Load step "<< k<<"; \tSystem size = "<<Uold.size()<<" x "<<Uold.size()<<"\n";
+        gsInfo<<"Load step "<< k<<"; \t(starting from "<<eps<<" strain)\tSystem size = "<<Uold.size()<<" x "<<Uold.size()<<"\n";
         gsParaviewCollection errors(dirname + "/" + "error" + util::to_string(k));
         gsParaviewCollection error_fields(dirname + "/" + "error_field" + util::to_string(k));
 
@@ -676,11 +681,14 @@ int main (int argc, char** argv)
         loadstep_errors.push_back(std::make_pair(assembler->numDofsL(),error));
         ///////////////////////////////////////////////////
 
-        deformation = mp_def;
-        for (index_t p=0; p!=mp_def.nPatches(); p++)
-	    deformation.patch(p).coefs() -= mp.patch(p).coefs();
+        deltaU_patch = U_patch;
+        for (index_t p=0; p!=deltaU_patch.nPatches(); p++)
+            deltaU_patch.patch(p).coefs() -= Uold_patch.patch(p).coefs();
 
-        real_t deformationNorm = assembler->deformationNorm(deformation,mp);
+
+        eps = U_patch.patch(0).eval(epsPoint)(0,0) / aDim;
+
+        real_t deformationNorm = assembler->deformationNorm(U_patch,mp);
 
         PlotResults(k,assembler,mp,mp_def,plot,stress,write,mesh,deformed,dirname,output,
                     collection,Smembrane,Sflexural,Smembrane_p);
@@ -730,11 +738,12 @@ int main (int argc, char** argv)
         Uold_patch = U_patch;
         deltaUold_patch = deltaU_patch;
 
-        deformation = mp_def;
-        for (index_t p=0; p!=mp_def.nPatches(); p++)
-            deformation.patch(p).coefs() -= mp.patch(p).coefs();
+        deltaU_patch = U_patch;
+        for (index_t p=0; p!=deltaU_patch.nPatches(); p++)
+            deltaU_patch.patch(p).coefs() -= Uold_patch.patch(p).coefs();
 
-        real_t deformationNorm = assembler->deformationNorm(deformation,mp);
+
+        real_t deformationNorm = assembler->deformationNorm(U_patch,mp);
 
         PlotResults(k,assembler,mp,mp_def,plot,stress,write,mesh,deformed,dirname,output,
                     collection,Smembrane,Sflexural,Smembrane_p);
@@ -771,15 +780,18 @@ int main (int argc, char** argv)
         deltaUold_patch.patch(0) = *basisL.basis(0).makeGeometry(give(coefs));
     }
 
+    eps = U_patch.patch(0).eval(epsPoint)(0,0) / aDim;
+    k++;
+
     gsInfo<<"----------Post-Buckling-----------\n";
     // POST BUCKLING
     real_t refTol = target / bandwidth; // refine if error is above
     real_t crsTol = target * bandwidth; // coarsen if error is below
     GISMO_ENSURE(refTol >= crsTol,"Refinement tolerance should be bigger than the coarsen tolerance");
-    for ( ; k<step; k++)
+    while (eps < epsmax && eps > epsmin && k < maxSteps)
     {
         loadstep_errors.clear();
-        gsInfo<<"Load step "<< k<<"; \tSystem size = "<<Uold.size()<<" x "<<Uold.size()<<"\n";
+        gsInfo<<"Load step "<< k<<"; \t(starting from "<<eps<<" strain)\tSystem size = "<<Uold.size()<<" x "<<Uold.size()<<"\n";
         gsParaviewCollection errors(dirname + "/" + "error" + util::to_string(k));
         gsParaviewCollection error_fields(dirname + "/" + "error_field" + util::to_string(k));
 
@@ -972,19 +984,11 @@ int main (int argc, char** argv)
             error_fields.save();
         }
 
-        // Update Uold
-        Uold_patch = U_patch;
-        deltaUold_patch = deltaU_patch;
-        Lold = L;
-        deltaLold = deltaL;
+        deltaU_patch = U_patch;
+        for (index_t p=0; p!=deltaU_patch.nPatches(); p++)
+            deltaU_patch.patch(p).coefs() -= Uold_patch.patch(p).coefs();
 
-        // not needed??
-        // Uold = U;
-        // Lold = L;
-        // deltaUold = deltaU;
-        // deltaLold = deltaL;
-
-        indicator_prev = indicator;
+        eps = U_patch.patch(0).eval(epsPoint)(0,0) / aDim;
 
         /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -1006,6 +1010,16 @@ int main (int argc, char** argv)
             writeSectionOutput(deformation,dirname,cross_coordinate,cross_val,201,false);
 
         write_errors.push_back(loadstep_errors);
+
+        // Update Uold
+        Uold_patch = U_patch;
+        deltaUold_patch = deltaU_patch;
+        Lold = L;
+        deltaLold = deltaL;
+
+        indicator_prev = indicator;
+
+        k++;
     }
 
     if (plot)

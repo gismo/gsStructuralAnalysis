@@ -720,7 +720,7 @@ int main (int argc, char** argv)
                         gsInfo<<"Load Step "<<k<<": Error is within bounds. Error = "<<error<<", refTol = "<<refTol<<", crsTol = "<<crsTol<<"\n";
                         mesher.markRef_into(elErrors,markRef);
                         mesher.markCrs_into(elErrors,markRef,markCrs);
-			gsInfo<<"Marked "<<markRef.totalSize()<<" elements for refinement\n";
+			            gsInfo<<"Marked "<<markRef.totalSize()<<" elements for refinement\n";
                         gsInfo<<"Marked "<<markCrs.totalSize()<<" elements for coarsening\n";
                         refined = mesher.refine(markRef);
                         refined = mesher.unrefine(markCrs);
