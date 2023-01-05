@@ -518,7 +518,6 @@ int main (int argc, char** argv)
     gsParaviewCollection Smembrane(dirname + "/" + "membrane");
     gsParaviewCollection Sflexural(dirname + "/" + "flexural");
     gsParaviewCollection Smembrane_p(dirname + "/" + "membrane_p");
-    gsMultiPatch<> deformation = mp;
 
     // Make objects for previous solutions
     real_t Lold = 0, deltaLold = 0;
@@ -694,10 +693,10 @@ int main (int argc, char** argv)
                     collection,Smembrane,Sflexural,Smembrane_p);
 
         if (write)
-            writeStepOutput(deformationNorm,L,indicator,deformation, error, numDofs, dirname + "/" + wn, writePoints,1, 201);
+            writeStepOutput(deformationNorm,L,indicator,U_patch, error, numDofs, dirname + "/" + wn, writePoints,1, 201);
 
         if (crosssection && cross_coordinate!=-1)
-            writeSectionOutput(deformation,dirname,cross_coordinate,cross_val,201,false);
+            writeSectionOutput(U_patch,dirname,cross_coordinate,cross_val,201,false);
 
         write_errors.push_back(loadstep_errors);
     }
@@ -749,10 +748,10 @@ int main (int argc, char** argv)
                     collection,Smembrane,Sflexural,Smembrane_p);
 
         if (write)
-            writeStepOutput(deformationNorm,L,indicator,deformation, error, numDofs, dirname + "/" + wn, writePoints,1, 201);
+            writeStepOutput(deformationNorm,L,indicator,U_patch, error, numDofs, dirname + "/" + wn, writePoints,1, 201);
 
         if (crosssection && cross_coordinate!=-1)
-            writeSectionOutput(deformation,dirname,cross_coordinate,cross_val,201,false);
+            writeSectionOutput(U_patch,dirname,cross_coordinate,cross_val,201,false);
 
         loadstep_errors.push_back(std::make_pair(-1,-1.));
         write_errors.push_back(loadstep_errors);
@@ -990,24 +989,16 @@ int main (int argc, char** argv)
 
         eps = U_patch.patch(0).eval(epsPoint)(0,0) / aDim;
 
-        /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-        /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	//gsInfo<<"deformation.patch(0).coefs().col(2) = "<<deformation.patch(0).coefs().col(2)<<"\n";
-        deformation = mp_def;
-        for (index_t p=0; p!=mp_def.nPatches(); p++)
-            deformation.patch(p).coefs() -= mp.patch(p).coefs();
-
-        real_t deformationNorm = assembler->deformationNorm(deformation,mp);
+        real_t deformationNorm = assembler->deformationNorm(U_patch,mp);
 
         PlotResults(k,assembler,mp,mp_def,plot,stress,write,mesh,deformed,dirname,output,
                     collection,Smembrane,Sflexural,Smembrane_p);
 
         if (write)
-            writeStepOutput(deformationNorm,L,indicator,deformation, error, numDofs, dirname + "/" + wn, writePoints,1, 201);
+            writeStepOutput(deformationNorm,L,indicator,U_patch, error, numDofs, dirname + "/" + wn, writePoints,1, 201);
 
         if (crosssection && cross_coordinate!=-1)
-            writeSectionOutput(deformation,dirname,cross_coordinate,cross_val,201,false);
+            writeSectionOutput(U_patch,dirname,cross_coordinate,cross_val,201,false);
 
         write_errors.push_back(loadstep_errors);
 
