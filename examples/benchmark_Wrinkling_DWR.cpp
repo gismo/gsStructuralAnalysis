@@ -605,7 +605,7 @@ int main (int argc, char** argv)
     index_t k = 0;
     gsInfo<<"----------Pre-Buckling-----------\n";
     real_t eps = 0;
-    real_t epsmax = 0.3;
+    real_t epsmax = 0.5;
     real_t epsmin = -1e-4;
     while (eps < epsmax && eps > epsmin && k < maxSteps)
     {
@@ -800,8 +800,8 @@ int main (int argc, char** argv)
         bool refined = true;
         bool coarsened = true;
         error = 1;
-        bool bandtest = (bandwidth==1) ? error > refTol : ((error < crsTol )|| (error >= refTol));
-        while ((bandtest || error < nocrs) && it < maxIt && (refined || coarsened))
+        bool bandtest = (bandwidth==1) ? error > refTol : ((error < crsTol && error > nocrs)|| (error >= refTol)); // is true if error is outside the band
+        while ((bandtest) && it < maxIt && (refined || coarsened))
         {
             gsInfo<<"Iteration "<<it<<"/"<<maxIt<<", refTol < prev error < crsTol : "<<refTol<<" < "<<error<<" < "<<crsTol<<"\n";
             gsInfo<<"New basis (L): \n"<<mp.basis(0)<<"\n";
@@ -932,7 +932,7 @@ int main (int argc, char** argv)
                         gsInfo<<"Load Step "<<k<<": Error is too small to coarsen! Error = "<<error<<", no-coarsening-tol = "<<nocrs<<"\n";
                     }
 
-                    bandtest = (bandwidth==1) ? error > refTol : ((error < crsTol )|| (error >= refTol));
+                    bandtest = (bandwidth==1) ? error > refTol : ((error < crsTol && error > nocrs )|| (error >= refTol));
 
                     basisL = gsMultiBasis<>(mp);
                     basisH = basisL;
