@@ -757,6 +757,7 @@ int main (int argc, char** argv)
         write_errors.push_back(loadstep_errors);
         unstable = false;
         unstable_prev = true;
+        k++;
     }
 
     if (adaptiveMesh)
