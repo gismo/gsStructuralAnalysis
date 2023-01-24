@@ -112,12 +112,9 @@ int main (int argc, char** argv)
     bool plotError  = false;
     bool mesh = false;
     bool stress       = false;
-    bool SingularPoint = false;
     bool quasiNewton = false;
     int quasiNewtonInt = -1;
     bool adaptive = false;
-    bool adaptiveMesh = false;
-    bool admissible = false;
     int maxSteps = 250;
     int method = 2; // (0: Load control; 1: Riks' method; 2: Crisfield's method; 3: consistent crisfield method; 4: extended iterations)
     bool deformed = false;
@@ -149,10 +146,6 @@ int main (int argc, char** argv)
     real_t tol = 1e-6;
     real_t tolU = 1e-6;
     real_t tolF = 1e-3;
-
-    real_t target   =1e-3;
-    real_t nocrs    =1e-12;
-    real_t bandwidth=1;
 
     index_t goal = 6;
     index_t component = 0;
@@ -188,17 +181,12 @@ int main (int argc, char** argv)
 
     cmd.addString("U","output", "outputDirectory", dirname);
 
-    cmd.addReal("T","target", "Refinement target error", target);
-    cmd.addReal("B","band", "Refinement target error bandwidth", bandwidth);
-    cmd.addReal("D","nocrs", "Below this tolerance, there is no coarsening", nocrs);
-
     cmd.addInt( "g", "goal", "Goal function to use", goal );
     cmd.addInt( "C", "comp", "Component", component );
 
     cmd.addSwitch("adaptive", "Adaptive length ", adaptive);
     cmd.addSwitch("adaptiveMesh", "Adaptive mesh ", adaptiveMesh);
     cmd.addSwitch("admissible", "Admissible refinement", admissible);
-    cmd.addSwitch("bifurcation", "Compute singular points and bifurcation paths", SingularPoint);
     cmd.addSwitch("quasi", "Use the Quasi Newton method", quasiNewton);
     cmd.addSwitch("plot", "Plot result in ParaView format", plot);
     cmd.addSwitch("noInterior", "Error computation not on the interior", interior);
@@ -215,9 +203,7 @@ int main (int argc, char** argv)
 
     gsFileData<> metadata;
     gsFileData<> solutionFile;
-    gsFileData<> cmdOptions;
-    cmdOptions.add(cmd);
-    cmdOptions.save("cmdOptions");
+    gsFileData<> geometryFile;
 
     if (dL==0)
     {
@@ -350,8 +336,6 @@ int main (int argc, char** argv)
 
     metadata.addString(dirname,"dirname");
     metadata.addString(wn,"wn");
-
-    SingularPoint = true;
 
     index_t cross_coordinate = 0;
     real_t cross_val = 0.0;
@@ -846,8 +830,11 @@ int main (int argc, char** argv)
 
     metadata.addString(dirname + "/" + "errors.csv","errors");
 
+    geometryFile.add(mp);
+
     metadata.save("metadata");
     solutionFile.save("solutionFile");
+    geometryFile.save("geometryFile");
 
   return result;
 }

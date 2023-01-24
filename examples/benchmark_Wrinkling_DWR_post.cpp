@@ -173,6 +173,7 @@ int main (int argc, char** argv)
 
     gsFileData<> metadata("metadata.xml");
     gsFileData<> solutionFile("solutionFile.xml");
+    gsFileData<> geometryFile("geometryFile.xml");
 
     real_t thickness = 0.14e-3;
     real_t E_modulus     = 1;
@@ -202,7 +203,7 @@ int main (int argc, char** argv)
     gsDebug<<"E = "<<E_modulus<<"; nu = "<<PoissonRatio<<"; mu = "<<mu<<"; ratio = "<<Ratio<<"\n";
 
     gsMultiPatch<> mp,mp_def;
-    GISMO_ENSURE(metadata.getFirst(mp),"No mp found!");
+    GISMO_ENSURE(geometryFile.getFirst(mp),"No mp found!");
 
     gsMatrix<> dimensions;
     metadata.getId(400,dimensions);
@@ -706,6 +707,10 @@ int main (int argc, char** argv)
         loadStepData<<eps,k;
         solutionFile.add(loadStepData,10000);
         solutionFile.save("solutionFile");
+
+        geometryFile.clear();
+        geometryFile.add(mp);
+        geometryFile.save("geometryFile");
     }
 
     if (plot)
