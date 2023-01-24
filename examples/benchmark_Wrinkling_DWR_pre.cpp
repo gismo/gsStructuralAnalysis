@@ -112,6 +112,8 @@ int main (int argc, char** argv)
     bool plotError  = false;
     bool mesh = false;
     bool stress       = false;
+    bool adaptiveMesh = false;
+    bool admissible = false;
     bool quasiNewton = false;
     int quasiNewtonInt = -1;
     bool adaptive = false;
@@ -278,8 +280,6 @@ int main (int argc, char** argv)
         for (index_t i = 0; i< numHref; ++i)
             mp.patch(0).uniformRefine();
     }
-
-    metadata.add(mp);
 
     mp_def = mp;
 
