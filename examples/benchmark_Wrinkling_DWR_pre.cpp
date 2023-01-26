@@ -802,7 +802,11 @@ int main (int argc, char** argv)
 
     gsMatrix<> loadStepData(1,2);
     loadStepData<<eps,k;
-    solutionFile.add(loadStepData,10000);
+    solutionFile.add(loadStepData,1001);
+
+    gsMatrix<index_t> stabilityData(1,1);
+    stabilityData<<unstable_prev;
+    solutionFile.add(stabilityData,1002);
 
     if (plot)
     {

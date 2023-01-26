@@ -143,6 +143,7 @@ int main (int argc, char** argv)
     bool crosssection = false;
 
     index_t maxit = 20;
+    index_t maxRefIt = 10;
 
     // Arc length method options
     real_t dL = 0; // General arc length
@@ -186,6 +187,7 @@ int main (int argc, char** argv)
     cmd.addReal("F","factor", "factor for bifurcation perturbation", tau);
     cmd.addInt("q","QuasiNewtonInt","Use the Quasi Newton method every INT iterations",quasiNewtonInt);
     cmd.addInt("N", "maxsteps", "Maximum number of steps", maxSteps);
+    cmd.addInt("i", "maxRefIt", "Maximum number of refinement iterations steps", maxRefIt);
 
     cmd.addString("U","output", "outputDirectory", dirname);
 
@@ -626,7 +628,6 @@ int main (int argc, char** argv)
           arcLength.setLength(dLb);
           arcLength.setSolution(Uold,Lold);
           bisected = true;
-          k -= 1;
           continue;
         }
         indicator = arcLength.indicator();
@@ -796,15 +797,14 @@ int main (int argc, char** argv)
         gsParaviewCollection error_fields(dirname + "/" + "error_field" + util::to_string(k));
 
         gsInfo<<"Basis (L): \n"<<mp.basis(0)<<"\n";
-        index_t maxIt = 10;
         index_t it = 0;
         bool refined = true;
         bool coarsened = true;
         error = 1;
         bool bandtest = (bandwidth==1) ? error > refTol : ((error < crsTol && error > nocrs)|| (error >= refTol)); // is true if error is outside the band
-        while ((bandtest) && it < maxIt && (refined || coarsened))
+        while ((bandtest) && it < maxRefIt && (refined || coarsened))
         {
-            gsInfo<<"Iteration "<<it<<"/"<<maxIt<<", refTol < prev error < crsTol : "<<refTol<<" < "<<error<<" < "<<crsTol<<"\n";
+            gsInfo<<"Iteration "<<it<<"/"<<maxRefIt<<", refTol < prev error < crsTol : "<<refTol<<" < "<<error<<" < "<<crsTol<<"\n";
             gsInfo<<"New basis (L): \n"<<mp.basis(0)<<"\n";
 
             assembler->assembleL();
@@ -831,7 +831,6 @@ int main (int argc, char** argv)
               arcLength.setLength(dLb);
               arcLength.setSolution(Uold,Lold);
               bisected = true;
-              it -= 1;
               continue;
             }
             indicator = arcLength.indicator();
@@ -919,6 +918,7 @@ int main (int argc, char** argv)
                         gsInfo<<"Marked "<<markCrs.totalSize()<<" elements for coarsening\n";
                         mesher.markCrs_into(elErrors,markRef,markCrs);
                         refined = mesher.refine(markRef);
+                        coarsened = mesher.unrefine(markCrs);
                     }
                     else if (error < crsTol && error > nocrs)
                     {

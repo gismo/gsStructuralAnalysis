@@ -723,7 +723,7 @@ int main (int argc, char** argv)
 			            gsInfo<<"Marked "<<markRef.totalSize()<<" elements for refinement\n";
                         gsInfo<<"Marked "<<markCrs.totalSize()<<" elements for coarsening\n";
                         refined = mesher.refine(markRef);
-                        refined = mesher.unrefine(markCrs);
+                        coarsened = mesher.unrefine(markCrs);
                         gsInfo<<"No elements marked\n";
                     }
                     else if (error < crsTol)
