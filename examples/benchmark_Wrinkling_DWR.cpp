@@ -347,7 +347,7 @@ int main (int argc, char** argv)
 
     dirname = dirname + "/QuarterSheet_-r" + std::to_string(numHref) + "-e" + std::to_string(numElevate) + "-M" + std::to_string(material) + "-c" + std::to_string(Compressibility) + "-alpha" + std::to_string(aDim/bDim) + "-beta" + std::to_string(bDim/thickness) + "-g" + std::to_string(goal) + "-C" + std::to_string(component);
     if (adaptiveMesh)
-        dirname = dirname + "_adaptive" + "R=" + std::to_string(mesherOpts.getReal("RefineParam")) + "_C=" + std::to_stringstd::to_string(mesherOpts.getReal("CoarsenParam"));
+        dirname = dirname + "_adaptive" + "R=" + std::to_string(mesherOpts.getReal("RefineParam")) + "_C=" + std::to_string(mesherOpts.getReal("CoarsenParam"));
 
     output =  "solution";
     wn = output + "data.txt";
