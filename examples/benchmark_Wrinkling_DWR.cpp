@@ -300,6 +300,7 @@ int main (int argc, char** argv)
     }
 
     mp_def = mp;
+    mp0 = mp;
 
     gsInfo<<"alpha = "<<aDim/bDim<<"; beta = "<<bDim/thickness<<"\n";
 
@@ -932,6 +933,7 @@ int main (int argc, char** argv)
                     else if (error < nocrs)
                     {
                         gsInfo<<"Load Step "<<k<<": Error is too small to coarsen! Error = "<<error<<", no-coarsening-tol = "<<nocrs<<"\n";
+                        mp = mp0;
                     }
 
                     bandtest = (bandwidth==1) ? error > refTol : ((error < crsTol && error > nocrs )|| (error >= refTol));
