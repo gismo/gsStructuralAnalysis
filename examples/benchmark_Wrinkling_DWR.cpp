@@ -874,7 +874,7 @@ int main (int argc, char** argv)
             loadstep_errors.push_back(std::make_pair(assembler->numDofsL(),error));
 
             std::vector<real_t> errorVec = helper.errors();
-            std::vector<real_t> elErrors = helper.absErrors();
+            std::vector<real_t> elErrors = helper.sqErrors();
 
             if (plotError)
             {
