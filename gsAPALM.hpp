@@ -696,6 +696,7 @@ void gsAPALM<T>::_sendMainToWorker( const index_t &         workerID,
   std::tie(refU,refL) = dataReference;
   refSize   = refU.size();
 
+  // Put all data 0-14 in a struct and send a single struct
   MPI_Request req[18];
   m_comm.isend(&ID        ,1,workerID,&req[0] ,0 );
   m_comm.isend(&branch    ,1,workerID,&req[1] ,1 );
@@ -726,7 +727,8 @@ template <class T>
 void gsAPALM<T>::_sendMainToWorker( const index_t &   workerID,
                                     const bool &      stop )
 {
-  // when we handle the stop signal with isend/irecv, we get a deadlock
+  // NOTE: when we handle the stop signal with isend/irecv, we get a deadlock
+  // TODO: handle stop with broadcast
   gsMPIInfo(m_rank)<<"Sending stop signal from "<<m_rank<<" to "<<workerID<<"\n";
   m_comm.send(&stop,1,workerID,99);
 }
@@ -757,6 +759,7 @@ void gsAPALM<T>::_recvMainToWorker( const index_t &   sourceID,
 
   T           tstart, tend;
 
+  // Put all data 0-14 in a struct and recv a single struct
   MPI_Request req[14];
   m_comm.irecv(&ID        ,1,sourceID,&req[0] ,0 );
   m_comm.irecv(&branch    ,1,sourceID,&req[1] ,1 );
