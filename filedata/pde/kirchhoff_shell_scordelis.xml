@@ -106,17 +106,28 @@
   0 0 0.30024
 </Matrix>
 
+<!-- Solver options -->
+<OptionList id="90">
+<int label="verbose" desc="Verbose for Newton iterations [0: off, 1: iterations, 2: full (matrix and vector output)" value="1"/>
+<int label="maxIt" desc="Maximum number of Newton iterations [integer]" value="10"/>
+<real label="tolF" desc="Relative error tolerance for Newton iterations [double]" value="-1"/>
+<real label="tolU" desc="Relative error tolerance for Newton iterations [double]" value="-1"/>
+<real label="tol" desc="Relative error tolerance for Newton iterations [double]" value="1e-6"/>
+<real label="Relaxation" desc="Relative error tolerance for Newton iterations [double]" value="1.0"/>
+<string label="Solver" desc="Specifies the sparse solver, see gsSparseSolver::get for more details [string]" value="CGDiagonal"/>
+</OptionList>
+
 <!-- Assembler options -->
- <OptionList id="90">
-  <int label="verbose" desc="Verbose for Newton iterations [0: off, 1: iterations, 2: full (matrix and vector output)" value="1"/>
-  <int label="maxIt" desc="Maximum number of Newton iterations [integer]" value="10"/>
-  <real label="tolF" desc="Relative error tolerance for Newton iterations [double]" value="-1"/>
-  <real label="tolU" desc="Relative error tolerance for Newton iterations [double]" value="-1"/>
-  <real label="tol" desc="Relative error tolerance for Newton iterations [double]" value="1e-6"/>
-  <real label="Relaxation" desc="Relative error tolerance for Newton iterations [double]" value="1.0"/>
-  <string label="Solver" desc="Specifies the sparse solver, see gsSparseSolver::get for more details [string]" value="CGDiagonal"/>
- </OptionList>
-
-
-
+<OptionList id="91">
+<int label="DirichletStrategy" desc="Method for enforcement of Dirichlet BCs [11..14]" value="11"/>
+<int label="DirichletValues" desc="Method for computation of Dirichlet DoF values [100..103]" value="101"/>
+<int label="InterfaceStrategy" desc="Method of treatment of patch interfaces [0..3]" value="1"/>
+<real label="bdA" desc="Estimated nonzeros per column of the matrix: bdA*deg + bdB" value="2"/>
+<int label="bdB" desc="Estimated nonzeros per column of the matrix: bdA*deg + bdB" value="1"/>
+<real label="bdO" desc="Overhead of sparse mem. allocation: (1+bdO)(bdA*deg + bdB) [0..1]" value="0.333"/>
+<real label="quA" desc="Number of quadrature points: quA*deg + quB; For patchRule: Order of the target space" value="6"/>
+<int  label="quB" desc="Number of quadrature points: quA*deg + quB; For patchRule: Regularity of the target space" value="0"/>
+<int label="quRule" desc="Quadrature rule used (1) Gauss-Legendre; (2) Gauss-Lobatto; (3) Patch-Rule" value="3"/>
+<bool label="overInt" desc="Apply over-integration or not?" value="0"/>
+</OptionList>
 </xml>

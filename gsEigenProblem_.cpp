@@ -1,4 +1,3 @@
-#include <gismo.h>
 
 #include <gsCore/gsTemplateTools.h>
 #include <gsStructuralAnalysis/gsEigenProblemBase.h>

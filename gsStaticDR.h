@@ -11,7 +11,6 @@
     Author(s): H.M. Verhelst (2019-..., TU Delft)
 */
 
-#include <gismo.h>
 #include <gsStructuralAnalysis/gsStaticBase.h>
 
 namespace gismo
