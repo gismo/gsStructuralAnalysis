@@ -405,7 +405,7 @@ int main (int argc, char** argv)
         std::string fileName = dirname + "/" + output + util::to_string(k);
         gsWriteParaview<>(solField, fileName, 5000);
         fileName = output + util::to_string(k) + "0";
-        collection.addTimestep(fileName,k,".vts");
+        collection.addPart(fileName + ".vts",k);
       }
 
       if (write)

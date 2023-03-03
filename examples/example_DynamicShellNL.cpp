@@ -305,7 +305,7 @@ for (index_t i=0; i<steps; i++)
   std::string fileName = dirname + "/solution" + util::to_string(i);
   gsWriteParaview<>(solField, fileName, 500);
   fileName = "solution" + util::to_string(i) + "0";
-  collection.addTimestep(fileName,i,".vts");
+  collection.addPart(fileName + ".vts",i);
 
   if (write)
   {

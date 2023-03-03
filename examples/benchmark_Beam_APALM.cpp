@@ -460,8 +460,8 @@ int main (int argc, char** argv)
             std::string fileName = dirname + "/" + "data_serial_branch"+std::to_string(b) + util::to_string(k);
             gsWriteParaview<>(solField, fileName, 1000,mesh);
             fileName = "data_serial_branch"+std::to_string(b) + util::to_string(k) + "0";
-            dataCollection.addTimestep(fileName,times[k],".vts");
-            if (mesh) dataCollection.addTimestep(fileName,times[k],"_mesh.vtp");
+            dataCollection.addPart(fileName + ".vts",times[k]);
+            if (mesh) dataCollection.addPart(fileName + "_mesh.vtp",times[k]);
           }
         }
         if (plot)
@@ -529,8 +529,8 @@ int main (int argc, char** argv)
             std::string fileName = dirname + "/" + "data_parallel_branch"+std::to_string(b) + util::to_string(k);
             gsWriteParaview<>(solField, fileName, 1000,mesh);
             fileName = "data_parallel_branch"+std::to_string(b) + util::to_string(k) + "0";
-            dataCollection.addTimestep(fileName,times[k],".vts");
-            if (mesh) dataCollection.addTimestep(fileName,times[k],"_mesh.vtp");
+            dataCollection.addPart(fileName + ".vts",times[k]);
+            if (mesh) dataCollection.addPart(fileName + "_mesh.vtp",times[k]);
           }
         }
         if (plot)

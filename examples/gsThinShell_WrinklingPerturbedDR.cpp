@@ -724,8 +724,8 @@ int main (int argc, char** argv)
         std::string fileName = dirname + "/" + output + util::to_string(k);
         gsWriteParaview<>(solField, fileName, 1000,mesh);
         fileName = output + util::to_string(k) + "0";
-        collection.addTimestep(fileName,k,".vts");
-        if (mesh) collection.addTimestep(fileName,k,"_mesh.vtp");
+        collection.addPart(fileName + ".vts",k);
+        if (mesh) collection.addPart(fileName + "_mesh.vtp",k);
       }
       if (stress)
       {
@@ -756,17 +756,17 @@ int main (int argc, char** argv)
         fileName = dirname + "/" + "membrane" + util::to_string(k);
         gsWriteParaview( membraneStress, fileName, 1000);
         fileName = "membrane" + util::to_string(k) + "0";
-        Smembrane.addTimestep(fileName,k,".vts");
+        Smembrane.addPart(fileName + ".vts",k);
 
         fileName = dirname + "/" + "flexural" + util::to_string(k);
         gsWriteParaview( flexuralStress, fileName, 1000);
         fileName = "flexural" + util::to_string(k) + "0";
-        Sflexural.addTimestep(fileName,k,".vts");
+        Sflexural.addPart(fileName + ".vts",k);
 
         fileName = dirname + "/" + "membrane_p" + util::to_string(k);
         gsWriteParaview( membraneStress_p, fileName, 1000);
         fileName = "membrane_p" + util::to_string(k) + "0";
-        Smembrane_p.addTimestep(fileName,k,".vts");
+        Smembrane_p.addPart(fileName + ".vts",k);
       }
 
 

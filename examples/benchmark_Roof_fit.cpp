@@ -523,8 +523,8 @@ int main (int argc, char** argv)
         std::string fileName = dirname + "/" + "data" + util::to_string(k);
         gsWriteParaview<>(solField, fileName, 1000,mesh);
         fileName = "data" + util::to_string(k) + "0";
-        dataCollection.addTimestep(fileName,times[k],".vts");
-        if (mesh) dataCollection.addTimestep(fileName,times[k],"_mesh.vtp");
+        dataCollection.addPart(fileName + ".vts",times[k]);
+        if (mesh) dataCollection.addPart(fileName + "_mesh.vtp",times[k]);
       }
     }
 
@@ -559,8 +559,8 @@ int main (int argc, char** argv)
         std::string fileName = dirname + "/" + "line" + util::to_string(k);
         gsWriteParaview<>(solField, fileName, 1000,mesh);
         fileName = "line" + util::to_string(k) + "0";
-        lineCollection.addTimestep(fileName,xi[k],".vts");
-        if (mesh) lineCollection.addTimestep(fileName,xi[k],"_mesh.vtp");
+        lineCollection.addPart(fileName + ".vts",xi[k]);
+        if (mesh) lineCollection.addPart(fileName + "_mesh.vtp",xi[k]);
       }
     }
 

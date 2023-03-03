@@ -707,7 +707,7 @@ int main (int argc, char** argv)
           std::string fileName = "BucklingResults/modes" + util::to_string(m);
           gsWriteParaview<>(solField, fileName, 5000);
           fileName = "modes" + util::to_string(m) + "0";
-          collection.addTimestep(fileName,m,".vts");
+          collection.addPart(fileName + ".vts",m);
         }
         collection.save();
     }
