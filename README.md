@@ -2,8 +2,10 @@
 - ALResidual(x,lambda,force) --> ALResidual(x,lambda)
 
 # Changelog
+## v23.3:
+  - add APALM (see PR https://github.com/gismo/gsStructuralAnalysis/pull/13)
 
-## v21.X:
+## v22.1:
   - Static solves can be done by `gsStaticNewton` and `gsStaticDR` (Dynamic Relaxation method), both inheriting from `gsStaticBase`
   - Provided base class for ALMs. All ALMs have a separate class now, and the singular point approach method is implemented in the base class.
   - Eigenvalue problems (Buckling, Modal) have a base class as well, and `gsBucklingSolver` and `gsModalSolver` only provide a top-layer assigning the right matrices.
