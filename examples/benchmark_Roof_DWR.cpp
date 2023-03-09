@@ -583,7 +583,7 @@ int main (int argc, char** argv)
     typename gsBoxTopology::bContainer goalSides;
     //goalSides.push_back(patchSide(0,boundary::west));
     gsMatrix<> points;
-    real_t error = 1;
+    real_t error = std::numeric_limits<real_t>::max();
     index_t numDofs = assembler->numDofsL();
 
     real_t refTol = target / bandwidth; // refine if error is above
@@ -679,7 +679,7 @@ int main (int argc, char** argv)
             loadstep_errors.push_back(std::make_pair(assembler->numDofsL(),error));
 
             std::vector<real_t> errorVec = helper.errors();
-            std::vector<real_t> elErrors = helper.absErrors();
+            std::vector<real_t> elErrors = helper.sqErrors();
 
             if (plotError)
             {
