@@ -137,6 +137,7 @@ int main (int argc, char** argv)
     bool write        = false;
 
     index_t maxit     = 20;
+    index_t maxRefIt = 10;
 
     // Arc length method options
     real_t dL        = 0.5; // Ard length to find bifurcation
@@ -173,6 +174,7 @@ int main (int argc, char** argv)
 
     cmd.addInt("q","QuasiNewtonInt","Use the Quasi Newton method every INT iterations",quasiNewtonInt);
     cmd.addInt("N", "maxsteps", "Maximum number of steps", maxSteps);
+    cmd.addInt("i", "maxRefIt", "Maximum number of refinement iterations steps", maxRefIt);
 
     cmd.addString("U","output", "outputDirectory", dirname);
 
@@ -602,11 +604,11 @@ int main (int argc, char** argv)
         index_t it = 0;
         bool refined = true;
         bool coarsened = true;
-        error = 1;
+        error = std::numeric_limits<real_t>::max();
         bool bandtest = (bandwidth==1) ? error > refTol : ((error < crsTol )|| (error >= refTol));
-        while (bandtest && it < maxIt && (refined || coarsened))
+        while (bandtest && it < maxRefIt && (refined || coarsened))
         {
-            gsInfo<<"Iteration "<<it<<"/"<<maxIt<<", refTol < prev error < crsTol : "<<refTol<<" < "<<error<<" < "<<crsTol<<"\n";
+            gsInfo<<"Iteration "<<it<<"/"<<maxRefIt<<", refTol < prev error < crsTol : "<<refTol<<" < "<<error<<" < "<<crsTol<<"\n";
             gsInfo<<"New basis (L): \n"<<mp.basis(0)<<"\n";
 
             assembler->setPointLoads(pLoads);
