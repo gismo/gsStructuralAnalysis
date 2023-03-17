@@ -525,6 +525,8 @@ int main (int argc, char** argv)
     gsParaviewCollection Smembrane(dirname + "/" + "membrane");
     gsParaviewCollection Sflexural(dirname + "/" + "flexural");
     gsParaviewCollection Smembrane_p(dirname + "/" + "membrane_p");
+    gsParaviewCollection errors(dirname + "/" + "errors");
+    std::vector<real_t> elErrors;
 
     // Make objects for previous solutions
     real_t Lold = 0, deltaLold = 0;
@@ -615,8 +617,6 @@ int main (int argc, char** argv)
     {
         loadstep_errors.clear();
         gsInfo<<"Load step "<< k<<"; \t(starting from "<<eps<<" strain)\tSystem size = "<<Uold.size()<<" x "<<Uold.size()<<"\n";
-        gsParaviewCollection errors(dirname + "/" + "error" + util::to_string(k));
-        gsParaviewCollection error_fields(dirname + "/" + "error_field" + util::to_string(k));
 
         arcLength.setLength(dLb);
 
@@ -660,27 +660,31 @@ int main (int argc, char** argv)
         indicator_prev = indicator;
 
         ///////////////////////////////////////////////////
-        index_t it = 0;
-        if (plot)
-        {
-            std::string fileName = dirname + "/" + "error_field" + util::to_string(k) + "_" + util::to_string(it);
-            helper.computeError(mp_def,U_patch,goalSides,points,interior,false,fileName,1000,false,mesh);
-            fileName = "error_field" + util::to_string(k) + "_" + util::to_string(it) ;
-            for (size_t p=0; p!=mp.nPatches(); p++)
-            {
-                error_fields.addTimestep(fileName+std::to_string(p),it,".vts");
-                if (mesh)
-                    error_fields.addTimestep(fileName + "_mesh"+std::to_string(p),it,".vtp");
-            }
-        }
-        else
-            helper.computeError(mp_def,U_patch,goalSides,points,interior);
+        helper.computeError(mp_def,U_patch,goalSides,points,interior);
 
         error = std::abs(helper.error());
         numDofs = assembler->numDofsL();
 
         gsInfo<<"Error = "<<error<<"\n";
         loadstep_errors.push_back(std::make_pair(assembler->numDofsL(),error));
+
+        elErrors = helper.sqErrors(true);
+        if (plotError)
+        {
+            for (size_t p=0; p!=mp.nPatches(); p++)
+            {
+                gsElementErrorPlotter<real_t> err_eh(mp.basis(p),elErrors);
+                const gsField<> elemError_eh( mp.patch(p), err_eh, true );
+                std::string fileName = dirname + "/" + "error" + util::to_string(k);
+                writeSinglePatchField<>(mp.patch(p), err_eh, true, fileName + "_" + util::to_string(p), 1000);
+                if (mesh)
+                    writeSingleCompMesh<>(mp.basis(p), mp.patch(p),fileName + "_mesh" + "_" + util::to_string(p));
+                fileName = "error" + util::to_string(k);
+                errors.addTimestep(fileName,p,k,".vts");
+                if (mesh)
+                    errors.addTimestep(fileName + "_mesh",p,k,".vtp");
+            }
+        }
         ///////////////////////////////////////////////////
 
         deltaU_patch = U_patch;
@@ -795,8 +799,6 @@ int main (int argc, char** argv)
     {
         loadstep_errors.clear();
         gsInfo<<"Load step "<< k<<"; \t(starting from "<<eps<<" strain)\tSystem size = "<<Uold.size()<<" x "<<Uold.size()<<"\n";
-        gsParaviewCollection errors(dirname + "/" + "error" + util::to_string(k));
-        gsParaviewCollection error_fields(dirname + "/" + "error_field" + util::to_string(k));
 
         gsInfo<<"Basis (L): \n"<<mp.basis(0)<<"\n";
         index_t it = 0;
@@ -804,10 +806,12 @@ int main (int argc, char** argv)
         bool coarsened = true;
         error = 1;
         bool bandtest = (bandwidth==1) ? error > refTol : ((error < crsTol && error > nocrs)|| (error >= refTol)); // is true if error is outside the band
+        gsMultiPatch<> mp_prev;
         while ((bandtest) && it < maxRefIt && (refined || coarsened))
         {
             gsInfo<<"Iteration "<<it<<"/"<<maxRefIt<<", refTol < prev error < crsTol : "<<refTol<<" < "<<error<<" < "<<crsTol<<"\n";
             gsInfo<<"New basis (L): \n"<<mp.basis(0)<<"\n";
+            mp_prev = mp;
 
             assembler->assembleL();
             Force = assembler->primalL();
@@ -853,45 +857,14 @@ int main (int argc, char** argv)
             /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
             // ERROR ESTIMATION PART
             /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-            if (plot)
-            {
-                std::string fileName = dirname + "/" + "error_field" + util::to_string(k) + "_" + util::to_string(it);
-                helper.computeError(mp_def,U_patch,goalSides,points,interior,false,fileName,1000,false,mesh);
-                fileName = "error_field" + util::to_string(k) + "_" + util::to_string(it) ;
-                for (size_t p=0; p!=mp.nPatches(); p++)
-                {
-                    error_fields.addTimestep(fileName+std::to_string(p),it,".vts");
-                    if (mesh)
-                        error_fields.addTimestep(fileName + "_mesh"+std::to_string(p),it,".vtp");
-                }
-            }
-            else
-                helper.computeError(mp_def,U_patch,goalSides,points,interior);
+            helper.computeError(mp_def,U_patch,goalSides,points,interior);
 
             error = std::abs(helper.error());
             numDofs = assembler->numDofsL();
             gsInfo<<"Error = "<<error<<", numDofs = "<<numDofs<<"\n";
             loadstep_errors.push_back(std::make_pair(assembler->numDofsL(),error));
 
-            std::vector<real_t> errorVec = helper.errors();
-            std::vector<real_t> elErrors = helper.sqErrors();
-
-            if (plotError)
-            {
-                for (size_t p=0; p!=mp.nPatches(); p++)
-                {
-                    gsElementErrorPlotter<real_t> err_eh(mp.basis(p),elErrors);
-                    const gsField<> elemError_eh( mp.patch(p), err_eh, true );
-                    std::string fileName = dirname + "/" + "error" + util::to_string(k) + "_" + util::to_string(it);
-                    writeSinglePatchField<>(mp.patch(p), err_eh, true, fileName + "_" + util::to_string(p), 1000);
-                    if (mesh)
-                        writeSingleCompMesh<>(mp.basis(p), mp.patch(p),fileName + "_mesh" + "_" + util::to_string(p));
-                    fileName = "error" + util::to_string(k) + "_" + util::to_string(it) ;
-                    errors.addTimestep(fileName,p,it,".vts");
-                    if (mesh)
-                        errors.addTimestep(fileName + "_mesh",p,it,".vtp");
-                }
-            }
+            elErrors = helper.sqErrors(true);
 
             /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
             // ADAPTIVE MESHING PART
@@ -983,8 +956,19 @@ int main (int argc, char** argv)
 
         if (plotError)
         {
-            errors.save();
-            error_fields.save();
+            for (size_t p=0; p!=mp_prev.nPatches(); p++)
+            {
+                gsElementErrorPlotter<real_t> err_eh(mp_prev.basis(p),elErrors);
+                const gsField<> elemError_eh( mp_prev.patch(p), err_eh, true );
+                std::string fileName = dirname + "/" + "error" + util::to_string(k);
+                writeSinglePatchField<>(mp_prev.patch(p), err_eh, true, fileName + "_" + util::to_string(p), 1000);
+                if (mesh)
+                    writeSingleCompMesh<>(mp_prev.basis(p), mp_prev.patch(p),fileName + "_mesh" + "_" + util::to_string(p));
+                fileName = "error" + util::to_string(k);
+                errors.addTimestep(fileName,p,k,".vts");
+                if (mesh)
+                    errors.addTimestep(fileName + "_mesh",p,k,".vtp");
+            }
         }
 
         deltaU_patch = U_patch;
@@ -1017,6 +1001,10 @@ int main (int argc, char** argv)
         k++;
     }
 
+    if (plotError)
+    {
+        errors.save();
+    }
     if (plot)
     {
       collection.save();
