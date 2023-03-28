@@ -191,7 +191,7 @@ public:
     /// Apply the options
     virtual void applyOptions() {this->getOptions(); }
 
-    virtual T distance(gsVector<T>& DeltaU, T DeltaL)
+    virtual T distance(const gsVector<T>& DeltaU, T DeltaL)
     {
         GISMO_NO_IMPLEMENTATION;
     }

@@ -52,9 +52,10 @@ public:
 
   // std::tuple<std::vector<T>,std::vector<solution_t>,std::vector<index_t>> getFlatSolution(index_t level=-1);
 
-  void add(const gsAPALMData<T,solution_t> & data)
+  index_t add(const gsAPALMData<T,solution_t> & data)
   {
     m_container.push_back(data);
+    return m_container.size()-1;
   }
 
   gsAPALMData<T,solution_t> & branch(index_t k)

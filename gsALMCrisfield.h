@@ -76,7 +76,7 @@ public:
     }
 
 public:
-    T distance(gsVector<T>& DeltaU, T DeltaL)
+    T distance(const gsVector<T>& DeltaU, T DeltaL)
     {
         T A0 = math::pow(m_phi,2)*m_forcing.dot(m_forcing);
         return math::pow(DeltaU.dot(DeltaU) + A0*math::pow(DeltaL,2.0),0.5);

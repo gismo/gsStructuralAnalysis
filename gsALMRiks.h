@@ -78,7 +78,7 @@ public:
     }
 
 public:
-    T distance(gsVector<T>& DeltaU, T DeltaL)
+    T distance(const gsVector<T>& DeltaU, T DeltaL)
     {
         return math::pow(m_phi * math::pow(m_DeltaU.norm(),2.0) + (1.0-m_phi) * math::pow(m_DeltaL,2.0),0.5);
     }

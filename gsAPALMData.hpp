@@ -20,7 +20,8 @@ template <class T, class solution_t >
 gsAPALMData<T,solution_t>::gsAPALMData( const std::vector<T> & times,
                                   const  std::vector<solution_t> & solutions)
 :
-m_initialized(false)
+m_initialized(false),
+m_dt(1.0)
 {
   GISMO_ASSERT(times.size()==solutions.size(),"Sizes must agree");
 
@@ -32,7 +33,8 @@ m_initialized(false)
 template <class T, class solution_t >
 gsAPALMData<T,solution_t>::gsAPALMData(const std::vector<T> & times)
 :
-m_initialized(false)
+m_initialized(false),
+m_dt(1.0)
 {
   // Initialize the knot vectors
   m_t = gsKnotVector<T>(times,1,0);
@@ -47,9 +49,11 @@ m_initialized(false)
 template <class T, class solution_t >
 gsAPALMData<T,solution_t>::gsAPALMData()
 :
-m_initialized(false)
+m_initialized(false),
+m_dt(1.0)
 {
   _defaultOptions();
+  m_t = gsKnotVector<T>(0);
 }
 
 template <class T, class solution_t >
@@ -77,7 +81,7 @@ void gsAPALMData<T,solution_t>::init()
 {
   this->_applyOptions();
   // Clean queue
-  std::queue<std::tuple<T,T,index_t>> queue;
+  std::deque<std::tuple<T,T,index_t>> queue;
   m_queue.swap(queue);
 
   T low,upp;
@@ -86,7 +90,7 @@ void gsAPALMData<T,solution_t>::init()
     low = *it;
     it++;
     upp = *it;
-    m_queue.push({low,upp,1});
+    m_queue.push_back({low,upp,1});
   }
 
   this->_buildMap();
@@ -95,11 +99,91 @@ void gsAPALMData<T,solution_t>::init()
 }
 
 template <class T, class solution_t >
+void gsAPALMData<T,solution_t>::addStartPoint(const T & time, const solution_t & solution, bool priority)
+{
+  GISMO_ASSERT(m_t.size()==m_xi.size(),"Sizes must be the same!");
+  GISMO_ASSERT(m_t.size()==0,"Start point can only be added in a new branch");
+  this->_applyOptions();
+  T xi  = 0;
+  m_t.insert(time);
+  m_xi.insert(xi);
+
+  auto sol = std::make_shared<solution_t>(solution);
+  m_solutions.insert({xi,sol});
+  m_levels.insert({xi,0});
+
+  auto prev = std::make_shared<solution_t>(*(m_solutions[xi]).get());
+  m_prevs  .insert({xi,prev});
+
+  // same start and end coordinate, will be recognized by the pop function
+  if (priority)
+    m_queue.push_front({xi,xi,0});
+  else
+    m_queue.push_back({xi,xi,0});
+  m_initialized = true;
+}
+
+template <class T, class solution_t >
+void gsAPALMData<T,solution_t>::appendPoint(bool priority)
+{
+  // same start and end coordinate, will be recognized by the pop function
+  if (priority)
+    m_queue.push_front({m_xi.last(),m_xi.last(),0});
+  else
+    m_queue.push_back({m_xi.last(),m_xi.last(),0});
+  m_initialized = true;
+}
+
+template <class T, class solution_t >
+void gsAPALMData<T,solution_t>::appendData(const T & time, const solution_t & solution, bool priority)
+{
+  // Initialize the knot vectors
+  GISMO_ASSERT(m_t.size()==m_xi.size(),"Sizes must be the same!");
+  GISMO_ASSERT(m_t.size()==0 || time>m_t.last(),"Time must be bigger than last stored time!");
+  T xi;
+  if (m_t.size()==0)
+    xi = 0;
+  else if (m_t.size()==1)
+    xi = 1;
+  else
+    xi = (time-m_t.last()) * (m_xi.last()-m_xi.first()) / (m_t.last()-m_t.first()) + m_xi.last();
+
+  auto sol = std::make_shared<solution_t>(solution);
+  m_solutions.insert({xi,sol});
+  m_levels.insert({xi,0});
+
+  // add a previous, if exists
+  if (m_t.size()==0)
+  {
+    auto prev = std::make_shared<solution_t>(*(m_solutions[xi]).get());
+    m_prevs  .insert({xi,prev});
+  }
+  else
+  {
+    auto prev = std::make_shared<solution_t>(*(m_solutions[m_xi.last()]).get());
+    m_prevs  .insert({xi,prev});
+    if (priority)
+      m_queue.push_front({m_xi.last(),xi,1});
+    else
+      m_queue.push_back({m_xi.last(),xi,1});
+    m_initialized = true;
+  }
+
+
+  m_t.insert(time);
+  m_xi.insert(xi);
+
+  this->_buildMap();
+}
+
+template <class T, class solution_t >
 void gsAPALMData<T,solution_t>::setData(const std::vector<T> & times,const  std::vector<solution_t> & solutions)
 {
   // Initialize the knot vectors
   m_t = gsKnotVector<T>(times,1,0);
   m_t.degreeDecrease(1);
+
+  gsDebugVar(m_t);
 
   m_xi = m_t;
   m_xi.transform(0,1);
@@ -116,11 +200,7 @@ void gsAPALMData<T,solution_t>::setData(const std::vector<T> & times,const  std:
     m_levels.insert({m_xi.at(k),0});
     auto prevk = std::make_shared<solution_t>(*(m_solutions[m_xi.at(k-1)]).get());
     m_prevs .insert({m_xi.at(k),prevk});
-    auto nextk = std::make_shared<solution_t>(*(m_solutions[m_xi.at(k)]).get());
-    m_nexts .insert({m_xi.at(k-1),nextk});
   }
-  auto nextN = std::make_shared<solution_t>(*(m_solutions[m_xi.last()]).get());
-  m_nexts  .insert({m_xi.last(),nextN});
 }
 
 // template <class T, class solution_t >
@@ -138,7 +218,7 @@ void gsAPALMData<T,solution_t>::init(const std::vector<T> & times,const  std::ve
 }
 
 template <class T, class solution_t >
-std::tuple<index_t, T     , solution_t, solution_t, solution_t> gsAPALMData<T,solution_t>::pop()
+std::tuple<index_t, T     , solution_t, solution_t> gsAPALMData<T,solution_t>::pop()
 {
   GISMO_ASSERT(m_initialized,"Structure is not initialized");
   GISMO_ASSERT(!m_queue.empty(),"The queue is empty! Something went wrong.");
@@ -146,20 +226,23 @@ std::tuple<index_t, T     , solution_t, solution_t, solution_t> gsAPALMData<T,so
   T xilow = std::get<0>(m_queue.front());
   T xiupp = std::get<1>(m_queue.front());
   index_t level = std::get<2>(m_queue.front());
-  m_queue.pop();
+  m_queue.pop_front();
+
   T tlow = m_tmap[xilow];
   T tupp = m_tmap[xiupp];
 
-  T dt  = (tupp-tlow);
+  T dt;
+  if (xilow==xiupp && level==0)
+    dt = m_dt;
+  else
+    dt = (tupp-tlow);
 
   GISMO_ASSERT(m_solutions.count(xilow)!=0,"Cannot find start point at tstart = "<<tlow<<"\n");
   GISMO_ASSERT(m_prevs  .count(xilow)!=0,"Cannot find previous solution for tstart = "<<tlow<<"\n");
-  GISMO_ASSERT(m_nexts  .count(xilow)!=0,"Cannot find previous solution for tstart = "<<tlow<<"\n");
 
   solution_t start = *(m_solutions[xilow].get());
 
   solution_t prev = *(m_prevs[xilow].get());
-  solution_t next = *(m_nexts[xilow].get());
 
   // add the job to the active jobs
   m_jobs[m_ID++] = std::make_tuple(xilow,xiupp,level);
@@ -171,7 +254,7 @@ std::tuple<index_t, T     , solution_t, solution_t, solution_t> gsAPALMData<T,so
     gsDebug<<"job "<<it->first<<" on ["<<xilow<<","<<xiupp<<"] = ["<<tlow<<","<<tupp<<"] with level "<<level<<"\n";
   }
 
-  return std::make_tuple(m_ID-1, dt, start, prev, next);
+  return std::make_tuple(m_ID-1, dt, start, prev);
 }
 
 template <class T, class solution_t >
@@ -314,7 +397,7 @@ void gsAPALMData<T,solution_t>::submit(index_t ID, const std::vector<T> & distan
     {
       if (level < m_maxLevel)
       {
-        m_queue.push(std::make_tuple(xi.at(k-1),xi.at(k),level+1));
+        m_queue.push_back(std::make_tuple(xi.at(k-1),xi.at(k),level+1));
         if (m_verbose==1) gsInfo<<"Interval ["<<xi.at(k-1)<<","<<xi.at(k)<<"] on level "<<level+1<<" added to queue\n";
       }
       else
@@ -353,12 +436,18 @@ void gsAPALMData<T,solution_t>::submit(index_t ID, const std::vector<T> & distan
     if (m_verbose==2) gsInfo<<"Added a previous solution on time = "<<m_tmap[xi.at(k)]<<" (parametric time = "<<xi.at(k)<<")\n";
     m_prevs[xi.at(k)] = std::make_shared<solution_t>(*(m_solutions[xi.at(k-1)].get()));
   }
+}
 
-  for (size_t k=1; k!=xi.size()-1; k++) // add only INTERIOR solutions
-  {
-    if (m_verbose==2) gsInfo<<"Added a next solution on time = "<<m_tmap[xi.at(k)]<<" (parametric time = "<<xi.at(k)<<")\n";
-    m_nexts[xi.at(k)] = std::make_shared<solution_t>(*(m_solutions[xi.at(k+1)].get()));
-  }
+template <class T, class solution_t >
+T gsAPALMData<T,solution_t>::jobStartTime(index_t ID)
+{
+  return m_tmap[std::get<0>(m_jobs[ID])];
+}
+
+template <class T, class solution_t >
+T gsAPALMData<T,solution_t>::jobStartPar(index_t ID)
+{
+  return std::get<0>(m_jobs[ID]);
 }
 
 template <class T, class solution_t >
@@ -381,9 +470,7 @@ std::pair<T,T> gsAPALMData<T,solution_t>::jobPars(index_t ID)
 template <class T, class solution_t >
 index_t gsAPALMData<T,solution_t>::jobLevel(index_t ID)
 {
-  index_t level;
-  std::tie(std::ignore,std::ignore,level) = m_jobs[ID];
-  return level;
+  return std::get<2>(m_jobs[ID]);
 }
 
 template <class T, class solution_t >
@@ -454,14 +541,14 @@ void gsAPALMData<T,solution_t>::print()
 template <class T, class solution_t >
 void gsAPALMData<T,solution_t>::printQueue()
 {
-  std::queue<std::tuple<T,T,index_t>> queue = m_queue;
+  std::deque<std::tuple<T,T,index_t>> queue = m_queue;
   gsInfo<<"Queue has "<<queue.size()<<" elements\n";
   while (!queue.empty())
   {
     gsInfo<<"Start time "<<std::get<0>(queue.front())
           <<"; end time = "<<std::get<1>(queue.front())
           <<"; level = "<<std::get<2>(queue.front())<<"\n";
-    queue.pop();
+    queue.pop_front();
   }
   gsInfo<<"Queue is empty\n";
 }

@@ -28,6 +28,15 @@ namespace gismo
 #define gsMPIInfo(rank) gsInfo<<"[MPI process "<<rank<<"]: "
 #define gsMPIDebug(rank) gsDebug<<"[MPI process "<<rank<<"]: "
 
+/*
+ * IDEA (Hugo Verhelst, 03-03-2023):
+ * The APALM can be extended for adaptive meshes by storing multipatches as solutions.
+ * Starting from a solution (i.e. a mp), one can construct the start point vector internally
+ * and continue with 'normal' arclength methods. The distance function for the ALM
+ * can be re-implemented for multipatches if needed. The major changes will be that the
+ * parts where gsALMBase::step() is called need to be specialized.
+ */
+
 template<class T>
 class gsAPALM
 {
@@ -63,6 +72,7 @@ private:
 public:
   virtual void initialize();
 
+  virtual void solve(index_t Nsteps = 10);
   virtual void serialSolve(index_t Nsteps = 10);
   virtual void parallelSolve();
 
@@ -135,51 +145,89 @@ public:
 protected:
 
 #ifdef GISMO_WITH_MPI
+  // For meta-data
+  void _sendMainToWorker( const index_t &   workerID,
+                          const index_t &   branch,
+                          const index_t &   jobID,
+                          const index_t &   dataLevel);
+
   // For data
   void _sendMainToWorker( const index_t &         workerID,
-                          const index_t &         branch,
-                          const std::tuple<index_t, T     , solution_t, solution_t, solution_t> & dataEntry,
+                          const std::tuple<index_t, T     , solution_t, solution_t> & dataEntry,
                           const std::pair<T,T> &  dataInterval,
-                          const index_t &         dataLevel,
                           const solution_t &      dataReference );
 
+  void _sendMainToWorker( const index_t &         workerID,
+                          const std::tuple<index_t, T     , solution_t, solution_t> & dataEntry,
+                          const T       &         startTime);
   // For stop signal
   void _sendMainToWorker( const index_t &   workerID,
                           const bool &      stop      );
   void _sendMainToAll(    const bool &      stop      );
 
+  // For meta-data
+  void _recvMainToWorker( const index_t &   sourceID,
+                                index_t &   branch,
+                                index_t &   jobID,
+                                index_t &   dataLevel);
+
   // For data
   void _recvMainToWorker( const index_t &         sourceID,
-                                index_t &         branch,
-                                std::tuple<index_t, T     , solution_t, solution_t, solution_t> & dataEntry,
+                                std::tuple<index_t, T     , solution_t, solution_t> & dataEntry,
                                 std::pair<T,T> &  dataInterval,
-                                index_t &         dataLevel,
                                 solution_t &      dataReference);
+
+  void _recvMainToWorker( const index_t &   sourceID,
+                                std::tuple<index_t, T     , solution_t, solution_t> & dataEntry,
+                                T &               startTime);
 
   // For stop signal
   void _recvMainToWorker(   const index_t &   sourceID,
                                   bool &      stop);
+  // For meta-data
+  void _sendWorkerToMain( const index_t & mainID,
+                          const index_t & branch,
+                          const index_t & jobID);
 
+  // For meta-data
+  void _recvWorkerToMain( index_t & sourceID, // source ID will change to MPI
+                          index_t & branch,
+                          index_t & jobID);
   // For data
   void _sendWorkerToMain( const index_t &                   mainID,
-                          const index_t &                   branch,
-                          const index_t &                   jobID,
                           const std::vector<T> &            distances,
                           const std::vector<solution_t> &   stepSolutions,
                           const T &                         upperDistance,
                           const T &                         lowerDistance );
 
+  void _sendWorkerToMain( const index_t &     mainID,
+                          const T &           distance,
+                          const solution_t &  solution,
+                          const bool &        bifurcation);
+
   // For data
   void _recvWorkerToMain( index_t &                   sourceID, // source ID will change to MPI
-                          index_t &                   branch,
-                          index_t &                   jobID,
                           std::vector<T> &            distances,
                           std::vector<solution_t>&    stepSolutions,
                           T &                         upperDistance,
                           T &                         lowerDistance);
 
+  void _recvWorkerToMain( index_t &     sourceID, // source ID will change to MPI
+                          T &           distance,
+                          solution_t &  solution,
+                          bool &        bifurcation);
+
+
   gsMpiComm & comm() { return m_comm; }
 #endif
+
+  template <bool _hasWorkers>
+  typename std::enable_if< _hasWorkers, void>::type
+  _solve_impl(index_t Nsteps);
+
+  template <bool _hasWorkers>
+  typename std::enable_if<!_hasWorkers, void>::type
+  _solve_impl(index_t Nsteps);
 
   template <bool _hasWorkers>
   typename std::enable_if< _hasWorkers, void>::type
@@ -189,17 +237,23 @@ protected:
   typename std::enable_if<!_hasWorkers, void>::type
   parallelSolve_impl();
 
-  void _parallelSolve_worker(   const std::tuple<index_t, T     , solution_t, solution_t, solution_t> & dataEntry,
-                                        const std::pair<T,T> &  dataInterval,
-                                        const index_t &         dataLevel,
-                                        const solution_t &      dataReference,
-                                        std::vector<T> &        distances,
-                                        std::vector<solution_t>&stepSolutions,
-                                        T &                     upperDistance,
-                                        T &                     lowerDistance   );
-  void _parallelSolve_main(     gsAPALMDataContainer<T,solution_t> & data       );
+  void _initiation(   const std::tuple<index_t, T     , solution_t, solution_t> & dataEntry,
+                      const T &               startTime,
+                      const index_t &         dataLevel,
+                      T &                     endTime,
+                      solution_t &            stepSolution,
+                      bool &                  bifurcation   );
 
-  void _parallelSolve_finalize();
+  void _correction(   const std::tuple<index_t, T     , solution_t, solution_t> & dataEntry,
+                      const std::pair<T,T> &  dataInterval,
+                      const index_t &         dataLevel,
+                      const solution_t &      dataReference,
+                      std::vector<T> &        distances,
+                      std::vector<solution_t>&stepSolutions,
+                      T &                     upperDistance,
+                      T &                     lowerDistance   );
+
+  void _finalize();
 
 protected:
 

@@ -109,7 +109,7 @@ int main (int argc, char** argv)
     int numElevate    = 1;
     int numHref       = 1;
     bool plot         = false;
-    bool make_fit     = false;
+    bool sequential   = false;
     bool mesh         = false;
     bool stress       = false;
     bool membrane     = false;
@@ -187,7 +187,7 @@ int main (int argc, char** argv)
     cmd.addSwitch("membrane", "Use membrane model (no bending)", membrane);
     cmd.addSwitch("deformed", "plot on deformed shape", deformed);
     cmd.addSwitch("write", "write to file", write);
-    cmd.addSwitch("fit", "Make a fit and refer to that", make_fit);
+    cmd.addSwitch("sequential", "Solve sequentially, i.e. serial --> parallel", sequential);
 
 
     try { cmd.getValues(argc,argv); } catch (int rv) { return rv; }
@@ -478,10 +478,6 @@ int main (int argc, char** argv)
 
     index_t level = 0;
 
-    gsInfo<<"------------------------------------------------------------------------------------\n";
-    gsInfo<<"\t\t\tLevel "<<level<<" (dL = "<<dL<<") -- Coarse grid \n";
-    gsInfo<<"------------------------------------------------------------------------------------\n";
-
     gsVector<> refPoints(2);
     gsVector<index_t> refPatches(1);
     refPoints<<1.0,1.0;
@@ -495,7 +491,13 @@ int main (int argc, char** argv)
     gsAPALMFrustrum<real_t> apalm(arcLength,apalmData,assembler,dirname,refPoints,refPatches);
 
 #ifdef GISMO_WITH_MPI
+#   ifdef _OPENMP
+    const int tid = omp_get_thread_num();
+    const int nt  = omp_get_num_threads();
+    gsInfo << "Gismo was compiled with MPI support with "<<apalm.size()<<" ranks and with OpenMP support with "<<nt<<" threads per rank.\n";
+#   else
     gsInfo << "Gismo was compiled with MPI support with "<<apalm.size()<<" cores.\n";
+#   endif
 #endif
 
     apalm.options().setSwitch("Verbose",(verbose>0));
@@ -503,152 +505,234 @@ int main (int argc, char** argv)
     apalm.options().setInt("MaxIt",1000);
     apalm.initialize();
 
-    real_t serialTime = apalm.wallTime();
-    apalm.serialSolve(step+1);
-    serialTime = apalm.wallTime() - serialTime;
-    if (apalm.isMain()) gsInfo<<"Serial time = "<<serialTime<<"\n";
 
-    // plot geometry
-    if (apalm.isMain())
-      if (plot)
-        gsWriteParaview(mp,dirname + "/" + "mp",1000,true);
-
-    if (apalm.isMain())
-      if (write)
-        initStepOutput(dirname + "/" + wn, writePoints);
-
-    if (apalm.isMain())
+    if(!sequential)
     {
-      solutions = apalm.getFlatSolutions();
-      times     = apalm.getFlatTimes();
-      levels    = apalm.getFlatLevels();
+      real_t time = apalm.wallTime();
+      apalm.solve(step+1);
+      time = apalm.wallTime() - time;
+      if (apalm.isMain()) gsInfo<<"Time = "<<time<<"\n";
 
-      if (plot || write)
-      {
-        gsField<> solField;
-        gsMultiPatch<> mp_tmp;
-        std::vector<std::string> pointheaders = {"u_x","u_y","u_z"};
-        std::vector<std::string> otherheaders = {"lambda","level"};
+      // plot geometry
+      if (apalm.isMain())
+        if (plot)
+          gsWriteParaview(mp,dirname + "/" + "mp",1000,true);
 
-        gsParaviewCollection dataCollection(dirname + "/" + "data_serial");
-        gsStructuralAnalysisOutput<real_t> data(dirname + "/data_serial.csv",refPoints);
+      if (apalm.isMain())
         if (write)
-            data.init(pointheaders,otherheaders);
+          initStepOutput(dirname + "/" + wn, writePoints);
 
-        for (size_t k=0; k!= solutions.size(); k++)
+      if (apalm.isMain())
+      {
+        solutions = apalm.getFlatSolutions();
+        times     = apalm.getFlatTimes();
+        levels    = apalm.getFlatLevels();
+
+        if (plot || write)
         {
-          Lold = solutions[k].second;
-          Uold = solutions[k].first;
+          gsField<> solField;
+          gsMultiPatch<> mp_tmp;
+          std::vector<std::string> pointheaders = {"u_x","u_y","u_z"};
+          std::vector<std::string> otherheaders = {"lambda","level"};
 
-          assembler->constructSolution(Uold,mp_tmp);
-          deformation.patch(0) = mp_tmp.patch(0);
-          deformation.patch(0).coefs() -= mp.patch(0).coefs();// assuming 1 patch here
-          solField = gsField<>(mp,deformation);
-
+          gsParaviewCollection dataCollection(dirname + "/" + "data");
+          gsStructuralAnalysisOutput<real_t> data(dirname + "/data.csv",refPoints);
           if (write)
-            if (refPoints.cols()!=0)
+              data.init(pointheaders,otherheaders);
+
+          for (size_t k=0; k!= solutions.size(); k++)
+          {
+            Lold = solutions[k].second;
+            Uold = solutions[k].first;
+
+            assembler->constructSolution(Uold,mp_tmp);
+            deformation.patch(0) = mp_tmp.patch(0);
+            deformation.patch(0).coefs() -= mp.patch(0).coefs();// assuming 1 patch here
+            solField = gsField<>(mp,deformation);
+
+            if (write)
+              if (refPoints.cols()!=0)
+              {
+                  gsVector<> otherData(2);
+                  otherData<<Lold,levels[k];
+                  gsMatrix<> pointResults(mp.geoDim(),refPoints.cols());
+                  for (index_t p=0; p!=refPoints.cols(); p++)
+                      pointResults.col(p) = solField.value(refPoints.col(p),refPatches(0,p));
+                  data.add(pointResults,otherData);
+              }
+
+            if (plot)
             {
+              std::string fileName = dirname + "/" + "data" + util::to_string(k);
+              gsWriteParaview<>(solField, fileName, 1000,mesh);
+              fileName = "data" + util::to_string(k) + "0";
+              dataCollection.addPart(fileName + ".vts",times[k]);
+              if (mesh) dataCollection.addPart(fileName + "_mesh.vtp",times[k]);
+            }
+          }
+          if (plot)
+          {
+            dataCollection.save();
+          }
+        }
+      }
+
+    }
+    else
+    {
+
+      real_t serialTime = apalm.wallTime();
+      if (apalm.isMain())
+      {
+        gsInfo<<"------------------------------------------------------------------------------------\n";
+        gsInfo<<"\t\t\tLevel "<<level<<" (dL = "<<dL<<") -- Coarse grid \n";
+        gsInfo<<"------------------------------------------------------------------------------------\n";
+      }
+      apalm.serialSolve(step+1);
+      serialTime = apalm.wallTime() - serialTime;
+      if (apalm.isMain()) gsInfo<<"Serial time = "<<serialTime<<"\n";
+
+      // plot geometry
+      if (apalm.isMain())
+        if (plot)
+          gsWriteParaview(mp,dirname + "/" + "mp",1000,true);
+
+      if (apalm.isMain())
+        if (write)
+          initStepOutput(dirname + "/" + wn, writePoints);
+
+      if (apalm.isMain())
+      {
+        solutions = apalm.getFlatSolutions();
+        times     = apalm.getFlatTimes();
+        levels    = apalm.getFlatLevels();
+
+        if (plot || write)
+        {
+          gsField<> solField;
+          gsMultiPatch<> mp_tmp;
+          std::vector<std::string> pointheaders = {"u_x","u_y","u_z"};
+          std::vector<std::string> otherheaders = {"lambda","level"};
+
+          gsParaviewCollection dataCollection(dirname + "/" + "data_serial");
+          gsStructuralAnalysisOutput<real_t> data(dirname + "/data_serial.csv",refPoints);
+          if (write)
+              data.init(pointheaders,otherheaders);
+
+          for (size_t k=0; k!= solutions.size(); k++)
+          {
+            Lold = solutions[k].second;
+            Uold = solutions[k].first;
+
+            assembler->constructSolution(Uold,mp_tmp);
+            deformation.patch(0) = mp_tmp.patch(0);
+            deformation.patch(0).coefs() -= mp.patch(0).coefs();// assuming 1 patch here
+            solField = gsField<>(mp,deformation);
+
+            if (write)
+              if (refPoints.cols()!=0)
+              {
+                  gsVector<> otherData(2);
+                  otherData<<Lold,levels[k];
+                  gsMatrix<> pointResults(mp.geoDim(),refPoints.cols());
+                  for (index_t p=0; p!=refPoints.cols(); p++)
+                      pointResults.col(p) = solField.value(refPoints.col(p),refPatches(0,p));
+                  data.add(pointResults,otherData);
+              }
+
+            if (plot)
+            {
+              std::string fileName = dirname + "/" + "data_serial" + util::to_string(k);
+              gsWriteParaview<>(solField, fileName, 1000,mesh);
+              fileName = "data_serial" + util::to_string(k) + "0";
+              dataCollection.addPart(fileName + ".vts",times[k]);
+              if (mesh) dataCollection.addPart(fileName + "_mesh.vtp",times[k]);
+            }
+          }
+          if (plot)
+          {
+            dataCollection.save();
+          }
+        }
+      }
+
+      /////////////////////////////////////////////////////////////////////////////////////////////
+      /////////////////////////////////////////////////////////////////////////////////////////////
+      /////////////////////////////////////////////////////////////////////////////////////////////
+
+      real_t parallelTime = apalm.wallTime();
+      apalm.parallelSolve();
+      parallelTime = apalm.wallTime() - parallelTime;
+      if (apalm.isMain()) gsInfo<<"Parallel time = "<<parallelTime<<"\n";
+
+      /////////////////////////////////////////////////////////////////////////////////////////////
+      /////////////////////////////////////////////////////////////////////////////////////////////
+      /////////////////////////////////////////////////////////////////////////////////////////////
+
+      if (apalm.isMain())
+      {
+        solutions = apalm.getFlatSolutions();
+        times     = apalm.getFlatTimes();
+        levels    = apalm.getFlatLevels();
+
+        if (plot || write)
+        {
+          gsField<> solField;
+          gsMultiPatch<> mp_tmp;
+          std::vector<std::string> pointheaders = {"u_x","u_y","u_z"};
+          std::vector<std::string> otherheaders = {"lambda","level"};
+
+          gsParaviewCollection dataCollection2(dirname + "/" + "data_parallel");
+          gsStructuralAnalysisOutput<real_t> data2(dirname + "/data_parallel.csv",refPoints);
+          if (write)
+              data2.init(pointheaders,otherheaders);
+
+          for (size_t k=0; k!= solutions.size(); k++)
+          {
+            Lold = solutions[k].second;
+            Uold = solutions[k].first;
+
+            assembler->constructSolution(Uold,mp_tmp);
+            deformation.patch(0) = mp_tmp.patch(0);
+            deformation.patch(0).coefs() -= mp.patch(0).coefs();// assuming 1 patch here
+            solField = gsField<>(mp,deformation);
+
+            if (write)
+              if (refPoints.cols()!=0)
+              {
                 gsVector<> otherData(2);
                 otherData<<Lold,levels[k];
                 gsMatrix<> pointResults(mp.geoDim(),refPoints.cols());
                 for (index_t p=0; p!=refPoints.cols(); p++)
                     pointResults.col(p) = solField.value(refPoints.col(p),refPatches(0,p));
-                data.add(pointResults,otherData);
-            }
+                data2.add(pointResults,otherData);
+              }
 
+            if (plot)
+            {
+              std::string fileName = dirname + "/" + "data_parallel" + util::to_string(k);
+              gsWriteParaview<>(solField, fileName, 1000,mesh);
+              fileName = "data_parallel" + util::to_string(k) + "0";
+              dataCollection2.addPart(fileName + ".vts",times[k]);
+              if (mesh) dataCollection2.addPart(fileName + "_mesh.vtp",times[k]);
+            }
+          }
           if (plot)
           {
-            std::string fileName = dirname + "/" + "data_serial" + util::to_string(k);
-            gsWriteParaview<>(solField, fileName, 1000,mesh);
-            fileName = "data_serial" + util::to_string(k) + "0";
-            dataCollection.addPart(fileName + ".vts",times[k]);
-            if (mesh) dataCollection.addPart(fileName + "_mesh.vtp",times[k]);
+            dataCollection2.save();
           }
         }
-        if (plot)
-        {
-          dataCollection.save();
-        }
       }
-    }
-
-    /////////////////////////////////////////////////////////////////////////////////////////////
-    /////////////////////////////////////////////////////////////////////////////////////////////
-    /////////////////////////////////////////////////////////////////////////////////////////////
-
-    real_t parallelTime = apalm.wallTime();
-    apalm.parallelSolve();
-    parallelTime = apalm.wallTime() - parallelTime;
-    if (apalm.isMain()) gsInfo<<"Parallel time = "<<parallelTime<<"\n";
-
-    /////////////////////////////////////////////////////////////////////////////////////////////
-    /////////////////////////////////////////////////////////////////////////////////////////////
-    /////////////////////////////////////////////////////////////////////////////////////////////
 
     if (apalm.isMain())
     {
-      solutions = apalm.getFlatSolutions();
-      times     = apalm.getFlatTimes();
-      levels    = apalm.getFlatLevels();
-
-      if (plot || write)
-      {
-        gsField<> solField;
-        gsMultiPatch<> mp_tmp;
-        std::vector<std::string> pointheaders = {"u_x","u_y","u_z"};
-        std::vector<std::string> otherheaders = {"lambda","level"};
-
-        gsParaviewCollection dataCollection2(dirname + "/" + "data_parallel");
-        gsStructuralAnalysisOutput<real_t> data2(dirname + "/data_parallel.csv",refPoints);
-        if (write)
-            data2.init(pointheaders,otherheaders);
-
-        for (size_t k=0; k!= solutions.size(); k++)
-        {
-          Lold = solutions[k].second;
-          Uold = solutions[k].first;
-
-          assembler->constructSolution(Uold,mp_tmp);
-          deformation.patch(0) = mp_tmp.patch(0);
-          deformation.patch(0).coefs() -= mp.patch(0).coefs();// assuming 1 patch here
-          solField = gsField<>(mp,deformation);
-
-          if (write)
-            if (refPoints.cols()!=0)
-            {
-              gsVector<> otherData(2);
-              otherData<<Lold,levels[k];
-              gsMatrix<> pointResults(mp.geoDim(),refPoints.cols());
-              for (index_t p=0; p!=refPoints.cols(); p++)
-                  pointResults.col(p) = solField.value(refPoints.col(p),refPatches(0,p));
-              data2.add(pointResults,otherData);
-            }
-
-          if (plot)
-          {
-            std::string fileName = dirname + "/" + "data_parallel" + util::to_string(k);
-            gsWriteParaview<>(solField, fileName, 1000,mesh);
-            fileName = "data_parallel" + util::to_string(k) + "0";
-            dataCollection2.addPart(fileName + ".vts",times[k]);
-            if (mesh) dataCollection2.addPart(fileName + "_mesh.vtp",times[k]);
-          }
-        }
-        if (plot)
-        {
-          dataCollection2.save();
-        }
-      }
+      std::ofstream file;
+      file.open("times");
+      file<<"serial   time: "<<serialTime<<" s\n";
+      file<<"parallel time: "<<parallelTime<<" s\n";
+      file.close();
     }
-
-  if (apalm.isMain())
-  {
-    std::ofstream file;
-    file.open("times");
-    file<<"serial   time: "<<serialTime<<" s\n";
-    file<<"parallel time: "<<parallelTime<<" s\n";
-    file.close();
   }
-
   delete arcLength;
 
   return result;

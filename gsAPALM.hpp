@@ -250,6 +250,19 @@ void gsAPALM<T>::parallelSolve()
 }
 
 template <class T>
+void gsAPALM<T>::solve(index_t Nsteps)
+{
+#ifdef GISMO_WITH_MPI
+  if (m_comm.size()==1)
+    this->_solve_impl<false>(Nsteps);
+  else
+    this->_solve_impl<true>(Nsteps);
+#else
+    this->_solve_impl<false>(Nsteps);
+#endif
+}
+
+template <class T>
 template <bool _hasWorkers>
 typename std::enable_if< _hasWorkers, void>::type
 gsAPALM<T>::parallelSolve_impl()
@@ -261,18 +274,22 @@ gsAPALM<T>::parallelSolve_impl()
   solution_t reference;
   index_t ID;
   index_t it = 0;
+  index_t branch;
+
   std::vector<T> distances;
   std::vector<solution_t> stepSolutions;
   T lowerDistance, upperDistance;
+  std::pair<T,T> dataInterval;
 
-  std::tuple<index_t, T     , solution_t, solution_t, solution_t> dataEntry;
+  index_t dataLevel;
+
+  std::tuple<index_t, T     , solution_t, solution_t> dataEntry;
 
   //----------------------------------------------------------------------------------------
   //MAIN------------------------------------------------------------------------------------
   //----------------------------------------------------------------------------------------
   if (m_rank==0)
   {
-    index_t branch;
     index_t njobs = 0;
 
     gsMPIInfo(m_rank)<<"Adding workers...\n";
@@ -296,20 +313,18 @@ gsAPALM<T>::parallelSolve_impl()
 
       dataEntry = m_data.branch(branch).pop();
       ID = std::get<0>(dataEntry);
+      dataLevel = m_data.branch(branch).jobLevel(ID);
       bool success = m_data.branch(branch).getReferenceByID(ID,reference);
       GISMO_ASSERT(success,"Reference not found");
-
-      std::pair<T,T> dataInterval = m_data.branch(branch).jobTimes(ID);
-      T tstart = 0;
-      T tend = 0;
-      std::tie(tstart,tend) = dataInterval;
 
       this->_sendMainToWorker(m_workers.front(),stop);
       this->_sendMainToWorker(m_workers.front(),
                               branch,
+                              ID,
+                              dataLevel);
+      this->_sendMainToWorker(m_workers.front(),
                               dataEntry,
                               m_data.branch(branch).jobTimes(ID),
-                              m_data.branch(branch).jobLevel(ID),
                               reference
                               );
 
@@ -325,7 +340,8 @@ gsAPALM<T>::parallelSolve_impl()
       index_t source = MPI_ANY_SOURCE;
       this->_recvWorkerToMain(source,
                               branch,
-                              ID,
+                              ID);
+      this->_recvWorkerToMain(source,
                               distances,
                               stepSolutions,
                               upperDistance,
@@ -357,14 +373,17 @@ gsAPALM<T>::parallelSolve_impl()
 
         dataEntry = m_data.branch(branch).pop();
         ID = std::get<0>(dataEntry);
+        dataLevel = m_data.branch(branch).jobLevel(ID);
         bool success = m_data.branch(branch).getReferenceByID(ID,reference);
         GISMO_ASSERT(success,"Reference not found");
         this->_sendMainToWorker(m_workers.front(),stop);
         this->_sendMainToWorker(m_workers.front(),
                                 branch,
+                                ID,
+                                dataLevel);
+        this->_sendMainToWorker(m_workers.front(),
                                 dataEntry,
                                 m_data.branch(branch).jobTimes(ID),
-                                m_data.branch(branch).jobLevel(ID),
                                 reference
                                 );
         m_workers.pop();
@@ -376,7 +395,7 @@ gsAPALM<T>::parallelSolve_impl()
     stop = true;
     this->_sendMainToAll(stop);
 
-    this->_parallelSolve_finalize();
+    this->_finalize();
   }
   else
   {
@@ -386,29 +405,29 @@ gsAPALM<T>::parallelSolve_impl()
       if (stop)
         break;
 
-      std::pair<T,T> dataInterval;
-      index_t dataLevel, branch;
-
       this->_recvMainToWorker(0,
                               branch,
+                              ID,
+                              dataLevel);
+      this->_recvMainToWorker(0,
                               dataEntry,
                               dataInterval,
-                              dataLevel,
                               reference
                               );
 
-      this->_parallelSolve_worker(dataEntry,
-                                  dataInterval,
-                                  dataLevel,
-                                  reference,
-                                  distances,
-                                  stepSolutions,
-                                  upperDistance,
-                                  lowerDistance);
+      this->_correction(dataEntry,
+                        dataInterval,
+                        dataLevel,
+                        reference,
+                        distances,
+                        stepSolutions,
+                        upperDistance,
+                        lowerDistance);
 
       this->_sendWorkerToMain(0,
                               branch,
-                              std::get<0>(dataEntry),
+                              ID);
+      this->_sendWorkerToMain(0,
                               distances,
                               stepSolutions,
                               upperDistance,
@@ -437,9 +456,10 @@ gsAPALM<T>::parallelSolve_impl()
   std::vector<solution_t> stepSolutions;
   T lowerDistance, upperDistance;
   index_t branch;
+  index_t dataLevel;
 
   m_data.print();
-  std::tuple<index_t, T     , solution_t, solution_t, solution_t> dataEntry;
+  std::tuple<index_t, T     , solution_t, solution_t> dataEntry;
   while (!m_data.empty() && it < m_maxIterations)
   {
     branch = m_data.getFirstNonEmptyBranch();
@@ -447,29 +467,29 @@ gsAPALM<T>::parallelSolve_impl()
 
     dataEntry = m_data.branch(branch).pop();
     ID = std::get<0>(dataEntry);
-    gsInfo<<"ID = "<<ID<<"\n";
+    dataLevel = m_data.branch(branch).jobLevel(ID);
     bool success = m_data.branch(branch).getReferenceByID(ID,reference);
     GISMO_ASSERT(success,"Reference not found");
-    this->_parallelSolve_worker(dataEntry,
-                                m_data.branch(branch).jobTimes(ID),
-                                m_data.branch(branch).jobLevel(ID),
-                                reference,
-                                distances,
-                                stepSolutions,
-                                upperDistance,
-                                lowerDistance
-                                );
+    this->_correction(dataEntry,
+                      m_data.branch(branch).jobTimes(ID),
+                      dataLevel,
+                      reference,
+                      distances,
+                      stepSolutions,
+                      upperDistance,
+                      lowerDistance
+                      );
 
     m_data.branch(branch).submit(ID,distances,stepSolutions,upperDistance,lowerDistance);
     m_data.branch(branch).finishJob(ID);
 
     it++;
   }
-  this->_parallelSolve_finalize();
+  this->_finalize();
 }
 
 template <class T>
-void gsAPALM<T>::_parallelSolve_finalize()
+void gsAPALM<T>::_finalize()
 {
   std::vector<solution_t>   solutions;
   std::vector<T>            times;
@@ -500,18 +520,522 @@ void gsAPALM<T>::_parallelSolve_finalize()
   }
 }
 
+template <class T>
+template <bool _hasWorkers>
+typename std::enable_if< _hasWorkers, void>::type
+gsAPALM<T>::_solve_impl(index_t Nsteps)
+{
+#ifdef GISMO_WITH_MPI
+  GISMO_ASSERT(m_comm.size()>1,"Something went wrong. This implementation only works when >1 processes are availbale, but nprocesses = "<<m_comm.size());
+
+  bool stop = false; // stop signal
+  solution_t reference;
+  index_t ID;
+  index_t it = 0;
+  index_t branch;
+  index_t dataLevel;
+  std::tuple<index_t, T     , solution_t, solution_t> dataEntry;
+
+  // Correction
+  std::pair<T,T> dataInterval;
+  std::vector<T> distances;
+  std::vector<solution_t> stepSolutions;
+  T lowerDistance, upperDistance;
+
+  // Initiation
+  T tstart;
+  T distance;
+  solution_t solution;
+  bool bifurcation;
+
+
+  //----------------------------------------------------------------------------------------
+  //MAIN------------------------------------------------------------------------------------
+  //----------------------------------------------------------------------------------------
+  if (m_rank==0)
+  {
+    index_t njobs = 0;
+
+    // K keeps track of the iterations per branch
+    std::vector<index_t> K(1);
+    K[0] = 1;
+
+    // Fill the start interval list
+    T L0;
+    gsMatrix<T> U0;
+    T dL;
+    while (!m_starts.empty())
+    {
+      // Initialize solutions
+      U0 = std::get<0>(m_starts.front()).first;
+      L0 = std::get<0>(m_starts.front()).second;
+      dL = std::get<1>(m_starts.front());
+      m_starts.pop();
+
+      gsAPALMData<T,solution_t> data = m_dataEmpty;
+      branch = m_data.add(data);
+      m_data.branch(branch).addStartPoint(T(0),std::make_pair(U0,L0));
+      m_data.branch(branch).setLength(dL); // sets the default length that is used when started from a Point
+    }
+
+    gsMPIInfo(m_rank)<<"Adding workers...\n";
+    for (index_t w = 1; w!=m_proc_count; w++)
+      m_workers.push(w);
+
+    while (!m_data.empty() && it < m_maxIterations && !m_workers.empty())
+    {
+      gsMPIInfo(m_rank)<<"Available workers:\t";
+      std::queue<index_t> workers_copy = m_workers;
+      while (!workers_copy.empty())
+      {
+          gsMPIInfo(m_rank)<<workers_copy.front()<<"\t";
+          workers_copy.pop();
+      }
+      gsMPIInfo(m_rank)<<"\n";
+
+
+      branch = m_data.getFirstNonEmptyBranch();
+      gsMPIInfo(m_rank)<<"There are "<<m_data.branch(branch).nActive()<<" active jobs and "<<m_data.branch(branch).nWaiting()<<" jobs in the queue of branch "<<branch<<"\n";
+
+      dataEntry = m_data.branch(branch).pop();
+      ID = std::get<0>(dataEntry);
+      dataLevel = m_data.branch(branch).jobLevel(ID);
+      // Initialization intervals start at level 0
+      if (dataLevel==0)
+      {
+        this->_sendMainToWorker(m_workers.front(),stop);
+        this->_sendMainToWorker(m_workers.front(),
+                                branch,
+                                ID,
+                                dataLevel);
+        this->_sendMainToWorker(m_workers.front(),
+                                dataEntry,
+                                m_data.branch(branch).jobStartTime(ID)
+                                );
+      }
+      // Correction intervals have level > 0
+      else
+      {
+        bool success = m_data.branch(branch).getReferenceByID(ID,reference);
+        GISMO_ASSERT(success,"Reference not found");
+
+        this->_sendMainToWorker(m_workers.front(),stop);
+        this->_sendMainToWorker(m_workers.front(),
+                                branch,
+                                ID,
+                                dataLevel);
+        this->_sendMainToWorker(m_workers.front(),
+                                dataEntry,
+                                m_data.branch(branch).jobTimes(ID),
+                                reference
+                                );
+      }
+      m_workers.pop();
+      it++;
+      njobs++;
+    }
+
+    while (njobs > 0)
+    {
+      gsMPIInfo(m_rank)<<njobs<<" job(s) running\n";
+      index_t source = MPI_ANY_SOURCE;
+      // Receive meta-data
+      this->_recvWorkerToMain(source,
+                              branch,
+                              ID);
+
+      // Initialization intervals start at level 0
+      dataLevel = m_data.branch(branch).jobLevel(ID);
+      if (dataLevel == 0)
+      {
+        this->_recvWorkerToMain(source,
+                                distance,
+                                solution,
+                                bifurcation);
+
+        T tstart = m_data.branch(branch).jobStartTime(ID);
+        m_data.branch(branch).appendData(tstart+distance,solution,false);
+
+        if (K[branch]++ < Nsteps-1) // add a new point
+        {
+          if (!bifurcation)
+          {
+            m_data.branch(branch).appendPoint(true);
+            // sets the default length that is used when started from a Point.
+            // After bifurcation, it's the original one times the branch length multiplier times the bifurcation length multiplier
+            if (branch!=0 && ID==0)
+              m_data.branch(branch).setLength(m_data.branch(branch).getLength()/m_bifLengthMult);
+          }
+          else
+          {
+            gsAPALMData<T,solution_t> data = m_dataEmpty;
+            branch = m_data.add(data);
+            K.push_back(1);
+            m_data.branch(branch).addStartPoint(T(0),solution,true);
+            // Sets the default length that is used when started from a Point.
+            // After bifurcation, it's the original one times the branch length multiplier times the bifurcation length multiplier
+            m_data.branch(branch).setLength(m_ALM->getLength()*m_branchLengthMult*m_bifLengthMult);
+          }
+        }
+        m_data.branch(branch).finishJob(ID);
+      }
+      // Correction intervals have level > 0
+      else
+      {
+        this->_recvWorkerToMain(source,
+                                distances,
+                                stepSolutions,
+                                upperDistance,
+                                lowerDistance);
+
+        m_data.branch(branch).submit(ID,distances,stepSolutions,upperDistance,lowerDistance);
+        m_data.branch(branch).finishJob(ID);
+      }
+
+      // Remove job
+      njobs--;
+      // Add worker to pool
+      m_workers.push(source);
+
+      gsMPIInfo(m_rank)<<"Available workers:\t";
+      std::queue<index_t> workers_copy = m_workers;
+      while (!workers_copy.empty())
+      {
+          gsInfo<<workers_copy.front()<<"\t";
+          workers_copy.pop();
+      }
+      gsInfo<<"\n";
+
+      // As long as the queue is not empty, the iterations are lower than the max number and the pool of workers is not empty
+      while (!m_data.empty() && it < m_maxIterations && !m_workers.empty())
+      {
+        // // SAME WHILE LOOP AS ABOVE!!!!!!!!
+        branch = m_data.getFirstNonEmptyBranch();
+        gsMPIInfo(m_rank)<<"There are "<<m_data.branch(branch).nActive()<<" active jobs and "<<m_data.branch(branch).nWaiting()<<" jobs in the queue of branch "<<branch<<"\n";
+
+        dataEntry = m_data.branch(branch).pop();
+        ID = std::get<0>(dataEntry);
+
+        // Initialization intervals start at level 0
+        dataLevel = m_data.branch(branch).jobLevel(ID);
+        if (dataLevel==0)
+        {
+          this->_sendMainToWorker(m_workers.front(),stop);
+          this->_sendMainToWorker(m_workers.front(),
+                                  branch,
+                                  ID,
+                                  dataLevel);
+          this->_sendMainToWorker(m_workers.front(),
+                                  dataEntry,
+                                  m_data.branch(branch).jobStartTime(ID)
+                                  );
+        }
+        // Correction intervals have level > 0
+        else
+        {
+          bool success = m_data.branch(branch).getReferenceByID(ID,reference);
+          GISMO_ASSERT(success,"Reference not found");
+
+          this->_sendMainToWorker(m_workers.front(),stop);
+          this->_sendMainToWorker(m_workers.front(),
+                                  branch,
+                                  ID,
+                                  dataLevel);
+          this->_sendMainToWorker(m_workers.front(),
+                                  dataEntry,
+                                  m_data.branch(branch).jobTimes(ID),
+                                  reference
+                                  );
+        }
+        m_workers.pop();
+        it++;
+        njobs++;
+      }
+    }
+    stop = true;
+    this->_sendMainToAll(stop);
+
+    this->_finalize();
+  }
+  else
+  {
+    while (!stop) // until loop breaks due to stop signal
+    {
+      this->_recvMainToWorker(0,stop);
+      if (stop)
+        break;
+
+      // Receive meta-data
+      this->_recvMainToWorker(0,
+                              branch,
+                              ID,
+                              dataLevel);
+
+      // Initialization intervals start at level 0
+      if (dataLevel==0)
+      {
+        this->_recvMainToWorker(0,
+                                dataEntry,
+                                tstart
+                                );
+
+        this->_initiation(dataEntry,
+                          tstart,
+                          dataLevel,
+                          distance,
+                          solution,
+                          bifurcation
+                          );
+
+        this->_sendWorkerToMain(0,
+                                branch,
+                                ID);
+        this->_sendWorkerToMain(0,
+                                distance,
+                                solution,
+                                bifurcation);
+      }
+      // Correction intervals have level > 0
+      else
+      {
+        this->_recvMainToWorker(0,
+                                dataEntry,
+                                dataInterval,
+                                reference
+                                );
+
+        this->_correction(dataEntry,
+                          dataInterval,
+                          dataLevel,
+                          reference,
+                          distances,
+                          stepSolutions,
+                          upperDistance,
+                          lowerDistance);
+
+        this->_sendWorkerToMain(0,
+                                branch,
+                                ID);
+        this->_sendWorkerToMain(0,
+                                distances,
+                                stepSolutions,
+                                upperDistance,
+                                lowerDistance);
+      }
+    }
+  }
+
+#else
+  GISMO_NO_IMPLEMENTATION;
+#endif
+
+    // #ifdef GISMO_WITH_MPI
+    //   gsMPIInfo(m_rank)<<"[MPI Process "<<m_rank<<" of "<<m_comm.size()<<"] Hi!\n";
+    // #endif
+}
+
+template <class T>
+template <bool _hasWorkers>
+typename std::enable_if<!_hasWorkers, void>::type
+gsAPALM<T>::_solve_impl(index_t Nsteps)
+{
+  index_t ID;
+  index_t it = 0;
+  std::vector<index_t> K(1);
+  K[0] = 1;
+
+  index_t branch;
+  index_t dataLevel;
+
+  T L0;
+  gsMatrix<T> U0;
+  T dL;
+  while (!m_starts.empty())
+  {
+    // Initialize solutions
+    U0 = std::get<0>(m_starts.front()).first;
+    L0 = std::get<0>(m_starts.front()).second;
+    dL = std::get<1>(m_starts.front());
+    m_starts.pop();
+
+    gsAPALMData<T,solution_t> data = m_dataEmpty;
+    branch = m_data.add(data);
+    m_data.branch(branch).addStartPoint(T(0),std::make_pair(U0,L0));
+    m_data.branch(branch).setLength(dL); // sets the default length that is used when started from a Point
+  }
+
+  m_data.print();
+  std::tuple<index_t, T     , solution_t, solution_t> dataEntry;
+  while (!m_data.empty() && it < m_maxIterations)
+  {
+    branch = m_data.getFirstNonEmptyBranch();
+    gsMPIInfo(m_rank)<<"There are "<<m_data.branch(branch).nActive()<<" active jobs and "<<m_data.branch(branch).nWaiting()<<" jobs in the queue of branch "<<branch<<"\n";
+
+    dataEntry = m_data.branch(branch).pop();
+    ID = std::get<0>(dataEntry);
+
+    dataLevel = m_data.branch(branch).jobLevel(ID);
+    if (dataLevel==0)
+    {
+      if (m_verbose) gsMPIInfo(m_rank)<<"Initialization\n";
+      T startTime = m_data.branch(branch).jobStartTime(ID);
+      T distance;
+      solution_t solution;
+      bool bifurcation;
+      this->_initiation(dataEntry,
+                        startTime,
+                        dataLevel,
+                        distance,
+                        solution,
+                        bifurcation
+                        );
+
+      m_data.branch(branch).appendData(startTime+distance,solution,false);
+      // if no bifurcation is hit, we mark the end of the interval as the start point
+
+      if (K[branch]++ < Nsteps - 1) // add a new point
+      {
+        if (!bifurcation)
+        {
+          m_data.branch(branch).appendPoint(true);
+          // sets the default length that is used when started from a Point.
+          // After bifurcation, it's the original one times the branch length multiplier times the bifurcation length multiplier
+          if (branch!=0 && ID==0)
+            m_data.branch(branch).setLength(m_data.branch(branch).getLength()/m_bifLengthMult);
+        }
+        else
+        {
+          gsAPALMData<T,solution_t> data = m_dataEmpty;
+          branch = m_data.add(data);
+          K.push_back(1);
+          m_data.branch(branch).addStartPoint(T(0),solution,true);
+          // Sets the default length that is used when started from a Point.
+          // After bifurcation, it's the original one times the branch length multiplier times the bifurcation length multiplier
+          m_data.branch(branch).setLength(m_ALM->getLength()*m_branchLengthMult*m_bifLengthMult);
+        }
+      }
+      m_data.branch(branch).finishJob(ID);
+    }
+    else
+    {
+      if (m_verbose) gsMPIInfo(m_rank)<<"Correction\n";
+      solution_t reference;
+      std::vector<T> distances;
+      std::vector<solution_t> stepSolutions;
+      T lowerDistance, upperDistance;
+      bool success = m_data.branch(branch).getReferenceByID(ID,reference);
+      GISMO_ASSERT(success,"Reference not found");
+      this->_correction(dataEntry,
+                        m_data.branch(branch).jobTimes(ID),
+                        dataLevel,
+                        reference,
+                        distances,
+                        stepSolutions,
+                        upperDistance,
+                        lowerDistance
+                        );
+
+      m_data.branch(branch).submit(ID,distances,stepSolutions,upperDistance,lowerDistance);
+      m_data.branch(branch).finishJob(ID);
+
+      it++;
+    }
+  }
+  this->_finalize();
+}
+
 // NOTE: This does not make new branches!
 template <class T>
-void gsAPALM<T>::_parallelSolve_worker( const std::tuple<index_t, T     , solution_t, solution_t, solution_t> & dataEntry,
-                                        const std::pair<T,T> &  dataInterval,
-                                        const index_t &         dataLevel,
-                                        const solution_t &      dataReference,
-                                        std::vector<T> &        distances,
-                                        std::vector<solution_t>&stepSolutions,
-                                        T &                     upperDistance,
-                                        T &                     lowerDistance )
+void gsAPALM<T>::_initiation( const std::tuple<index_t, T     , solution_t, solution_t> & dataEntry,
+                              const T &               startTime,
+                              const index_t &         dataLevel,
+                              T &                     distance,
+                              solution_t&             solution,
+                              bool &                  bifurcation )
 {
-  solution_t start, prev, next, reference;
+  solution_t start, prev;
+  index_t ID;
+  T tstart = startTime;
+  T dL;
+  gsVector<T> DeltaU;
+  T DeltaL;
+
+  T Lprev, Lold;
+  gsMatrix<T> Uprev, Uold;
+
+  /// Worker
+  std::tie(ID,dL,start,prev) = dataEntry;
+  std::tie(Uold,Lold) = start;
+  std::tie(Uprev,Lprev) = prev;
+
+  m_ALM->setLength(dL);
+  m_ALM->setSolution(Uold,Lold);
+  // m_ALM->resetStep();
+  m_ALM->setPrevious(Uprev,Lprev);
+  gsMPIDebug(m_rank)<<"Start - ||u|| = "<<Uold.norm()<<", L = "<<Lold<<"\n";
+  gsMPIDebug(m_rank)<<"Prev  - ||u|| = "<<Uprev.norm()<<", L = "<<Lprev<<"\n";
+
+  bool diverged = true;
+  bifurcation = false;
+  while (diverged)
+  {
+    gsMPIInfo(m_rank)<<"Starting with ID "<<ID<<" from (|U|,L) = ("<<Uold.norm()<<","<<Lold<<"), curve time = "<<tstart<<", arc-length = "<<dL<<"\n";
+    m_ALM->step();
+    if ((diverged = !(m_ALM->converged())))
+    {
+      if (m_verbose) gsMPIInfo(m_rank)<<"Error: Loop terminated, arc length method did not converge.\n";
+      dL = m_ALM->reduceLength();
+      m_ALM->setSolution(Uold,Lold);
+      continue;
+    }
+  }
+  m_ALM->resetLength();
+  if (m_singularPoint)
+  {
+    m_ALM->computeStability(m_ALM->solutionU(),m_ALM->options().getSwitch("Quasi"));
+    if (m_ALM->stabilityChange())
+    {
+      gsMPIInfo(m_rank)<<"Bifurcation spotted!"<<"\n";
+      m_ALM->computeSingularPoint(1e-4, 5, Uold, Lold, 1e-10, 0, false);
+      m_ALM->switchBranch();
+      bifurcation = true;
+    }
+  }
+
+  solution = std::make_pair(m_ALM->solutionU(),m_ALM->solutionL());
+  DeltaU = m_ALM->solutionU() - Uold;
+  DeltaL = m_ALM->solutionL() - Lold;
+
+  distance = m_ALM->distance(DeltaU,DeltaL);
+  T tend = tstart + distance;
+
+  std::vector<solution_t> stepSolutionsExport(2);
+  std::vector<T> stepTimesExport(2);
+  // Export parallel interval output
+  // Solutions
+  std::pair<gsVector<T>,T> front = std::make_pair(start.first,start.second);
+  stepSolutionsExport.front() = front;
+  std::pair<gsVector<T>,T> back  = std::make_pair(solution.first,solution.second);
+  stepSolutionsExport.back() = back;
+  // Times
+  stepTimesExport.front() = tstart;
+  stepTimesExport.back() = tend;
+
+  this->parallelIntervalOutput(stepSolutionsExport,stepTimesExport,dataLevel,ID);
+}
+
+// NOTE: This does not make new branches!
+template <class T>
+void gsAPALM<T>::_correction( const std::tuple<index_t, T     , solution_t, solution_t> & dataEntry,
+                              const std::pair<T,T> &  dataInterval,
+                              const index_t &         dataLevel,
+                              const solution_t &      dataReference,
+                              std::vector<T> &        distances,
+                              std::vector<solution_t>&stepSolutions,
+                              T &                     upperDistance,
+                              T &                     lowerDistance )
+{
+  solution_t start, prev, reference;
   index_t ID;
   T tstart = 0;
   T tend = 0;
@@ -522,18 +1046,17 @@ void gsAPALM<T>::_parallelSolve_worker( const std::tuple<index_t, T     , soluti
   bool bisected = false;
   T dL_rem = 0;
 
-  T Lprev, Lnext, Lold;
-  gsMatrix<T> Uprev, Unext,Uold;
+  T Lprev, Lold;
+  gsMatrix<T> Uprev, Uold;
 
   /// Worker
   stepSolutions.resize(Nintervals);
   std::vector<T> stepTimes(Nintervals);
   distances.resize(Nintervals+1);
 
-  std::tie(ID,dL0,start,prev,next) = dataEntry;
+  std::tie(ID,dL0,start,prev) = dataEntry;
   std::tie(Uold,Lold) = start;
   std::tie(Uprev,Lprev) = prev;
-  std::tie(Unext,Lnext) = next;
   std::tie(tstart,tend) = dataInterval;
 
   gsMPIDebug(m_rank)<<"tstart = "<<tstart<<" , "<<"tend = "<<tend<<"\n";
@@ -550,9 +1073,6 @@ void gsAPALM<T>::_parallelSolve_worker( const std::tuple<index_t, T     , soluti
   m_ALM->setPrevious(Uprev,Lprev);
   gsMPIDebug(m_rank)<<"Start - ||u|| = "<<Uold.norm()<<", L = "<<Lold<<"\n";
   gsMPIDebug(m_rank)<<"Prev  - ||u|| = "<<Uprev.norm()<<", L = "<<Lprev<<"\n";
-  gsMPIDebug(m_rank)<<"Next  - ||u|| = "<<Unext.norm()<<", L = "<<Lnext<<"\n";
-
-  gsVector<T> tmpU = Uold-Uprev;
 
   T s = 0;
   T time = tstart;
@@ -659,68 +1179,110 @@ void gsAPALM<T>::_parallelSolve_worker( const std::tuple<index_t, T     , soluti
   }
 }
 
-
 // -----------------------------------------------------------------------------------------------------
 // MPI functions
 // -----------------------------------------------------------------------------------------------------
 #ifdef GISMO_WITH_MPI
 
 template <class T>
+void gsAPALM<T>::_sendMainToWorker( const index_t & workerID,
+                                    const index_t & branch,
+                                    const index_t & jobID,
+                                    const index_t & dataLevel)
+{
+  gsMPIInfo(m_rank)<<"Sending data from "<<m_rank<<" to "<<workerID<<"\n";
+  MPI_Request req[3];
+  m_comm.isend(&branch        ,1,workerID,&req[0] ,0 );
+  m_comm.isend(&jobID         ,1,workerID,&req[1] ,1 );
+  m_comm.isend(&dataLevel     ,1,workerID,&req[2] ,2 );
+}
+
+template <class T>
 void gsAPALM<T>::_sendMainToWorker( const index_t &         workerID,
-                                    const index_t &         branch,
-                                    const std::tuple<index_t, T     , solution_t, solution_t, solution_t> & dataEntry,
+                                    const std::tuple<index_t, T     , solution_t, solution_t> & dataEntry,
                                     const std::pair<T,T> &  dataInterval,
-                                    const index_t &         dataLevel,
                                     const solution_t &      dataReference )
 {
   gsMPIInfo(m_rank)<<"Sending data from "<<m_rank<<" to "<<workerID<<"\n";
 
   index_t     ID;
   T           dL0;
-  solution_t  start,    prev,     next;
-  gsVector<T> startU,   prevU,    nextU,    refU;
-  index_t     startSize,prevSize, nextSize, refSize;
-  T           startL,   prevL,    nextL,    refL;
+  solution_t  start,    prev;
+  gsVector<T> startU,   prevU,    refU;
+  index_t     startSize,prevSize, refSize;
+  T           startL,   prevL,    refL;
 
   T           tstart, tend;
 
-  std::tie(ID,dL0,start,prev,next) = dataEntry;
+  std::tie(ID,dL0,start,prev) = dataEntry;
   std::tie(tstart,tend) = dataInterval;
 
   std::tie(startU,startL) = start;
   startSize = startU.size();
   std::tie(prevU,prevL) = prev;
   prevSize  = prevU.size();
-  std::tie(nextU,nextL) = next;
-  nextSize  = nextU.size();
   std::tie(refU,refL) = dataReference;
   refSize   = refU.size();
 
   // Put all data 0-14 in a struct and send a single struct
-  MPI_Request req[18];
+  MPI_Request req[13];
   m_comm.isend(&ID        ,1,workerID,&req[0] ,0 );
-  m_comm.isend(&branch    ,1,workerID,&req[1] ,1 );
-  m_comm.isend(&dL0       ,1,workerID,&req[2] ,2 );
-  m_comm.isend(&tstart    ,1,workerID,&req[3] ,3 );
-  m_comm.isend(&tend      ,1,workerID,&req[4] ,4 );
-  m_comm.isend(&dataLevel ,1,workerID,&req[5] ,5 );
+  m_comm.isend(&dL0       ,1,workerID,&req[1] ,1 );
+  m_comm.isend(&tstart    ,1,workerID,&req[2] ,2 );
+  m_comm.isend(&tend      ,1,workerID,&req[3] ,3 );
 
-  m_comm.isend(&startSize ,1,workerID,&req[6] ,6 );
-  m_comm.isend(&startL    ,1,workerID,&req[7] ,7 );
+  m_comm.isend(&startSize ,1,workerID,&req[4] ,4 );
+  m_comm.isend(&startL    ,1,workerID,&req[5] ,5 );
 
-  m_comm.isend(&prevSize  ,1,workerID,&req[8] ,8 );
-  m_comm.isend(&prevL     ,1,workerID,&req[9] ,9 );
+  m_comm.isend(&prevSize  ,1,workerID,&req[6] ,6 );
+  m_comm.isend(&prevL     ,1,workerID,&req[7] ,7 );
 
-  m_comm.isend(&nextSize  ,1,workerID,&req[10],10);
-  m_comm.isend(&nextL     ,1,workerID,&req[11],11);
+  m_comm.isend(&refSize   ,1,workerID,&req[8],8);
+  m_comm.isend(&refL      ,1,workerID,&req[9],9);
 
-  m_comm.isend(&refSize   ,1,workerID,&req[12],12);
-  m_comm.isend(&refL      ,1,workerID,&req[13],13);
+  m_comm.isend(startU.data(), startSize,workerID,&req[10],10);
+  m_comm.isend(prevU.data(),  prevSize, workerID,&req[11],11);
+  m_comm.isend(refU.data(),   refSize,  workerID,&req[12],12);
+}
 
-  m_comm.isend(startU.data(), startSize,workerID,&req[14],14);
-  m_comm.isend(prevU.data(),  prevSize, workerID,&req[15],15);
-  m_comm.isend(nextU.data(),  nextSize, workerID,&req[16],16);
-  m_comm.isend(refU.data(),   refSize,  workerID,&req[17],17);
+template <class T>
+void gsAPALM<T>::_sendMainToWorker( const index_t &         workerID,
+                                    const std::tuple<index_t, T     , solution_t, solution_t> & dataEntry,
+                                    const T       &         startTime)
+{
+  gsMPIInfo(m_rank)<<"Sending data from "<<m_rank<<" to "<<workerID<<"\n";
+
+  index_t     ID;
+  T           dL0;
+  solution_t  start,    prev;
+  gsVector<T> startU,   prevU;
+  index_t     startSize,prevSize;
+  T           startL,   prevL;
+
+  T           tstart;
+
+  std::tie(ID,dL0,start,prev) = dataEntry;
+  tstart = startTime;
+
+  std::tie(startU,startL) = start;
+  startSize = startU.size();
+  std::tie(prevU,prevL) = prev;
+  prevSize  = prevU.size();
+
+  // Put all data 0-10 in a struct and send a single struct
+  MPI_Request req[9];
+  m_comm.isend(&ID        ,1,workerID,&req[0] ,0 );
+  m_comm.isend(&dL0       ,1,workerID,&req[1] ,1 );
+  m_comm.isend(&tstart    ,1,workerID,&req[2] ,2 );
+
+  m_comm.isend(&startSize ,1,workerID,&req[3] ,3 );
+  m_comm.isend(&startL    ,1,workerID,&req[4] ,4 );
+
+  m_comm.isend(&prevSize  ,1,workerID,&req[5] ,5 );
+  m_comm.isend(&prevL     ,1,workerID,&req[6] ,6 );
+
+  m_comm.isend(startU.data(), startSize,workerID,&req[7],7);
+  m_comm.isend(prevU.data(),  prevSize, workerID,&req[8],8);
 }
 
 template <class T>
@@ -742,66 +1304,116 @@ void gsAPALM<T>::_sendMainToAll(  const bool &      stop )
 
 template <class T>
 void gsAPALM<T>::_recvMainToWorker( const index_t &   sourceID,
-                                          index_t &         branch,
-                                          std::tuple<index_t, T     , solution_t, solution_t, solution_t> & dataEntry,
+                                          index_t &   branch,
+                                          index_t &   jobID,
+                                          index_t &   dataLevel)
+{
+  gsMPIInfo(m_rank)<<"Receiving data on "<<m_rank<<" from "<<sourceID<<"\n";
+  MPI_Request req[3];
+  m_comm.irecv(&branch    ,1,sourceID,&req[0] ,0 );
+  m_comm.irecv(&jobID     ,1,sourceID,&req[1] ,1 );
+  m_comm.irecv(&dataLevel ,1,sourceID,&req[2] ,2 );
+  MPI_Waitall( 3, req, MPI_STATUSES_IGNORE );
+}
+
+
+template <class T>
+void gsAPALM<T>::_recvMainToWorker( const index_t &         sourceID,
+                                          std::tuple<index_t, T     , solution_t, solution_t> & dataEntry,
                                           std::pair<T,T> &  dataInterval,
-                                          index_t &         dataLevel,
                                           solution_t &      dataReference)
 {
   gsMPIInfo(m_rank)<<"Receiving data on "<<m_rank<<" from "<<sourceID<<"\n";
 
   index_t     ID;
   T           dL0;
-  solution_t  start,    prev,     next;
-  gsVector<T> startU,   prevU,    nextU,    refU;
-  index_t     startSize,prevSize, nextSize, refSize;
-  T           startL,   prevL,    nextL,    refL;
+  solution_t  start,    prev;
+  gsVector<T> startU,   prevU,    refU;
+  index_t     startSize,prevSize, refSize;
+  T           startL,   prevL,    refL;
 
   T           tstart, tend;
 
   // Put all data 0-14 in a struct and recv a single struct
-  MPI_Request req[14];
+  MPI_Request req[10];
   m_comm.irecv(&ID        ,1,sourceID,&req[0] ,0 );
-  m_comm.irecv(&branch    ,1,sourceID,&req[1] ,1 );
-  m_comm.irecv(&dL0       ,1,sourceID,&req[2] ,2 );
-  m_comm.irecv(&tstart    ,1,sourceID,&req[3] ,3 );
-  m_comm.irecv(&tend      ,1,sourceID,&req[4] ,4 );
-  m_comm.irecv(&dataLevel ,1,sourceID,&req[5] ,5 );
+  m_comm.irecv(&dL0       ,1,sourceID,&req[1] ,1 );
+  m_comm.irecv(&tstart    ,1,sourceID,&req[2] ,2 );
+  m_comm.irecv(&tend      ,1,sourceID,&req[3] ,3 );
 
-  m_comm.irecv(&startSize ,1,sourceID,&req[6] ,6 );
-  m_comm.irecv(&startL    ,1,sourceID,&req[7] ,7 );
+  m_comm.irecv(&startSize ,1,sourceID,&req[4] ,4 );
+  m_comm.irecv(&startL    ,1,sourceID,&req[5] ,5 );
 
-  m_comm.irecv(&prevSize  ,1,sourceID,&req[8] ,8 );
-  m_comm.irecv(&prevL     ,1,sourceID,&req[9] ,9 );
+  m_comm.irecv(&prevSize  ,1,sourceID,&req[6] ,6 );
+  m_comm.irecv(&prevL     ,1,sourceID,&req[7] ,7 );
 
-  m_comm.irecv(&nextSize  ,1,sourceID,&req[10],10);
-  m_comm.irecv(&nextL     ,1,sourceID,&req[11],11);
+  m_comm.irecv(&refSize   ,1,sourceID,&req[8],8);
+  m_comm.irecv(&refL      ,1,sourceID,&req[9],9);
 
-  m_comm.irecv(&refSize   ,1,sourceID,&req[12],12);
-  m_comm.irecv(&refL      ,1,sourceID,&req[13],13);
-
-  MPI_Waitall( 14, req, MPI_STATUSES_IGNORE );
+  MPI_Waitall( 10, req, MPI_STATUSES_IGNORE );
   dataInterval = std::make_pair(tstart,tend);
 
   startU.resize(startSize);
   prevU .resize(prevSize);
-  nextU .resize(nextSize);
   refU  .resize(refSize);
 
-  MPI_Request req_data[4];
-  m_comm.irecv(startU.data(), startU.size(),sourceID,&req_data[0],14);
-  m_comm.irecv(prevU.data(),  prevU.size(), sourceID,&req_data[1],15);
-  m_comm.irecv(nextU.data(),  nextU.size(), sourceID,&req_data[2],16);
-  m_comm.irecv(refU.data(),   refU.size(),  sourceID,&req_data[3],17);
+  MPI_Request req_data[3];
+  m_comm.irecv(startU.data(), startU.size(),sourceID,&req_data[0],10);
+  m_comm.irecv(prevU.data(),  prevU.size(), sourceID,&req_data[1],11);
+  m_comm.irecv(refU.data(),   refU.size(),  sourceID,&req_data[2],12);
 
-  MPI_Waitall( 4, req_data, MPI_STATUSES_IGNORE );
+  MPI_Waitall( 3, req_data, MPI_STATUSES_IGNORE );
 
   start         = std::make_pair(startU,startL);
   prev          = std::make_pair(prevU ,prevL);
-  next          = std::make_pair(nextU ,nextL);
   dataReference = std::make_pair(refU  ,refL);
 
-  dataEntry = std::make_tuple(ID,dL0,start,prev,next);
+  dataEntry = std::make_tuple(ID,dL0,start,prev);
+}
+
+template <class T>
+void gsAPALM<T>::_recvMainToWorker( const index_t &   sourceID,
+                                          std::tuple<index_t, T     , solution_t, solution_t> & dataEntry,
+                                          T &               startTime)
+{
+  gsMPIInfo(m_rank)<<"Receiving data on "<<m_rank<<" from "<<sourceID<<"\n";
+
+  index_t     ID;
+  T           dL0;
+  solution_t  start,    prev;
+  gsVector<T> startU,   prevU;
+  index_t     startSize,prevSize;
+  T           startL,   prevL;
+
+  T           tstart;
+
+  // Put all data 0-14 in a struct and recv a single struct
+  MPI_Request req[7];
+  m_comm.irecv(&ID        ,1,sourceID,&req[0] ,0 );
+  m_comm.irecv(&dL0       ,1,sourceID,&req[1] ,1 );
+  m_comm.irecv(&tstart    ,1,sourceID,&req[2] ,2 );
+
+  m_comm.irecv(&startSize ,1,sourceID,&req[3] ,3 );
+  m_comm.irecv(&startL    ,1,sourceID,&req[4] ,4 );
+
+  m_comm.irecv(&prevSize  ,1,sourceID,&req[5] ,5 );
+  m_comm.irecv(&prevL     ,1,sourceID,&req[6] ,6 );
+
+  MPI_Waitall( 7, req, MPI_STATUSES_IGNORE );
+
+  startU.resize(startSize);
+  prevU .resize(prevSize);
+
+  MPI_Request req_data[2];
+  m_comm.irecv(startU.data(), startU.size(),sourceID,&req_data[0],7);
+  m_comm.irecv(prevU.data(),  prevU.size(), sourceID,&req_data[1],8);
+
+  MPI_Waitall( 2, req_data, MPI_STATUSES_IGNORE );
+
+  start         = std::make_pair(startU,startL);
+  prev          = std::make_pair(prevU ,prevL);
+
+  dataEntry = std::make_tuple(ID,dL0,start,prev);
 }
 
 template <class T>
@@ -812,10 +1424,44 @@ void gsAPALM<T>::_recvMainToWorker(  const  index_t &   sourceID,
   m_comm.recv(&stop,1,sourceID,99);
 }
 
+// Sends metadata
 template <class T>
 void gsAPALM<T>::_sendWorkerToMain( const index_t &                   mainID,
                                     const index_t &                   branch,
-                                    const index_t &                   jobID,
+                                    const index_t &                   jobID)
+{
+  gsMPIInfo(m_rank)<<"Sending data from "<<m_rank<<" to "<<mainID<<"\n";
+
+  index_t tag = 0;
+
+  MPI_Request req_meta[2];
+  m_comm.isend(&branch        ,1, mainID, &req_meta[0], tag++);
+  m_comm.isend(&jobID         ,1, mainID, &req_meta[1], tag++);
+  MPI_Waitall( 2, req_meta, MPI_STATUSES_IGNORE );
+}
+
+// Receives metadata
+template <class T>
+void gsAPALM<T>::_recvWorkerToMain( index_t &                   sourceID,
+                                    index_t &                   branch,
+                                    index_t &                   jobID)
+{
+
+  index_t tag = 0;
+
+  MPI_Status  status;
+  MPI_Request req_meta[2];
+  m_comm.irecv(&branch         ,1, sourceID, &req_meta[0], tag++);
+  MPI_Wait ( &req_meta[0], &status );
+  if (sourceID==MPI_ANY_SOURCE)  sourceID = status.MPI_SOURCE; // Overwrite source ID to be unique
+
+  // Request metadata
+  m_comm.irecv(&jobID          ,1, sourceID, &req_meta[1], tag++);
+  MPI_Waitall( 2, req_meta, MPI_STATUSES_IGNORE );
+}
+
+template <class T>
+void gsAPALM<T>::_sendWorkerToMain( const index_t &                   mainID,
                                     const std::vector<T> &            distances,
                                     const std::vector<solution_t> &   stepSolutions,
                                     const T &                         upperDistance,
@@ -828,11 +1474,9 @@ void gsAPALM<T>::_sendWorkerToMain( const index_t &                   mainID,
   index_t vectorSize;
   T load;
 
-  MPI_Request req_meta[4];
-  m_comm.isend(&branch        ,1, mainID, &req_meta[0], tag++);
-  m_comm.isend(&jobID         ,1, mainID, &req_meta[1], tag++);
-  m_comm.isend(&upperDistance ,1, mainID, &req_meta[2], tag++);
-  m_comm.isend(&lowerDistance ,1, mainID, &req_meta[3], tag++);
+  MPI_Request req_meta[2];
+  m_comm.isend(&upperDistance ,1, mainID, &req_meta[0], tag++);
+  m_comm.isend(&lowerDistance ,1, mainID, &req_meta[1], tag++);
 
   MPI_Request req_solSize;
   m_comm.isend(&size          ,1, mainID, &req_solSize, tag++);
@@ -860,13 +1504,45 @@ void gsAPALM<T>::_sendWorkerToMain( const index_t &                   mainID,
   MPI_Waitall( size, req_data, MPI_STATUSES_IGNORE );
   MPI_Waitall( size, req_loads, MPI_STATUSES_IGNORE );
   MPI_Waitall( size+1, req_distances, MPI_STATUSES_IGNORE );
-  MPI_Waitall( 4, req_meta, MPI_STATUSES_IGNORE );
+  MPI_Waitall( 2, req_meta, MPI_STATUSES_IGNORE );
+}
+
+template <class T>
+void gsAPALM<T>::_sendWorkerToMain( const index_t &     mainID,
+                                    const T &           distance,
+                                    const solution_t &  solution,
+                                    const bool &        bifurcation)
+{
+  gsMPIInfo(m_rank)<<"Sending data from "<<m_rank<<" to "<<mainID<<"\n";
+
+  index_t tag = 0;
+  index_t vectorSize;
+  T load;
+
+  MPI_Request req_meta[2];
+  m_comm.isend(&distance ,1, mainID, &req_meta[0], tag++);
+  m_comm.isend(&bifurcation ,1, mainID, &req_meta[1], tag++);
+
+  MPI_Request req_vecSizes[1];
+  MPI_Request req_loads[1];
+
+  load      = solution.second;
+  m_comm.isend(&load              ,1, mainID, &req_loads[0]       , tag++);
+  vectorSize= solution.first.size();
+  m_comm.isend(&vectorSize        ,1, mainID, &req_vecSizes[0]    , tag++);
+
+  MPI_Request req_data[1];
+  m_comm.isend( solution.first.data(),
+                solution.first.size(), mainID, &req_data[0], tag++);
+
+  MPI_Waitall( 1, req_vecSizes, MPI_STATUSES_IGNORE );
+  MPI_Waitall( 1, req_data, MPI_STATUSES_IGNORE );
+  MPI_Waitall( 1, req_loads, MPI_STATUSES_IGNORE );
+  MPI_Waitall( 2, req_meta, MPI_STATUSES_IGNORE );
 }
 
 template <class T>
 void gsAPALM<T>::_recvWorkerToMain( index_t &                   sourceID,
-                                    index_t &                   branch,
-                                    index_t &                   jobID,
                                     std::vector<T> &            distances,
                                     std::vector<solution_t> &   stepSolutions,
                                     T &                         upperDistance,
@@ -877,16 +1553,14 @@ void gsAPALM<T>::_recvWorkerToMain( index_t &                   sourceID,
   index_t size;
 
   MPI_Status  status;
-  MPI_Request req_meta[4];
-  m_comm.irecv(&branch         ,1, sourceID, &req_meta[0], tag++);
+  MPI_Request req_meta[2];
+  m_comm.irecv(&upperDistance  ,1, sourceID, &req_meta[0], tag++);
   MPI_Wait ( &req_meta[0], &status );
   if (sourceID==MPI_ANY_SOURCE)  sourceID = status.MPI_SOURCE; // Overwrite source ID to be unique
   gsMPIInfo(m_rank)<<"Receiving data on "<<m_rank<<" from "<<sourceID<<"\n";
 
   // Request metadata
-  m_comm.irecv(&jobID          ,1, sourceID, &req_meta[1], tag++);
-  m_comm.irecv(&upperDistance  ,1, sourceID, &req_meta[2], tag++);
-  m_comm.irecv(&lowerDistance  ,1, sourceID, &req_meta[3], tag++);
+  m_comm.irecv(&lowerDistance  ,1, sourceID, &req_meta[1], tag++);
 
   // Request the number of solution intervals
   MPI_Request req_solSize;
@@ -933,8 +1607,56 @@ void gsAPALM<T>::_recvWorkerToMain( index_t &                   sourceID,
   // Wait for the distances to finish
   MPI_Waitall( size+1, req_distances, MPI_STATUSES_IGNORE );
   // Wait for the meta data to finish
-  MPI_Waitall( 4, req_meta, MPI_STATUSES_IGNORE );
+  MPI_Waitall( 2, req_meta, MPI_STATUSES_IGNORE );
 }
+
+template <class T>
+void gsAPALM<T>::_recvWorkerToMain( index_t &     sourceID,
+                                    T &           distance,
+                                    solution_t &  solution,
+                                    bool &        bifurcation)
+{
+  index_t tag = 0;
+
+  MPI_Status  status;
+  MPI_Request req_meta[2];
+  m_comm.irecv(&distance  ,1, sourceID, &req_meta[0], tag++);
+  MPI_Wait ( &req_meta[0], &status );
+  if (sourceID==MPI_ANY_SOURCE)  sourceID = status.MPI_SOURCE; // Overwrite source ID to be unique
+  gsMPIInfo(m_rank)<<"Receiving data on "<<m_rank<<" from "<<sourceID<<"\n";
+
+  // Request metadata
+  m_comm.irecv(&bifurcation  ,1, sourceID, &req_meta[1], tag++);
+
+  // temporary objects to store solutions and the sizes of the solution vectors
+  gsVector<T> U;
+  T           L;
+  index_t     vectorSize;
+
+  // Collect distances, solution vector sizes and loads
+  MPI_Request req_vecSizes[1];
+  MPI_Request req_loads[1];
+
+  m_comm.irecv(&L           ,1, sourceID, &req_loads[0]       , tag++);
+  m_comm.irecv(&vectorSize  ,1, sourceID, &req_vecSizes[0]    , tag++);
+
+  // When the solution vector size is collected, resize the solution vector
+  MPI_Waitall( 1, req_vecSizes, MPI_STATUSES_IGNORE );
+  U.resize(vectorSize);
+
+  // Collect the solution data
+  MPI_Request req_data[1];
+  m_comm.irecv(U.data()    ,vectorSize  , sourceID, &req_data[0], tag++);
+
+  // When the solution data and the loads are collected, put them in the solution object
+  MPI_Waitall( 1, req_data, MPI_STATUSES_IGNORE );
+  MPI_Waitall( 1, req_loads, MPI_STATUSES_IGNORE );
+  solution = std::make_pair(U,L);
+
+  // Wait for the meta data to finish
+  MPI_Waitall( 2, req_meta, MPI_STATUSES_IGNORE );
+}
+
 
 #endif
 
