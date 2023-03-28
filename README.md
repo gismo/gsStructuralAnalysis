@@ -35,7 +35,7 @@ Module for structural analysis with solids ([`gsElasticity`](https://github.com/
 #### Installation
 ```
 cd path/to/build/dir
-cmake . -DGISMO_WITH_SPECTRA=ON -DGISMO_STRUCTURALANALYSIS=ON
+cmake . -DGISMO_OPTIONAL="OTHER-MODULES;gsStructuralAnalysis;gsSpectra"
 make
 ```
 
@@ -47,6 +47,7 @@ The `gsStructuralAnalysis` 	module provides the following analysis tools:
 * `gsModalSolver`&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Solves the vibration problem to find eigenfrequencies and mode shapes given linear mass and stiffness matrices.
 * `gsBucklingSolver`&nbsp;&nbsp;&nbsp;&nbsp;Solves the a buckling eigenvalue problem given a solution **u** from a linear analysis, the linear stiffness matrix and the jacobian given **u**.
 * `gsALMBase`&nbsp;&nbsp;Used for nonlinear buckling analysis (i.e. *post buckling analysis*). It includes arc-length schemes, extended arc-length methods and branch-switching methods.
+* `gsAPALM`&nbsp;&nbsp;Parallel implementation of the arc-length method
 * `gsTimeIntegrator`&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Solves the (nonlinear) second-order structural dynamics problem.
 
 All the tools in the `gsStructuralAnalysis` structural mass matrices, (linear/nonlinear) siffness matrices and forcing vectors/jacobians. The nonlinear modules typically work with jacobians and residuals of the following form (example using `gsThinShellAssembler`):
