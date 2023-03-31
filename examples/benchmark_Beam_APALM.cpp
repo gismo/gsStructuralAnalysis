@@ -414,9 +414,6 @@ int main (int argc, char** argv)
   apalm.options().setReal("BifLengthMultiplier",0.05);
   apalm.initialize();
 
-
-
-
   if (!sequential)
   {
     gsInfo<<"Serial solve\n";
