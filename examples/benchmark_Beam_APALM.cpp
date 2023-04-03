@@ -229,6 +229,7 @@ int main (int argc, char** argv)
 
   std::string output = "solution";
   std::string dirname = "ArcLengthResults";
+  std::string cores;
   real_t pressure = 0.0;
 
   gsMatrix<> writePoints(2,3);
@@ -237,6 +238,13 @@ int main (int argc, char** argv)
   writePoints.col(2)<< 1.0,0.5;
   index_t cross_coordinate = -1;
   real_t cross_val = 0.0;
+
+#ifdef GISMO_WITH_MPI
+    const gsMpi & mpi = gsMpi::init();
+    gsMpiComm comm = mpi.worldComm();
+    cores = "_ncores="+std::to_string(comm.size());
+#endif
+
 
   if (testCase == 2)
   {
@@ -257,7 +265,7 @@ int main (int argc, char** argv)
     // dL =  1e-3;
     // dLb = 2e0;
 
-    dirname = dirname + "/Beam_clamped-verticalLoad";
+    dirname = dirname + "/Beam_clamped-verticalLoad" + cores;
     output =  "solution";
     wn = output + "data.txt";
   }
@@ -283,7 +291,7 @@ int main (int argc, char** argv)
     load << -Load, 0.0, 0.0 ;
     pLoads.addLoad(point, load, 0 );
 
-    dirname = dirname + "/Beam_clamped-horizontalLoad";
+    dirname = dirname + "/Beam_clamped-horizontalLoad"  + cores;
     output =  "solution";
     wn = output + "data.txt";
   }
@@ -416,8 +424,11 @@ int main (int argc, char** argv)
 
   if (!sequential)
   {
-    gsInfo<<"Serial solve\n";
+    real_t time = apalm.wallTime();
     apalm.solve(step+1);
+    time = apalm.wallTime() - time;
+    if (apalm.isMain()) gsInfo<<"Time = "<<time<<"\n";
+
     if (apalm.isMain())
     {
       if (plot || write)
@@ -474,10 +485,21 @@ int main (int argc, char** argv)
         }
       }
     }
+    if (apalm.isMain())
+    {
+      std::ofstream file;
+      file.open("times");
+      file<<"solution time: "<<time<<" s\n";
+      file.close();
+    }
   }
   else
   {
+    real_t serialTime = apalm.wallTime();
     apalm.serialSolve(step+1);
+    serialTime = apalm.wallTime() - serialTime;
+    if (apalm.isMain()) gsInfo<<"Serial time = "<<serialTime<<"\n";
+
     if (apalm.isMain())
     {
       if (plot || write)
@@ -541,7 +563,10 @@ int main (int argc, char** argv)
     /////////////////////////////////////////////////////////////////////////////////////////////
     /////////////////////////////////////////////////////////////////////////////////////////////
 
+    real_t parallelTime = apalm.wallTime();
     apalm.parallelSolve();
+    parallelTime = apalm.wallTime() - parallelTime;
+    if (apalm.isMain()) gsInfo<<"Parallel time = "<<parallelTime<<"\n";
 
     /////////////////////////////////////////////////////////////////////////////////////////////
     /////////////////////////////////////////////////////////////////////////////////////////////
@@ -603,7 +628,14 @@ int main (int argc, char** argv)
         }
       }
     }
-
+    if (apalm.isMain())
+    {
+      std::ofstream file;
+      file.open("times");
+      file<<"serial   time: "<<serialTime<<" s\n";
+      file<<"parallel time: "<<parallelTime<<" s\n";
+      file.close();
+    }
   }
 
   delete assembler;

@@ -200,10 +200,10 @@ protected:
                           const T &                         upperDistance,
                           const T &                         lowerDistance );
 
-  void _sendWorkerToMain( const index_t &     mainID,
-                          const T &           distance,
-                          const solution_t &  solution,
-                          const bool &        bifurcation);
+  void _sendWorkerToMain( const index_t &                   mainID,
+                          const T &                         distance,
+                          const std::vector<solution_t> &   solutions,
+                          const bool &                      bifurcation);
 
   // For data
   void _recvWorkerToMain( index_t &                   sourceID, // source ID will change to MPI
@@ -212,10 +212,10 @@ protected:
                           T &                         upperDistance,
                           T &                         lowerDistance);
 
-  void _recvWorkerToMain( index_t &     sourceID, // source ID will change to MPI
-                          T &           distance,
-                          solution_t &  solution,
-                          bool &        bifurcation);
+  void _recvWorkerToMain( index_t &                   sourceID, // source ID will change to MPI
+                          T &                         distance,
+                          std::vector<solution_t> &   stepSolutions,
+                          bool &                      bifurcation);
 
 
   gsMpiComm & comm() { return m_comm; }
@@ -241,7 +241,7 @@ protected:
                       const T &               startTime,
                       const index_t &         dataLevel,
                       T &                     endTime,
-                      solution_t &            stepSolution,
+                      std::vector<solution_t>&solutions,
                       bool &                  bifurcation   );
 
   void _correction(   const std::tuple<index_t, T     , solution_t, solution_t> & dataEntry,

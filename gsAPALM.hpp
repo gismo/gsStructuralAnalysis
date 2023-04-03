@@ -545,7 +545,7 @@ gsAPALM<T>::_solve_impl(index_t Nsteps)
   // Initiation
   T tstart;
   T distance;
-  solution_t solution;
+  std::vector<solution_t> solutions;
   bool bifurcation;
 
 
@@ -650,16 +650,18 @@ gsAPALM<T>::_solve_impl(index_t Nsteps)
       {
         this->_recvWorkerToMain(source,
                                 distance,
-                                solution,
+                                solutions,
                                 bifurcation);
 
         T tstart = m_data.branch(branch).jobStartTime(ID);
-        m_data.branch(branch).appendData(tstart+distance,solution,false);
+        m_data.branch(branch).appendData(tstart+distance,solutions[0],false);
+        m_data.branch(branch).finishJob(ID);
 
         if (K[branch]++ < Nsteps-1) // add a new point
         {
           if (!bifurcation)
           {
+            GISMO_ASSERT(solutions.size()==1,"There must be one solution, but solutions.size() = "<<solutions.size());
             m_data.branch(branch).appendPoint(true);
             // sets the default length that is used when started from a Point.
             // After bifurcation, it's the original one times the branch length multiplier times the bifurcation length multiplier
@@ -668,16 +670,16 @@ gsAPALM<T>::_solve_impl(index_t Nsteps)
           }
           else
           {
+            GISMO_ASSERT(solutions.size()==2,"There must be two solutions!");
             gsAPALMData<T,solution_t> data = m_dataEmpty;
             branch = m_data.add(data);
             K.push_back(1);
-            m_data.branch(branch).addStartPoint(T(0),solution,true);
+            m_data.branch(branch).addStartPoint(T(0),solutions[1],true);
             // Sets the default length that is used when started from a Point.
             // After bifurcation, it's the original one times the branch length multiplier times the bifurcation length multiplier
             m_data.branch(branch).setLength(m_ALM->getLength()*m_branchLengthMult*m_bifLengthMult);
           }
         }
-        m_data.branch(branch).finishJob(ID);
       }
       // Correction intervals have level > 0
       else
@@ -725,6 +727,7 @@ gsAPALM<T>::_solve_impl(index_t Nsteps)
                                   branch,
                                   ID,
                                   dataLevel);
+
           this->_sendMainToWorker(m_workers.front(),
                                   dataEntry,
                                   m_data.branch(branch).jobStartTime(ID)
@@ -783,7 +786,7 @@ gsAPALM<T>::_solve_impl(index_t Nsteps)
                           tstart,
                           dataLevel,
                           distance,
-                          solution,
+                          solutions,
                           bifurcation
                           );
 
@@ -792,7 +795,7 @@ gsAPALM<T>::_solve_impl(index_t Nsteps)
                                 ID);
         this->_sendWorkerToMain(0,
                                 distance,
-                                solution,
+                                solutions,
                                 bifurcation);
       }
       // Correction intervals have level > 0
@@ -880,23 +883,25 @@ gsAPALM<T>::_solve_impl(index_t Nsteps)
       if (m_verbose) gsMPIInfo(m_rank)<<"Initialization\n";
       T startTime = m_data.branch(branch).jobStartTime(ID);
       T distance;
-      solution_t solution;
+      std::vector<solution_t> solutions;
       bool bifurcation;
       this->_initiation(dataEntry,
                         startTime,
                         dataLevel,
                         distance,
-                        solution,
+                        solutions,
                         bifurcation
                         );
 
-      m_data.branch(branch).appendData(startTime+distance,solution,false);
+      m_data.branch(branch).appendData(startTime+distance,solutions[0],false);
+      m_data.branch(branch).finishJob(ID);
       // if no bifurcation is hit, we mark the end of the interval as the start point
 
       if (K[branch]++ < Nsteps - 1) // add a new point
       {
         if (!bifurcation)
         {
+          GISMO_ASSERT(solutions.size()==1,"There must be one solution!");
           m_data.branch(branch).appendPoint(true);
           // sets the default length that is used when started from a Point.
           // After bifurcation, it's the original one times the branch length multiplier times the bifurcation length multiplier
@@ -905,16 +910,16 @@ gsAPALM<T>::_solve_impl(index_t Nsteps)
         }
         else
         {
+          GISMO_ASSERT(solutions.size()==2,"There must be two solutions!");
           gsAPALMData<T,solution_t> data = m_dataEmpty;
           branch = m_data.add(data);
           K.push_back(1);
-          m_data.branch(branch).addStartPoint(T(0),solution,true);
+          m_data.branch(branch).addStartPoint(T(0),solutions[1],true); // use the second solution that is given in solutions
           // Sets the default length that is used when started from a Point.
           // After bifurcation, it's the original one times the branch length multiplier times the bifurcation length multiplier
           m_data.branch(branch).setLength(m_ALM->getLength()*m_branchLengthMult*m_bifLengthMult);
         }
       }
-      m_data.branch(branch).finishJob(ID);
     }
     else
     {
@@ -950,7 +955,7 @@ void gsAPALM<T>::_initiation( const std::tuple<index_t, T     , solution_t, solu
                               const T &               startTime,
                               const index_t &         dataLevel,
                               T &                     distance,
-                              solution_t&             solution,
+                              std::vector<solution_t>&solutions,
                               bool &                  bifurcation )
 {
   solution_t start, prev;
@@ -964,6 +969,7 @@ void gsAPALM<T>::_initiation( const std::tuple<index_t, T     , solution_t, solu
   gsMatrix<T> Uprev, Uold;
 
   /// Worker
+  solutions.clear();
   std::tie(ID,dL,start,prev) = dataEntry;
   std::tie(Uold,Lold) = start;
   std::tie(Uprev,Lprev) = prev;
@@ -997,31 +1003,38 @@ void gsAPALM<T>::_initiation( const std::tuple<index_t, T     , solution_t, solu
     {
       gsMPIInfo(m_rank)<<"Bifurcation spotted!"<<"\n";
       m_ALM->computeSingularPoint(1e-4, 5, Uold, Lold, 1e-10, 0, false);
-      m_ALM->switchBranch();
       bifurcation = true;
     }
   }
 
-  solution = std::make_pair(m_ALM->solutionU(),m_ALM->solutionL());
   DeltaU = m_ALM->solutionU() - Uold;
   DeltaL = m_ALM->solutionL() - Lold;
-
   distance = m_ALM->distance(DeltaU,DeltaL);
-  T tend = tstart + distance;
+  solutions.push_back(std::make_pair(m_ALM->solutionU(),m_ALM->solutionL()));
 
-  std::vector<solution_t> stepSolutionsExport(2);
-  std::vector<T> stepTimesExport(2);
-  // Export parallel interval output
-  // Solutions
-  std::pair<gsVector<T>,T> front = std::make_pair(start.first,start.second);
-  stepSolutionsExport.front() = front;
-  std::pair<gsVector<T>,T> back  = std::make_pair(solution.first,solution.second);
-  stepSolutionsExport.back() = back;
-  // Times
-  stepTimesExport.front() = tstart;
-  stepTimesExport.back() = tend;
+  if (bifurcation)
+  {
+    m_ALM->switchBranch();
+    // add the extra point after bifurcation to the export
+    solutions.push_back(std::make_pair(m_ALM->solutionU(),m_ALM->solutionL()));
+  }
 
-  this->parallelIntervalOutput(stepSolutionsExport,stepTimesExport,dataLevel,ID);
+
+  // T tend = tstart + distance;
+
+  // std::vector<solution_t> stepSolutionsExport(2);
+  // std::vector<T> stepTimesExport(2);
+  // // Export parallel interval output
+  // // Solutions
+  // std::pair<gsVector<T>,T> front = std::make_pair(start.first,start.second);
+  // stepSolutionsExport.front() = front;
+  // std::pair<gsVector<T>,T> back  = std::make_pair(solution.first,solution.second);
+  // stepSolutionsExport.back() = back;
+  // // Times
+  // stepTimesExport.front() = tstart;
+  // stepTimesExport.back() = tend;
+
+  // this->parallelIntervalOutput(stepSolutionsExport,stepTimesExport,dataLevel,ID);
 }
 
 // NOTE: This does not make new branches!
@@ -1385,13 +1398,11 @@ void gsAPALM<T>::_recvMainToWorker( const index_t &   sourceID,
   index_t     startSize,prevSize;
   T           startL,   prevL;
 
-  T           tstart;
-
   // Put all data 0-14 in a struct and recv a single struct
   MPI_Request req[7];
   m_comm.irecv(&ID        ,1,sourceID,&req[0] ,0 );
   m_comm.irecv(&dL0       ,1,sourceID,&req[1] ,1 );
-  m_comm.irecv(&tstart    ,1,sourceID,&req[2] ,2 );
+  m_comm.irecv(&startTime ,1,sourceID,&req[2] ,2 );
 
   m_comm.irecv(&startSize ,1,sourceID,&req[3] ,3 );
   m_comm.irecv(&startL    ,1,sourceID,&req[4] ,4 );
@@ -1508,14 +1519,15 @@ void gsAPALM<T>::_sendWorkerToMain( const index_t &                   mainID,
 }
 
 template <class T>
-void gsAPALM<T>::_sendWorkerToMain( const index_t &     mainID,
-                                    const T &           distance,
-                                    const solution_t &  solution,
-                                    const bool &        bifurcation)
+void gsAPALM<T>::_sendWorkerToMain( const index_t &                   mainID,
+                                    const T &                         distance,
+                                    const std::vector<solution_t> &   solutions,
+                                    const bool &                      bifurcation)
 {
   gsMPIInfo(m_rank)<<"Sending data from "<<m_rank<<" to "<<mainID<<"\n";
 
   index_t tag = 0;
+  index_t size = solutions.size();
   index_t vectorSize;
   T load;
 
@@ -1523,21 +1535,28 @@ void gsAPALM<T>::_sendWorkerToMain( const index_t &     mainID,
   m_comm.isend(&distance ,1, mainID, &req_meta[0], tag++);
   m_comm.isend(&bifurcation ,1, mainID, &req_meta[1], tag++);
 
-  MPI_Request req_vecSizes[1];
-  MPI_Request req_loads[1];
+  MPI_Request req_solSize;
+  m_comm.isend(&size          ,1, mainID, &req_solSize, tag++);
 
-  load      = solution.second;
-  m_comm.isend(&load              ,1, mainID, &req_loads[0]       , tag++);
-  vectorSize= solution.first.size();
-  m_comm.isend(&vectorSize        ,1, mainID, &req_vecSizes[0]    , tag++);
+  MPI_Request req_vecSizes[size];
+  MPI_Request req_loads[size];
+  for (index_t k=0; k!=size; k++)
+  {
+    load      = solutions.at(k).second;
+    m_comm.isend(&load              ,1, mainID, &req_loads[k]       , tag++);
+    vectorSize= solutions.at(k).first.size();
+    m_comm.isend(&vectorSize        ,1, mainID, &req_vecSizes[k]    , tag++);
+  }
 
-  MPI_Request req_data[1];
-  m_comm.isend( solution.first.data(),
-                solution.first.size(), mainID, &req_data[0], tag++);
+  MPI_Request req_data[size];
+  for (index_t k=0; k!=size; k++)
+    m_comm.isend( solutions.at(k).first.data(),
+                  solutions.at(k).first.size(), mainID, &req_data[k], tag++);
 
-  MPI_Waitall( 1, req_vecSizes, MPI_STATUSES_IGNORE );
-  MPI_Waitall( 1, req_data, MPI_STATUSES_IGNORE );
-  MPI_Waitall( 1, req_loads, MPI_STATUSES_IGNORE );
+  MPI_Wait(&req_solSize,MPI_STATUS_IGNORE);
+  MPI_Waitall( size, req_vecSizes, MPI_STATUSES_IGNORE );
+  MPI_Waitall( size, req_data, MPI_STATUSES_IGNORE );
+  MPI_Waitall( size, req_loads, MPI_STATUSES_IGNORE );
   MPI_Waitall( 2, req_meta, MPI_STATUSES_IGNORE );
 }
 
@@ -1611,12 +1630,13 @@ void gsAPALM<T>::_recvWorkerToMain( index_t &                   sourceID,
 }
 
 template <class T>
-void gsAPALM<T>::_recvWorkerToMain( index_t &     sourceID,
-                                    T &           distance,
-                                    solution_t &  solution,
-                                    bool &        bifurcation)
+void gsAPALM<T>::_recvWorkerToMain( index_t &                 sourceID,
+                                    T &                       distance,
+                                    std::vector<solution_t> & solutions,
+                                    bool &                    bifurcation)
 {
   index_t tag = 0;
+  index_t size;
 
   MPI_Status  status;
   MPI_Request req_meta[2];
@@ -1628,30 +1648,43 @@ void gsAPALM<T>::_recvWorkerToMain( index_t &     sourceID,
   // Request metadata
   m_comm.irecv(&bifurcation  ,1, sourceID, &req_meta[1], tag++);
 
+  // Request the number of solution intervals
+  MPI_Request req_solSize;
+  m_comm.irecv(&size           ,1, sourceID, &req_solSize, tag++);
+
+  MPI_Wait(&req_solSize,MPI_STATUS_IGNORE);
+
   // temporary objects to store solutions and the sizes of the solution vectors
-  gsVector<T> U;
-  T           L;
-  index_t     vectorSize;
+  std::vector<gsVector<T>> Us(size);
+  std::vector<T          > Ls(size);
+  std::vector<index_t    > vectorSizes(size);
+  // final containers for distances and step solutions
+  solutions.resize(size);
 
   // Collect distances, solution vector sizes and loads
-  MPI_Request req_vecSizes[1];
-  MPI_Request req_loads[1];
+  MPI_Request req_vecSizes[size];
+  MPI_Request req_loads[size];
+  for (index_t k=0; k!=size; k++)
+  {
+    m_comm.irecv(&Ls.at(k)          ,1, sourceID, &req_loads[k]       , tag++);
+    m_comm.irecv(&vectorSizes.at(k) ,1, sourceID, &req_vecSizes[k]    , tag++);
+  }
 
-  m_comm.irecv(&L           ,1, sourceID, &req_loads[0]       , tag++);
-  m_comm.irecv(&vectorSize  ,1, sourceID, &req_vecSizes[0]    , tag++);
-
-  // When the solution vector size is collected, resize the solution vector
-  MPI_Waitall( 1, req_vecSizes, MPI_STATUSES_IGNORE );
-  U.resize(vectorSize);
+  // When all solution vector sizes are collected, resize the solution vectors
+  MPI_Waitall( size, req_vecSizes, MPI_STATUSES_IGNORE );
+  for (index_t k=0; k!=size; k++)
+    Us[k].resize(vectorSizes.at(k));
 
   // Collect the solution data
-  MPI_Request req_data[1];
-  m_comm.irecv(U.data()    ,vectorSize  , sourceID, &req_data[0], tag++);
+  MPI_Request req_data[size];
+  for (index_t k=0; k!=size; k++)
+    m_comm.irecv(Us.at(k).data()    ,vectorSizes.at(k)  , sourceID, &req_data[k], tag++);
 
-  // When the solution data and the loads are collected, put them in the solution object
-  MPI_Waitall( 1, req_data, MPI_STATUSES_IGNORE );
-  MPI_Waitall( 1, req_loads, MPI_STATUSES_IGNORE );
-  solution = std::make_pair(U,L);
+  // When the solution data and the loads are collected, put them in the solutions container.
+  MPI_Waitall( size, req_data, MPI_STATUSES_IGNORE );
+  MPI_Waitall( size, req_loads, MPI_STATUSES_IGNORE );
+  for (index_t k=0; k!=size; k++)
+    solutions.at(k) = std::make_pair(Us.at(k),Ls.at(k));
 
   // Wait for the meta data to finish
   MPI_Waitall( 2, req_meta, MPI_STATUSES_IGNORE );
