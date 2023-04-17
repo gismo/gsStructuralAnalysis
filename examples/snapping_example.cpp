@@ -753,7 +753,7 @@ gsMultiPatch<T> makeTop(const T tw, const T tg, const T tb, const T ts, const T 
     ones = gsMatrix<T>::Ones(tmp.rows(),1);
     coefs_tmp.resize(2*tmp.rows(),tmp.cols());
     coefs_tmp.block(0,0,tmp.rows(),tmp.cols()) = tmp;
-    tmp.col(1).setConstant(tg/2+ts+tg+tb+2*a);
+    tmp.col(1).setConstant(tg/2+ts+tg+tb+(5*tg));
     coefs_tmp.block(tmp.rows(),0,tmp.rows(),tmp.cols()) = tmp;
     top.addPatch(gsTensorBSpline<2,real_t>(left_tbasis,coefs_tmp),"bearing");
 
@@ -761,7 +761,7 @@ gsMultiPatch<T> makeTop(const T tw, const T tg, const T tb, const T ts, const T 
     ones = gsMatrix<T>::Ones(tmp.rows(),1);
     coefs_tmp.resize(2*tmp.rows(),tmp.cols());
     coefs_tmp.block(0,0,tmp.rows(),tmp.cols()) = tmp;
-    tmp.col(1).setConstant(tg/2+ts+tg+tb+2*a);
+    tmp.col(1).setConstant(tg/2+ts+tg+tb+(5*tg));
     coefs_tmp.block(tmp.rows(),0,tmp.rows(),tmp.cols()) = tmp;
     top.addPatch(gsTensorBSpline<2,real_t>(midleft_tbasis,coefs_tmp),"bearing");
 
@@ -769,7 +769,7 @@ gsMultiPatch<T> makeTop(const T tw, const T tg, const T tb, const T ts, const T 
     ones = gsMatrix<T>::Ones(tmp.rows(),1);
     coefs_tmp.resize(2*tmp.rows(),tmp.cols());
     coefs_tmp.block(0,0,tmp.rows(),tmp.cols()) = tmp;
-    tmp.col(1).setConstant(tg/2+ts+tg+tb+2*a);
+    tmp.col(1).setConstant(tg/2+ts+tg+tb+(5*tg));
     coefs_tmp.block(tmp.rows(),0,tmp.rows(),tmp.cols()) = tmp;
     top.addPatch(gsTensorBSpline<2,real_t>(mid_tbasis,coefs_tmp),"bearing");
 
@@ -777,7 +777,7 @@ gsMultiPatch<T> makeTop(const T tw, const T tg, const T tb, const T ts, const T 
     ones = gsMatrix<T>::Ones(tmp.rows(),1);
     coefs_tmp.resize(2*tmp.rows(),tmp.cols());
     coefs_tmp.block(0,0,tmp.rows(),tmp.cols()) = tmp;
-    tmp.col(1).setConstant(tg/2+ts+tg+tb+2*a);
+    tmp.col(1).setConstant(tg/2+ts+tg+tb+(5*tg));
     coefs_tmp.block(tmp.rows(),0,tmp.rows(),tmp.cols()) = tmp;
     top.addPatch(gsTensorBSpline<2,real_t>(midright_tbasis,coefs_tmp),"bearing");
 
@@ -785,7 +785,7 @@ gsMultiPatch<T> makeTop(const T tw, const T tg, const T tb, const T ts, const T 
     ones = gsMatrix<T>::Ones(tmp.rows(),1);
     coefs_tmp.resize(2*tmp.rows(),tmp.cols());
     coefs_tmp.block(0,0,tmp.rows(),tmp.cols()) = tmp;
-    tmp.col(1).setConstant(tg/2+ts+tg+tb+2*a);
+    tmp.col(1).setConstant(tg/2+ts+tg+tb+(5*tg));
     coefs_tmp.block(tmp.rows(),0,tmp.rows(),tmp.cols()) = tmp;
     top.addPatch(gsTensorBSpline<2,real_t>(right_tbasis,coefs_tmp),"bearing");
 
@@ -1094,7 +1094,7 @@ gsMultiPatch<T> makeBottom(const T tw, const T tg, const T tb, const T ts, const
     ones = gsMatrix<T>::Ones(tmp.rows(),1);
     coefs_tmp.resize(2*tmp.rows(),tmp.cols());
     coefs_tmp.block(0,0,tmp.rows(),tmp.cols()) = tmp;
-    tmp.col(1).setConstant(-tg/2-2*a-2*a); // the amplitude of the cosine is 2a so we have to cover at least 2a, plus a margin (here 2a as well)
+    tmp.col(1).setConstant(-tg/2-2*a-(5*tg)); // the amplitude of the cosine is 2a so we have to cover at least 2a, plus a margin (here 5*tg)
     coefs_tmp.block(tmp.rows(),0,tmp.rows(),tmp.cols()) = tmp;
     bottom.addPatch(gsTensorBSpline<2,real_t>(left_tbasis,coefs_tmp),"bearing");
 
@@ -1102,7 +1102,7 @@ gsMultiPatch<T> makeBottom(const T tw, const T tg, const T tb, const T ts, const
     ones = gsMatrix<T>::Ones(tmp.rows(),1);
     coefs_tmp.resize(2*tmp.rows(),tmp.cols());
     coefs_tmp.block(0,0,tmp.rows(),tmp.cols()) = tmp;
-    tmp.col(1).setConstant(-tg/2-2*a-2*a);
+    tmp.col(1).setConstant(-tg/2-2*a-(5*tg));
     coefs_tmp.block(tmp.rows(),0,tmp.rows(),tmp.cols()) = tmp;
     bottom.addPatch(gsTensorBSpline<2,real_t>(midleft_tbasis,coefs_tmp),"bearing");
 
@@ -1110,7 +1110,7 @@ gsMultiPatch<T> makeBottom(const T tw, const T tg, const T tb, const T ts, const
     ones = gsMatrix<T>::Ones(tmp.rows(),1);
     coefs_tmp.resize(2*tmp.rows(),tmp.cols());
     coefs_tmp.block(0,0,tmp.rows(),tmp.cols()) = tmp;
-    tmp.col(1).setConstant(-tg/2-2*a-2*a);
+    tmp.col(1).setConstant(-tg/2-2*a-(5*tg));
     coefs_tmp.block(tmp.rows(),0,tmp.rows(),tmp.cols()) = tmp;
     bottom.addPatch(gsTensorBSpline<2,real_t>(mid_tbasis,coefs_tmp),"bearing");
 
@@ -1118,7 +1118,7 @@ gsMultiPatch<T> makeBottom(const T tw, const T tg, const T tb, const T ts, const
     ones = gsMatrix<T>::Ones(tmp.rows(),1);
     coefs_tmp.resize(2*tmp.rows(),tmp.cols());
     coefs_tmp.block(0,0,tmp.rows(),tmp.cols()) = tmp;
-    tmp.col(1).setConstant(-tg/2-2*a-2*a);
+    tmp.col(1).setConstant(-tg/2-2*a-(5*tg));
     coefs_tmp.block(tmp.rows(),0,tmp.rows(),tmp.cols()) = tmp;
     bottom.addPatch(gsTensorBSpline<2,real_t>(midright_tbasis,coefs_tmp),"bearing");
 
@@ -1126,7 +1126,7 @@ gsMultiPatch<T> makeBottom(const T tw, const T tg, const T tb, const T ts, const
     ones = gsMatrix<T>::Ones(tmp.rows(),1);
     coefs_tmp.resize(2*tmp.rows(),tmp.cols());
     coefs_tmp.block(0,0,tmp.rows(),tmp.cols()) = tmp;
-    tmp.col(1).setConstant(-tg/2-2*a-2*a);
+    tmp.col(1).setConstant(-tg/2-2*a-(5*tg));
     coefs_tmp.block(tmp.rows(),0,tmp.rows(),tmp.cols()) = tmp;
     bottom.addPatch(gsTensorBSpline<2,real_t>(right_tbasis,coefs_tmp),"bearing");
 
