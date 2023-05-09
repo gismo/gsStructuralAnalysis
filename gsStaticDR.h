@@ -154,6 +154,7 @@ protected:
     // Iterations
     using Base::m_numIterations;
     using Base::m_maxIterations;
+    index_t m_resetIterations;
 
     // Residuals
     using Base::m_R;

@@ -94,13 +94,12 @@ gsVector<T> gsStaticNewton<T>::solveNonlinear()
     // m_start: true -> m_U given
     // m_headstart: true -> m_DeltaU given
 
-    if (m_DeltaU.norm()==0 || m_DeltaU.rows()==0) ///
+    if (m_DeltaU.norm()==0 && m_DeltaU.rows()==0) ///
     {
         m_deltaU = m_DeltaU = this->solveLinear();
         m_U.setZero(); // Needed because linear solve modifies m_U.
         m_headstart = true; // due to this, the relative residual is based on the solution of the linear solve
     }
-
     _start();
 
     gsSparseMatrix<T> jacMat;

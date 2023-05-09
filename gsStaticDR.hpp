@@ -24,6 +24,7 @@ void gsStaticDR<T>::defaultOptions()
     m_options.addReal("damping","damping factor",1.0);
     m_options.addReal("alpha","mass coefficient",2.0);
     m_options.addReal("tolE","Kinetic energy tolerance",1e-6);
+    m_options.addInt("ResetIt","Reset rate of velocities if damping is zero",-1);
 }
 
 template <class T>
@@ -33,6 +34,7 @@ void gsStaticDR<T>::getOptions()
     m_c = m_options.getReal("damping");
     m_alpha = m_options.getReal("alpha");
     m_tolE = m_options.getReal("tolE");
+    m_resetIterations = m_options.getInt("ResetIt");
 }
 
 template <class T>
@@ -83,11 +85,15 @@ void gsStaticDR<T>::solve()
     m_Eks.push_back(m_Ek);
 
     if (m_verbose != 0) stepOutput(0);
-    for (m_numIterations=1; m_numIterations!=m_maxIterations; m_numIterations++)
+    index_t resetIt = 0;
+    for (m_numIterations=1; m_numIterations!=m_maxIterations; m_numIterations++, resetIt++)
     {
         _iteration();
-        if ((m_c==0 && m_Ek_prev > m_Ek))// || (m_Ek/m_Ek_prev > 1/m_tolE && m_Ek_prev!=0))
+        if ((m_c==0 && m_Ek_prev > m_Ek) || resetIt==m_resetIterations)// || (m_Ek/m_Ek_prev > 1/m_tolE && m_Ek_prev!=0))
+        {
+            resetIt = 0;
             _peak();
+        }
 
         if (m_verbose!=0)
             if (m_numIterations % m_verbose == 0 || m_verbose==-1 ) stepOutput(m_numIterations);
@@ -185,7 +191,8 @@ void gsStaticDR<T>::_start()
         m_DeltaU.setZero(m_dofs);
         // Compute current residual and its norm
         m_R = m_residualFun(m_U);
-        m_residual = m_R.norm();
+        // m_residual = m_R.norm();
+        m_residual = m_forcing.norm();
         // If the residual is 0 (e.g. with purely displacment loading), we set it to 1 to allow divisions
         if (m_residual==0) m_residual=1;
         // All residual norms are equal
@@ -195,7 +202,8 @@ void gsStaticDR<T>::_start()
     {
         // Compute current residual and its norm
         m_R = m_residualFun(m_U + m_DeltaU);
-        m_residual = m_R.norm();
+        // m_residual = m_R.norm();
+        m_residual = m_forcing.norm();
         // If the residual is 0 (e.g. with purely displacment loading), we set it to 1 to allow divisions
         if (m_residual==0) m_residual=1;
         // The previous step residual is the same as the residual
