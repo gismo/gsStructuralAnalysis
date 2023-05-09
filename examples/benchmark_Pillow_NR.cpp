@@ -188,7 +188,7 @@ int main (int argc, char** argv)
 
     gsMaterialMatrixBase<real_t>* materialMatrix = new gsMaterialMatrixLinear<3,real_t>(mp,t,E,nu,rho);
     gsMaterialMatrixTFT<3,real_t,false> * materialMatrixTFT = new gsMaterialMatrixTFT<3,real_t,false>(static_cast<gsMaterialMatrixBaseDim<3,real_t> * >(materialMatrix));
-    materialMatrixTFT->options().setReal("SlackMultiplier",1);    
+    materialMatrixTFT->options().setReal("SlackMultiplier",1e-6);    
 
     gsThinShellAssemblerBase<real_t>* assembler;
     if (membrane && TFT)
@@ -290,6 +290,8 @@ int main (int argc, char** argv)
       assembler->assembleMass(true);
       gsVector<> M = assembler->rhs();
 
+      bool bisected = false;
+
       maxIt = 1e3;
       gsStaticDR<real_t> DRM(M,F,Residual);
       gsOptionList DROptions = DRM.options();
@@ -304,6 +306,16 @@ int main (int argc, char** argv)
       DRM.setOptions(DROptions);
       DRM.initialize();
       DRM.solve();
+      if (!DRM.converged())
+      {
+        gsWarn<<"Load step "<<k<<" did not converge\n";
+        GISMO_ASSERT(load_fac!=0,"load_fac is zero but no convergence on the first step. Try to increase the number of iterations");
+        load_fac -= dload_fac;
+        dload_fac /= 2;
+        load_fac += dload_fac;
+        bisected = true;
+        continue;
+      }
 
       gsVector<> updateVector = DRM.solution() - solVector;
 
@@ -320,7 +332,6 @@ int main (int argc, char** argv)
       NWT.setDisplacement(solVector);
       NWT.setUpdate(updateVector);
       NWT.solve();
-      bool bisected = false;
       if (!NWT.converged())
       {
         gsWarn<<"Load step "<<k<<" did not converge\n";
