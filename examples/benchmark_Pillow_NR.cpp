@@ -292,7 +292,7 @@ int main (int argc, char** argv)
 
       bool bisected = false;
 
-      maxIt = 1e3;
+      maxIt = 1e4;
       gsStaticDR<real_t> DRM(M,F,Residual);
       gsOptionList DROptions = DRM.options();
       DROptions.setReal("damping",damping);
