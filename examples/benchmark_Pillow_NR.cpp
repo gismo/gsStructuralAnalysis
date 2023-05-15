@@ -160,8 +160,10 @@ int main (int argc, char** argv)
     real_t pressure = 5e3;
     // real_t pressure =0;
 
-    std::string dirname = "ArcLengthResults";
-    dirname = dirname + "/Pillow";
+    std::string dirname = ".";
+    dirname = dirname + "/Pillow_r" + std::to_string(numHref) + "_e" + std::to_string(numElevate);
+    if (TFT)
+      dirname = dirname + "_TFT";
     std::string output =  "solution";
 
     std::string commands = "mkdir -p " + dirname;
@@ -306,16 +308,16 @@ int main (int argc, char** argv)
       DRM.setOptions(DROptions);
       DRM.initialize();
       DRM.solve();
-      if (!DRM.converged())
-      {
-        gsWarn<<"Load step "<<k<<" did not converge\n";
-        GISMO_ASSERT(load_fac!=0,"load_fac is zero but no convergence on the first step. Try to increase the number of iterations");
-        load_fac -= dload_fac;
-        dload_fac /= 2;
-        load_fac += dload_fac;
-        bisected = true;
-        continue;
-      }
+      // if (!DRM.converged())
+      // {
+      //   gsWarn<<"Load step "<<k<<" did not converge\n";
+      //   GISMO_ASSERT(load_fac!=0,"load_fac is zero but no convergence on the first step. Try to increase the number of iterations");
+      //   load_fac -= dload_fac;
+      //   dload_fac /= 2;
+      //   load_fac += dload_fac;
+      //   bisected = true;
+      //   continue;
+      // }
 
       gsVector<> updateVector = DRM.solution() - solVector;
 
@@ -356,7 +358,7 @@ int main (int argc, char** argv)
       {
           gsField<> solField(mp_def, deformation);
           gsInfo<<"Plotting in Paraview...\n";
-          gsWriteParaview<>( solField, "solution", 1000, true);
+          gsWriteParaview<>( solField, dirname + "/" + "solution", 1000, true);
           // ev.options().setSwitch("plot.elements", true);
           // ev.writeParaview( u_sol   , G, "solution");
 
@@ -367,7 +369,7 @@ int main (int argc, char** argv)
           gsPiecewiseFunction<> TFes;
           assembler->constructStress(mp_def,TFes,stress_type::tension_field);
           gsField<> TF(mp_def,TFes, true);
-          gsWriteParaview(TF,"tensionfield",5000);
+          gsWriteParaview(TF, dirname + "/" + "tensionfield",5000);
 
 
           gsInfo <<"Maximum deformation coef: "
@@ -461,7 +463,7 @@ int main (int argc, char** argv)
     {
         gsField<> solField(mp_def, deformation);
         gsInfo<<"Plotting in Paraview...\n";
-        gsWriteParaview<>( solField, "solution", 1000, true);
+        gsWriteParaview<>( solField, dirname + "/" + "solution", 1000, true);
         // ev.options().setSwitch("plot.elements", true);
         // ev.writeParaview( u_sol   , G, "solution");
 
@@ -472,7 +474,7 @@ int main (int argc, char** argv)
         gsPiecewiseFunction<> TFes;
         assembler->constructStress(mp_def,TFes,stress_type::tension_field);
         gsField<> TF(mp_def,TFes, true);
-        gsWriteParaview(TF,"tensionfield",5000);
+        gsWriteParaview(TF,dirname + "/" + "tensionfield",5000);
 
 
         gsInfo <<"Maximum deformation coef: "
@@ -532,18 +534,18 @@ int main (int argc, char** argv)
       gsField<> TF(mp_def,TFes, true);
 
 
-      gsWriteParaview(membraneStress,"MembraneStress",5000);
-      gsWriteParaview(VMStress,"MembraneStressVM",5000);
-      gsWriteParaview(Stretches,"PrincipalStretch",5000);
-      gsWriteParaview(pstrainM,"PrincipalMembraneStrain",5000);
-      gsWriteParaview(pstrainF,"PrincipalFlexuralStrain",5000);
-      gsWriteParaview(pstressM,"PrincipalMembraneStress",5000);
-      gsWriteParaview(pstressF,"PrincipalFlexuralStress",5000);
-      gsWriteParaview(stretchDir1,"PrincipalDirection1",5000);
-      gsWriteParaview(stretchDir1,"PrincipalDirection1",5000);
-      gsWriteParaview(stretchDir2,"PrincipalDirection2",5000);
-      gsWriteParaview(stretchDir3,"PrincipalDirection3",5000);
-      gsWriteParaview(TF,"tensionfield",5000);
+      gsWriteParaview(membraneStress,dirname + "/" + "MembraneStress",5000);
+      gsWriteParaview(VMStress,dirname + "/" + "MembraneStressVM",5000);
+      gsWriteParaview(Stretches,dirname + "/" + "PrincipalStretch",5000);
+      gsWriteParaview(pstrainM,dirname + "/" + "PrincipalMembraneStrain",5000);
+      gsWriteParaview(pstrainF,dirname + "/" + "PrincipalFlexuralStrain",5000);
+      gsWriteParaview(pstressM,dirname + "/" + "PrincipalMembraneStress",5000);
+      gsWriteParaview(pstressF,dirname + "/" + "PrincipalFlexuralStress",5000);
+      gsWriteParaview(stretchDir1,dirname + "/" + "PrincipalDirection1",5000);
+      gsWriteParaview(stretchDir1,dirname + "/" + "PrincipalDirection1",5000);
+      gsWriteParaview(stretchDir2,dirname + "/" + "PrincipalDirection2",5000);
+      gsWriteParaview(stretchDir3,dirname + "/" + "PrincipalDirection3",5000);
+      gsWriteParaview(TF,dirname + "/" + "tensionfield",5000);
     }
     gsInfo<<"Total ellapsed assembly time: \t\t"<<time<<" s\n";
 
