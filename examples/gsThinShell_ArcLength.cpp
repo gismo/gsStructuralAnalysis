@@ -16,6 +16,8 @@
 #include <gsKLShell/gsThinShellAssembler.h>
 #include <gsKLShell/getMaterialMatrix.h>
 
+#include <gsStructuralAnalysis/gsStructuralAnalysisTools.h>
+
 #include <gsStructuralAnalysis/gsALMBase.h>
 #include <gsStructuralAnalysis/gsALMLoadControl.h>
 #include <gsStructuralAnalysis/gsALMRiks.h>
@@ -961,49 +963,49 @@ int main (int argc, char** argv)
     gsStopwatch stopwatch;
     real_t time = 0.0;
 
-    typedef std::function<gsSparseMatrix<real_t> (gsVector<real_t> const &)>                                Jacobian_t;
-    typedef std::function<gsSparseMatrix<real_t> (gsVector<real_t> const &, gsVector<real_t> const &)>      dJacobian_t;
-    typedef std::function<gsVector<real_t> (gsVector<real_t> const &, real_t, gsVector<real_t> const &) >   ALResidual_t;
-    // Function for the Jacobian
-    Jacobian_t Jacobian = [&time,&stopwatch,&assembler,&mp_def](gsVector<real_t> const &x)
-    {
-      stopwatch.restart();
-      assembler->constructSolution(x,mp_def);
-      assembler->assembleMatrix(mp_def);
-      time += stopwatch.stop();
-
-      gsSparseMatrix<real_t> m = assembler->matrix();
-      return m;
-    };
-    dJacobian_t dJacobian = [&time,&stopwatch,&assembler,&mp_def,&MIP](gsVector<real_t> const &x, gsVector<real_t> const &dx)
-    {
-      stopwatch.restart();
-      assembler->constructSolution(x,mp_def);
-
-      if (MIP)
-          assembler->assembleMatrix(x,x-dx);
-      else
-          assembler->assembleMatrix(mp_def);
-
-      time += stopwatch.stop();
-
-      gsSparseMatrix<real_t> m = assembler->matrix();
-      return m;
-    };
-    // Function for the Residual
-    ALResidual_t ALResidual = [&time,&stopwatch,&assembler,&mp_def](gsVector<real_t> const &x, real_t lam, gsVector<real_t> const &force)
-    {
-      stopwatch.restart();
-      assembler->constructSolution(x,mp_def);
-      assembler->assembleVector(mp_def);
-      gsVector<real_t> Fint = -(assembler->rhs() - force);
-      gsVector<real_t> result = Fint - lam * force;
-      time += stopwatch.stop();
-      return result; // - lam * force;
-    };
     // Assemble linear system to obtain the force vector
     assembler->assemble();
     gsVector<> Force = assembler->rhs();
+
+    // Function for the Jacobian
+    gsStructuralAnalysisOps<real_t>::Jacobian_t Jacobian = [&time,&stopwatch,&assembler,&mp_def](gsVector<real_t> const &x, gsSparseMatrix<real_t> & m)
+    {
+      stopwatch.restart();
+      ThinShellAssemblerStatus status;
+      assembler->constructSolution(x,mp_def);
+      status = assembler->assembleMatrix(mp_def);
+      m = assembler->matrix();
+      time += stopwatch.stop();
+      return status == ThinShellAssemblerStatus::Success;
+    };
+    gsStructuralAnalysisOps<real_t>::dJacobian_t dJacobian = [&time,&stopwatch,&assembler,&mp_def,&MIP](gsVector<real_t> const &x, gsVector<real_t> const &dx, gsSparseMatrix<real_t> & m)
+    {
+      stopwatch.restart();
+      ThinShellAssemblerStatus status;
+      assembler->constructSolution(x,mp_def);
+      if (MIP)
+        assembler->assembleMatrix(x,x-dx);
+      else
+      {
+        assembler->constructSolution(x,mp_def);
+        assembler->assembleMatrix(mp_def);
+      }
+
+      m = assembler->matrix();
+      time += stopwatch.stop();
+      return status == ThinShellAssemblerStatus::Success;
+    };
+    // Function for the Residual
+    gsStructuralAnalysisOps<real_t>::ALResidual_t ALResidual = [&time,&stopwatch,&assembler,&mp_def,&Force](gsVector<real_t> const &x, real_t lam, gsVector<real_t> & result)
+    {
+      ThinShellAssemblerStatus status;
+      stopwatch.restart();
+      assembler->constructSolution(x,mp_def);
+      status = assembler->assembleVector(mp_def);
+      result = Force - lam * Force - assembler->rhs(); // assembler rhs - force = Finternal
+      time += stopwatch.stop();
+      return status == ThinShellAssemblerStatus::Success;
+    };
 
     gsALMBase<real_t> * arcLength;
     if (method==0)
@@ -1071,12 +1073,13 @@ int main (int argc, char** argv)
     {
       gsInfo<<"Load step "<< k<<"\n";
       // assembler->constructSolution(solVector,solution);
-      arcLength->step();
+      gsStatus status = arcLength->step();
 
       // gsInfo<<"m_U = "<<arcLength->solutionU()<<"\n";
-      if (!(arcLength->converged()))
+
+      if (status==gsStatus::NotConverged || status==gsStatus::AssemblyError)
       {
-        gsInfo<<"Error: Loop terminated, arc length method did not converge.\n";
+        gsInfo<<"Error: Loop terminated, arc length method failed.\n";
         dLb = dLb / 2.;
         arcLength->setLength(dLb);
         arcLength->setSolution(Uold,Lold);

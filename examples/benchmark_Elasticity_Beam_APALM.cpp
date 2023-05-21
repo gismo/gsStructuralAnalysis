@@ -27,6 +27,7 @@
 #include <gsStructuralAnalysis/gsSolutionFitter.h>
 #include <gsStructuralAnalysis/gsSpaceTimeFitter.h>
 #include <gsStructuralAnalysis/gsStructuralAnalysisUtils.h>
+#include <gsStructuralAnalysis/gsStructuralAnalysisTools.h>
 
 using namespace gismo;
 
@@ -190,7 +191,7 @@ int main (int argc, char** argv)
   gsMultiPatch<> mp;
   real_t L,B,H;
 
-  real_t E_modulus, thickness, PoissonRatio;
+  real_t E_modulus, PoissonRatio;
   /*
     Case 2: Clamped beam (left) under vertical end load                   --- Validation settings: -L 5e-1 -M 0 -N 10 -r 2 -e 1 (--plot --write -q 5)
                                                                               Fig 3b from: Pagani, A., & Carrera, E. (2018). Unified formulation of geometrically nonlinear refined beam theories. Mechanics of Advanced Materials and Structures, 25(1), 15–31. https://doi.org/10.1080/15376494.2016.1232458
@@ -232,8 +233,6 @@ int main (int argc, char** argv)
   writePoints.col(0)<< 0.0,0.5,0.5;
   writePoints.col(1)<< 0.5,0.5,0.5;
   writePoints.col(2)<< 1.0,0.5,0.5;
-  index_t cross_coordinate = -1;
-  real_t cross_val = 0.0;
 
   if (testCase == 2)
   {
@@ -299,33 +298,31 @@ int main (int argc, char** argv)
   gsStopwatch stopwatch;
   real_t time = 0.0;
 
+  // Assemble linear system to obtain the force vector
+  assembler.assemble();
+  gsVector<> Force = assembler.rhs();
+
   std::vector<gsMatrix<> > fixedDofs = assembler.allFixedDofs();
-  typedef std::function<gsSparseMatrix<real_t> (gsVector<real_t> const &)>                                Jacobian_t;
-  typedef std::function<gsVector<real_t> (gsVector<real_t> const &, real_t, gsVector<real_t> const &) >   ALResidual_t;
   // Function for the Jacobian
-  Jacobian_t Jacobian = [&time,&stopwatch,&assembler,&fixedDofs](gsVector<real_t> const &x)
+  gsStructuralAnalysisOps<real_t>::Jacobian_t Jacobian = [&time,&stopwatch,&assembler,&fixedDofs](gsVector<real_t> const &x, gsSparseMatrix<real_t> &m)
   {
     stopwatch.restart();
     assembler.assemble(x,fixedDofs);
     time += stopwatch.stop();
 
-    gsSparseMatrix<real_t> m = assembler.matrix();
+    m = assembler.matrix();
     // gsInfo<<"matrix = \n"<<m.toDense()<<"\n";
-    return m;
+    return true;
   };
   // Function for the Residual
-  ALResidual_t ALResidual = [&time,&stopwatch,&assembler,&fixedDofs](gsVector<real_t> const &x, real_t lam, gsVector<real_t> const &force)
+  gsStructuralAnalysisOps<real_t>::ALResidual_t ALResidual = [&time,&stopwatch,&assembler,&fixedDofs,&Force](gsVector<real_t> const &x, real_t lam, gsVector<real_t> &result)
   {
     stopwatch.restart();
     assembler.assemble(x,fixedDofs);
-    gsVector<real_t> Fint = -(assembler.rhs() - force);
-    gsVector<real_t> result = Fint - lam * force;
+    result = Force - lam * Force - assembler.rhs(); // assembler rhs - force = Finternal
     time += stopwatch.stop();
-    return result; // - lam * force;
+    return true;
   };
-  // Assemble linear system to obtain the force vector
-  assembler.assemble();
-  gsVector<> Force = assembler.rhs();
 
   // if (material==0)
     assembler.options().setInt("MaterialLaw",material_law::saint_venant_kirchhoff);
@@ -387,7 +384,6 @@ int main (int argc, char** argv)
   std::vector<solution_t> solutions;
   std::vector<real_t> times;
   std::vector<index_t> levels;
-  real_t s = 0;
 
   index_t level = 0;
   gsInfo<<"------------------------------------------------------------------------------------\n";

@@ -157,9 +157,9 @@ void gsAPALM<T>::serialSolve(index_t Nsteps)
       if (m_verbose) gsMPIInfo(m_rank)<<"Load step "<< k<<"\t"<<"dL = "<<m_ALM->getLength()<<"; curve time = "<<s<<"\n";
 
       // Set a step
-      m_ALM->step();
-      // If not converged, bisect the arc-length
-      if ((diverged = !(m_ALM->converged())))
+      gsStatus status = m_ALM->step();
+      diverged = (status!=gsStatus::Success);
+      if (status==gsStatus::NotConverged || status==gsStatus::AssemblyError)
       {
         if (m_verbose) gsMPIInfo(m_rank)<<"Error: Loop terminated, arc length method did not converge.\n";
         dL = m_ALM->reduceLength();
@@ -986,8 +986,10 @@ void gsAPALM<T>::_initiation( const std::tuple<index_t, T     , solution_t, solu
   while (diverged)
   {
     gsMPIInfo(m_rank)<<"Starting with ID "<<ID<<" from (|U|,L) = ("<<Uold.norm()<<","<<Lold<<"), curve time = "<<tstart<<", arc-length = "<<dL<<"\n";
-    m_ALM->step();
-    if ((diverged = !(m_ALM->converged())))
+    // Set a step
+    gsStatus status = m_ALM->step();
+    diverged = (status!=gsStatus::Success);
+    if (status==gsStatus::NotConverged || status==gsStatus::AssemblyError)
     {
       if (m_verbose) gsMPIInfo(m_rank)<<"Error: Loop terminated, arc length method did not converge.\n";
       dL = m_ALM->reduceLength();
@@ -1095,8 +1097,9 @@ void gsAPALM<T>::_correction( const std::tuple<index_t, T     , solution_t, solu
   {
     gsMPIDebug(m_rank)<<"Interval "<<k+1<<" of "<<Nintervals<<"\n";
     gsMPIDebug(m_rank)<<"Start - ||u|| = "<<Uold.norm()<<", L = "<<Lold<<"\n";
-    m_ALM->step();
-    if (!(m_ALM->converged()))
+
+    gsStatus status = m_ALM->step();
+    if (status==gsStatus::NotConverged || status==gsStatus::AssemblyError)
     {
       gsMPIInfo(m_rank)<<"Error: Loop terminated, arc length method did not converge.\n";
       dL = dL / 2.;
@@ -1107,7 +1110,6 @@ void gsAPALM<T>::_correction( const std::tuple<index_t, T     , solution_t, solu
       k -= 1;
       continue;
     }
-    GISMO_ENSURE(m_ALM->converged(),"Loop terminated, arc length method did not converge.\n");
 
     std::pair<gsVector<T>,T> pair = std::make_pair(m_ALM->solutionU(),m_ALM->solutionL());
     stepSolutions.at(k) = pair;

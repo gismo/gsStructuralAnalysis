@@ -17,6 +17,8 @@
 #include <gsElasticity/gsElasticityAssembler.h>
 #include <gsElasticity/gsWriteParaviewMultiPhysics.h>
 
+#include <gsStructuralAnalysis/gsStructuralAnalysisTools.h>
+
 #include <gsStructuralAnalysis/gsALMBase.h>
 #include <gsStructuralAnalysis/gsALMLoadControl.h>
 #include <gsStructuralAnalysis/gsALMRiks.h>
@@ -59,7 +61,6 @@ int main(int argc, char *argv[])
     bool quasiNewton = false;
     int quasiNewtonInt = -1;
     bool adaptive = false;
-    real_t perturbation = 0;
     int step = 10;
     index_t maxit = 20;
 
@@ -246,38 +247,35 @@ int main(int argc, char *argv[])
     stopwatch.restart();
     stopwatch2.restart();
     real_t time = 0.0;
-    real_t totaltime = 0.0;
+
+    assembler.assemble();
+    time += stopwatch.stop();
+    gsVector<> Force = assembler.rhs();
 
     std::vector<gsMatrix<> > fixedDofs = assembler.allFixedDofs();
-    typedef std::function<gsSparseMatrix<real_t> (gsVector<real_t> const &)>                                Jacobian_t;
-    typedef std::function<gsVector<real_t> (gsVector<real_t> const &, real_t, gsVector<real_t> const &) >   ALResidual_t;
     // Function for the Jacobian
-    Jacobian_t Jacobian = [&time,&stopwatch,&assembler,&fixedDofs](gsVector<real_t> const &x)
+    gsStructuralAnalysisOps<real_t>::Jacobian_t Jacobian = [&time,&stopwatch,&assembler,&fixedDofs](gsVector<real_t> const &x, gsSparseMatrix<real_t> & m)
     {
-      stopwatch.restart();
-      assembler.assemble(x,fixedDofs);
-      time += stopwatch.stop();
+        stopwatch.restart();
+        assembler.assemble(x,fixedDofs);
+        time += stopwatch.stop();
 
-      gsSparseMatrix<real_t> m = assembler.matrix();
-      // gsInfo<<"matrix = \n"<<m.toDense()<<"\n";
-      return m;
-  };
+        m = assembler.matrix();
+        // gsInfo<<"matrix = \n"<<m.toDense()<<"\n";
+        return true;
+    };
     // Function for the Residual
-  ALResidual_t ALResidual = [&time,&stopwatch,&assembler,&fixedDofs](gsVector<real_t> const &x, real_t lam, gsVector<real_t> const &force)
-  {
-      stopwatch.restart();
-      assembler.assemble(x,fixedDofs);
-      gsVector<real_t> Fint = -(assembler.rhs() - force);
-      gsVector<real_t> result = Fint - lam * force;
-      // gsInfo<<"vector = \n"<<result.transpose()<<"\n";
-      time += stopwatch.stop();
-      return result; // - lam * force;
-  };
+    gsStructuralAnalysisOps<real_t>::ALResidual_t ALResidual = [&time,&stopwatch,&assembler,&fixedDofs,&Force](gsVector<real_t> const &x, real_t lam, gsVector<real_t> & result)
+    {
+        stopwatch.restart();
+        assembler.assemble(x,fixedDofs);
+        result = Force - lam * Force - assembler.rhs(); // assembler rhs - force = Finternal
+        // gsInfo<<"vector = \n"<<result.transpose()<<"\n";
+        time += stopwatch.stop();
+        return true;
+    };
 
-  assembler.assemble();
-  time += stopwatch.stop();
-  gsVector<> Force = assembler.rhs();
-  assembler.options().setInt("MaterialLaw",material_law::neo_hooke_quad);
+    assembler.options().setInt("MaterialLaw",material_law::neo_hooke_quad);
 
     //=============================================//
                   // Solving //
@@ -326,7 +324,7 @@ else
     gsDebugVar(supp);
     writePoints.col(0)<<supp.col(1);
 
-    std::string dirname = "ArcLengthResults/snapping_element_3D_al=" + std::to_string(al);
+    std::string dirname = "ArcLengthResults/snapping_element_2D_al=" + std::to_string(al);
     gsParaviewCollection collection(dirname + "/" + output);
     deformation = mp;
 

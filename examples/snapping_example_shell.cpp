@@ -13,21 +13,17 @@
 
 #include <iostream>
 
-#include <gsElasticity/gsGeoUtils.h>
-#include <gsElasticity/gsElasticityAssembler.h>
-#include <gsElasticity/gsWriteParaviewMultiPhysics.h>
-
 #include <gsKLShell/gsThinShellAssembler.h>
 #include <gsKLShell/gsMaterialMatrixBase.h>
+#include <gsKLShell/gsMaterialMatrixLinear.h>
 #include <gsKLShell/getMaterialMatrix.h>
+
+#include <gsStructuralAnalysis/gsStructuralAnalysisTools.h>
 
 #include <gsStructuralAnalysis/gsALMBase.h>
 #include <gsStructuralAnalysis/gsALMLoadControl.h>
 #include <gsStructuralAnalysis/gsALMRiks.h>
 #include <gsStructuralAnalysis/gsALMCrisfield.h>
-
-#include <gsElasticity/gsNeoHookLogMaterial.h>
-#include <gsElasticity/gsLinearMaterial.h>
 
 #include <gismo.h>
 
@@ -106,8 +102,8 @@ int main(int argc, char *argv[])
     cmd.addInt("Y","Ny","Number of element in y-direction",Ny);
 
     cmd.addInt("r","hRefine",
-     "Number of dyadic h-refinement (bisection) steps to perform before solving",
-     numHref);
+       "Number of dyadic h-refinement (bisection) steps to perform before solving",
+       numHref);
     cmd.addInt("e","degreeElevation",
       "Number of degree elevation steps to perform on the Geometry's basis before solving",
       numElevate);
@@ -325,35 +321,32 @@ int main(int argc, char *argv[])
     assembler.setOptions(assemblerOptions);
     assembler.setPointLoads(pLoads);
 
-    //! [Define jacobian and residual]
-    // Function for the Jacobian
-    typedef std::function<gsSparseMatrix<real_t> (gsVector<real_t> const &)>                                Jacobian_t;
-    typedef std::function<gsVector<real_t> (gsVector<real_t> const &, real_t, gsVector<real_t> const &) >   ALResidual_t;
-
-    Jacobian_t Jacobian = [&assembler,&mp_def](gsVector<real_t> const &x)
-    {
-        assembler.constructSolution(x,mp_def);
-        assembler.assembleMatrix(mp_def);
-        gsSparseMatrix<real_t> m = assembler.matrix();
-        return m;
-    };
-    // Function for the Residual
-    ALResidual_t ALResidual = [&assembler,&mp_def](gsVector<real_t> const &x, real_t lam, gsVector<real_t> const &force)
-    {
-        assembler.constructSolution(x,mp_def);
-        assembler.assembleVector(mp_def);
-        gsVector<real_t> Fint = -(assembler.rhs() - force);
-        gsVector<real_t> result = Fint - lam * force;
-        return result; // - lam * force;
-    };
-    //! [Define jacobian and residual]
-
-
     // Assemble linear system to obtain the force vector
     assembler.assemble();
     gsVector<> Force = assembler.rhs();
     gsDebugVar(Force.norm());
     gsInfo << "Initialized system with " << assembler.numDofs() << " dofs.\n";
+
+    //! [Define jacobian and residual]
+    // Function for the Jacobian
+    gsStructuralAnalysisOps<real_t>::Jacobian_t Jacobian = [&assembler,&mp_def](gsVector<real_t> const &x, gsSparseMatrix<real_t> & m)
+    {
+        ThinShellAssemblerStatus status;
+        assembler.constructSolution(x,mp_def);
+        status = assembler.assembleMatrix(mp_def);
+        m = assembler.matrix();
+        return status == ThinShellAssemblerStatus::Success;
+    };
+    // Function for the Residual
+    gsStructuralAnalysisOps<real_t>::ALResidual_t ALResidual = [&assembler,&mp_def,&Force](gsVector<real_t> const &x, real_t lam, gsVector<real_t> & result)
+    {
+        ThinShellAssemblerStatus status;
+        assembler.constructSolution(x,mp_def);
+        status = assembler.assembleVector(mp_def);
+        result = Force - lam * Force - assembler.rhs(); // assembler rhs - force = Finternal
+        return status == ThinShellAssemblerStatus::Success;
+    };
+    //! [Define jacobian and residual]
 
     //=============================================//
                   // Solving //
@@ -367,7 +360,7 @@ int main(int argc, char *argv[])
     else if (method==2)
         arcLength = new gsALMCrisfield<real_t>(Jacobian, ALResidual, Force);
     else
-    GISMO_ERROR("Method "<<method<<" unknown");
+        GISMO_ERROR("Method "<<method<<" unknown");
 
       arcLength->options().setString("Solver","SimplicialLDLT"); // LDLT solver
       arcLength->options().setInt("BifurcationMethod",0); // 0: determinant, 1: eigenvalue
@@ -438,11 +431,21 @@ int main(int argc, char *argv[])
     {
 
         gsInfo<<"Load step "<< k<<"\n";
-        arcLength->step();
-
-        if (!(arcLength->converged()))
+        gsStatus status = arcLength->step();
+        if      (status==gsStatus::Success)
+            gsDebug<<"Step successful\n";
+        else if (status==gsStatus::NotConverged)
+            gsDebug<<"Not converged\n";
+        else if (status==gsStatus::AssemblyError)
+            gsDebug<<"Assembly error\n";
+        else if (status==gsStatus::SolverError)
+            gsDebug<<"Solver error\n";
+        else if (status==gsStatus::OtherError)
+            gsDebug<<"Other error\n";
+        
+        if (status==gsStatus::NotConverged || status==gsStatus::AssemblyError)
         {
-            gsInfo<<"Error: Loop terminated, arc length method did not converge.\n";
+            gsInfo<<"Error: Loop terminated, arc length method failed.\n";
             dLb = dLb / 2.;
             arcLength->setLength(dLb);
             arcLength->setSolution(Uold,Lold);
@@ -497,9 +500,9 @@ int main(int argc, char *argv[])
             std::ofstream file;
             file.open(dirname + "/" + wn,std::ofstream::out | std::ofstream::app);
             file    << std::setprecision(6)
-                    << arcLength->solutionU().norm() << ",";
+            << arcLength->solutionU().norm() << ",";
             file<< out_def(0,0) << ","
-                << out_def(1,0) << ",";
+            << out_def(1,0) << ",";
             file<< eps<<",";
             file<< sig<<",";
             file    << arcLength->solutionL() << "," << arcLength->indicator()<<"\n";
@@ -511,9 +514,10 @@ int main(int argc, char *argv[])
         {
           dLb = dLb0;
           arcLength->setLength(dLb);
-      }
-      bisected = false;
-      k++;
+        }
+
+        bisected = false;
+        k++;
     }
 
     if (plot)

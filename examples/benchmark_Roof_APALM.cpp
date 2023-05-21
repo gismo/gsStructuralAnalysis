@@ -23,6 +23,7 @@
 #include <gsStructuralAnalysis/gsSolutionFitter.h>
 #include <gsStructuralAnalysis/gsSpaceTimeFitter.h>
 #include <gsStructuralAnalysis/gsStructuralAnalysisUtils.h>
+#include <gsStructuralAnalysis/gsStructuralAnalysisTools.h>
 
 using namespace gismo;
 
@@ -350,30 +351,30 @@ int main (int argc, char** argv)
   assembler->setOptions(opts);
   assembler->setPointLoads(pLoads);
 
-  typedef std::function<gsSparseMatrix<real_t> (gsVector<real_t> const &)>                                Jacobian_t;
-  typedef std::function<gsVector<real_t> (gsVector<real_t> const &, real_t, gsVector<real_t> const &) >   ALResidual_t;
-  // Function for the Jacobian
-  Jacobian_t Jacobian = [&assembler](gsVector<real_t> const &x)
-  {
-    gsMultiPatch<> mp_def;
-    assembler->constructSolution(x,mp_def);
-    assembler->assembleMatrix(mp_def);
-    gsSparseMatrix<real_t> m = assembler->matrix();
-    return m;
-  };
-  // Function for the Residual
-  ALResidual_t ALResidual = [&assembler](gsVector<real_t> const &x, real_t lam, gsVector<real_t> const &force)
-  {
-    gsMultiPatch<> mp_def;
-    assembler->constructSolution(x,mp_def);
-    assembler->assembleVector(mp_def);
-    gsVector<real_t> Fint = -(assembler->rhs() - force);
-    gsVector<real_t> result = Fint - lam * force;
-    return result; // - lam * force;
-  };
   // Assemble linear system to obtain the force vector
   assembler->assemble();
   gsVector<> Force = assembler->rhs();
+
+  // Function for the Jacobian
+  gsStructuralAnalysisOps<real_t>::Jacobian_t Jacobian = [&assembler](gsVector<real_t> const &x, gsSparseMatrix<real_t> & m)
+  {
+      ThinShellAssemblerStatus status;
+      gsMultiPatch<> mp_def;
+      assembler->constructSolution(x,mp_def);
+      status = assembler->assembleMatrix(mp_def);
+      m = assembler->matrix();
+      return status == ThinShellAssemblerStatus::Success;
+  };
+  // Function for the Residual
+  gsStructuralAnalysisOps<real_t>::ALResidual_t ALResidual = [&assembler,&Force](gsVector<real_t> const &x, real_t lam, gsVector<real_t> & result)
+  {
+      ThinShellAssemblerStatus status;
+      gsMultiPatch<> mp_def;
+      assembler->constructSolution(x,mp_def);
+      status = assembler->assembleVector(mp_def);
+      result = Force - lam * Force - assembler->rhs(); // assembler rhs - force = Finternal
+      return status == ThinShellAssemblerStatus::Success;
+  };
 
   gsALMBase<real_t> * arcLength;
   arcLength = new gsALMCrisfield<real_t>(Jacobian, ALResidual, Force);
@@ -423,7 +424,6 @@ int main (int argc, char** argv)
   std::vector<solution_t> solutions;
   std::vector<real_t> times;
   std::vector<index_t> levels;
-  real_t s = 0;
 
   index_t level = 0;
   gsInfo<<"------------------------------------------------------------------------------------\n";

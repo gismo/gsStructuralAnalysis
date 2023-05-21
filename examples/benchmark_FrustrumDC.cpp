@@ -20,6 +20,8 @@
 #include <gsKLShell/gsThinShellAssembler.h>
 #include <gsKLShell/getMaterialMatrix.h>
 
+#include <gsStructuralAnalysis/gsStructuralAnalysisTools.h>
+
 #include <gsStructuralAnalysis/gsStaticNewton.h>
 #include <gsStructuralAnalysis/gsControlDisplacement.h>
 
@@ -289,38 +291,40 @@ int main (int argc, char** argv)
 
 
     // Function for the Jacobian
-    typedef std::function<gsSparseMatrix<real_t> (gsVector<real_t> const &)>    Jacobian_t;
-    typedef std::function<gsVector<real_t> (gsVector<real_t> const &) >         Residual_t;
-    typedef std::function<gsVector<real_t> (gsVector<real_t> const &, real_t) > ALResidual_t;
-    Jacobian_t Jacobian = [&time,&stopwatch,&assembler,&mp_def](gsVector<real_t> const &x)
+    gsStructuralAnalysisOps<real_t>::Jacobian_t Jacobian = [&time,&stopwatch,&assembler,&mp_def](gsVector<real_t> const &x, gsSparseMatrix<real_t> & m)
     {
+      ThinShellAssemblerStatus status;
       stopwatch.restart();
       assembler->constructSolution(x,mp_def);
-      assembler->assembleMatrix(mp_def);
+      status = assembler->assembleMatrix(mp_def);
+      m = assembler->matrix();
       time += stopwatch.stop();
-      gsSparseMatrix<real_t> m = assembler->matrix();
-      return m;
+      return status == ThinShellAssemblerStatus::Success;
     };
     // Function for the Residual
-    Residual_t Residual = [&time,&stopwatch,&assembler,&mp_def](gsVector<real_t> const &x)
+    gsStructuralAnalysisOps<real_t>::Residual_t Residual = [&time,&stopwatch,&assembler,&mp_def](gsVector<real_t> const &x, gsVector<real_t> & result)
     {
+      ThinShellAssemblerStatus status;
       stopwatch.restart();
       assembler->constructSolution(x,mp_def);
-      assembler->assembleVector(mp_def);
+      status = assembler->assembleVector(mp_def);
+      result = assembler->rhs();
       time += stopwatch.stop();
-      return assembler->rhs();
+      return status == ThinShellAssemblerStatus::Success;
     };
 
     // Function for the Residual
-    ALResidual_t ALResidual = [&displ,&BCs,&time,&stopwatch,&assembler,&mp_def](gsVector<real_t> const &x, real_t lambda)
+    gsStructuralAnalysisOps<real_t>::ALResidual_t ALResidual = [&displ,&BCs,&time,&stopwatch,&assembler,&mp_def](gsVector<real_t> const &x, real_t lambda, gsVector<real_t> & result)
     {
+      ThinShellAssemblerStatus status;
       stopwatch.restart();
       displ.setValue(lambda,3);
       assembler->updateBCs(BCs);
       assembler->constructSolution(x,mp_def);
-      assembler->assembleVector(mp_def);
+      status = assembler->assembleVector(mp_def);
+      result = assembler->rhs();
       time += stopwatch.stop();
-      return assembler->rhs();
+      return status == ThinShellAssemblerStatus::Success;
     };
 
     assembler = new gsThinShellAssembler<3, real_t, true >(mp,dbasis,BCs,force,materialMatrix);
@@ -360,14 +364,9 @@ int main (int argc, char** argv)
       // staticSolver.solve();
       // solVector = staticSolver.solution();
       //
-      control.step(-dL);
-      solVector = control.solutionU();
+      gsStatus status = control.step(-dL);
 
-      time += stopwatch.stop();
-
-      totaltime += stopwatch2.stop();
-
-      if (!staticSolver.converged())
+      if (status==gsStatus::NotConverged || status==gsStatus::AssemblyError)
       {
         dL = dL/2;
         displ.setValue(D -dL,3);
@@ -377,6 +376,14 @@ int main (int argc, char** argv)
         k -= 1;
         continue;
       }
+
+      solVector = control.solutionU();
+
+      time += stopwatch.stop();
+
+      totaltime += stopwatch2.stop();
+
+
 
       indicator = staticSolver.indicator();
 

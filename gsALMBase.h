@@ -18,6 +18,7 @@
 #include <gsSpectra/gsSpectra.h>
 #endif
 #include <gsIO/gsOptionList.h>
+#include <gsStructuralAnalysis/gsStructuralAnalysisTools.h>
 
 namespace gismo
 {
@@ -32,21 +33,27 @@ namespace gismo
 template <class T>
 class gsALMBase
 {
+protected:
+
+    typedef typename gsStructuralAnalysisOps<T>::ALResidual_t    ALResidual_t;
+    typedef typename gsStructuralAnalysisOps<T>::Jacobian_t      Jacobian_t;
+    typedef typename gsStructuralAnalysisOps<T>::dJacobian_t     dJacobian_t;
+
 public:
 
     virtual ~gsALMBase() {};
 
     /// Constructor
-    gsALMBase(  std::function < gsSparseMatrix<T> ( gsVector<T> const & ) > &Jacobian,
-                std::function < gsVector<T> ( gsVector<T> const &, T, gsVector<T> const & ) > &Residual,
-                gsVector<T> &Force )
-    : m_residualFun(Residual),
+    gsALMBase(  const Jacobian_t   & Jacobian,
+                const ALResidual_t & ALResidual,
+                const gsVector<T>  & Force )
+    : m_residualFun(ALResidual),
       m_forcing(Force)
     {
         m_jacobian  = Jacobian;
-        m_djacobian = [this](gsVector<T> const & x, gsVector<T> const & dx)
+        m_djacobian = [this](gsVector<T> const & x, gsVector<T> const & dx, gsSparseMatrix<T> & m) -> bool
         {
-            return m_jacobian(x);
+            return m_jacobian(x,m);
         };
 
         // initialize variables
@@ -58,12 +65,14 @@ public:
         // initialize errors
         m_basisResidualF = 0.0;
         m_basisResidualU = 0.0;
+
+        m_status = gsStatus::NotStarted;
     }
 
     /// Constructor using the jacobian that takes the solution and the solution step
-    gsALMBase(  std::function < gsSparseMatrix<T> ( gsVector<T> const &, gsVector<T> const & ) > &dJacobian,
-                std::function < gsVector<T> ( gsVector<T> const &, T, gsVector<T> const & ) > &Residual,
-                gsVector<T> &Force )
+    gsALMBase(  const dJacobian_t &  dJacobian,
+                const ALResidual_t & Residual,
+                const gsVector<T>  & Force )
     : m_residualFun(Residual),
       m_forcing(Force)
     {
@@ -82,6 +91,9 @@ public:
 
 // General functions
 public:
+
+    virtual gsStatus status() { return m_status; }
+
     // Returns the number of DoFs
     virtual index_t numDofs() {return m_forcing.size();}
 
@@ -89,7 +101,7 @@ public:
     virtual T getLength() {return m_arcLength; }
 
     /// Perform one arc-length step
-    virtual void step();
+    virtual gsStatus step();
 
     /// Initialize the arc-length method, computes the stability of the initial configuration if \a stability is true
     virtual void initialize(bool stability = true)
@@ -156,8 +168,11 @@ public:
     /// Returns if solution passed a bifurcation point
     virtual bool isStable() const {return m_stability;}
 
-    /// Returns the value of the deterimant of the jacobian
-    virtual T determinant() const {return m_jacobian(m_U).toDense().determinant();}
+    // /// Returns the value of the deterimant of the jacobian
+    // virtual T determinant() const 
+    // {
+    //     return m_jacobian(m_U).toDense().determinant();
+    // }
 
     /// Resets the step
     virtual void resetStep() {m_DeltaUold.setZero(); m_DeltaLold = 0;}
@@ -214,22 +229,9 @@ public:
      * @param[in]  switchBranch  Switches branch if true
      * @param[in]  jacobian      Evaluate the Jacobian?
      */
-    virtual void computeSingularPoint(T singTol, index_t kmax, gsVector<T> U, T L, T tolE, T tolB=0, bool switchBranch=false, bool jacobian=false);
-    virtual void computeSingularPoint(T singTol, index_t kmax, T tolE, T tolB=0, bool switchBranch=false, bool jacobian=false);
-    virtual void computeSingularPoint(gsVector<T> U, T L, T tolE, T tolB=0, bool switchBranch=false, bool jacobian=false);
-
-
-    /**
-     * @brief      Tests if a point is singular
-     *
-     * @param[in]  tol       The tolerance
-     * @param[in]  kmax      The maximum number of iterations for the initial power method
-     * @param[in]  jacobian  Evaluate the Jacobian?
-     *
-     * @return     True if it is a singular point
-     */
-    virtual bool testSingularPoint(T tol, index_t kmax, bool jacobian=false);
-    virtual bool testSingularPoint(gsVector<T> U, T L, T tol, index_t kmax, bool jacobian=false);
+    virtual gsStatus computeSingularPoint(T singTol, index_t kmax, gsVector<T> U, T L, T tolE, T tolB=0, bool switchBranch=false, bool jacobian=false);
+    virtual gsStatus computeSingularPoint(T singTol, index_t kmax, T tolE, T tolB=0, bool switchBranch=false, bool jacobian=false);
+    virtual gsStatus computeSingularPoint(gsVector<T> U, T L, T tolE, T tolB=0, bool switchBranch=false, bool jacobian=false);
 
     /// Checks if the stability of the system changed since the previously known solution
     virtual bool stabilityChange();
@@ -243,18 +245,7 @@ public:
      * @param[in]  jacobian  Compute the jacobian?
      * @param[in]  shift     The shift to apply
      */
-    virtual void computeStability(gsVector<T> x, bool jacobian=true, T shift = -1e2);
-
-    /**
-     * @brief      Computes the buckling modes at a singular point with solution \a x
-     *
-     * @param[in]  x         Solution vector
-     * @param[in]  jacobian  Compute the jacobian?
-     * @param[in]  shift     The shift to apply
-     *
-     * @return     The modes.
-     */
-    virtual gsMatrix<T> computeModes(gsVector<T> x, bool jacobian=true, T shift = -1e2);
+    virtual gsStatus computeStability(gsVector<T> x, bool jacobian=true, T shift = -1e2);
 
     /// Computes the stability: -1 if unstable, +1 if stable
     virtual index_t stability();
@@ -270,30 +261,52 @@ public:
     virtual T resetLength();
 
 protected:
+
+    /// See \a computeStability
+    virtual void _computeStability(gsVector<T> x, bool jacobian=true, T shift = -1e2);
+
+    /// See \a computeSingularPoint
+    virtual void _computeSingularPoint(T singTol, index_t kmax, gsVector<T> U, T L, T tolE, T tolB=0, bool switchBranch=false, bool jacobian=false);
+
+    /**
+     * @brief      Tests if a point is singular
+     *
+     * @param[in]  tol       The tolerance
+     * @param[in]  kmax      The maximum number of iterations for the initial power method
+     * @param[in]  jacobian  Evaluate the Jacobian?
+     *
+     * @return     True if it is a singular point
+     */
+    virtual bool _testSingularPoint(T tol, index_t kmax, bool jacobian=false);
+    virtual bool _testSingularPoint(gsVector<T> U, T L, T tol, index_t kmax, bool jacobian=false);
+
+
     /// Perform an extended system iteration
-    virtual void extendedSystemIteration();
+    virtual void _extendedSystemIteration();
 
     /// Returns the objective function for the bisection method given solution \a x
-    virtual index_t bisectionObjectiveFunction(const gsVector<T> & x, bool jacobian=true);
+    virtual index_t _bisectionObjectiveFunction(const gsVector<T> & x, bool jacobian=true);
     /// Returns the termination function for the bisection method given solution \a x
-    virtual T bisectionTerminationFunction(const gsVector<T> & x, bool jacobian=true);
+    virtual T       _bisectionTerminationFunction(const gsVector<T> & x, bool jacobian=true);
 
     /// Perform an extended system solve to find a singular point
-    virtual void extendedSystemSolve(const gsVector<T> U, T L, T tol);
+    virtual bool _extendedSystemSolve(const gsVector<T> U, T L, T tol);
 
     /// Perform a bisection system solve to find a singular point
-    virtual void bisectionSolve(const gsVector<T> U, T L, T tol);
+    virtual bool _bisectionSolve(const gsVector<T> U, T L, T tol);
 
     /// Initialize the output for extended iterations
-    virtual void initOutputExtended();
+    virtual void _initOutputExtended();
 
     /// Step output for extended iterations
-    virtual void stepOutputExtended();
+    virtual void _stepOutputExtended();
 
 // ------------------------------------------------------------------------------------------------------------
 // ---------------------------------------Computations---------------------------------------------------------
 // ------------------------------------------------------------------------------------------------------------
 protected:
+    /// Implementation of step
+    virtual void _step();
 
     /// Set default options
     virtual void defaultOptions();
@@ -311,6 +324,7 @@ protected:
     virtual gsVector<T> solveSystem(const gsVector<T> & F);
 
     /// Compute the residual
+    virtual gsVector<T> computeResidual(const gsVector<T> & U, const T & L);
     virtual void computeResidual();
 
     /// Compute the residual error norms
@@ -360,10 +374,10 @@ protected:
     // Number of degrees of freedom
     index_t m_numDof;
 
-    std::function < gsSparseMatrix<T> ( gsVector<T> const & ) > m_jacobian;
-    std::function < gsSparseMatrix<T> ( gsVector<T> const &, gsVector<T> const & ) > m_djacobian;
-    std::function < gsMatrix<T> ( gsVector<T> const &, T, gsVector<T> const & ) > m_residualFun;
-    gsVector<T> m_forcing;
+    Jacobian_t      m_jacobian;
+    dJacobian_t     m_djacobian;
+    const ALResidual_t    m_residualFun;
+    const gsVector<T>     m_forcing;
 
     mutable typename gsSparseSolver<T>::uPtr m_solver; // Cholesky by default
 
@@ -432,6 +446,8 @@ protected:
     index_t m_quasiNewtonInterval;
 
     std::string m_note;
+
+    gsStatus m_status;
 
 protected:
 

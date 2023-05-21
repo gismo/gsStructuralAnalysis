@@ -13,21 +13,16 @@
 
 #include <iostream>
 
-#include <gsElasticity/gsGeoUtils.h>
-#include <gsElasticity/gsElasticityAssembler.h>
-#include <gsElasticity/gsWriteParaviewMultiPhysics.h>
-
 #include <gsKLShell/gsThinShellAssembler.h>
 #include <gsKLShell/gsMaterialMatrixBase.h>
 #include <gsKLShell/getMaterialMatrix.h>
+
+#include <gsStructuralAnalysis/gsStructuralAnalysisTools.h>
 
 #include <gsStructuralAnalysis/gsALMBase.h>
 #include <gsStructuralAnalysis/gsALMLoadControl.h>
 #include <gsStructuralAnalysis/gsALMRiks.h>
 #include <gsStructuralAnalysis/gsALMCrisfield.h>
-
-#include <gsElasticity/gsNeoHookLogMaterial.h>
-#include <gsElasticity/gsLinearMaterial.h>
 
 #include <gismo.h>
 
@@ -63,7 +58,6 @@ int main(int argc, char *argv[])
     bool quasiNewton = false;
     int quasiNewtonInt = -1;
     bool adaptive = false;
-    real_t perturbation = 0;
     int step = 10;
     index_t maxit = 20;
 
@@ -243,34 +237,31 @@ int main(int argc, char *argv[])
     assembler.setOptions(assemblerOptions);
     assembler.setPointLoads(pLoads);
 
-    //! [Define jacobian and residual]
-    // Function for the Jacobian
-    typedef std::function<gsSparseMatrix<real_t> (gsVector<real_t> const &)>                                Jacobian_t;
-    typedef std::function<gsVector<real_t> (gsVector<real_t> const &, real_t, gsVector<real_t> const &) >   ALResidual_t;
-
-    Jacobian_t Jacobian = [&assembler,&mp_def](gsVector<real_t> const &x)
-    {
-        assembler.constructSolution(x,mp_def);
-        assembler.assembleMatrix(mp_def);
-        gsSparseMatrix<real_t> m = assembler.matrix();
-        return m;
-    };
-    // Function for the Residual
-    ALResidual_t ALResidual = [&assembler,&mp_def](gsVector<real_t> const &x, real_t lam, gsVector<real_t> const &force)
-    {
-        assembler.constructSolution(x,mp_def);
-        assembler.assembleVector(mp_def);
-        gsVector<real_t> Fint = -(assembler.rhs() - force);
-        gsVector<real_t> result = Fint - lam * force;
-        return result; // - lam * force;
-    };
-    //! [Define jacobian and residual]
-
-
     // Assemble linear system to obtain the force vector
     assembler.assemble();
     gsVector<> Force = assembler.rhs();
+    gsDebugVar(Force.norm());
     gsInfo << "Initialized system with " << assembler.numDofs() << " dofs.\n";
+
+    //! [Define jacobian and residual]
+    // Function for the Jacobian
+    gsStructuralAnalysisOps<real_t>::Jacobian_t Jacobian = [&assembler,&mp_def](gsVector<real_t> const &x, gsSparseMatrix<real_t> & m)
+    {
+        ThinShellAssemblerStatus status;
+        assembler.constructSolution(x,mp_def);
+        status = assembler.assembleMatrix(mp_def);
+        m = assembler.matrix();
+        return status == ThinShellAssemblerStatus::Success;
+    };
+    // Function for the Residual
+    gsStructuralAnalysisOps<real_t>::ALResidual_t ALResidual = [&assembler,&mp_def,&Force](gsVector<real_t> const &x, real_t lam, gsVector<real_t> & result)
+    {
+        ThinShellAssemblerStatus status;
+        assembler.constructSolution(x,mp_def);
+        status = assembler.assembleVector(mp_def);
+        result = Force - lam * Force - assembler.rhs(); // assembler rhs - force = Finternal
+        return status == ThinShellAssemblerStatus::Success;
+    };
 
     //=============================================//
                   // Solving //
@@ -360,9 +351,9 @@ int main(int argc, char *argv[])
     {
 
         gsInfo<<"Load step "<< k<<"\n";
-        arcLength->step();
+        gsStatus status = arcLength->step();
 
-        if (!(arcLength->converged()))
+        if (status==gsStatus::NotConverged || status==gsStatus::AssemblyError)
         {
             gsInfo<<"Error: Loop terminated, arc length method did not converge.\n";
             dLb = dLb / 2.;
@@ -391,8 +382,6 @@ int main(int argc, char *argv[])
         Lold = arcLength->solutionL();
         gsPiecewiseFunction<> stresses;
         assembler.constructDisplacement(solVector,mp_def);
-
-        gsInfo<<"Total ellapsed assembly time: "<<time<<" s\n";
 
         if (plot)
         {

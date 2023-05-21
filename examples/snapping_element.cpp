@@ -17,6 +17,8 @@
 #include <gsElasticity/gsElasticityAssembler.h>
 #include <gsElasticity/gsWriteParaviewMultiPhysics.h>
 
+#include <gsStructuralAnalysis/gsStructuralAnalysisTools.h>
+
 #include <gsStructuralAnalysis/gsALMBase.h>
 #include <gsStructuralAnalysis/gsALMLoadControl.h>
 #include <gsStructuralAnalysis/gsALMRiks.h>
@@ -59,7 +61,6 @@ int main(int argc, char *argv[])
     bool quasiNewton = false;
     int quasiNewtonInt = -1;
     bool adaptive = false;
-    real_t perturbation = 0;
     int step = 10;
     index_t maxit = 20;
 
@@ -161,27 +162,27 @@ int main(int argc, char *argv[])
     bc.addCondition(0,boundary::west,condition_type::dirichlet,0,0);
     bc.addCondition(0,boundary::west,condition_type::dirichlet,0,1);
 
-    bc.addCondition(1,boundary::south,condition_type::dirichlet,0,0);
+    bc.addCondition(1,boundary::south,condition_type::collapsed,0,0);
     bc.addCondition(1,boundary::south,condition_type::dirichlet,0,1);
-    bc.addCondition(1,boundary::east,condition_type::dirichlet,0,0);
+    bc.addCondition(1,boundary::east,condition_type::collapsed,0,0);
     bc.addCondition(1,boundary::east,condition_type::dirichlet,0,1);
 
     bc.addCondition(2,boundary::west,condition_type::dirichlet,0,0);
     bc.addCondition(2,boundary::west,condition_type::dirichlet,0,1);
 
-    bc.addCondition(6,boundary::east,condition_type::dirichlet,0,0);
+    bc.addCondition(6,boundary::east,condition_type::collapsed,0,0);
     bc.addCondition(6,boundary::east,condition_type::dirichlet,0,1);
 
     bc.addCondition(8,boundary::west,condition_type::dirichlet,0,0);
 
-    bc.addCondition(12,boundary::east,condition_type::dirichlet,0,0);
+    bc.addCondition(12,boundary::east,condition_type::collapsed,0,0);
 
     bc.addCondition(13,boundary::north,condition_type::dirichlet,0,0);
     bc.addCondition(13,boundary::north,condition_type::collapsed,0,1);
     bc.addCondition(13,boundary::north,condition_type::neumann,&neu);
     bc.addCondition(13,boundary::west,condition_type::dirichlet,0,0);
 
-    bc.addCondition(14,boundary::north,condition_type::dirichlet,0,0);
+    bc.addCondition(14,boundary::north,condition_type::collapsed,0,0);
     bc.addCondition(14,boundary::north,condition_type::collapsed,0,1);
     bc.addCondition(14,boundary::north,condition_type::neumann,&neu);
     bc.addCondition(14,boundary::east,condition_type::dirichlet,0,0);
@@ -226,69 +227,66 @@ int main(int argc, char *argv[])
     stopwatch.restart();
     stopwatch2.restart();
     real_t time = 0.0;
-    real_t totaltime = 0.0;
+
+    assembler.assemble();
+    time += stopwatch.stop();
+    gsVector<> Force = assembler.rhs();
 
     std::vector<gsMatrix<> > fixedDofs = assembler.allFixedDofs();
-    typedef std::function<gsSparseMatrix<real_t> (gsVector<real_t> const &)>                                Jacobian_t;
-    typedef std::function<gsVector<real_t> (gsVector<real_t> const &, real_t, gsVector<real_t> const &) >   ALResidual_t;
     // Function for the Jacobian
-    Jacobian_t Jacobian = [&time,&stopwatch,&assembler,&fixedDofs](gsVector<real_t> const &x)
+    gsStructuralAnalysisOps<real_t>::Jacobian_t Jacobian = [&time,&stopwatch,&assembler,&fixedDofs](gsVector<real_t> const &x, gsSparseMatrix<real_t> & m)
     {
-      stopwatch.restart();
-      assembler.assemble(x,fixedDofs);
-      time += stopwatch.stop();
+        stopwatch.restart();
+        assembler.assemble(x,fixedDofs);
+        time += stopwatch.stop();
 
-      gsSparseMatrix<real_t> m = assembler.matrix();
-      // gsInfo<<"matrix = \n"<<m.toDense()<<"\n";
-      return m;
-  };
+        m = assembler.matrix();
+        // gsInfo<<"matrix = \n"<<m.toDense()<<"\n";
+        return true;
+    };
     // Function for the Residual
-  ALResidual_t ALResidual = [&time,&stopwatch,&assembler,&fixedDofs](gsVector<real_t> const &x, real_t lam, gsVector<real_t> const &force)
-  {
-      stopwatch.restart();
-      assembler.assemble(x,fixedDofs);
-      gsVector<real_t> Fint = -(assembler.rhs() - force);
-      gsVector<real_t> result = Fint - lam * force;
-      // gsInfo<<"vector = \n"<<result.transpose()<<"\n";
-      time += stopwatch.stop();
-      return result; // - lam * force;
-  };
+    gsStructuralAnalysisOps<real_t>::ALResidual_t ALResidual = [&time,&stopwatch,&assembler,&fixedDofs,&Force](gsVector<real_t> const &x, real_t lam, gsVector<real_t> & result)
+    {
+        stopwatch.restart();
+        assembler.assemble(x,fixedDofs);
+        result = Force - lam * Force - assembler.rhs(); // assembler rhs - force = Finternal
+        // gsInfo<<"vector = \n"<<result.transpose()<<"\n";
+        time += stopwatch.stop();
+        return true;
+    };
 
-  assembler.assemble();
-  time += stopwatch.stop();
-  gsVector<> Force = assembler.rhs();
-  assembler.options().setInt("MaterialLaw",material_law::neo_hooke_quad);
+    assembler.options().setInt("MaterialLaw",material_law::neo_hooke_quad);
 
     //=============================================//
                   // Solving //
     //=============================================//
 
-  gsALMBase<real_t> * arcLength;
-  if (method==0)
-    arcLength = new gsALMLoadControl<real_t>(Jacobian, ALResidual, Force);
-else if (method==1)
-    arcLength = new gsALMRiks<real_t>(Jacobian, ALResidual, Force);
-else if (method==2)
-    arcLength = new gsALMCrisfield<real_t>(Jacobian, ALResidual, Force);
-else
-    GISMO_ERROR("Method "<<method<<" unknown");
+    gsALMBase<real_t> * arcLength;
+    if (method==0)
+        arcLength = new gsALMLoadControl<real_t>(Jacobian, ALResidual, Force);
+    else if (method==1)
+        arcLength = new gsALMRiks<real_t>(Jacobian, ALResidual, Force);
+    else if (method==2)
+        arcLength = new gsALMCrisfield<real_t>(Jacobian, ALResidual, Force);
+    else
+        GISMO_ERROR("Method "<<method<<" unknown");
 
-      arcLength->options().setString("Solver","SimplicialLDLT"); // LDLT solver
-      arcLength->options().setInt("BifurcationMethod",0); // 0: determinant, 1: eigenvalue
-      arcLength->options().setReal("Length",dLb);
-      arcLength->options().setInt("AngleMethod",0); // 0: step, 1: iteration
-      arcLength->options().setSwitch("AdaptiveLength",adaptive);
-      arcLength->options().setInt("AdaptiveIterations",5);
-      arcLength->options().setReal("Perturbation",tau);
-      arcLength->options().setReal("Scaling",0.0);
-      arcLength->options().setReal("Tol",tol);
-      arcLength->options().setReal("TolU",tolU);
-      arcLength->options().setReal("TolF",tolF);
-      arcLength->options().setInt("MaxIter",maxit);
-      arcLength->options().setSwitch("Verbose",true);
-      arcLength->options().setReal("Relaxation",relax);
-      if (quasiNewtonInt>0)
-      {
+    arcLength->options().setString("Solver","SimplicialLDLT"); // LDLT solver
+    arcLength->options().setInt("BifurcationMethod",0); // 0: determinant, 1: eigenvalue
+    arcLength->options().setReal("Length",dLb);
+    arcLength->options().setInt("AngleMethod",0); // 0: step, 1: iteration
+    arcLength->options().setSwitch("AdaptiveLength",adaptive);
+    arcLength->options().setInt("AdaptiveIterations",5);
+    arcLength->options().setReal("Perturbation",tau);
+    arcLength->options().setReal("Scaling",0.0);
+    arcLength->options().setReal("Tol",tol);
+    arcLength->options().setReal("TolU",tolU);
+    arcLength->options().setReal("TolF",tolF);
+    arcLength->options().setInt("MaxIter",maxit);
+    arcLength->options().setSwitch("Verbose",true);
+    arcLength->options().setReal("Relaxation",relax);
+    if (quasiNewtonInt>0)
+    {
         quasiNewton = true;
         arcLength->options().setInt("QuasiIterations",quasiNewtonInt);
     }
@@ -345,11 +343,11 @@ else
     {
 
         gsInfo<<"Load step "<< k<<"\n";
-        arcLength->step();
+        gsStatus status = arcLength->step();
 
-        if (!(arcLength->converged()))
+        if (status==gsStatus::NotConverged || status==gsStatus::AssemblyError)
         {
-            gsInfo<<"Error: Loop terminated, arc length method did not converge.\n";
+            gsInfo<<"Error: Loop terminated, arc length method failed.\n";
             dLb = dLb / 2.;
             arcLength->setLength(dLb);
             arcLength->setSolution(Uold,Lold);

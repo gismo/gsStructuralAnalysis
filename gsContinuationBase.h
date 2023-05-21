@@ -34,7 +34,7 @@ public:
     }
 
 
-    virtual void step(T dL) = 0;
+    virtual gsStatus step(T dL) = 0;
     virtual gsVector<T> solutionU() = 0;
     virtual T solutionL() = 0;
 

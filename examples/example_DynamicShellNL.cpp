@@ -22,6 +22,7 @@
 #include <gsKLShell/getMaterialMatrix.h>
 
 #include <gsStructuralAnalysis/gsTimeIntegrator.h>
+#include <gsStructuralAnalysis/gsStructuralAnalysisTools.h>
 
 using namespace gismo;
 
@@ -233,25 +234,26 @@ int main (int argc, char** argv)
 //------------------------------------------------------------------------------
 gsParaviewCollection collection(dirname + "/solution");
 
-typedef std::function<gsSparseMatrix<real_t> (gsVector<real_t> const &)>        Jacobian_t;
-typedef std::function<gsVector<real_t> (gsVector<real_t> const &, real_t time) >Residual_t;
 // Function for the Jacobian
-Jacobian_t Jacobian = [&assembler,&mp_def](gsMatrix<real_t> const &x)
+gsStructuralAnalysisOps<real_t>::Jacobian_t Jacobian = [&assembler,&mp_def](gsMatrix<real_t> const &x, gsSparseMatrix<real_t> & m)
 {
-  // to do: add time dependency of forcing
-  assembler->constructSolution(x,mp_def);
-  assembler->assemble(mp_def);
-  gsSparseMatrix<real_t> m = assembler->matrix();
-  return m;
+    // to do: add time dependency of forcing
+    ThinShellAssemblerStatus status;
+    assembler->constructSolution(x,mp_def);
+    status = assembler->assembleMatrix(mp_def);
+    m = assembler->matrix();
+    return status == ThinShellAssemblerStatus::Success;
 };
 
 // Function for the Residual
-Residual_t Residual = [&assembler,&mp_def](gsMatrix<real_t> const &x, real_t time)
+gsStructuralAnalysisOps<real_t>::TResidual_t Residual = [&assembler,&mp_def](gsMatrix<real_t> const &x, real_t time, gsVector<real_t> & result)
 {
-  assembler->constructSolution(x,mp_def);
-  assembler->assembleVector(mp_def);
-  return assembler->rhs();
-};
+    ThinShellAssemblerStatus status;
+    assembler->constructSolution(x,mp_def);
+    status = assembler->assembleVector(mp_def);
+    result = assembler->rhs();
+    return status == ThinShellAssemblerStatus::Success;
+  };
 
 // // Function for the Residual (TEST FO CHANGE FUNCTION!)
 // Residual_t Residual = [&force,&assembler,&solution](gsMatrix<real_t> const &x, real_t time)
@@ -294,7 +296,10 @@ timeIntegrator.setAcceleration(aNew);
 real_t time;
 for (index_t i=0; i<steps; i++)
 {
-  timeIntegrator.step();
+  gsStatus status = timeIntegrator.step();
+  if (status!=gsStatus::Success)
+    GISMO_ERROR("Time integrator did not succeed");
+
   timeIntegrator.constructSolution();
   gsMatrix<> displacements = timeIntegrator.displacements();
 

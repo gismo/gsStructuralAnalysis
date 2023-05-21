@@ -19,6 +19,7 @@
 #include <gsStructuralAnalysis/gsStaticDR.h>
 #include <gsStructuralAnalysis/gsStaticNewton.h>
 #include <gsStructuralAnalysis/gsControlDisplacement.h>
+#include <gsStructuralAnalysis/gsStructuralAnalysisTools.h>
 
 //#include <gsThinShell/gsNewtonIterator.h>
 
@@ -231,29 +232,28 @@ int main(int argc, char *argv[])
     assembler->setPointLoads(pLoads);
 
     // Function for the Jacobian
-    typedef std::function<gsSparseMatrix<real_t> (gsVector<real_t> const &)>    Jacobian_t;
-    typedef std::function<gsVector<real_t> (gsVector<real_t> const &, real_t) >   ALResidual_t;
-    Jacobian_t Jacobian = [&assembler,&mp_def](gsVector<real_t> const &x)
+    gsStructuralAnalysisOps<real_t>::Jacobian_t Jacobian = [&assembler,&mp_def](gsVector<real_t> const &x, gsSparseMatrix<real_t> & m)
     {
+      ThinShellAssemblerStatus status;
       assembler->constructSolution(x,mp_def);
-      assembler->assembleMatrix(mp_def);
-      gsSparseMatrix<real_t> m = assembler->matrix();
-      return m;
+      status = assembler->assembleMatrix(mp_def);
+      m = assembler->matrix();
+      return status == ThinShellAssemblerStatus::Success;
     };
-    // Function for the Residual
-    ALResidual_t ALResidual = [&displ,&bc,&assembler,&mp_def](gsVector<real_t> const &x, real_t lam)
+
+    gsStructuralAnalysisOps<real_t>::ALResidual_t ALResidual = [&displ,&bc,&assembler,&mp_def](gsVector<real_t> const &x, real_t lam, gsVector<real_t> & result)
     {
+        ThinShellAssemblerStatus status;
         displ.setValue(lam,3);
         assembler->updateBCs(bc);
         assembler->constructSolution(x,mp_def);
-        assembler->assembleVector(mp_def);
-        return assembler->rhs(); // - lam * force;
+        status = assembler->assembleVector(mp_def);
+        result = assembler->rhs();
+        return status == ThinShellAssemblerStatus::Success;
     };
-
 
     displ.setValue(1.0,3);
     assembler->updateBCs(bc);
-
 
     assembler->assemble();
     gsSparseMatrix<> K = assembler->matrix();

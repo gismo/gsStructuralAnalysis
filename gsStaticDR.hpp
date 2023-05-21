@@ -68,10 +68,34 @@ void gsStaticDR<T>::stepOutput(index_t k)
 }
 
 template <class T>
-void gsStaticDR<T>::solve()
+gsStatus gsStaticDR<T>::solve()
 {
-    m_converged = false;
+    try
+    {
+        _solve();
+        m_status = gsStatus::Success;
+    }
+    catch (int errorCode)
+    {
+        if      (errorCode==1)
+            m_status = gsStatus::NotConverged;
+        else if (errorCode==2)
+            m_status = gsStatus::AssemblyError;
+        else if (errorCode==3)
+            m_status = gsStatus::SolverError;
+        else
+            m_status = gsStatus::OtherError;
+    }
+    catch (...)
+    {
+        m_status = gsStatus::OtherError;
+    }
+    return m_status;
+}
 
+template <class T>
+void gsStaticDR<T>::_solve()
+{
     m_Eks.clear();
     m_Eks.reserve(m_maxIterations);
 
@@ -99,13 +123,13 @@ void gsStaticDR<T>::solve()
         if (m_residual/m_residualIni < m_tolF && m_Ek/m_Ek0 < m_tolE && m_deltaU.norm()/m_DeltaU.norm() < m_tolU)
         {
             m_U += m_DeltaU;
-            m_converged = true;
             break;
         }
         if (m_numIterations==m_maxIterations-1)
         {
             m_U += m_DeltaU;
-            gsWarn<<"Maximum iterations reached!\n";
+            gsInfo<<"Maximum iterations reached. Solution did not converge\n";
+            throw 1;
         }
     }
     gsInfo<<"\n";
@@ -122,7 +146,6 @@ void gsStaticDR<T>::initialize()
 template <class T>
 void gsStaticDR<T>::_init()
 {
-    m_converged = false;
     m_headstart = false;
 
     m_Ek = m_Ek0 = 0.0;
@@ -137,13 +160,24 @@ void gsStaticDR<T>::_init()
 
     defaultOptions();
     m_massInv = m_mass.array().inverse();
+
+    m_status = gsStatus::NotStarted;
+}
+
+template <class T>
+gsVector<T> gsStaticDR<T>::_computeResidual(const gsVector<T> & U)
+{
+  gsVector<T> resVec;
+  if (!m_residualFun(U, resVec))
+    throw 2;
+  return resVec;
 }
 
 template <class T>
 void gsStaticDR<T>::_iteration()
 {
     m_Ek_prev = m_Ek;
-    m_R = m_residualFun(m_U+m_DeltaU) - m_damp.cwiseProduct(m_v);
+    m_R = _computeResidual(m_U+m_DeltaU) - m_damp.cwiseProduct(m_v);
     m_residual = m_R.norm();
 //----------------------------------------------------------------------------------
     m_v += m_dt * m_massInv.cwiseProduct(m_R);                    // Velocities at t+dt/2
@@ -160,7 +194,7 @@ void gsStaticDR<T>::_iteration()
 template <class T>
 void gsStaticDR<T>::_peak()
 {
-    m_R = m_residualFun(m_U+m_DeltaU)- m_damp.cwiseProduct(m_v);
+    m_R = _computeResidual(m_U+m_DeltaU)- m_damp.cwiseProduct(m_v);
     m_deltaU = - 1.5 * m_dt * m_v + m_dt*m_dt / 2. * m_massInv.cwiseProduct(m_R);
     m_DeltaU += m_deltaU;
 
@@ -184,7 +218,7 @@ void gsStaticDR<T>::_start()
         // We can reset the update to ensure we properly restart
         m_DeltaU.setZero(m_dofs);
         // Compute current residual and its norm
-        m_R = m_residualFun(m_U);
+        m_R = _computeResidual(m_U);
         m_residual = m_R.norm();
         // If the residual is 0 (e.g. with purely displacment loading), we set it to 1 to allow divisions
         if (m_residual==0) m_residual=1;
@@ -194,14 +228,14 @@ void gsStaticDR<T>::_start()
     else
     {
         // Compute current residual and its norm
-        m_R = m_residualFun(m_U + m_DeltaU);
+        m_R = _computeResidual(m_U + m_DeltaU);
         m_residual = m_R.norm();
         // If the residual is 0 (e.g. with purely displacment loading), we set it to 1 to allow divisions
         if (m_residual==0) m_residual=1;
         // The previous step residual is the same as the residual
         m_residualOld = m_residual;
         // Residual0 is the residual without m_DeltaU
-        m_residualIni = m_residualFun(m_U).norm();
+        m_residualIni = _computeResidual(m_U).norm();
         // If the residual is 0 (e.g. with purely displacment loading), we set it to 1 to allow divisions
         if (m_residualIni==0) m_residualIni=1;
 
@@ -210,7 +244,7 @@ void gsStaticDR<T>::_start()
     }
 
 //----------------------------------------------------------------------------------
-    // m_R = m_residualFun(m_U+m_DeltaU);
+    // m_R = _computeResidual(m_U+m_DeltaU);
     m_deltaU = 0.5*m_dt*m_dt*m_massInv.cwiseProduct(m_R);
     m_v = m_deltaU/m_dt;
 //----------------------------------------------------------------------------------

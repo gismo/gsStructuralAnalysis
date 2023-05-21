@@ -17,6 +17,8 @@
 #include <gsKLShell/getMaterialMatrix.h>
 #include <gsStructuralAnalysis/gsBucklingSolver.h>
 
+#include <gsStructuralAnalysis/gsStructuralAnalysisTools.h>
+
 using namespace gismo;
 
 void writeToCSVfile(std::string name, gsMatrix<> matrix)
@@ -618,27 +620,28 @@ int main (int argc, char** argv)
     gsSparseMatrix<> K_L =  assembler->matrix();
     gsVector<> rhs = assembler->rhs();
 
-    typedef std::function<gsSparseMatrix<real_t> (gsVector<real_t> const &)>                            Jacobian_t;
-    typedef std::function<gsSparseMatrix<real_t> (gsVector<real_t> const &, gsVector<real_t> const &)>  dJacobian_t;
-    Jacobian_t K_NL = [&assembler,&mp_def](gsVector<real_t> const &x)
+    // Function for the Jacobian
+    gsStructuralAnalysisOps<real_t>::Jacobian_t K_NL = [&assembler,&mp_def](gsVector<real_t> const &x, gsSparseMatrix<real_t> & m)
     {
+      ThinShellAssemblerStatus status;
       assembler->constructSolution(x,mp_def);
-      assembler->assemble(mp_def);
-      gsSparseMatrix<real_t> m = assembler->matrix();
-      return m;
+      status = assembler->assembleMatrix(mp_def);
+      m = assembler->matrix();
+      return status == ThinShellAssemblerStatus::Success;
     };
-    dJacobian_t dK_NL = [&assembler,&mp_def,&MIP](gsVector<real_t> const &x, gsVector<real_t> const &dx)
+    gsStructuralAnalysisOps<real_t>::dJacobian_t dK_NL = [&assembler,&mp_def,&MIP](gsVector<real_t> const &x, gsVector<real_t> const &dx, gsSparseMatrix<real_t> & m)
     {
+      ThinShellAssemblerStatus status;
       if (MIP)
-        assembler->assembleMatrix(x,x-dx);
+        status = assembler->assembleMatrix(x,x-dx);
       else
       {
         assembler->constructSolution(x,mp_def);
-        assembler->assembleMatrix(mp_def);
+        status = assembler->assembleMatrix(mp_def);
       }
 
-      gsSparseMatrix<real_t> m = assembler->matrix();
-      return m;
+      m = assembler->matrix();
+      return status == ThinShellAssemblerStatus::Success;
     };
 
     gsBucklingSolver<real_t> buckling(K_L,rhs,dK_NL);
@@ -649,10 +652,13 @@ int main (int argc, char** argv)
     buckling.options().setInt("ncvFac",2);
     // buckling.computePower();
 
+    gsStatus status;
     if (!sparse)
-      buckling.compute();
+      status = buckling.compute();
     else
-      buckling.computeSparse(shift,nmodes);//,2,Spectra::SortRule::LargestMagn,Spectra::SortRule::SmallestMagn);
+      status = buckling.computeSparse(shift,nmodes);//,2,Spectra::SortRule::LargestMagn,Spectra::SortRule::SmallestMagn);
+
+    GISMO_ENSURE(status == gsStatus::Success,"Buckling solver failed");
 
     gsMatrix<> values = buckling.values();
     gsMatrix<> vectors = buckling.vectors();
