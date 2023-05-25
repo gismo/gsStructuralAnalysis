@@ -135,10 +135,6 @@ int main(int argc, char *argv[])
     index_t topmid_ID = 14;
     mp.computeTopology();
 
-    // For different materials for snapping or bearing patches.
-    // std::vector<size_t> snapIdx = mp.indicesByLabel("snapping");
-    // std::vector<size_t> bearIdx = mp.indicesByLabel("bearing");
-
     if (plot)
     {
         gsWriteParaview<>(mp,"mp",1000,true,false);
@@ -585,7 +581,7 @@ gsMultiPatch<T> makeElement(const T tw, const T tg, const T tb, const T ts, cons
     coefs_tmp.block(tmp.rows(),0,tmp.rows(),tmp.cols()) = tmp;
     tmp.col(1).setConstant(0);
     coefs_tmp.block(0,0,tmp.rows(),tmp.cols()) = tmp;
-    element.addPatch(gsTensorBSpline<2,real_t>(left_tbasis,coefs_tmp),"bearing");
+    element.addPatch(gsTensorBSpline<2,real_t>(left_tbasis,coefs_tmp));
 
     tmp = right_coefs;
     ones = gsMatrix<T>::Ones(tmp.rows(),1);
@@ -593,7 +589,7 @@ gsMultiPatch<T> makeElement(const T tw, const T tg, const T tb, const T ts, cons
     coefs_tmp.block(tmp.rows(),0,tmp.rows(),tmp.cols()) = tmp;
     tmp.col(1).setConstant(0);
     coefs_tmp.block(0,0,tmp.rows(),tmp.cols()) = tmp;
-    element.addPatch(gsTensorBSpline<2,real_t>(right_tbasis,coefs_tmp),"bearing");
+    element.addPatch(gsTensorBSpline<2,real_t>(right_tbasis,coefs_tmp));
 
     // Now the bottom cosine
     tmp = left_coefs;
@@ -602,7 +598,7 @@ gsMultiPatch<T> makeElement(const T tw, const T tg, const T tb, const T ts, cons
     coefs_tmp.block(0,0,tmp.rows(),tmp.cols()) = tmp;
     tmp.col(1) += ts * ones;
     coefs_tmp.block(tmp.rows(),0,tmp.rows(),tmp.cols()) = tmp;
-    element.addPatch(gsTensorBSpline<2,real_t>(left_tbasis,coefs_tmp),"snapping");
+    element.addPatch(gsTensorBSpline<2,real_t>(left_tbasis,coefs_tmp));
 
     tmp = midleft_coefs;
     ones = gsMatrix<T>::Ones(tmp.rows(),1);
@@ -610,7 +606,7 @@ gsMultiPatch<T> makeElement(const T tw, const T tg, const T tb, const T ts, cons
     coefs_tmp.block(0,0,tmp.rows(),tmp.cols()) = tmp;
     tmp.col(1) += ts * ones;
     coefs_tmp.block(tmp.rows(),0,tmp.rows(),tmp.cols()) = tmp;
-    element.addPatch(gsTensorBSpline<2,real_t>(midleft_tbasis,coefs_tmp),"snapping");
+    element.addPatch(gsTensorBSpline<2,real_t>(midleft_tbasis,coefs_tmp));
 
     tmp = mid_coefs;
     ones = gsMatrix<T>::Ones(tmp.rows(),1);
@@ -618,7 +614,7 @@ gsMultiPatch<T> makeElement(const T tw, const T tg, const T tb, const T ts, cons
     coefs_tmp.block(0,0,tmp.rows(),tmp.cols()) = tmp;
     tmp.col(1) += ts * ones;
     coefs_tmp.block(tmp.rows(),0,tmp.rows(),tmp.cols()) = tmp;
-    element.addPatch(gsTensorBSpline<2,real_t>(mid_tbasis,coefs_tmp),"snapping");
+    element.addPatch(gsTensorBSpline<2,real_t>(mid_tbasis,coefs_tmp));
 
     tmp = midright_coefs;
     ones = gsMatrix<T>::Ones(tmp.rows(),1);
@@ -626,7 +622,7 @@ gsMultiPatch<T> makeElement(const T tw, const T tg, const T tb, const T ts, cons
     coefs_tmp.block(0,0,tmp.rows(),tmp.cols()) = tmp;
     tmp.col(1) += ts * ones;
     coefs_tmp.block(tmp.rows(),0,tmp.rows(),tmp.cols()) = tmp;
-    element.addPatch(gsTensorBSpline<2,real_t>(midright_tbasis,coefs_tmp),"snapping");
+    element.addPatch(gsTensorBSpline<2,real_t>(midright_tbasis,coefs_tmp));
 
     tmp = right_coefs;
     ones = gsMatrix<T>::Ones(tmp.rows(),1);
@@ -634,7 +630,7 @@ gsMultiPatch<T> makeElement(const T tw, const T tg, const T tb, const T ts, cons
     coefs_tmp.block(0,0,tmp.rows(),tmp.cols()) = tmp;
     tmp.col(1) += ts * ones;
     coefs_tmp.block(tmp.rows(),0,tmp.rows(),tmp.cols()) = tmp;
-    element.addPatch(gsTensorBSpline<2,real_t>(right_tbasis,coefs_tmp),"snapping");
+    element.addPatch(gsTensorBSpline<2,real_t>(right_tbasis,coefs_tmp));
 
     // Lift all coefficient matrices with ts
     ones = gsMatrix<T>::Ones(left_coefs.rows(),1);
@@ -655,7 +651,7 @@ gsMultiPatch<T> makeElement(const T tw, const T tg, const T tb, const T ts, cons
     coefs_tmp.block(0,0,tmp.rows(),tmp.cols()) = tmp;
     tmp.col(1) += tg*ones;
     coefs_tmp.block(tmp.rows(),0,tmp.rows(),tmp.cols()) = tmp;
-    element.addPatch(gsTensorBSpline<2,real_t>(mid_tbasis,coefs_tmp),"bearing");
+    element.addPatch(gsTensorBSpline<2,real_t>(mid_tbasis,coefs_tmp));
 
     // Lift all coefficient matrices with tg/2.
     ones = gsMatrix<T>::Ones(left_coefs.rows(),1);
@@ -676,7 +672,7 @@ gsMultiPatch<T> makeElement(const T tw, const T tg, const T tb, const T ts, cons
     coefs_tmp.block(0,0,tmp.rows(),tmp.cols()) = tmp;
     tmp.col(1) += tb * ones;
     coefs_tmp.block(tmp.rows(),0,tmp.rows(),tmp.cols()) = tmp;
-    element.addPatch(gsTensorBSpline<2,real_t>(left_tbasis,coefs_tmp),"bearing");
+    element.addPatch(gsTensorBSpline<2,real_t>(left_tbasis,coefs_tmp));
 
     tmp = midleft_coefs;
     ones = gsMatrix<T>::Ones(tmp.rows(),1);
@@ -684,7 +680,7 @@ gsMultiPatch<T> makeElement(const T tw, const T tg, const T tb, const T ts, cons
     coefs_tmp.block(0,0,tmp.rows(),tmp.cols()) = tmp;
     tmp.col(1) += tb * ones;
     coefs_tmp.block(tmp.rows(),0,tmp.rows(),tmp.cols()) = tmp;
-    element.addPatch(gsTensorBSpline<2,real_t>(midleft_tbasis,coefs_tmp),"bearing");
+    element.addPatch(gsTensorBSpline<2,real_t>(midleft_tbasis,coefs_tmp));
 
     tmp = mid_coefs;
     ones = gsMatrix<T>::Ones(tmp.rows(),1);
@@ -692,7 +688,7 @@ gsMultiPatch<T> makeElement(const T tw, const T tg, const T tb, const T ts, cons
     coefs_tmp.block(0,0,tmp.rows(),tmp.cols()) = tmp;
     tmp.col(1) += tb * ones;
     coefs_tmp.block(tmp.rows(),0,tmp.rows(),tmp.cols()) = tmp;
-    element.addPatch(gsTensorBSpline<2,real_t>(mid_tbasis,coefs_tmp),"bearing");
+    element.addPatch(gsTensorBSpline<2,real_t>(mid_tbasis,coefs_tmp));
 
     tmp = midright_coefs;
     ones = gsMatrix<T>::Ones(tmp.rows(),1);
@@ -700,7 +696,7 @@ gsMultiPatch<T> makeElement(const T tw, const T tg, const T tb, const T ts, cons
     coefs_tmp.block(0,0,tmp.rows(),tmp.cols()) = tmp;
     tmp.col(1) += tb * ones;
     coefs_tmp.block(tmp.rows(),0,tmp.rows(),tmp.cols()) = tmp;
-    element.addPatch(gsTensorBSpline<2,real_t>(midright_tbasis,coefs_tmp),"bearing");
+    element.addPatch(gsTensorBSpline<2,real_t>(midright_tbasis,coefs_tmp));
 
     tmp = right_coefs;
     ones = gsMatrix<T>::Ones(tmp.rows(),1);
@@ -708,7 +704,7 @@ gsMultiPatch<T> makeElement(const T tw, const T tg, const T tb, const T ts, cons
     coefs_tmp.block(0,0,tmp.rows(),tmp.cols()) = tmp;
     tmp.col(1) += tb * ones;
     coefs_tmp.block(tmp.rows(),0,tmp.rows(),tmp.cols()) = tmp;
-    element.addPatch(gsTensorBSpline<2,real_t>(right_tbasis,coefs_tmp),"bearing");
+    element.addPatch(gsTensorBSpline<2,real_t>(right_tbasis,coefs_tmp));
 
     // Lift all coefficient matrices with tg
     ones = gsMatrix<T>::Ones(left_coefs.rows(),1);
@@ -728,14 +724,14 @@ gsMultiPatch<T> makeElement(const T tw, const T tg, const T tb, const T ts, cons
     coefs_tmp.block(tmp.rows(),0,tmp.rows(),tmp.cols()) = tmp;
     tmp.col(1).setConstant(tg/2.+ts+tg+tb+tg/2.);
     coefs_tmp.block(0,0,tmp.rows(),tmp.cols()) = tmp;
-    element.addPatch(gsTensorBSpline<2,real_t>(left_tbasis,coefs_tmp),"bearing");
+    element.addPatch(gsTensorBSpline<2,real_t>(left_tbasis,coefs_tmp));
 
     tmp = right_coefs;
     coefs_tmp.resize(2*tmp.rows(),tmp.cols());
     coefs_tmp.block(tmp.rows(),0,tmp.rows(),tmp.cols()) = tmp;
     tmp.col(1).setConstant(tg/2.+ts+tg+tb+tg/2.);
     coefs_tmp.block(0,0,tmp.rows(),tmp.cols()) = tmp;
-    element.addPatch(gsTensorBSpline<2,real_t>(right_tbasis,coefs_tmp),"bearing");
+    element.addPatch(gsTensorBSpline<2,real_t>(right_tbasis,coefs_tmp));
     return element;
 }
 
