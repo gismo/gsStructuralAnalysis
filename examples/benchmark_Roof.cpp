@@ -21,6 +21,8 @@
 #include <gsKLShell/gsThinShellAssembler.h>
 #include <gsKLShell/getMaterialMatrix.h>
 
+#include <gsStructuralAnalysis/gsStructuralAnalysisTools.h>
+
 #include <gsStructuralAnalysis/gsALMBase.h>
 #include <gsStructuralAnalysis/gsALMRiks.h>
 #include <gsStructuralAnalysis/gsALMLoadControl.h>
@@ -232,9 +234,12 @@ int main (int argc, char** argv)
     Gs[0] = Gs[1] = Gs[2] = &Gfun;
 
     gsConstantFunction<> phi1,phi2,phi3;
-    phi1.setValue(pi/2,3);
-    phi2.setValue(0,3);
-    phi3.setValue(pi/2,3);
+    // phi1.setValue(pi/2,3);
+    // phi2.setValue(0,3);
+    // phi3.setValue(pi/2,3);
+    phi1.setValue(0,3);
+    phi2.setValue(pi/2,3);
+    phi3.setValue(0,3);
 
     Phis[0] = &phi1;
     Phis[1] = &phi2;
@@ -276,33 +281,32 @@ int main (int argc, char** argv)
     gsStopwatch stopwatch;
     real_t time = 0.0;
 
-    typedef std::function<gsSparseMatrix<real_t> (gsVector<real_t> const &)>                                Jacobian_t;
-    typedef std::function<gsVector<real_t> (gsVector<real_t> const &, real_t, gsVector<real_t> const &) >   ALResidual_t;
-    // Function for the Jacobian
-    Jacobian_t Jacobian = [&time,&stopwatch,&assembler,&mp_def](gsVector<real_t> const &x)
-    {
-      stopwatch.restart();
-      assembler->constructSolution(x,mp_def);
-      assembler->assembleMatrix(mp_def);
-      time += stopwatch.stop();
-
-      gsSparseMatrix<real_t> m = assembler->matrix();
-      return m;
-    };
-    // Function for the Residual
-    ALResidual_t ALResidual = [&time,&stopwatch,&assembler,&mp_def](gsVector<real_t> const &x, real_t lam, gsVector<real_t> const &force)
-    {
-      stopwatch.restart();
-      assembler->constructSolution(x,mp_def);
-      assembler->assembleVector(mp_def);
-      gsVector<real_t> Fint = -(assembler->rhs() - force);
-      gsVector<real_t> result = Fint - lam * force;
-      time += stopwatch.stop();
-      return result; // - lam * force;
-    };
     // Assemble linear system to obtain the force vector
     assembler->assemble();
     gsVector<> Force = assembler->rhs();
+
+    // Function for the Jacobian
+    gsStructuralAnalysisOps<real_t>::Jacobian_t Jacobian = [&time,&stopwatch,&assembler,&mp_def](gsVector<real_t> const &x, gsSparseMatrix<real_t> & m)
+    {
+      ThinShellAssemblerStatus status;
+      stopwatch.restart();
+      assembler->constructSolution(x,mp_def);
+      status = assembler->assembleMatrix(mp_def);
+      m = assembler->matrix();
+      time += stopwatch.stop();
+      return status == ThinShellAssemblerStatus::Success;
+    };
+    // Function for the Residual
+    gsStructuralAnalysisOps<real_t>::ALResidual_t ALResidual = [&time,&stopwatch,&assembler,&mp_def,&Force](gsVector<real_t> const &x, real_t lam, gsVector<real_t> & result)
+    {
+        ThinShellAssemblerStatus status;
+        stopwatch.restart();
+        assembler->constructSolution(x,mp_def);
+        status = assembler->assembleVector(mp_def);
+        result = Force - lam * Force - assembler->rhs(); // assembler rhs - force = Finternal
+        time += stopwatch.stop();
+        return status == ThinShellAssemblerStatus::Success;
+    };
 
     // (0: Load control; 1: Riks' method; 2: Crisfield's method; 3: consistent crisfield method)
     gsALMBase<real_t> * arcLength;
@@ -323,7 +327,7 @@ int main (int argc, char** argv)
     // arcLength->options().setInt("AngleMethod",0); // 0: step, 1: iteration
     arcLength->options().setSwitch("AdaptiveLength",adaptive);
     arcLength->options().setInt("AdaptiveIterations",5);
-    // arcLength->options().setReal("Scaling",0.0);
+    arcLength->options().setReal("Scaling",1.0);
     arcLength->options().setReal("Tol",tol);
     arcLength->options().setReal("TolU",tolU);
     arcLength->options().setReal("TolF",tolF);
@@ -359,14 +363,30 @@ int main (int argc, char** argv)
     arcLength->setIndicator(indicator); // RESET INDICATOR
     bool bisected = false;
     real_t dL0 = dL;
+
+    gsVector<> pt(2);
+    pt<<0.5,0.5;
+    gsMatrix<> pt_result;
+    gsMultiPatch<> mp_tmp;
+    /////////////////////////////////////////////////////////////////////////////////////////////
+    std::ofstream file;
+    file.open("sol.txt",std::ofstream::out);
+    assembler->constructSolution(Uold,mp_tmp);
+    deformation.patch(0) = mp_tmp.patch(0);
+    deformation.patch(0).coefs() -= mp.patch(0).coefs();// assuming 1 patch here
+    deformation.patch(0).eval_into(pt,pt_result);
+    file  << std::setprecision(20) << pt_result(2,0) << "," << Lold<<"\n";
+    //////////////////////////////////////////////////////////////////////////////////////////////
+
+
     for (index_t k=0; k<step; k++)
     {
       gsInfo<<"Load step "<< k<<"\n";
+        gsInfo<<"dL = "<<dL<<"\n";
       // assembler->constructSolution(solVector,solution);
-      arcLength->step();
 
-      // gsInfo<<"m_U = "<<arcLength->solutionU()<<"\n";
-      if (!(arcLength->converged()))
+      gsStatus status = arcLength->step();
+      if (status==gsStatus::NotConverged || status==gsStatus::AssemblyError)
       {
         gsInfo<<"Error: Loop terminated, arc length method did not converge.\n";
         dL = dL / 2.;
@@ -397,6 +417,16 @@ int main (int argc, char** argv)
       Lold = arcLength->solutionL();
       assembler->constructSolution(solVector,mp_def);
 
+      //////////////////////////////////////////////////////////////////////////////////////////////
+      assembler->constructSolution(Uold,mp_tmp);
+      deformation.patch(0) = mp_tmp.patch(0);
+      deformation.patch(0).coefs() -= mp.patch(0).coefs();// assuming 1 patch here
+      deformation.patch(0).eval_into(pt,pt_result);
+      file  << std::setprecision(20) << pt_result(2,0) << "," << Lold<<"\n";
+      //////////////////////////////////////////////////////////////////////////////////////////////
+
+
+
       deformation = mp_def;
       deformation.patch(0).coefs() -= mp.patch(0).coefs();// assuming 1 patch here
 
@@ -413,8 +443,8 @@ int main (int argc, char** argv)
         std::string fileName = dirname + "/" + output + util::to_string(k);
         gsWriteParaview<>(solField, fileName, 1000,mesh);
         fileName = output + util::to_string(k) + "0";
-        collection.addTimestep(fileName,k,".vts");
-        if (mesh) collection.addTimestep(fileName,k,"_mesh.vtp");
+        collection.addPart(fileName + ".vts",k);
+        if (mesh) collection.addPart(fileName + "_mesh.vtp",k);
       }
       if (stress)
       {
@@ -432,7 +462,7 @@ int main (int argc, char** argv)
         fileName = dirname + "/" + "membrane" + util::to_string(k);
         gsWriteParaview( membraneStress, fileName, 1000);
         fileName = "membrane" + util::to_string(k) + "0";
-        Smembrane.addTimestep(fileName,k,".vts");
+        Smembrane.addPart(fileName + ".vts",k);
 
         gsPiecewiseFunction<> flexuralStresses;
         assembler->constructStress(mp_def,flexuralStresses,stress_type::flexural);
@@ -444,7 +474,7 @@ int main (int argc, char** argv)
         fileName = dirname + "/" + "flexural" + util::to_string(k);
         gsWriteParaview( flexuralStress, fileName, 1000);
         fileName = "flexural" + util::to_string(k) + "0";
-        Sflexural.addTimestep(fileName,k,".vts");
+        Sflexural.addPart(fileName + ".vts",k);
       }
 
       if (write)
@@ -467,9 +497,14 @@ int main (int argc, char** argv)
       Smembrane_p.save();
     }
 
-  delete materialMatrix;
-  delete assembler;
-  delete arcLength;
+    //////////////////////////////////////////////////////////////////////////////////////////////
+    file.close();
+    //////////////////////////////////////////////////////////////////////////////////////////////
+
+
+    delete arcLength;
+    delete materialMatrix;
+    delete assembler;
 
   return result;
 }

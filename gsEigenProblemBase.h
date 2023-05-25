@@ -18,6 +18,7 @@
 #include <gsSpectra/gsSpectra.h>
 #endif
 #include <gsIO/gsOptionList.h>
+#include <gsStructuralAnalysis/gsStructuralAnalysisTools.h>
 
 #pragma once
 
@@ -38,7 +39,11 @@ class gsEigenProblemBase
 
 public:
 
-    gsEigenProblemBase() { m_options = defaultOptions(); }
+    gsEigenProblemBase() 
+    { 
+        m_options = defaultOptions(); 
+        m_status  = gsStatus::NotStarted;
+    }
 
     ~gsEigenProblemBase() {};
 
@@ -83,28 +88,12 @@ public:
 
     gsOptionList & options() {return m_options; };
 
-    virtual void compute();
-    virtual void compute(T shift);
+    virtual gsStatus compute();
+    virtual gsStatus compute(const T shift);
 
-    virtual void computeSparse(T shift = 0.0, index_t number = 10)
-    {
-        #ifdef GISMO_WITH_SPECTRA
-            if (m_options.getInt("solver")==0)
-                computeSparse_impl<Spectra::GEigsMode::Cholesky>(shift,number);
-            else if (m_options.getInt("solver")==1)
-                computeSparse_impl<Spectra::GEigsMode::RegularInverse>(shift,number);
-            else if (m_options.getInt("solver")==2)
-                computeSparse_impl<Spectra::GEigsMode::ShiftInvert>(shift,number);
-            else if (m_options.getInt("solver")==3)
-                computeSparse_impl<Spectra::GEigsMode::Buckling>(shift,number);
-            else if (m_options.getInt("solver")==4)
-                computeSparse_impl<Spectra::GEigsMode::Cayley>(shift,number);
-        #else
-            GISMO_NO_IMPLEMENTATION
-        #endif
-    };
+    virtual gsStatus computeSparse(const T shift = 0.0, const index_t number = 10);
 
-    virtual void computePower();
+    virtual gsStatus computePower();
 
     virtual gsMatrix<T> values() const { return m_values; };
     virtual T value(int k) const { return m_values.at(k); };
@@ -113,8 +102,6 @@ public:
     virtual gsMatrix<T> vector(int k) const { return m_vectors.col(k); };
 
     virtual std::vector<std::pair<T,gsMatrix<T>> > mode(int k) const {return makeMode(k); }
-
-
 
 protected:
 
@@ -151,6 +138,7 @@ protected:
 
     index_t m_num;
 
+    gsStatus m_status;
 };
 
 

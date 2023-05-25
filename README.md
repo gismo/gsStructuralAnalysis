@@ -2,8 +2,10 @@
 - ALResidual(x,lambda,force) --> ALResidual(x,lambda)
 
 # Changelog
+## v23.3:
+  - add APALM (see PR https://github.com/gismo/gsStructuralAnalysis/pull/13)
 
-## v21.X:
+## v22.1:
   - Static solves can be done by `gsStaticNewton` and `gsStaticDR` (Dynamic Relaxation method), both inheriting from `gsStaticBase`
   - Provided base class for ALMs. All ALMs have a separate class now, and the singular point approach method is implemented in the base class.
   - Eigenvalue problems (Buckling, Modal) have a base class as well, and `gsBucklingSolver` and `gsModalSolver` only provide a top-layer assigning the right matrices.
@@ -16,7 +18,7 @@
 
 Module for structural analysis with solids ([`gsElasticity`](https://github.com/gismo/gsElasticity/)) or Kirchhoff-Love shells ([`gsKLShell`](https://github.com/gismo/gsKLShell/)).
 
-|CMake flags|```-DGISMO_STRUCTURALANALYSIS=ON``` (default ```OFF```)|
+|CMake flags|```-DGISMO_OPTIONAL="<other submodules>;gsStructuralAnalysis;gsSpectra"```|
 |--:|---|
 |License|[MPL 2.0](https://www.mozilla.org/en-US/MPL/2.0/)|
 |OS support|Linux, Windows, macOS|
@@ -28,12 +30,12 @@ Module for structural analysis with solids ([`gsElasticity`](https://github.com/
 |Last checked|09-12-2021|
 
 #### Dependencies
-`gsSpectra` via `-cmake . -DGISMO_WITH_SPECTRA=ON`.
+`gsSpectra` via `-cmake . -DGISMO_OPTIONAL="<other submodules>;gsSpectra"`. The use of `gsSpectra` is not required, but strongly adviced. 
 
 #### Installation
 ```
 cd path/to/build/dir
-cmake . -DGISMO_WITH_SPECTRA=ON -DGISMO_STRUCTURALANALYSIS=ON
+cmake . -DGISMO_OPTIONAL="<other submodules>;gsStructuralAnalysis;gsSpectra"
 make
 ```
 
@@ -45,6 +47,7 @@ The `gsStructuralAnalysis` 	module provides the following analysis tools:
 * `gsModalSolver`&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Solves the vibration problem to find eigenfrequencies and mode shapes given linear mass and stiffness matrices.
 * `gsBucklingSolver`&nbsp;&nbsp;&nbsp;&nbsp;Solves the a buckling eigenvalue problem given a solution **u** from a linear analysis, the linear stiffness matrix and the jacobian given **u**.
 * `gsALMBase`&nbsp;&nbsp;Used for nonlinear buckling analysis (i.e. *post buckling analysis*). It includes arc-length schemes, extended arc-length methods and branch-switching methods.
+* `gsAPALM`&nbsp;&nbsp;Parallel implementation of the arc-length method
 * `gsTimeIntegrator`&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Solves the (nonlinear) second-order structural dynamics problem.
 
 All the tools in the `gsStructuralAnalysis` structural mass matrices, (linear/nonlinear) siffness matrices and forcing vectors/jacobians. The nonlinear modules typically work with jacobians and residuals of the following form (example using `gsThinShellAssembler`):

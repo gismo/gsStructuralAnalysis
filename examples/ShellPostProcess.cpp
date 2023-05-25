@@ -131,8 +131,8 @@ int main(int argc, char *argv[])
         std::string fileName = path + output + util::to_string(k);
         gsWriteParaview<>(solField, fileName, N, mesh);
         fileName = output + util::to_string(k) + "0";
-        collection.addTimestep(fileName,k,".vts");
-        if (mesh) collection.addTimestep(fileName,k,"_mesh.vtp");
+        collection.addPart(fileName + ".vts",k);
+        if (mesh) collection.addPart(fileName + "_mesh.vtp",k);
         gsInfo<<"---> "<<fileName<<".vts";
       }
       if (write)

@@ -16,6 +16,7 @@
 #include <gsKLShell/gsThinShellAssembler.h>
 #include <gsKLShell/getMaterialMatrix.h>
 #include <gsStructuralAnalysis/gsTimeIntegrator.h>
+#include <gsStructuralAnalysis/gsStructuralAnalysisTools.h>
 
 using namespace gismo;
 
@@ -247,22 +248,22 @@ std::string wn = dirname + "/output.csv";
 gsParaviewCollection collection("DynamicBeamResults/solution");
 gsParaviewCollection collection_an("DynamicBeamResults/analytical");
 
-typedef std::function<gsSparseMatrix<real_t> (gsVector<real_t> const &)>        Jacobian_t;
-typedef std::function<gsVector<real_t> (gsVector<real_t> const &, real_t time) >Residual_t;
 // Function for the Jacobian
-Jacobian_t Jacobian = [&assembler,&mp_def](gsMatrix<real_t> const &x)
+gsStructuralAnalysisOps<real_t>::Jacobian_t Jacobian = [&assembler,&mp_def](gsMatrix<real_t> const &x, gsSparseMatrix<real_t> & m)
 {
   // to do: add time dependency of forcing
+  ThinShellAssemblerStatus status;
   assembler->constructSolution(x,mp_def);
-  assembler->assembleMatrix(mp_def);
-  gsSparseMatrix<real_t> m = assembler->matrix();
-  return m;
+  status = assembler->assembleMatrix(mp_def);
+  m = assembler->matrix();
+  return status == ThinShellAssemblerStatus::Success;
 };
 
 // Function for the Residual (TEST TO CHANGE FUNCTION!)
-Residual_t Residual = [&EA,&load,&omega,&length,&EI,&force,&Density,&Area,&assembler,&mp_def](gsMatrix<real_t> const &x, real_t time)
+gsStructuralAnalysisOps<real_t>::TResidual_t Residual = [&EA,&load,&omega,&length,&EI,&force,&Density,&Area,&assembler,&mp_def](gsMatrix<real_t> const &x, real_t time, gsVector<real_t> & result)
 {
   /// Make time dependent forcing
+  ThinShellAssemblerStatus status;
   char buffer_traction[200];
   sprintf(buffer_traction,"%e*%e^2*cos(%e*pi*%e)^2*(%e^3-6*%e*x^2+4*x^3)*x*(%e-x)/(48*%e^2)",EA,load,omega,time,length,length,length,EI);
   std::string traction = buffer_traction;
@@ -276,8 +277,9 @@ Residual_t Residual = [&EA,&load,&omega,&length,&EI,&force,&Density,&Area,&assem
   gsFunctionExpr<> surfForceTemp(traction,"0",pressure,3);
   force.swap(surfForceTemp);
   assembler->constructSolution(x,mp_def);
-  assembler->assembleVector(mp_def);
-  return assembler->rhs();
+  status = assembler->assembleVector(mp_def);
+  result = assembler->rhs();
+  return status == ThinShellAssemblerStatus::Success;
 };
 
 // Compute mass matrix (since it is constant over time)
@@ -310,7 +312,10 @@ timeIntegrator.setAcceleration(aNew);
 
 for (index_t i=0; i<steps; i++)
 {
-  timeIntegrator.step();
+  gsStatus status = timeIntegrator.step();
+  if (status!=gsStatus::Success)
+    GISMO_ERROR("Time integrator did not succeed");
+
   timeIntegrator.constructSolution();
   uNew = timeIntegrator.displacements();
 
@@ -330,13 +335,13 @@ for (index_t i=0; i<steps; i++)
   std::string fileName = dirname + "/solution" + util::to_string(i);
   gsWriteParaview<>(solField, fileName, 500);
   fileName = "solution" + util::to_string(i) + "0";
-  collection.addTimestep(fileName,i,".vts");
+  collection.addPart(fileName + ".vts",i);
 
   gsField<> anField(mp,analytical);
   fileName = dirname + "/analytical" + util::to_string(i);
   gsWriteParaview<>(anField, fileName, 500);
   fileName = "analytical" + util::to_string(i) + "0";
-  collection_an.addTimestep(fileName,i,".vts");
+  collection_an.addPart(fileName + ".vts",i);
 
   if (write)
   {

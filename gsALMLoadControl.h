@@ -34,6 +34,11 @@ class gsALMLoadControl : public gsALMBase<T>
 {
 
     typedef gsALMBase<T> Base;
+
+    typedef typename Base::ALResidual_t  ALResidual_t;
+    typedef typename Base::Jacobian_t    Jacobian_t;
+    typedef typename Base::dJacobian_t   dJacobian_t;
+
 public:
 
     using Base::setLength;
@@ -53,10 +58,10 @@ protected:
 public:
 
     /// Constructor
-    gsALMLoadControl(   std::function < gsSparseMatrix<T> ( gsVector<T> const & ) > &Jacobian,
-                        std::function < gsVector<T> ( gsVector<T> const &, T, gsVector<T> const & ) > &Residual,
+    gsALMLoadControl(   Jacobian_t  &Jacobian,
+                        ALResidual_t&ALResidual,
                         gsVector<T> &Force )
-    : Base(Jacobian,Residual,Force)
+    : Base(Jacobian,ALResidual,Force)
     {
         defaultOptions();
         getOptions();
@@ -65,10 +70,10 @@ public:
     }
 
     /// Constructor using the jacobian that takes the solution and the solution step
-    gsALMLoadControl(   std::function < gsSparseMatrix<T> ( gsVector<T> const &, gsVector<T> const & ) > &dJacobian,
-                        std::function < gsVector<T> ( gsVector<T> const &, T, gsVector<T> const & ) > &Residual,
+    gsALMLoadControl(   dJacobian_t &dJacobian,
+                        ALResidual_t&ALResidual,
                         gsVector<T> &Force )
-    : Base(dJacobian,Residual,Force)
+    : Base(dJacobian,ALResidual,Force)
     {
         defaultOptions();
         getOptions();
@@ -93,6 +98,7 @@ protected:
 
     /// See gsALMBase
     void predictor();
+    void predictorGuess();
     /// See gsALMBase
     void iteration();
 
@@ -154,6 +160,7 @@ protected:
     /// Displacement vector (present, at previously converged point)
     using Base::m_U;
     using Base::m_Uprev;
+    using Base::m_Uguess;
     /// Update of displacement vector
     using Base::m_DeltaU;
     /// u_bar
@@ -166,6 +173,7 @@ protected:
     /// Lambda (present, at previously converged point)
     using Base::m_L;
     using Base::m_Lprev;
+    using Base::m_Lguess;
     /// Update of lambdaGeneralizedSelfAdjointEigenSolver
     using Base::m_DeltaL;
     /// Update of update of lambda
