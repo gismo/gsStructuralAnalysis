@@ -161,7 +161,7 @@ int main (int argc, char** argv)
     // real_t pressure =0;
 
     std::string dirname = ".";
-    dirname = dirname + "/Pillow_r" + std::to_string(numHref) + "_e" + std::to_string(numElevate);
+    dirname = dirname + "/Pillow_r" + std::to_string(numRefine) + "_e" + std::to_string(numElevate);
     if (TFT)
       dirname = dirname + "_TFT";
     std::string output =  "solution";
@@ -202,33 +202,27 @@ int main (int argc, char** argv)
     else
       assembler = new gsThinShellAssembler<3, real_t, false >(mp,dbasis,BCs,force,materialMatrix);
 
-    // Construct assembler object
-    gsStopwatch stopwatch;
-    real_t time = 0.0;
+    gsDebugVar("----------------------------------------------------------------------------");
 
-    typedef std::function<gsSparseMatrix<real_t> (gsVector<real_t> const &)>                                Jacobian_t;
-    typedef std::function<gsVector<real_t> (gsVector<real_t> const &) >   Residual_t;
     // Function for the Jacobian
-    Jacobian_t Jacobian = [&time,&stopwatch,&assembler,&mp_def](gsVector<real_t> const &x)
+    gsStructuralAnalysisOps<real_t>::Jacobian_t Jacobian = [&assembler,&mp_def](gsVector<real_t> const &x, gsSparseMatrix<real_t> & m)
     {
-      stopwatch.restart();
+      ThinShellAssemblerStatus status;
       assembler->constructSolution(x,mp_def);
-      assembler->assembleMatrix(mp_def);
-      time += stopwatch.stop();
-
-      gsSparseMatrix<real_t> m = assembler->matrix();
-      return m;
+      status = assembler->assembleMatrix(mp_def);
+      m = assembler->matrix();
+      return status == ThinShellAssemblerStatus::Success;
     };
     // Function for the Residual
-    Residual_t Residual = [&pressFun,&assembler,&mp_def](gsVector<real_t> const &x)
+    gsStructuralAnalysisOps<real_t>::Residual_t Residual = [&assembler,&mp_def](gsVector<real_t> const &x, gsVector<real_t> & result)
     {
+      ThinShellAssemblerStatus status;
       assembler->constructSolution(x,mp_def);
-      assembler->assembleVector(mp_def);
-      gsVector<real_t> result = assembler->rhs();
-      // assembler->assemblePressureVector(pressFun,mp_def);
-      // result += assembler->rhs();
-      return result; // - lam * force;
+      status = assembler->assembleVector(mp_def);
+      result = assembler->rhs();
+      return status == ThinShellAssemblerStatus::Success;
     };
+
     // Assemble linear system to obtain the force vector
     assembler->assemble();
     gsSparseMatrix<> K = assembler->matrix();
@@ -547,7 +541,6 @@ int main (int argc, char** argv)
       gsWriteParaview(stretchDir3,dirname + "/" + "PrincipalDirection3",5000);
       gsWriteParaview(TF,dirname + "/" + "tensionfield",5000);
     }
-    gsInfo<<"Total ellapsed assembly time: \t\t"<<time<<" s\n";
 
     delete materialMatrix;
     delete materialMatrixTFT;

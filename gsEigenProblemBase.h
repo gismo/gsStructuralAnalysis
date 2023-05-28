@@ -113,7 +113,7 @@ private:
     typename std::enable_if<_GEigsMode==Spectra::GEigsMode::Cholesky ||
                             _GEigsMode==Spectra::GEigsMode::RegularInverse
                             ,
-                            void>::type computeSparse_impl(T shift, index_t number);
+                            gsStatus>::type computeSparse_impl(T shift, index_t number);
     #endif
 
     #ifdef GISMO_WITH_SPECTRA
@@ -122,7 +122,7 @@ private:
                             _GEigsMode==Spectra::GEigsMode::Buckling ||
                             _GEigsMode==Spectra::GEigsMode::Cayley
                             ,
-                            void>::type computeSparse_impl(T shift, index_t number);
+                            gsStatus>::type computeSparse_impl(T shift, index_t number);
     #endif
 
 protected:
