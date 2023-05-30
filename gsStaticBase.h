@@ -18,6 +18,7 @@
 #include <gsSpectra/gsSpectra.h>
 #endif
 #include <gsIO/gsOptionList.h>
+#include <gsStructuralAnalysis/gsStructuralAnalysisTools.h>
 
 #pragma once
 
@@ -35,12 +36,19 @@ namespace gismo
 template <class T>
 class gsStaticBase
 {
+protected:
+    
+    typedef typename gsStructuralAnalysisOps<T>::Residual_t      Residual_t;
+    typedef typename gsStructuralAnalysisOps<T>::ALResidual_t    ALResidual_t;
+    typedef typename gsStructuralAnalysisOps<T>::Jacobian_t      Jacobian_t;
+    typedef typename gsStructuralAnalysisOps<T>::dJacobian_t     dJacobian_t;
+
 public:
 
     virtual ~gsStaticBase() {};
 
     /// Solve
-    virtual void solve() = 0;
+    virtual gsStatus solve() = 0;
 
     /// Initialize output
     virtual void initOutput() = 0;
@@ -108,7 +116,10 @@ public:
     index_t iterations() const { return m_numIterations; }
 
     /// Returns whether the solver converged or not
-    bool converged() const { return m_converged; }
+    bool converged() const { return m_status==gsStatus::Success; }
+
+    /// Returns the status
+    gsStatus status() const { return m_status; }
 
     /// Returns the number of DoFs of the system
     index_t numDofs() { return m_dofs; }
@@ -139,22 +150,27 @@ public:
 
 protected:
     /// Computes the stability vector using the determinant of the Jacobian
-    virtual void _computeStabilityDet(const gsSparseMatrix<T> & jacMat)
+    virtual bool _computeStabilityDet(const gsSparseMatrix<T> & jacMat)
     {
         m_solver->compute(jacMat);
         // If 1: matrix is not SPD
-        GISMO_ASSERT(m_solver->info()==Eigen::ComputationInfo::Success,"Solver error with code "<<m_solver->info()<<". See Eigen documentation on ComputationInfo \n"
+        if (m_solver->info()!=Eigen::ComputationInfo::Success)
+        {
+            gsInfo<<"Solver error with code "<<m_solver->info()<<". See Eigen documentation on ComputationInfo \n"
                      <<Eigen::ComputationInfo::Success<<": Success"<<"\n"
                      <<Eigen::ComputationInfo::NumericalIssue<<": NumericalIssue"<<"\n"
                      <<Eigen::ComputationInfo::NoConvergence<<": NoConvergence"<<"\n"
-                     <<Eigen::ComputationInfo::InvalidInput<<": InvalidInput"<<"\n");
+                     <<Eigen::ComputationInfo::InvalidInput<<": InvalidInput"<<"\n";
+            return false;
+        }
 
         if ( auto * s = dynamic_cast<typename gsSparseSolver<T>::SimplicialLDLT*>(m_solver.get()) )
             m_stabilityVec = s->vectorD();
+        return true;
     }
 
     /// Computes the stability vector using the eigenvalues of the Jacobian, optionally applying a shift
-    virtual void _computeStabilityEig(const gsSparseMatrix<T> & jacMat, T shift)
+    virtual bool _computeStabilityEig(const gsSparseMatrix<T> & jacMat, T shift)
     {
 #ifdef GISMO_WITH_SPECTRA
         index_t number = std::min(static_cast<index_t>(std::floor(jacMat.cols()/5.)),10);
@@ -172,7 +188,11 @@ protected:
         gsSpectraSymShiftSolver<gsSparseMatrix<T>> es(jacMat,number,5*number,shift);
         es.init();
         es.compute(Spectra::SortRule::LargestAlge,1000,1e-6,Spectra::SortRule::SmallestAlge);
-        GISMO_ENSURE(es.info()==Spectra::CompInfo::Successful,"Spectra did not converge!"); // Reason for not converging can be due to the value of ncv (last input in the class member), which is too low.
+        if (es.info()!=Spectra::CompInfo::Successful)
+        {
+            gsWarn<<"Spectra did not converge!\n";
+            return false;   
+        }
 
         // if (es.info()==Spectra::CompInfo::NotComputed)
         // if (es.info()==Spectra::CompInfo::NotConverging)
@@ -185,23 +205,23 @@ protected:
 #endif
 
         m_indicator = m_stabilityVec.colwise().minCoeff()[0]; // This is required since D does not necessarily have one column.
+        return true;
     }
 
     /// Computes the stability of the Jacobian, optionally applying a shift (if provided)
-    virtual void _computeStability   (const gsSparseMatrix<T> & jacMat, T shift)
+    virtual bool _computeStability   (const gsSparseMatrix<T> & jacMat, T shift)
     {
+        bool success = false;
         if (m_stabilityMethod == stabmethod::Determinant)
-        {
-            _computeStabilityDet(jacMat);
-        }
+            success = _computeStabilityDet(jacMat);
         else if (m_stabilityMethod == stabmethod::Eigenvalue)
-        {
-            _computeStabilityEig(jacMat, shift);
-        }
+            success = _computeStabilityEig(jacMat, shift);
         else
           gsInfo<<"bifurcation method unknown!";
 
-        m_indicator = m_stabilityVec.colwise().minCoeff()[0]; // This is required since D does not necessarily have one column
+        if (success)
+            m_indicator = m_stabilityVec.colwise().minCoeff()[0]; // This is required since D does not necessarily have one column
+        return success;
     }
 
 protected:
@@ -214,7 +234,6 @@ protected:
 
     index_t m_numIterations;
     index_t m_maxIterations;
-    bool m_converged;
     bool m_start;
     index_t m_headstart;
 
@@ -240,6 +259,8 @@ protected:
             Eigenvalue  = 1,
         };
     };
+
+    gsStatus m_status;
 
 };
 

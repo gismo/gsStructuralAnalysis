@@ -54,7 +54,7 @@ void gsALMConsistentCrisfield<T>::initMethods()
 template <class T>
 void gsALMConsistentCrisfield<T>::quasiNewtonPredictor()
 {
-  computeJacobian();
+  m_jacMat = computeJacobian();
   computeUt(); // rhs does not depend on solution
   computeUbar(); // rhs contains residual and should be computed every time
 
@@ -64,7 +64,7 @@ void gsALMConsistentCrisfield<T>::quasiNewtonPredictor()
 template <class T>
 void gsALMConsistentCrisfield<T>::quasiNewtonIteration()
 {
-  computeJacobian();
+  m_jacMat = computeJacobian();
   computeUt(); // rhs does not depend on solution
 }
 
@@ -99,7 +99,7 @@ void gsALMConsistentCrisfield<T>::initiateStep()
 template <class T>
 void gsALMConsistentCrisfield<T>::predictor()
 {
-  computeJacobian();
+  m_jacMat = computeJacobian();
 
   // Check if the solution on start and prev are similar.
   // Then compute predictor of the method
@@ -120,6 +120,45 @@ void gsALMConsistentCrisfield<T>::predictor()
   {
     m_deltaL = 1./m_arcLength_prev*(m_L - m_Lprev);
     m_deltaU = 1./m_arcLength_prev*(m_U - m_Uprev);
+
+    if (!m_phi_user)
+      m_phi = math::pow( m_deltaUt.dot(m_deltaUt) / m_forcing.dot(m_forcing),0.5);
+  }
+
+  // Update iterative step
+  m_deltaL *= m_arcLength;
+  m_deltaU *= m_arcLength;
+
+  // Update load step
+  m_DeltaU += m_deltaU;
+  m_DeltaL += m_deltaL;
+}
+
+template <class T>
+void gsALMConsistentCrisfield<T>::predictorGuess()
+{
+  m_jacMat = computeJacobian();
+
+  // Check if the solution on start and prev are similar.
+  // Then compute predictor of the method
+  T tol = 1e-10;
+
+  if ( ((m_Uguess-m_U).norm() < tol) && ((m_Lguess - m_L) * (m_Lguess - m_L) < tol ) )
+  {
+    m_note+= "predictor\t";
+    T DL = 1.;
+    m_deltaUt = this->solveSystem(m_forcing);
+    m_deltaU = m_deltaUt / math::sqrt( m_deltaUt.dot(m_deltaUt) + m_DeltaL*DL );
+    m_deltaL = DL / math::sqrt( m_deltaUt.dot(m_deltaUt) + m_DeltaL*DL );
+
+    if (!m_phi_user)
+      m_phi = math::pow( m_deltaUt.dot(m_deltaUt) / m_forcing.dot(m_forcing),0.5);
+  }
+
+  else
+  {
+    m_deltaL = 1./m_arcLength_prev*(m_Lguess - m_L);
+    m_deltaU = 1./m_arcLength_prev*(m_Uguess - m_U);
 
     if (!m_phi_user)
       m_phi = math::pow( m_deltaUt.dot(m_deltaUt) / m_forcing.dot(m_forcing),0.5);

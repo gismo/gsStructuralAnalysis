@@ -22,7 +22,7 @@
 #include <gsKLShell/getMaterialMatrix.h>
 
 #include <gsStructuralAnalysis/gsTimeIntegrator.h>
-
+#include <gsStructuralAnalysis/gsStructuralAnalysisTools.h>
 
 using namespace gismo;
 
@@ -231,12 +231,12 @@ int main (int argc, char** argv)
 gsParaviewCollection collection(dirname + "/solution");
 
 // Function for the Residual
-std::function<gsMatrix<real_t> (real_t) > Forcing;
-Forcing = [&assembler](real_t time)
+gsStructuralAnalysisOps<real_t>::TForce_t Forcing = [&assembler](real_t time, gsVector<real_t> & result)
 {
-  assembler->assemble();
-  gsMatrix<real_t> r = assembler->rhs();
-  return r;
+  ThinShellAssemblerStatus status;
+  status = assembler->assemble();
+  result = assembler->rhs();
+  return status == ThinShellAssemblerStatus::Success;
 };
 
 // Compute mass matrix (since it is constant over time)
@@ -272,7 +272,10 @@ timeIntegrator.setAcceleration(aNew);
 real_t time;
 for (index_t i=0; i<steps; i++)
 {
-  timeIntegrator.step();
+  gsStatus status = timeIntegrator.step();
+  if (status!=gsStatus::Success)
+    GISMO_ERROR("Time integrator did not succeed");
+
   timeIntegrator.constructSolution();
   gsMatrix<> displacements = timeIntegrator.displacements();
 
@@ -283,7 +286,7 @@ for (index_t i=0; i<steps; i++)
   std::string fileName = dirname + "/solution" + util::to_string(i);
   gsWriteParaview<>(solField, fileName, 500);
   fileName = "solution" + util::to_string(i) + "0";
-  collection.addTimestep(fileName,i,".vts");
+  collection.addPart(fileName + ".vts",i);
 
   if (write)
   {

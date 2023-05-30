@@ -28,10 +28,27 @@ class gsContinuationBase
 {
 public:
     virtual ~gsContinuationBase() {};
+    gsContinuationBase()
+    {
+        defaultOptions();
+    }
 
-    virtual void step(T dL) = 0;
+
+    virtual gsStatus step(T dL) = 0;
     virtual gsVector<T> solutionU() = 0;
     virtual T solutionL() = 0;
+
+public:
+    void defaultOptions()
+    {
+        m_options.addInt("numSteps","number of steps to be taken",10);
+        m_options.addReal("dL","Step size",1.);
+    }
+
+    gsOptionList options() { return m_options; }
+
+protected:
+    gsOptionList m_options;
 
 };
 

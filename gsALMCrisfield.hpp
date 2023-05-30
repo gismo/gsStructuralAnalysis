@@ -55,7 +55,7 @@ void gsALMCrisfield<T>::initMethods()
 template <class T>
 void gsALMCrisfield<T>::quasiNewtonPredictor()
 {
-  computeJacobian();
+  m_jacMat = computeJacobian();
   computeUt(); // rhs does not depend on solution
   computeUbar(); // rhs contains residual and should be computed every time
 
@@ -64,7 +64,7 @@ void gsALMCrisfield<T>::quasiNewtonPredictor()
 template <class T>
 void gsALMCrisfield<T>::quasiNewtonIteration()
 {
-  computeJacobian();
+  m_jacMat = computeJacobian();
   computeUt(); // rhs does not depend on solution
 }
 
@@ -108,7 +108,7 @@ void gsALMCrisfield<T>::initiateStep()
 template <class T>
 void gsALMCrisfield<T>::predictor()
 {
-  computeJacobian();
+  m_jacMat = computeJacobian();
 
   m_deltaUt = this->solveSystem(m_forcing);
 
@@ -131,6 +131,7 @@ void gsALMCrisfield<T>::predictor()
 
     if (!m_phi_user)
       m_phi = math::pow( m_deltaUt.dot(m_deltaUt) / m_forcing.dot(m_forcing),0.5);
+    m_note += " phi=" + std::to_string(m_phi);
 
     // m_DeltaUold = m_deltaU;
     // m_DeltaLold = m_deltaL;
@@ -152,6 +153,33 @@ void gsALMCrisfield<T>::predictor()
    m_DeltaUold = m_DeltaU;
    m_DeltaLold = m_DeltaL;
   }
+}
+
+template <class T>
+void gsALMCrisfield<T>::predictorGuess()
+{
+  GISMO_ASSERT(m_Uguess.rows()!=0 && m_Uguess.cols()!=0,"Guess is empty");
+
+  m_jacMat = computeJacobian();
+
+  m_deltaUt = this->solveSystem(m_forcing);
+  if (!m_phi_user)
+    m_phi = math::pow( m_deltaUt.dot(m_deltaUt) / m_forcing.dot(m_forcing),0.5);
+  m_note += " phi=" + std::to_string(m_phi);
+
+  //
+  m_DeltaUold = -(m_Uguess - m_U);
+  m_DeltaLold = -(m_Lguess - m_L);
+
+  // m_DeltaUold *= m_arcLength / math::sqrt( m_deltaU.dot(m_deltaU));
+  // m_DeltaLold *= m_arcLength / math::sqrt( m_deltaU.dot(m_deltaU));
+
+  computeLambdaMU();
+
+  m_DeltaU = m_deltaU;
+  m_DeltaL = m_deltaL;
+
+  m_Uguess.resize(0);
 }
 
 template <class T>
@@ -229,7 +257,7 @@ void gsALMCrisfield<T>::computeLambdasModified()
 
       T eta1 = std::min(etas[0],etas[1]);
       T eta2 = std::max(etas[0],etas[1]);
-      gsInfo<<"eta 1 = "<<eta1<<"\t eta2 = "<<eta2<<"\n";
+      if (m_verbose) {gsInfo<<"eta 1 = "<<eta1<<"\t eta2 = "<<eta2<<"\n";}
 
       // Approach of Zhou 1995
       // m_eta = std::min(1.0,eta2);
@@ -312,7 +340,7 @@ void gsALMCrisfield<T>::computeLambdas()
       // gsInfo<<"2: dL1 = "<<m_deltaLs[0]<<"\tdL2 = "<<m_deltaLs[1]<<"\t eta = "<<m_eta<<"\n";
       computeLambdaDOT();
       // gsInfo<<"2: dL1 = "<<m_deltaL<<"\t m_deltaU.norm = "<<m_deltaU.norm()<<"\t eta = "<<m_eta<<"\n";
-      gsInfo<<"Modified Complex Root Solve\n";
+      if (m_verbose) {gsInfo<<"Modified Complex Root Solve\n";}
     }
     else
     {
@@ -320,7 +348,7 @@ void gsALMCrisfield<T>::computeLambdas()
       m_eta = 1.0;
       computeLambdasComplex();
       // gsInfo<<"3: dL1 = "<<m_deltaL<<"\t m_deltaU.norm = "<<m_deltaU.norm()<<"\t eta = "<<m_eta<<"\n";
-      gsInfo<<"Simplified Complex Root Solve\n";
+      if (m_verbose) {gsInfo<<"Simplified Complex Root Solve\n";}
       // Note: no selection of roots is needed
     }
   }
@@ -486,7 +514,7 @@ void gsALMCrisfield<T>::stepOutput()
   gsInfo<<std::setw(17)<<std::left<<m_DeltaL;
   gsInfo<<std::setw(17)<<std::left<<m_deltaU.norm();
   gsInfo<<std::setw(17)<<std::left<<m_deltaL;
-  gsInfo<<std::setw(17)<<std::left<<m_arcLength; //math::pow(m_DeltaU.dot(m_DeltaU) + A0*math::pow(m_DeltaL,2.0),0.5);
+  gsInfo<<std::setw(17)<<std::left<<this->distance(m_DeltaU,m_DeltaL);//math::pow(m_DeltaU.dot(m_DeltaU) + A0*math::pow(m_DeltaL,2.0),0.5);
   gsInfo<<std::setw(17)<<std::left<<math::pow(m_DeltaU.norm(),2.0);
   gsInfo<<std::setw(17)<<std::left<<A0*math::pow(m_DeltaL,2.0);
   gsInfo<<std::setw(17)<<std::left<<m_indicator <<std::left << " (" <<std::left<< m_negatives<<std::left << ")";

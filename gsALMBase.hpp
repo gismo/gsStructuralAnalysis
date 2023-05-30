@@ -75,7 +75,7 @@ void gsALMBase<T>::getOptions()
     m_verbose             = m_options.getSwitch ("Verbose");
     m_relax               = m_options.getReal("Relaxation");
 
-    m_arcLength = m_arcLength_prev = m_options.getReal("Length");
+    m_arcLength = m_arcLength_prev = m_arcLength_ori = m_options.getReal("Length");
 
     m_SPfail = m_options.getInt ("SingularPointFailure");
 }
@@ -85,7 +85,7 @@ void gsALMBase<T>::init(bool stability)
 {
   if (stability)
   {
-    this->computeStability(m_U);
+    this->_computeStability(m_U);
     m_stability = this->stability(); // requires Jabobian!!
   }
 }
@@ -105,9 +105,34 @@ void gsALMBase<T>::computeLength()
 }
 
 template <class T>
+T gsALMBase<T>::reduceLength(T fac)
+{
+  m_arcLength *= fac;
+  return m_arcLength;
+}
+
+template <class T>
+T gsALMBase<T>::resetLength()
+{
+  m_arcLength = m_arcLength_prev = m_arcLength_ori;
+  if (m_adaptiveLength)
+    computeLength();
+  return m_arcLength;
+}
+
+template <class T>
+gsVector<T> gsALMBase<T>::computeResidual(const gsVector<T> & U, const T & L)
+{
+  gsVector<T> resVec;
+  if (!m_residualFun(U, L, resVec))
+    throw 2;
+  return resVec;
+}
+
+template <class T>
 void gsALMBase<T>::computeResidual()
 {
-  m_resVec = m_residualFun(m_U + m_DeltaU, m_L + m_DeltaL, m_forcing);
+  m_resVec = this->computeResidual(m_U + m_DeltaU, m_L + m_DeltaL);
 }
 
 template <class T>
@@ -149,43 +174,62 @@ template <class T>
 void gsALMBase<T>::factorizeMatrix(const gsSparseMatrix<T> & M)
 {
   m_solver->compute(M);
-  GISMO_ASSERT(m_solver->info()==Eigen::ComputationInfo::Success,"Solver error with code "<<m_solver->info()<<". See Eigen documentation on ComputationInfo \n"
-                                                              <<Eigen::ComputationInfo::Success<<": Success"<<"\n"
-                                                              <<Eigen::ComputationInfo::NumericalIssue<<": NumericalIssue"<<"\n"
-                                                              <<Eigen::ComputationInfo::NoConvergence<<": NoConvergence"<<"\n"
-                                                              <<Eigen::ComputationInfo::InvalidInput<<": InvalidInput"<<"\n");
+  if (m_solver->info()!=Eigen::ComputationInfo::Success)
+  {
+    gsInfo<<"Solver error with code "<<m_solver->info()<<". See Eigen documentation on ComputationInfo \n"
+                                                                  <<Eigen::ComputationInfo::Success<<": Success"<<"\n"
+                                                                  <<Eigen::ComputationInfo::NumericalIssue<<": NumericalIssue"<<"\n"
+                                                                  <<Eigen::ComputationInfo::NoConvergence<<": NoConvergence"<<"\n"
+                                                                  <<Eigen::ComputationInfo::InvalidInput<<": InvalidInput"<<"\n";
+    throw 3;
+  }
 }
 
 template <class T>
 gsVector<T> gsALMBase<T>::solveSystem(const gsVector<T> & F)
 {
-  return m_solver->solve(F);
+  try
+  {
+    return m_solver->solve(F);
+  }
+  catch (...)
+  {
+    throw 3;
+  }
 }
 
 template <class T>
-gsSparseMatrix<T> gsALMBase<T>::_computeJacobian(const gsVector<T> U, const gsVector<T> deltaU)
+gsSparseMatrix<T> gsALMBase<T>::_computeJacobian(const gsVector<T> & U, const gsVector<T> & deltaU)
 {
   // Compute Jacobian
   gsSparseMatrix<T> m;
-  m = m_djacobian(U,deltaU);
-  this->factorizeMatrix(m);
   m_note += "J";
+  if (!m_djacobian(U,deltaU,m))
+    throw 2;
   return m;
 }
 
 template <class T>
-void gsALMBase<T>::computeJacobian(const gsVector<T> U, const gsVector<T> deltaU)
+gsSparseMatrix<T> gsALMBase<T>::computeJacobian(const gsVector<T> & U, const gsVector<T> & deltaU)
 {
-  m_jacMat = _computeJacobian(U,deltaU);
+  return this->_computeJacobian(U,deltaU);
 }
 
 template <class T>
-void gsALMBase<T>::computeJacobian()
+gsSparseMatrix<T> gsALMBase<T>::computeJacobian(const gsVector<T> & U)
+{
+  gsVector<T> DeltaU(U.rows());
+  DeltaU.setZero();
+  return this->computeJacobian(U,DeltaU);
+}
+
+template <class T>
+gsSparseMatrix<T> gsALMBase<T>::computeJacobian()
 {
   // Compute Jacobian
   if (m_deltaU.rows() == 0)
     m_deltaU = gsVector<T>::Zero(m_DeltaU.rows());
-  this->computeJacobian(m_U + m_DeltaU, m_deltaU);
+  return this->computeJacobian(m_U + m_DeltaU, m_deltaU);
 }
 
 template <class T> void gsALMBase<T>::computeUbar() { m_deltaUbar = this->solveSystem(-m_resVec); }
@@ -254,7 +298,33 @@ template <class T> void gsALMBase<T>::computeUt()   { m_deltaUt = this->solveSys
 // }
 
 template <class T>
-void gsALMBase<T>::step()
+gsStatus gsALMBase<T>::step()
+{
+  try
+  {
+    _step();
+    m_status = gsStatus::Success;
+  }
+  catch (int errorCode)
+  {
+    if      (errorCode==1)
+      m_status = gsStatus::NotConverged;
+    else if (errorCode==2)
+      m_status = gsStatus::AssemblyError;
+    else if (errorCode==3)
+      m_status = gsStatus::SolverError;
+    else
+      m_status = gsStatus::OtherError;
+  }
+  catch (...)
+  {
+    m_status = gsStatus::OtherError;
+  }
+  return m_status;
+}
+
+template <class T>
+void gsALMBase<T>::_step()
 {
   GISMO_ASSERT(m_initialized,"Arc-Length Method is not initialized! Call initialize()");
 
@@ -264,7 +334,11 @@ void gsALMBase<T>::step()
   m_converged = false;
   m_numIterations = 0;
   initiateStep();
-  predictor();
+
+  if (m_Uguess.rows()!=0 && m_Uguess.cols()!=0 && (m_Uguess-m_U).norm()!=0 && (m_Lguess-m_L)!=0)
+    predictorGuess();
+  else
+    predictor();
 
   computeResidual();
   computeResidualNorms();
@@ -303,728 +377,26 @@ void gsALMBase<T>::step()
       break;
     }
     else if (m_numIterations == m_maxIterations-1)
+    {
       gsInfo<<"maximum iterations reached. Solution did not converge\n";
+      throw 1;
+    }
 
       // GISMO_ERROR("maximum iterations reached. Solution did not converge");
   }
 }
 
-// // ------------------------------------------------------------------------------------------------------------
-// // ---------------------------------------Load Control method--------------------------------------------------------
-// // ------------------------------------------------------------------------------------------------------------
-
-// template <class T>
-// void gsALMBase<T>::iterationLC()
-// {
-//   m_deltaU = m_deltaUbar;
-//   m_DeltaU += m_deltaU;
-// }
-
-// template <class T>
-// void gsALMBase<T>::initiateStepLC()
-// {
-//   // (m_U,m_L) is the present solution (iteratively updated)
-//   // (m_Uprev,m_Lprev) is the previously converged solution before (m_Lprev,m_Uprev)
-
-//   // Reset step
-//   m_DeltaU = m_deltaU = gsVector<T>::Zero(m_numDof);
-//   m_DeltaL = m_deltaL = 0.0;
-
-//   // Initiate verbose
-//   if (m_verbose)
-//     initOutputLC();
-// }
-
-// template <class T>
-// void gsALMBase<T>::predictorLC()
-// {
-//   m_DeltaL = m_deltaL = m_arcLength;
-//   m_deltaUt = this->solveSystem(m_forcing);
-//   m_DeltaU = m_deltaL*m_deltaUt;
-
-//   // gsDebugVar(m_DeltaU.norm());
-//   m_note += "predictor\t";
-// }
-
-// template <class T>
-// void gsALMBase<T>::iterationFinishLC()
-// {
-//   m_converged = true;
-//   m_Uprev = m_U;
-//   m_Lprev = m_L;
-//   m_U += m_DeltaU;
-//   m_L += m_DeltaL;
-// }
-
-// // ------------------------------------------------------------------------------------------------------------
-// // ---------------------------------------Riks's method--------------------------------------------------------
-// // ------------------------------------------------------------------------------------------------------------
-
-// // template <class T>
-// // void gsALMBase<T>::iterationRiks()
-// // {
-// //   m_deltaUbar = this->solveSystem(-m_resVec);
-// //   m_deltaUt = this->solveSystem(m_forcing); // note the minus!!
-
-// //   m_deltaL = - ( (m_DeltaU).dot(m_deltaUbar) ) / ( (m_DeltaL)*m_forcing.dot(m_forcing) + (m_DeltaU).dot(m_deltaUt) );
-// //   m_deltaU = m_deltaUbar + m_deltaL*m_deltaUt;
-
-// //   m_DeltaU += m_deltaU;
-// //   m_DeltaL += m_deltaL;
-// // }
-
-// template <class T>
-// void gsALMBase<T>::iterationRiks()
-// {
-//   // Residual function
-//   // r = m_phi * m_DeltaU.dot(m_DeltaU)  + (1.0-m_phi) * m_DeltaL*m_DeltaL - m_arcLength*m_arcLength;
-//   T r = m_phi*(m_U + m_DeltaU - m_U).dot(m_U + m_DeltaU - m_U) + (1-m_phi)*math::pow(m_L + m_DeltaL - m_L,2.0) - m_arcLength*m_arcLength;
-
-//   m_deltaL = - ( r + 2*m_phi*(m_DeltaU).dot(m_deltaUbar) ) / ( 2*(1-m_phi)*(m_DeltaL) + 2*m_phi*(m_DeltaU).dot(m_deltaUt) );
-//   m_deltaU = m_deltaUbar + m_deltaL*m_deltaUt;
-
-//   m_DeltaU += m_deltaU;
-//   m_DeltaL += m_deltaL;
-// }
-
-// template <class T>
-// void gsALMBase<T>::initiateStepRiks()
-// {
-//   // (m_U,m_L) is the present solution (iteratively updated)
-//   // (m_Uprev,m_Lprev) is the previously converged solution before (m_Lprev,m_Uprev)
-
-//   // Reset step
-//   m_DeltaU = m_deltaU =  gsVector<T>::Zero(m_numDof);
-//   m_DeltaL = m_deltaL = 0.0;
-
-//   // Initiate verbose
-//   if (m_verbose)
-//     initOutputRiks();
-// }
-
-// template <class T>
-// void gsALMBase<T>::predictorRiks()
-// {
-//   // Define scaling
-//   if (m_numDof ==1)
-//     m_phi = 0.99999999999;
-//   else
-//     m_phi = 1./m_numDof;
-
-//   // Check if the solution on start and prev are similar.
-//   // Then compute predictor of the method
-//   T tol = 1e-10;
-
-//   if ( ((m_U-m_Uprev).norm() < tol) && ((m_L - m_Lprev) * (m_L - m_Lprev) < tol ) )
-//   {
-//     m_note += "predictor\t";
-//     T DL = 1.;
-//     m_deltaUt = this->solveSystem(m_forcing);
-//     m_deltaU = m_deltaUt / math::sqrt( m_deltaUt.dot(m_deltaUt) + m_DeltaL*DL );
-//     m_deltaL = DL / math::sqrt( m_deltaUt.dot(m_deltaUt) + m_DeltaL*DL );
-//   }
-//   else
-//   {
-//     m_deltaL = 1./m_arcLength_prev*(m_L - m_Lprev);
-//     m_deltaU = 1./m_arcLength_prev*(m_U - m_Uprev);
-//   }
-
-//   // Update iterative step
-//   m_deltaL *= m_arcLength;
-//   m_deltaU *= m_arcLength;
-
-//   // Update load step
-//   m_DeltaU += m_deltaU;
-//   m_DeltaL += m_deltaL;
-// }
-
-// // template <class T>
-// // void gsALMBase<T>::predictorRiks()
-// // {
-// //   // Check if the solution on start and prev are similar.
-// //   // Then compute predictor of the method
-// //   T tol = 1e-10;
-
-// //   if ( ((m_U-m_Uprev).norm() < tol) && ((m_L - m_Lprev) * (m_L - m_Lprev) < tol ) )
-// //   {
-// //     m_note += "predictor\t";
-// //     T DL = 1.;
-// //     computeJacobian();
-// //     m_deltaUt = this->solveSystem(m_forcing);
-// //     m_deltaU = m_deltaUt / math::sqrt( m_deltaUt.dot(m_deltaUt) + m_DeltaL*DL );
-// //     m_deltaL = DL / math::sqrt( m_deltaUt.dot(m_deltaUt) + m_DeltaL*DL );
-// //   }
-// //   else
-// //   {
-// //     m_deltaL = 1./m_arcLength*(m_L - m_Lprev);
-// //     m_deltaU = 1./m_arcLength*(m_U - m_Uprev);
-// //   }
-
-// //   // Update iterative step
-// //   m_deltaL *= m_arcLength;
-// //   m_deltaU *= m_arcLength;
-
-// //   // Update load step
-// //   m_DeltaU += m_deltaU;
-// //   m_DeltaL += m_deltaL;
-// // }
-
-// template <class T>
-// void gsALMBase<T>::iterationFinishRiks()
-// {
-//   m_converged = true;
-//   m_Uprev = m_U;
-//   m_Lprev = m_L;
-//   m_U += m_DeltaU;
-//   m_L += m_DeltaL;
-// }
-
-// // ------------------------------------------------------------------------------------------------------------
-// // ---------------------------------------Consistent Crisfield's method----------------------------------------
-// // ------------------------------------------------------------------------------------------------------------
-
-// template <class T>
-// void gsALMBase<T>::iterationConsistentCrisfield() // see Carrera1994 eqs 20 and 21
-// {
-//   T cres = m_DeltaU.dot(m_DeltaU) + m_phi*m_phi*m_DeltaL*m_DeltaL * m_forcing.dot(m_forcing) - m_arcLength*m_arcLength;
-//   T num = cres + (2*m_DeltaU).dot(m_deltaUbar);
-//   T denum = (2*m_DeltaU).dot(m_deltaUt) + m_phi*m_phi*2*m_DeltaL*m_forcing.dot(m_forcing);
-//   m_deltaL = - num / denum;
-//   m_deltaU = m_deltaL * m_deltaUt + m_deltaUbar;
-
-//   m_DeltaU += m_deltaU;
-//   m_DeltaL += m_deltaL;
-// }
-
-// template <class T>
-// void gsALMBase<T>::initiateStepConsistentCrisfield()
-// {
-//   // (m_U,m_L) is the present solution (iteratively updated)
-//   // (m_Uprev,m_Lprev) is the previously converged solution before (m_Lprev,m_Uprev)
-
-//   // Reset step
-//   m_DeltaU = m_deltaU =  gsVector<T>::Zero(m_numDof);
-//   m_DeltaL = m_deltaL = 0.0;
-
-//   // Initiate verbose
-//   if (m_verbose)
-//     initOutputRiks();
-// }
-
-// template <class T>
-// void gsALMBase<T>::predictorConsistentCrisfield()
-// {
-//   // Check if the solution on start and prev are similar.
-//   // Then compute predictor of the method
-//   T tol = 1e-10;
-
-//   if ( ((m_U-m_Uprev).norm() < tol) && ((m_L - m_Lprev) * (m_L - m_Lprev) < tol ) )
-//   {
-//     m_note += "predictor\t";
-//     T DL = 1.;
-//     m_deltaUt = this->solveSystem(m_forcing);
-//     m_deltaU = m_deltaUt / math::sqrt( m_deltaUt.dot(m_deltaUt) + m_DeltaL*DL );
-//     m_deltaL = DL / math::sqrt( m_deltaUt.dot(m_deltaUt) + m_DeltaL*DL );
-
-//     if (!m_phi_user)
-//       m_phi = math::pow( m_deltaUt.dot(m_deltaUt) / m_forcing.dot(m_forcing),0.5);
-//   }
-//   else
-//   {
-//     m_deltaL = 1./m_arcLength_prev*(m_L - m_Lprev);
-//     m_deltaU = 1./m_arcLength_prev*(m_U - m_Uprev);
-
-//     if (!m_phi_user)
-//       m_phi = math::pow( m_deltaUt.dot(m_deltaUt) / m_forcing.dot(m_forcing),0.5);
-//   }
-
-//   // Update iterative step
-//   m_deltaL *= m_arcLength;
-//   m_deltaU *= m_arcLength;
-
-//   // Update load step
-//   m_DeltaU += m_deltaU;
-//   m_DeltaL += m_deltaL;
-// }
-
-// template <class T>
-// void gsALMBase<T>::iterationFinishConsistentCrisfield()
-// {
-//   m_converged = true;
-//   m_Uprev = m_U;
-//   m_Lprev = m_L;
-//   m_U += m_DeltaU;
-//   m_L += m_DeltaL;
-//   m_DeltaUold = m_DeltaU;
-//   m_DeltaLold = m_DeltaL;
-// }
-
-// // ------------------------------------------------------------------------------------------------------------
-// // ---------------------------------------ExplicitIterations Method--------------------------------------------
-// // ------------------------------------------------------------------------------------------------------------
-
-// template <class T>
-// void gsALMBase<T>::iterationExplicitIterations() // see Forde 1987 page 627
-// {
-//   // first do the Riks-Wempner-Tangent Method (Carrera1994 section 4.1)
-//   T num = (m_DeltaU).dot(m_deltaUbar);
-//   T denum = (m_DeltaU).dot(m_deltaUt) + m_phi*m_phi*m_DeltaL*m_forcing.dot(m_forcing);
-//   m_deltaL = - num / denum;
-//   m_deltaU = m_deltaL * m_deltaUt + m_deltaUbar;
-
-//   // find the length of the tangent in the potential configuration
-//   m_tangentLength = math::sqrt( m_tangentLength * m_tangentLength + m_deltaU.dot(m_deltaU) + m_phi*m_phi*m_deltaL*m_deltaL );
-
-//   // residual of tangents
-//   T res = ( m_arcLength*m_arcLength / ( m_tangentLength*m_tangentLength ) ) * ( m_tangentLength - m_arcLength );
-
-//   m_deltaL = - ( res + m_DeltaU.dot(m_deltaUbar) ) / (m_DeltaU).dot(m_deltaUt) + m_phi*m_phi*m_DeltaL*m_forcing.dot(m_forcing);
-//   m_deltaU = m_deltaL * m_deltaUt + m_deltaUbar;
-
-//   m_DeltaU += m_deltaU;
-//   m_DeltaL += m_deltaL;
-// }
-
-// template <class T>
-// void gsALMBase<T>::initiateStepExplicitIterations()
-// {
-//   // (m_U,m_L) is the present solution (iteratively updated)
-//   // (m_Uprev,m_Lprev) is the previously converged solution before (m_Lprev,m_Uprev)
-
-//   // Reset step
-//   m_DeltaU = m_deltaU =  gsVector<T>::Zero(m_numDof);
-//   m_DeltaL = m_deltaL = 0.0;
-
-//   // Initiate verbose
-//   if (m_verbose)
-//     initOutputRiks();
-// }
-
-// template <class T>
-// void gsALMBase<T>::predictorExplicitIterations()
-// {
-//   // Check if the solution on start and prev are similar.
-//   // Then compute predictor of the method
-//   T tol = 1e-10;
-
-//   if ( ((m_U-m_Uprev).norm() < tol) && ((m_L - m_Lprev) * (m_L - m_Lprev) < tol ) )
-//   {
-//     m_note += "predictor\t";
-//     T DL = 1.;
-//     m_deltaUt = this->solveSystem(m_forcing);
-//     m_deltaU = m_deltaUt / math::sqrt( m_deltaUt.dot(m_deltaUt) + m_DeltaL*DL );
-//     m_deltaL = DL / math::sqrt( m_deltaUt.dot(m_deltaUt) + m_DeltaL*DL );
-
-//     if (!m_phi_user)
-//       m_phi = math::pow( m_deltaUt.dot(m_deltaUt) / m_forcing.dot(m_forcing),0.5);
-//   }
-//   else
-//   {
-//     m_deltaL = 1./m_arcLength_prev*(m_L - m_Lprev);
-//     m_deltaU = 1./m_arcLength_prev*(m_U - m_Uprev);
-
-//     if (!m_phi_user)
-//       m_phi = math::pow( m_deltaUt.dot(m_deltaUt) / m_forcing.dot(m_forcing),0.5);
-//   }
-
-//   // Update iterative step
-//   m_deltaL *= m_arcLength;
-//   m_deltaU *= m_arcLength;
-
-//   // Update load step
-//   m_DeltaU += m_deltaU;
-//   m_DeltaL += m_deltaL;
-
-//   m_tangentLength = math::sqrt( m_DeltaU.dot(m_DeltaU) + m_phi*m_phi*m_DeltaL*m_DeltaL );
-// }
-
-// template <class T>
-// void gsALMBase<T>::iterationFinishExplicitIterations()
-// {
-//   m_converged = true;
-//   m_Uprev = m_U;
-//   m_Lprev = m_L;
-//   m_U += m_DeltaU;
-//   m_L += m_DeltaL;
-//   m_DeltaUold = m_DeltaU;
-//   m_DeltaLold = m_DeltaL;
-// }
-
-// // ------------------------------------------------------------------------------------------------------------
-// // ---------------------------------------Crisfield's method---------------------------------------------------
-// // ------------------------------------------------------------------------------------------------------------
-// template <class T>
-// void gsALMBase<T>::iterationCrisfield()
-// {
-//   m_eta = 1.0;
-
-//   T lamold = m_deltaL;
-//   computeLambdas();
-
-//   // Relaxation against oscillating load factor
-//   if (( (lamold*m_deltaL < 0) && (abs(m_deltaL) <= abs(lamold) ) ) && m_relax != 1.0 )
-//   {
-//      m_note += "\t relaxated solution!";
-//      m_deltaU = m_relax * (m_deltaL*m_deltaUt + m_eta*m_deltaUbar);
-//      m_deltaL = m_relax * m_deltaL;
-//   }
-
-//   m_DeltaU += m_deltaU;
-//   m_DeltaL += m_deltaL;
-
-//   if (m_angleDetermine == angmethod::Iteration)
-//   {
-//     m_DeltaUold = m_DeltaU;
-//     m_DeltaLold = m_DeltaL;
-//   }
-// }
-
-// template <class T>
-// void gsALMBase<T>::initiateStepCrisfield()
-// {
-//   if (m_verbose)
-//     initOutputCrisfield();
-
-//   m_DeltaU = m_deltaUbar = m_deltaUt = gsVector<T>::Zero(m_numDof);
-//   m_DeltaL = m_deltaL = 0.0;
-//   m_eta = 1.0;
-// }
-
-// template <class T>
-// void gsALMBase<T>::predictorCrisfield()
-// {
-//   m_deltaUt = this->solveSystem(m_forcing);
-
-//   // Choose Solution
-//   if (m_DeltaUold.dot(m_DeltaUold) == 0 && m_DeltaLold*m_DeltaLold == 0) // no information about previous step.
-//   // {
-//   //  m_deltaL = m_arcLength / math::pow(2*( m_deltaUt.dot(m_deltaUt) ) , 0.5);
-//   //  m_deltaU = m_deltaUbar + m_deltaL*m_deltaUt;
-//   //  m_phi = math::pow( m_deltaUt.dot(m_deltaUt) / m_forcing.dot(m_forcing),0.5);
-
-//   // }
-//   {
-//     m_note += "predictor\t";
-//     T DL = 1.;
-//     // m_deltaL = m_arcLength * DL / math::sqrt( 2*( m_deltaUt.dot(m_deltaUt) + m_DeltaL*DL ) );
-//     m_deltaL = m_arcLength * DL / math::sqrt( ( m_deltaUt.dot(m_deltaUt) + m_DeltaL*DL ) );
-
-//     // m_deltaU = m_arcLength * m_deltaUt / math::sqrt( m_deltaUt.dot(m_deltaUt) + m_DeltaL*DL );
-//     m_deltaU = m_deltaL*m_deltaUt;
-
-//     if (!m_phi_user)
-//       m_phi = math::pow( m_deltaUt.dot(m_deltaUt) / m_forcing.dot(m_forcing),0.5);
-
-//     m_DeltaUold = m_deltaU;
-//     m_DeltaLold = m_deltaL;
-//   }
-//   else // previous point is not in the origin
-//   {
-//     if (!m_phi_user)
-//       m_phi = math::pow(m_U.dot(m_U)/( math::pow(m_L,2) * m_forcing.dot(m_forcing) ),0.5);
-//     m_note += " phi=" + std::to_string(m_phi);
-//     computeLambdaMU();
-//   }
-
-//   // Compute Temporary updates of DeltaL and DeltaU
-//   m_DeltaU += m_deltaU;
-//   m_DeltaL += m_deltaL;
-
-//   if (m_angleDetermine == angmethod::Iteration || m_angleDetermine == angmethod::Predictor)
-//   {
-//    m_DeltaUold = m_DeltaU;
-//    m_DeltaLold = m_DeltaL;
-//   }
-// }
-
-// template <class T>
-// void gsALMBase<T>::iterationFinishCrisfield()
-// {
-//   m_converged = true;
-//   m_Uprev = m_U;
-//   m_Lprev = m_L;
-//   m_U += m_DeltaU;
-//   m_L += m_DeltaL;
-//   if (m_angleDetermine == angmethod::Step)
-//   {
-//     m_DeltaUold = m_DeltaU;
-//     m_DeltaLold = m_DeltaL;
-//   }
-// }
-
-// template <class T>
-// void gsALMBase<T>::computeLambdasSimple() //Ritto-Corrêa et al. 2008
-// {
-//   T A0 = math::pow(m_phi,2)* m_forcing.dot(m_forcing); // see Lam et al. 1991,
-
-//   m_a0 = m_deltaUt.dot(m_deltaUt) + A0;
-//   m_b0 = 2*( m_deltaUt.dot(m_DeltaU) + m_DeltaL * A0 );
-//   m_b1 = 2*( m_deltaUbar.dot(m_deltaUt) );
-//   m_c0 = m_DeltaU.dot(m_DeltaU) + m_DeltaL*m_DeltaL * A0 - math::pow(m_arcLength,2);
-//   m_c1 = 2*( m_DeltaU.dot(m_deltaUbar) );
-//   m_c2 = m_deltaUbar.dot(m_deltaUbar);
-
-//   /// Calculate the coefficients of the polynomial
-//   m_alpha1 = m_a0;
-//   m_alpha2 = m_b0 + m_eta*m_b1;
-//   m_alpha3 = m_c0 + m_eta*m_c1 + m_eta*m_eta*m_c2;
-
-//   m_discriminant = math::pow(m_alpha2 ,2) - 4 * m_alpha1 * m_alpha3;
-//   // m_note += "\t D = " + std::to_string(m_discriminant);
-// }
-
-// template <class T>
-// void gsALMBase<T>::computeLambdasEta()
-// {
-//   m_alpha1 = m_a0;
-//   m_alpha2 = m_b0 + m_eta*m_b1;
-//   m_alpha3 = m_c0 + m_eta*m_c1 + m_eta*m_eta*m_c2;
-
-//   // Lam 1992
-//   m_discriminant = math::pow(m_alpha2 ,2) - 4 * m_alpha1 * m_alpha3;
-//   m_deltaLs[0] = (-m_alpha2 + math::sqrt(m_discriminant))/(2*m_alpha1);
-//   m_deltaLs[1] = (-m_alpha2 - math::sqrt(m_discriminant))/(2*m_alpha1);
-
-//   // Zhou 1995
-//   // m_deltaLs[0] = (-m_alpha2 )/(2*m_alpha1);
-//   // m_deltaLs[1] = (-m_alpha2 )/(2*m_alpha1);
-// }
-
-// template <class T>
-// void gsALMBase<T>::computeLambdasModified()
-// {
-//   m_alpha1 = m_b1*m_b1 - 4.0*m_a0*m_c2;
-//   m_alpha2 = 2.0*m_b0*m_b1 - 4.0*m_a0*m_c1;
-//   m_alpha3 = m_b0*m_b0 - 4.0*m_a0*m_c0;
-
-//   m_discriminant = math::pow(m_alpha2 ,2.0) - 4.0 * m_alpha1 * m_alpha3;
-
-//   gsVector<T> etas(2);
-//   etas.setZero();
-//   if (m_discriminant >= 0)
-//     {
-//       etas[0] = (-m_alpha2 + math::pow(m_discriminant,0.5))/(2.0*m_alpha1);
-//       etas[1] = (-m_alpha2 - math::pow(m_discriminant,0.5))/(2.0*m_alpha1);
-
-//       T eta1 = std::min(etas[0],etas[1]);
-//       T eta2 = std::max(etas[0],etas[1]);
-//       gsInfo<<"eta 1 = "<<eta1<<"\t eta2 = "<<eta2<<"\n";
-
-//       // Approach of Zhou 1995
-//       // m_eta = std::min(1.0,eta2);
-//       // if (m_eta <= 0)
-//       //   gsInfo<<"Warning: both etas are non-positive!\n";
-//       // if (m_eta <=0.5)
-//       // {
-//       //   gsInfo<<"Warning: eta is small; bisecting step length\n";
-//       //   m_arcLength=m_arcLength/2.;
-//       // }
-
-//       // Approach of Lam 1992
-//       T xi = 0.05*abs(eta2-eta1);
-//       if (eta2<1.0)
-//         m_eta = eta2-xi;
-//       else if ( (eta2 > 1.0) && (-m_alpha2/m_alpha1 < 1.0) )
-//         m_eta = eta2+xi;
-//       else if ( (eta1 < 1.0) && (-m_alpha2/m_alpha1 > 1.0) )
-//         m_eta = eta1-xi;
-//       else if ( eta1 > 1.0 )
-//         m_eta = eta1 + xi;
-
-//       if (eta2<1.0)
-//         m_note = note + " option 1";
-//       else if ( (eta2 > 1.0) && (-m_alpha2/m_alpha1 < 1.0) )
-//         m_note = note + " option 2";
-//       else if ( (eta1 < 1.0) && (-m_alpha2/m_alpha1 > 1.0) )
-//         m_note = note + " option 3";
-//       else if ( eta1 > 1.0 )
-//         m_note = note + " option 4";
-
-//       // m_eta = eta2;
-//     }
-//   else
-//   {
-//     gsInfo<<"Discriminant was negative in modified method\n";
-//   }
-// }
-// template <class T>
-// void gsALMBase<T>::computeLambdasComplex()
-// {
-//   T A0 = math::pow(m_phi,2)* m_forcing.dot(m_forcing); // see Lam et al. 1991
-//   gsVector<T> DeltaUcr = m_DeltaU + m_deltaUbar;
-
-//   // Compute internal loads from residual and
-//   // gsVector<T> R = m_residualFun(m_U + DeltaUcr, m_L + m_DeltaL , m_forcing);
-//   // gsVector<T> Fint = R + (m_L + m_DeltaL) * m_forcing;
-//   gsVector<T> Fint = m_jacMat*(m_U+m_DeltaU);
-//   T Lcr = Fint.dot(m_forcing)/m_forcing.dot(m_forcing);
-//   T DeltaLcr = Lcr - m_L;
-
-//   T arcLength_cr = math::pow( DeltaUcr.dot(DeltaUcr) + A0 * math::pow(DeltaLcr, 2.0) ,0.5);
-//   T mu = m_arcLength/arcLength_cr;
-
-//   m_deltaL = mu*DeltaLcr - m_DeltaL;
-//   m_deltaU = mu*DeltaUcr - m_DeltaU;
-// }
-
-// template <class T>
-// void gsALMBase<T>::computeLambdas()
-// {
-//   m_deltaLs.setZero(2);
-//   computeLambdasSimple();
-//   if (m_discriminant >= 0)
-//   {
-//     m_eta = 1.0;
-//     m_deltaLs[0] = (-m_alpha2 + math::pow(m_discriminant,0.5))/(2*m_alpha1);
-//     m_deltaLs[1] = (-m_alpha2 - math::pow(m_discriminant,0.5))/(2*m_alpha1);
-//     computeLambdaDOT();
-//   }
-//   else
-//   {
-//     m_note += "\tC";
-//     // Compute eta
-//     computeLambdasModified();
-//     if ((m_discriminant >= 0) && m_eta > 0.5)
-//     {
-//       // recompute lambdas with new eta
-//       computeLambdasEta();
-//       // gsInfo<<"2: dL1 = "<<m_deltaLs[0]<<"\tdL2 = "<<m_deltaLs[1]<<"\t eta = "<<m_eta<<"\n";
-//       computeLambdaDOT();
-//       // gsInfo<<"2: dL1 = "<<m_deltaL<<"\t m_deltaU.norm = "<<m_deltaU.norm()<<"\t eta = "<<m_eta<<"\n";
-//       gsInfo<<"Modified Complex Root Solve\n";
-//     }
-//     else
-//     {
-//       // if the roots of the modified method are still complex, we use the following function (see Lam 1992, eq 13-17)
-//       m_eta = 1.0;
-//       computeLambdasComplex();
-//       // gsInfo<<"3: dL1 = "<<m_deltaL<<"\t m_deltaU.norm = "<<m_deltaU.norm()<<"\t eta = "<<m_eta<<"\n";
-//       gsInfo<<"Simplified Complex Root Solve\n";
-//       // Note: no selection of roots is needed
-//     }
-//   }
-// }
-
-// template <class T>
-// void gsALMBase<T>::computeLambdaDET()
-// {
-//     computeLambdas();
-
-//     if (sign(m_DeltaL + m_deltaLs[0]) == sign(m_detKT))
-//       m_deltaL = m_deltaLs[0];
-//     else
-//       m_deltaL = m_deltaLs[1];
-
-//     // Compute update of U (NOTE: m_eta=1.0)
-//     m_deltaU = m_deltaUbar + m_deltaL*m_deltaUt;
-
-//     // gsInfo<<"\t\t Choice based on DETERMINANT. Options:\n";
-//     // gsInfo<<"\t\t DeltaL = "<<m_DeltaL+m_deltaLs[0]<<" DeltaU.norm = "<<(m_DeltaU + m_deltaUbar + m_deltaLs[0]*m_deltaUt).norm()<<"\n";
-//     // gsInfo<<"\t\t DeltaL = "<<m_DeltaL+m_deltaLs[1]<<" DeltaU.norm = "<<(m_DeltaU + m_deltaUbar + m_deltaLs[1]*m_deltaUt).norm()<<"\n";
-// }
-
-// template <class T>
-// void gsALMBase<T>::computeLambdaMU()
-// {
-//     T A0 = math::pow(m_phi,2)* m_forcing.dot(m_forcing); // see Lam et al. 1991
-//     index_t dir = sign(m_DeltaUold.dot(m_deltaUt) + A0*m_DeltaLold); // Feng et al. 1995 with H = \Psi^2
-//     T denum = ( math::pow( m_deltaUt.dot(m_deltaUt) + A0 ,0.5) ); // Feng et al. 1995 with H = \Psi^2
-
-//     T mu;
-//     if (denum==0)
-//       mu = m_arcLength;
-//     else
-//       mu = m_arcLength / denum;
-
-//     m_deltaL = dir*mu;
-//     m_deltaU = m_deltaL*m_deltaUt;
-// }
-
-// template <class T>
-// void gsALMBase<T>::computeLambdaDOT()
-// {
-//     gsVector<T> deltaU1, deltaU2;
-//     deltaU1 = m_eta*m_deltaUbar + m_deltaUt*m_deltaLs[0];
-//     deltaU2 = m_eta*m_deltaUbar + m_deltaUt*m_deltaLs[1];
-
-//     // ---------------------------------------------------------------------------------
-//     // Method by Ritto-Corea et al. 2008
-//     T DOT1,DOT2;
-//     DOT1 = m_deltaLs[0]*(m_DeltaUold.dot(m_deltaUt) + math::pow(m_phi,2)*m_DeltaLold);
-//     DOT2 = m_deltaLs[1]*(m_DeltaUold.dot(m_deltaUt) + math::pow(m_phi,2)*m_DeltaLold);
-
-//     if (DOT1 > DOT2)
-//     {
-//       m_deltaL = m_deltaLs[0];
-//       m_deltaU = deltaU1;
-//     }
-//     else if (DOT1 < DOT2)
-//     {
-//       m_deltaL = m_deltaLs[1];
-//       m_deltaU = deltaU2;
-//     }
-//     else
-//     {
-//       m_deltaL = m_deltaLs[0];
-//       m_deltaU = deltaU1;
-//     }
-
-//     // ---------------------------------------------------------------------------------
-//     // // Method by Crisfield 1981
-//     // T DOT1,DOT2;
-//     // DOT1 = (m_DeltaUold+deltaU1).dot(m_DeltaUold);
-//     // DOT2 = (m_DeltaUold+deltaU2).dot(m_DeltaUold);
-
-//     // DOT1 = (m_DeltaU+deltaU1).dot(m_DeltaUold);
-//     // DOT2 = (m_DeltaU+deltaU2).dot(m_DeltaUold);
-
-//     // if ((DOT1 > DOT2) && DOT2 <= 0)
-//     // {
-//     //   m_deltaL = m_deltaLs[0];
-//     //   m_deltaU = deltaU1;
-//     // }
-//     // else if ((DOT1 < DOT2) && DOT1 <= 0)
-//     // {
-//     //   m_deltaL = m_deltaLs[1];
-//     //   m_deltaU = deltaU2;
-//     // }
-//     // else if ((DOT1 >=0) && (DOT2 >=0))
-//     // {
-//     //   T linsol = -m_alpha3/m_alpha2;
-//     //   T diff1 = abs(m_deltaLs[0]-linsol);
-//     //   T diff2 = abs(m_deltaLs[1]-linsol);
-//     //   m_note += "\t linear solution!";
-//     //   // m_note += "Linsol\t" + std::to_string(diff1) + "\t" + std::to_string(diff2) + "\t" + std::to_string(linsol) + "\t" + std::to_string(m_deltaLs[0]) + "\t" + std::to_string(m_deltaLs[1]) + "\n";
-//     //   if (diff1 > diff2)
-//     //   {
-//     //     m_deltaL = m_deltaLs[1];
-//     //     m_deltaU = deltaU2;
-//     //   }
-//     //   else
-//     //   {
-//     //     m_deltaL = m_deltaLs[0];
-//     //     m_deltaU = deltaU1;
-//     //   }
-//     // }
-//     // else
-//     // {
-//     //   m_deltaL = m_deltaLs[0];
-//     //   m_deltaU = deltaU1;
-//     // }
-
-// }
-
 // ------------------------------------------------------------------------------------------------------------
 // ---------------------------------------Singular point methods-----------------------------------------------
 // ------------------------------------------------------------------------------------------------------------
 template <class T>
-void gsALMBase<T>::computeSingularPoint(T singTol, index_t kmax, gsVector<T> U, T L, T tolE, T tolB, bool switchBranch, bool jacobian)
+void gsALMBase<T>::_computeSingularPoint(T singTol, index_t kmax, gsVector<T> U, T L, T tolE, T tolB, bool switchBranch, bool jacobian)
 {
   // Controls the singular point test with the first two arguments
-  bool test = this->testSingularPoint(singTol, kmax,jacobian);
+  bool test = this->_testSingularPoint(singTol, kmax,jacobian);
   // if (m_verbose)
   // {
-  //  T value = this->bisectionTerminationFunction(m_U,false);
+  //  T value = this->_bisectionTerminationFunction(m_U,false);
   //  gsInfo<<"\t Singular point details:";
   //  gsInfo<<"\tvalue: "<<value<<"\n";
   // }
@@ -1032,16 +404,17 @@ void gsALMBase<T>::computeSingularPoint(T singTol, index_t kmax, gsVector<T> U, 
   {
     if (m_verbose) {gsInfo<<"\t Bifurcation point\n";}
 
+    bool converged = false;
     // First stage: bisection method
     if (tolB != 0)
     {
-      this->bisectionSolve(U,L,tolB);
-      this->extendedSystemSolve(m_U, m_L, tolE);
+      this->_bisectionSolve(U,L,tolB);
+      converged = this->_extendedSystemSolve(m_U, m_L, tolE);
     }
     else
-      this->extendedSystemSolve(U, L, tolE);
+      converged = this->_extendedSystemSolve(U, L, tolE);
 
-    if (switchBranch && (m_converged || m_SPfail==1))
+    if (switchBranch && (converged || m_SPfail==1))
       this->switchBranch();
 
     // here we assume that the stability of the singular point is
@@ -1053,111 +426,72 @@ void gsALMBase<T>::computeSingularPoint(T singTol, index_t kmax, gsVector<T> U, 
     gsInfo<<"\t Limit point\n";
 }
 
-template <class T>
-gsMatrix<T> gsALMBase<T>::computeModes(gsVector<T> x, bool jacobian, T shift)
-{
-  if (jacobian)
-  {
-    gsVector<T> dx = gsVector<T>::Zero(x.size());
-    this->computeJacobian(x,dx);
-  } // otherwise the jacobian is already computed (on m_U+m_DeltaU)
-
-  gsMatrix<T> result;
-#ifdef GISMO_WITH_SPECTRA
-  index_t number = std::min(static_cast<index_t>(std::floor(m_jacMat.cols()/3.)),10);
-  /*
-  // Without shift!
-  // This one can sometimes not converge, because spectra is better at finding large values.
-    gsSpectraSymSolver<gsSparseMatrix<T>> es(m_jacMat,number,5*number);
-    es.init();
-    es.compute(Spectra::SortRule::SmallestAlge,1000,1e-6,Spectra::SortRule::SmallestAlge);
-    GISMO_ASSERT(es.info()==Spectra::CompInfo::Successful,"Spectra did not converge!"); // Reason for not converging can be due to the value of ncv (last input in the class member), which is too low.
-  */
-
-  // With shift!
-  // This one converges easier. However, a shift must be provided!
-
-  gsSpectraSymShiftSolver<gsSparseMatrix<T>> es(m_jacMat,number,5*number,shift);
-
-  es.init();
-  es.compute(Spectra::SortRule::LargestAlge,1000,1e-6,Spectra::SortRule::SmallestAlge);
-  GISMO_ENSURE(es.info()==Spectra::CompInfo::Successful,"Spectra did not converge!"); // Reason for not converging can be due to the value of ncv (last input in the class member), which is too low.
-
-  // if (es.info()==Spectra::CompInfo::NotComputed)
-  // if (es.info()==Spectra::CompInfo::NotConverging)
-  // if (es.info()==Spectra::CompInfo::NumericalIssue)
-  // Eigen::SelfAdjointEigenSolver< gsMatrix<T> > es(m_jacMat);
-  m_stabilityVec = es.eigenvalues();
-
-  result.resize(m_numDof,countNegatives(m_stabilityVec));
-  if (result.cols() == number)
-    gsWarn<<"Number of computed eigenvectors is too small!";
-
-  for (index_t k=0; k!=result.cols(); ++k)
-  {
-    if (m_stabilityVec.at(k) < 0)
-      result.col(k) = es.eigenvectors().col(k).normalized();
-    else
-      break;
-  }
-
-#else
-  Eigen::SelfAdjointEigenSolver<gsMatrix<T>> es2(m_jacMat);
-  m_stabilityVec = es2.eigenvalues();
-
-  result.resize(m_numDof,countNegatives(m_stabilityVec));
-  for (index_t k=0; k!=result.cols(); ++k)
-  {
-    if (m_stabilityVec.at(k) < 0)
-      result.col(k) = es2.eigenvectors().col(k).normalized();
-    else
-      break;
-  }
-
-#endif
-
-  return result;
-
-}
-
 // tolB and switchBranch will be defaulted
 template <class T>
-void gsALMBase<T>::computeSingularPoint(gsVector<T> U, T L, T tolE, T tolB, bool switchBranch, bool jacobian)
-{ this->computeSingularPoint(1e-6, 5, U, L, tolE, tolB, switchBranch,jacobian); }
-
-// template <class T>
-// void gsALMBase<T>::computeSingularPoint(gsVector<T> U, T L, T tolE, bool switchBranch)
-// { this->computeSingularPoint(1e-6, 5, U, L, tolE, 0, switchBranch); }
-
-// template <class T>
-// void gsALMBase<T>::computeSingularPoint(T singTol, index_t kmax, gsVector<T> U, T L, T tolE, bool switchBranch)
-// { this->computeSingularPoint(singTol, kmax, U, L, tolE, 0, switchBranch); }
+gsStatus gsALMBase<T>::computeSingularPoint(T singTol, index_t kmax, gsVector<T> U, T L, T tolE, T tolB, bool switchBranch, bool jacobian)
+{ 
+  try
+  {
+    this->_computeSingularPoint(singTol, kmax, U, L, tolE, tolB, switchBranch,jacobian); 
+  }
+  catch (int errorCode)
+  {
+    if      (errorCode==1)
+      m_status = gsStatus::NotConverged;
+    else if (errorCode==2)
+      m_status = gsStatus::AssemblyError;
+    else if (errorCode==3)
+      m_status = gsStatus::SolverError;
+    else
+      m_status = gsStatus::OtherError;
+  }
+  catch (...)
+  {
+    m_status = gsStatus::OtherError;
+  }
+  return m_status;
+}
 
 template <class T>
-void gsALMBase<T>::computeSingularPoint(T singTol, index_t kmax, T tolE, T tolB, bool switchBranch, bool jacobian)
-{ this->computeSingularPoint(singTol, kmax, m_U, m_L, tolE, tolB, switchBranch,jacobian); }
+gsStatus gsALMBase<T>::computeSingularPoint(gsVector<T> U, T L, T tolE, T tolB, bool switchBranch, bool jacobian)
+{ return this->computeSingularPoint(1e-6, 5, U, L, tolE, tolB, switchBranch,jacobian); }
 
 // template <class T>
-// void gsALMBase<T>::computeSingularPoint(T singTol, index_t kmax, T tolE, bool switchBranch)
-// { this->computeSingularPoint(singTol, kmax, m_U, m_L, tolE, 0, switchBranch); }
+// gsStatus gsALMBase<T>::computeSingularPoint(gsVector<T> U, T L, T tolE, bool switchBranch)
+// { return this->computeSingularPoint(1e-6, 5, U, L, tolE, 0, switchBranch); }
 
 // template <class T>
-// void gsALMBase<T>::computeSingularPoint(T tolE, bool switchBranch)
-// { this->computeSingularPoint(1e-6, 5, m_U, m_L, tolE, 0, switchBranch); }
+// gsStatus gsALMBase<T>::computeSingularPoint(T singTol, index_t kmax, gsVector<T> U, T L, T tolE, bool switchBranch)
+// { return this->computeSingularPoint(singTol, kmax, U, L, tolE, 0, switchBranch); }
+
+template <class T>
+gsStatus gsALMBase<T>::computeSingularPoint(T singTol, index_t kmax, T tolE, T tolB, bool switchBranch, bool jacobian)
+{ return this->computeSingularPoint(singTol, kmax, m_U, m_L, tolE, tolB, switchBranch,jacobian); }
 
 // template <class T>
-// void gsALMBase<T>::computeSingularPoint(T tolE, T tolB, bool switchBranch)
-// { this->computeSingularPoint(1e-6, 5, m_U, m_L, tolE, tolB, switchBranch); }
+// gsStatus gsALMBase<T>::computeSingularPoint(T singTol, index_t kmax, T tolE, bool switchBranch)
+// { return this->computeSingularPoint(singTol, kmax, m_U, m_L, tolE, 0, switchBranch); }
+
+// template <class T>
+// gsStatus gsALMBase<T>::computeSingularPoint(T tolE, bool switchBranch)
+// { return this->computeSingularPoint(1e-6, 5, m_U, m_L, tolE, 0, switchBranch); }
+
+// template <class T>
+// gsStatus gsALMBase<T>::computeSingularPoint(T tolE, T tolB, bool switchBranch)
+// { return this->computeSingularPoint(1e-6, 5, m_U, m_L, tolE, tolB, switchBranch); }
 
 // to do: ADD POINT FROM WHICH TO TEST
 template <class T>
-bool gsALMBase<T>::testSingularPoint(gsVector<T> U, T L, T tol, index_t kmax, bool jacobian)
+bool gsALMBase<T>::_testSingularPoint(gsVector<T> U, T L, T tol, index_t kmax, bool jacobian)
 {
   // First, approximate the eigenvector of the Jacobian by a few arc length iterations
   // Initiate m_V and m_DeltaVDET
 
   if (jacobian)
-    this->computeJacobian(m_U,m_deltaU);
+  {
+    m_jacMat = this->computeJacobian(m_U,m_deltaU);
+    this->factorizeMatrix(m_jacMat);
+  }
 
   m_V = gsVector<T>::Ones(m_numDof);
   m_V.normalize();
@@ -1181,19 +515,45 @@ bool gsALMBase<T>::testSingularPoint(gsVector<T> U, T L, T tol, index_t kmax, bo
 }
 
 template <class T>
-bool gsALMBase<T>::testSingularPoint(T tol, index_t kmax, bool jacobian)
+bool gsALMBase<T>::_testSingularPoint(T tol, index_t kmax, bool jacobian)
 {
-  return testSingularPoint(m_U,m_L,tol,kmax,jacobian);
+  return _testSingularPoint(m_U,m_L,tol,kmax,jacobian);
 }
 
+template <class T>
+gsStatus gsALMBase<T>::computeStability(gsVector<T> x, bool jacobian, T shift)
+{
+  try
+  {
+    _computeStability(x,jacobian,shift);
+    m_status = gsStatus::Success;
+  }
+  catch (int errorCode)
+  {
+    if      (errorCode==1)
+      m_status = gsStatus::NotConverged;
+    else if (errorCode==2)
+      m_status = gsStatus::AssemblyError;
+    else if (errorCode==3)
+      m_status = gsStatus::SolverError;
+    else
+      m_status = gsStatus::OtherError;
+  }
+  catch (...)
+  {
+    m_status = gsStatus::OtherError;
+  }
+  return m_status;
+}
 
 template <class T>
-void gsALMBase<T>::computeStability(gsVector<T> x, bool jacobian, T shift)
+void gsALMBase<T>::_computeStability(gsVector<T> x, bool jacobian, T shift)
 {
   if (jacobian)
   {
     gsVector<T> dx = gsVector<T>::Zero(x.size());
-    this->computeJacobian(x,dx);
+    m_jacMat = this->computeJacobian(x,dx);
+    this->factorizeMatrix(m_jacMat);
   } // otherwise the jacobian is already computed (on m_U+m_DeltaU)
 
   // gsInfo<<"x = \n"<<x.transpose()<<"\n";
@@ -1205,7 +565,10 @@ void gsALMBase<T>::computeStability(gsVector<T> x, bool jacobian, T shift)
       m_stabilityVec = s->vectorD();
     }
     else
-      GISMO_ERROR("Determinant stability method only works with SimplicialLDLT solver, current solver is "<<m_options.getString("Solver"));
+    {
+      gsWarn<<"Determinant stability method only works with SimplicialLDLT solver, current solver is "<<m_options.getString("Solver")<<"\n";
+      throw 3;
+    }
   }
   else if (m_bifurcationMethod == bifmethod::Eigenvalue)
   {
@@ -1225,7 +588,11 @@ void gsALMBase<T>::computeStability(gsVector<T> x, bool jacobian, T shift)
     gsSpectraSymShiftSolver<gsSparseMatrix<T>> es(m_jacMat,number,5*number,shift);
     es.init();
     es.compute(Spectra::SortRule::LargestAlge,1000,1e-6,Spectra::SortRule::SmallestAlge);
-    GISMO_ENSURE(es.info()==Spectra::CompInfo::Successful,"Spectra did not converge!"); // Reason for not converging can be due to the value of ncv (last input in the class member), which is too low.
+    if (es.info()!=Spectra::CompInfo::Successful)
+    {
+      gsWarn<<"Spectra did not converge!\n"; // Reason for not converging can be due to the value of ncv (last input in the class member), which is too low.
+      throw 3;
+    }
 
     // if (es.info()==Spectra::CompInfo::NotComputed)
     // if (es.info()==Spectra::CompInfo::NotConverging)
@@ -1256,7 +623,7 @@ index_t gsALMBase<T>::stability()
 template <class T>
 index_t gsALMBase<T>::stability(gsVector<T> x, bool jacobian)
 {
-  this->computeStability(x, jacobian);
+  this->_computeStability(x, jacobian);
   index_t tmp = this->stability();
   return tmp;
 }
@@ -1274,13 +641,14 @@ bool gsALMBase<T>::stabilityChange()
 
 
 template <class T>
-void gsALMBase<T>::extendedSystemSolve(gsVector<T> U, T L, T tol)
+bool gsALMBase<T>::_extendedSystemSolve(gsVector<T> U, T L, T tol)
 {
   m_U = U;
   m_L = L;
   gsInfo<<"Extended iterations --- Starting with U.norm = "<<m_U.norm()<<" and L = "<<m_L<<"\n";
 
-  this->computeJacobian(m_U,m_deltaU); // Jacobian evaluated on m_U
+  m_jacMat = this->computeJacobian(m_U,m_deltaU); // Jacobian evaluated on m_U
+  this->factorizeMatrix(m_jacMat);
   m_basisResidualKTPhi = (m_jacMat*m_V).norm();
 
   m_DeltaV = gsVector<T>::Zero(m_numDof);
@@ -1290,12 +658,11 @@ void gsALMBase<T>::extendedSystemSolve(gsVector<T> U, T L, T tol)
   m_deltaV = gsVector<T>::Zero(m_numDof);
   m_deltaU.setZero();
   m_deltaL = 0.0;
-  m_converged = false;
   if (m_verbose)
-      initOutputExtended();
+      _initOutputExtended();
   for (m_numIterations = 0; m_numIterations < m_maxIterations; ++m_numIterations)
   {
-    extendedSystemIteration();
+    _extendedSystemIteration();
     m_DeltaU += m_deltaU;
     m_DeltaL += m_deltaL;
     m_DeltaV += m_deltaV;
@@ -1304,25 +671,24 @@ void gsALMBase<T>::extendedSystemSolve(gsVector<T> U, T L, T tol)
     // m_resVec = m_residualFun(m_U, m_L, m_forcing);
     // m_residue = m_resVec.norm() / ( m_L * m_forcing.norm() );
     // m_residue = (m_jacobian(m_U).toDense()*m_V).norm() / refError;
-    this->computeJacobian(m_U+m_DeltaU,m_deltaU);
+    m_jacMat = this->computeJacobian(m_U+m_DeltaU,m_deltaU);
+    this->factorizeMatrix(m_jacMat);
     m_residueKTPhi = (m_jacMat*(m_V+m_DeltaV)).norm(); // /m_basisResidualKTPhi;
-    m_resVec = m_residualFun(m_U+m_DeltaU,m_L+m_DeltaL,m_forcing);
+    m_resVec = this->computeResidual(m_U+m_DeltaU,m_L+m_DeltaL);
     computeResidualNorms();
     if (m_verbose)
-      stepOutputExtended();
+      _stepOutputExtended();
 
     // termination criteria
     // if ( m_residueF < m_toleranceF && m_residueU < m_toleranceU &&  m_residueKTPhi< tol )
     if ( m_residueKTPhi< tol )
     {
-      m_converged = true;
       m_U += m_DeltaU;
       m_L += m_DeltaL;
       gsInfo<<"Iterations finished. U.norm() = "<<m_U.norm()<<"\t L = "<<m_L<<"\n";
-
       break;
     }
-    if ( (m_numIterations == m_maxIterations-1) && (!m_converged) )
+    if (m_numIterations == m_maxIterations-1)
     {
       gsInfo<<"Warning: Extended iterations did not converge! \n";
       if (m_SPfail==1)
@@ -1342,29 +708,32 @@ void gsALMBase<T>::extendedSystemSolve(gsVector<T> U, T L, T tol)
         m_deltaL = 0.0;
         gsInfo<<"Iterations finished. continuing with original solution U.norm() = "<<m_U.norm()<<"\t L = "<<m_L<<"\n";
       }
+      return false;
     }
-
   }
+  return true;
 }
 
 // TODO: Optimize memory
 template <class T>
-void gsALMBase<T>::extendedSystemIteration()
+void gsALMBase<T>::_extendedSystemIteration()
 {
-  m_resVec = m_residualFun(m_U+m_DeltaU, m_L+m_DeltaL, m_forcing);
-  this->computeJacobian(m_U+m_DeltaU,m_deltaU);
+  m_resVec = this->computeResidual(m_U+m_DeltaU, m_L+m_DeltaL);
+  m_jacMat = this->computeJacobian(m_U+m_DeltaU,m_deltaU);
+  this->factorizeMatrix(m_jacMat);
+
   // m_jacMat = m_jacobian(m_U);
 
   m_deltaUt = this->solveSystem(m_forcing); // DeltaV1
   m_deltaUbar = this->solveSystem(-m_resVec); // DeltaV2
 
   real_t eps = 1e-8;
-  gsSparseMatrix<T> jacMatEps = m_jacobian((m_U+m_DeltaU) + eps*(m_V+m_DeltaV));
+  gsSparseMatrix<T> jacMatEps = this->computeJacobian((m_U+m_DeltaU) + eps*(m_V+m_DeltaV));
   m_note += "J"; // mark jacobian computation
   gsVector<T> h1 = 1/eps * ( jacMatEps * m_deltaUt ) - 1/eps * m_forcing;
   gsVector<T> h2 = m_jacMat * (m_V+m_DeltaV) + 1/eps * ( jacMatEps * m_deltaUbar + m_resVec );
 
-  factorizeMatrix(m_jacMat);
+  this->factorizeMatrix(m_jacMat);
 
   m_deltaVt = this->solveSystem(-h1); // DeltaV1
   m_deltaVbar = this->solveSystem(-h2); // DeltaV2
@@ -1379,24 +748,24 @@ void gsALMBase<T>::extendedSystemIteration()
 }
 
 template <class T>
-index_t gsALMBase<T>::bisectionObjectiveFunction(const gsVector<T> & x, bool jacobian)
+index_t gsALMBase<T>::_bisectionObjectiveFunction(const gsVector<T> & x, bool jacobian)
 {
-  this->computeStability(x,jacobian);
+  this->_computeStability(x,jacobian);
   index_t negs = countNegatives(m_stabilityVec);
   m_note += "(" + std::to_string(negs) + ")";
   return negs;
 }
 
 template <class T>
-T gsALMBase<T>::bisectionTerminationFunction(const gsVector<T> & x, bool jacobian)
+T gsALMBase<T>::_bisectionTerminationFunction(const gsVector<T> & x, bool jacobian)
 {
-  this->computeStability(x,jacobian);
+  this->_computeStability(x,jacobian);
   // return m_stabilityVec.colwise().minCoeff()[0]; // This is required since D does not necessarily have one column.
   return m_indicator;
 }
 
 template <class T>
-void gsALMBase<T>::bisectionSolve(gsVector<T> U, T L, T tol)
+bool gsALMBase<T>::_bisectionSolve(gsVector<T> U, T L, T tol)
 {
   m_U = U;
   m_L = L;
@@ -1407,20 +776,19 @@ void gsALMBase<T>::bisectionSolve(gsVector<T> U, T L, T tol)
   real_t dL = m_arcLength;
   bool adaptiveBool = m_adaptiveLength;
   m_adaptiveLength = false;
-  m_converged = false;
+  bool converged = false;
 
-  T referenceError = bisectionTerminationFunction(U, true);
+  T referenceError = _bisectionTerminationFunction(U, true);
 
   gsInfo<<"Bisection iterations --- Starting with U.norm = "<<m_U.norm()<<" and L = "<<m_L<<"; Reference error = "<<referenceError<<"\n";
 
-
   index_t fa, fb;
-  fa = bisectionObjectiveFunction(m_U, false); // jacobian is already computed in the termination function
+  fa = _bisectionObjectiveFunction(m_U, false); // jacobian is already computed in the termination function
 
   // m_arcLength = m_arcLength/2.0;
 
   // Store termination function value of initial solution U
-  // T termU =  bisectionTerminationFunction(m_U);
+  // T termU =  _bisectionTerminationFunction(m_U);
   for (index_t k = 1; k < m_maxIterations; ++k)
   {
     if (m_verbose) gsInfo<<"\t bisection iteration "<<k<<"\t arc length = "<<m_arcLength<<"; ";
@@ -1432,12 +800,12 @@ void gsALMBase<T>::bisectionSolve(gsVector<T> U, T L, T tol)
     gsInfo<<"From U.norm = "<<m_U.norm()<<" and L = "<<m_L<<"\n";
 
     // Make an arc length step; m_U and U_old and m_L and L_old are different
-    step();
+    gsStatus status = step();
 
     // Objective function on new point
-    fb = bisectionObjectiveFunction(m_U, true); // m_u is the new solution
+    fb = _bisectionObjectiveFunction(m_U, true); // m_u is the new solution
 
-    if (fa==fb && m_converged)
+    if (fa==fb && status==gsStatus::Success)
     {
       U_old = m_U;
       L_old = m_L;
@@ -1449,14 +817,14 @@ void gsALMBase<T>::bisectionSolve(gsVector<T> U, T L, T tol)
 
     // termination criteria
     // relative error
-    T term = bisectionTerminationFunction(m_U, false); // jacobian on the new point already computed
+    T term = _bisectionTerminationFunction(m_U, false); // jacobian on the new point already computed
 
     if (m_verbose) gsInfo<<"\t Finished. Relative error = "<< abs(term/referenceError)<<"\t"<<" obj.value = "<<term<<"\n";
 
     // if (  m_arcLength < tol && abs(term) < tol )
     if (  abs(term/referenceError) < tol )
     {
-        m_converged = true;
+        converged = true;
         break;
     }
 
@@ -1471,17 +839,18 @@ void gsALMBase<T>::bisectionSolve(gsVector<T> U, T L, T tol)
   gsVector<T> Vold = gsVector<T>::Zero(m_numDof);
   for (index_t k = 0; k<5; k++)
   {
-    factorizeMatrix(m_jacMat);
+    this->factorizeMatrix(m_jacMat);
 
     m_V = this->solveSystem(m_V);
     m_V.normalize();
     if (  (m_V-Vold).norm() < m_tolerance )
     {
-        m_converged = true;
+        converged = true;
         break;
     }
     Vold = m_V;
   }
+  return converged;
 }
 
 template <class T>
@@ -1505,7 +874,7 @@ void gsALMBase<T>::switchBranch()
 // ------------------------------------------------------------------------------------------------------------
 
 template <class T>
-void gsALMBase<T>::initOutputExtended()
+void gsALMBase<T>::_initOutputExtended()
 {
   gsInfo<<"\t";
   gsInfo<<std::setw(4)<<std::left<<"It.";
@@ -1530,7 +899,7 @@ void gsALMBase<T>::initOutputExtended()
 }
 
 template <class T>
-void gsALMBase<T>::stepOutputExtended()
+void gsALMBase<T>::_stepOutputExtended()
 {
   gsInfo<<"\t";
   gsInfo<<std::setw(4)<<std::left<<m_numIterations;
@@ -1547,7 +916,7 @@ void gsALMBase<T>::stepOutputExtended()
   gsInfo<<std::setw(17)<<std::left<<m_deltaU.norm();
   gsInfo<<std::setw(17)<<std::left<<m_deltaV.norm();
   gsInfo<<std::setw(17)<<std::left<<m_deltaL;
-  gsInfo<<std::setw(17)<<std::left<<bisectionTerminationFunction(m_U,false);
+  gsInfo<<std::setw(17)<<std::left<<_bisectionTerminationFunction(m_U,false);
   gsInfo<<std::setw(17)<<std::left<<m_note;
   gsInfo<<"\n";
 

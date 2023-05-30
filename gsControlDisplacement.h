@@ -13,6 +13,7 @@
 
 #include <typeinfo>
 #include <gsStructuralAnalysis/gsContinuationBase.h>
+#include <gsStructuralAnalysis/gsStructuralAnalysisTools.h>
 #pragma once
 
 
@@ -42,19 +43,20 @@ public:
         m_L = 0;
     }
 
-    void step(T dL)
+    gsStatus step(T dL)
     {
         m_solver->setLoad(m_L + dL);
         if (!first)
             m_solver->setDisplacement(m_U);
         else first = false;
-        m_solver->solve();
+        m_status = m_solver->solve();
 
-        if (m_solver->converged())
+        if (m_status == gsStatus::Success)
         {
             m_L += dL;
             m_U += m_solver->update();
         }
+        return m_status;
     }
 
     /// Return the displacements
@@ -82,7 +84,7 @@ protected:
 
     gsVector<T> m_U;
 
-
+    gsStatus m_status;
 };
 
 

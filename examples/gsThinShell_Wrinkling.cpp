@@ -16,6 +16,8 @@
 #include <gsKLShell/gsThinShellAssembler.h>
 #include <gsKLShell/getMaterialMatrix.h>
 
+#include <gsStructuralAnalysis/gsStructuralAnalysisTools.h>
+
 #include <gsStructuralAnalysis/gsALMBase.h>
 #include <gsStructuralAnalysis/gsALMLoadControl.h>
 #include <gsStructuralAnalysis/gsALMRiks.h>
@@ -786,42 +788,39 @@ int main (int argc, char** argv)
     gsStopwatch stopwatch;
     real_t assemblyTime = 0.0;
 
-    typedef std::function<gsSparseMatrix<real_t> (gsVector<real_t> const &)>                                Jacobian_t;
-    typedef std::function<gsVector<real_t> (gsVector<real_t> const &, real_t, gsVector<real_t> const &) >   ALResidual_t;
+    // Assemble linear system to obtain the force vector
+    assembler->assemble();
+    gsVector<> Force = assembler->rhs();
+
     // Function for the Jacobian
-    Jacobian_t Jacobian = [&assemblyTime,&stopwatch,&assembler,&mp_def](gsVector<real_t> const &x)
+    gsStructuralAnalysisOps<real_t>::Jacobian_t Jacobian = [&assemblyTime,&stopwatch,&assembler,&mp_def](gsVector<real_t> const &x, gsSparseMatrix<real_t> & m)
     {
+      ThinShellAssemblerStatus status;
       stopwatch.restart();
       assembler->constructSolution(x,mp_def);
       gsInfo<<"Start assembly...";
-      assembler->assembleMatrix(mp_def);
+      status = assembler->assembleMatrix(mp_def);
       gsInfo<<"finished.\n";
+      m = assembler->matrix();
       assemblyTime += stopwatch.stop();
-
-      gsSparseMatrix<real_t> m = assembler->matrix();
-      // gsInfo<<"matrix = \n"<<m.toDense()<<"\n";
-      return m;
+      return status == ThinShellAssemblerStatus::Success;
     };
     // Function for the Residual
-    ALResidual_t ALResidual = [&assemblyTime,&stopwatch,&assembler,&mp_def](gsVector<real_t> const &x, real_t lam, gsVector<real_t> const &force)
+    gsStructuralAnalysisOps<real_t>::ALResidual_t ALResidual = [&assemblyTime,&stopwatch,&assembler,&mp_def,&Force](gsVector<real_t> const &x, real_t lam, gsVector<real_t> & result)
     {
-      stopwatch.restart();
-      assembler->constructSolution(x,mp_def);
-      assembler->assembleVector(mp_def);
-      gsVector<real_t> Fint = -(assembler->rhs() - force);
-      gsVector<real_t> result = Fint - lam * force;
-      assemblyTime += stopwatch.stop();
-      return result; // - lam * force;
+        ThinShellAssemblerStatus status;
+        stopwatch.restart();
+        assembler->constructSolution(x,mp_def);
+        status = assembler->assembleVector(mp_def);
+        result = Force - lam * Force - assembler->rhs(); // assembler rhs - force = Finternal
+        assemblyTime += stopwatch.stop();
+        return status == ThinShellAssemblerStatus::Success;
     };
 
     gsInfo<<"finished ["<<time.stop()<<" s]\n";
 
     gsInfo<<"-> Initial assembly...";
     time.restart();
-
-    // Assemble linear system to obtain the force vector
-    assembler->assemble();
-    gsVector<> Force = assembler->rhs();
 
     gsInfo<<"finished ["<<time.stop()<<" s]\n";
 
@@ -899,10 +898,8 @@ int main (int argc, char** argv)
     {
       gsInfo<<"Load step "<< k<<"\n";
       // assembler->constructSolution(solVector,solution);
-      arcLength->step();
-
-      // gsInfo<<"m_U = "<<arcLength->solutionU()<<"\n";
-      if (!(arcLength->converged()))
+      gsStatus status = arcLength->step();
+      if (status==gsStatus::NotConverged || status==gsStatus::AssemblyError)
       {
         gsInfo<<"Error: Loop terminated, arc length method did not converge.\n";
         dLb = dLb / 2.;
@@ -925,7 +922,7 @@ int main (int argc, char** argv)
         //   std::string fileName = dirname + "/" + output + util::to_string(k);
         //   gsWriteParaview<>(solField, fileName, 5000,mesh);
         //   fileName = output + util::to_string(k) + "0";
-        //   collection.addTimestep(fileName,k,".vts");
+        //   collection.addPart(fileName + ".vts",k);
         // }
         // break;
       }
@@ -988,8 +985,8 @@ int main (int argc, char** argv)
         std::string fileName = dirname + "/" + output + util::to_string(k);
         gsWriteParaview<>(solField, fileName, 1000,mesh);
         fileName = output + util::to_string(k) + "0";
-        collection.addTimestep(fileName,k,".vts");
-        if (mesh) collection.addTimestep(fileName,k,"_mesh.vtp");
+        collection.addPart(fileName + ".vts",k);
+        if (mesh) collection.addPart(fileName + "_mesh.vtp",k);
       }
       if (stress)
       {
@@ -1020,17 +1017,17 @@ int main (int argc, char** argv)
         fileName = dirname + "/" + "membrane" + util::to_string(k);
         gsWriteParaview( membraneStress, fileName, 1000);
         fileName = "membrane" + util::to_string(k) + "0";
-        Smembrane.addTimestep(fileName,k,".vts");
+        Smembrane.addPart(fileName + ".vts",k);
 
         fileName = dirname + "/" + "flexural" + util::to_string(k);
         gsWriteParaview( flexuralStress, fileName, 1000);
         fileName = "flexural" + util::to_string(k) + "0";
-        Sflexural.addTimestep(fileName,k,".vts");
+        Sflexural.addPart(fileName + ".vts",k);
 
         fileName = dirname + "/" + "membrane_p" + util::to_string(k);
         gsWriteParaview( membraneStress_p, fileName, 1000);
         fileName = "membrane_p" + util::to_string(k) + "0";
-        Smembrane_p.addTimestep(fileName,k,".vts");
+        Smembrane_p.addPart(fileName + ".vts",k);
       }
 
 
