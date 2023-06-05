@@ -61,12 +61,13 @@ gsEigenProblemBase<T>::computeSparse_impl(T shift, index_t number)
     Spectra::SortRule sortRule = static_cast<Spectra::SortRule>(m_options.getInt("sortRule"));
 
     index_t ncvFac = m_options.getInt("ncvFac");
+    T tol = m_options.getReal("tolerance");
     if (verbose) { gsInfo<<"Solving eigenvalue problem" ; }
     gsSpectraGenSymSolver<gsSparseMatrix<T>,_GEigsMode> solver(m_A-shift*m_B,m_B,number,ncvFac*number);
     if (verbose) { gsInfo<<"." ; }
     solver.init();
     if (verbose) { gsInfo<<"." ; }
-    solver.compute(selectionRule,1000,1e-6,sortRule);
+    solver.compute(selectionRule,1000,tol,sortRule);
 
     if (solver.info()==Spectra::CompInfo::Successful)         { gsDebug<<"Spectra converged in "<<solver.num_iterations()<<" iterations and with "<<solver.num_operations()<<"operations. \n"; }
     else if (solver.info()==Spectra::CompInfo::NumericalIssue){ GISMO_ERROR("Spectra did not converge! Error code: NumericalIssue"); }
@@ -104,12 +105,13 @@ gsEigenProblemBase<T>::computeSparse_impl(T shift, index_t number)
     gsWarn<<"Selection Rule 'SmallestAlge' is selected, but for ShiftInvert, Buckling and Cayley it is advised to use 'LargestMagn'!\n";
 
     index_t ncvFac = m_options.getInt("ncvFac");
+    T tol = m_options.getReal("tolerance");
     if (verbose) { gsInfo<<"Solving eigenvalue problem" ; }
     gsSpectraGenSymShiftSolver<gsSparseMatrix<T>,_GEigsMode> solver(m_A,m_B,number,ncvFac*number,shift);
     if (verbose) { gsInfo<<"." ; }
     solver.init();
     if (verbose) { gsInfo<<"." ; }
-    solver.compute(selectionRule,1000,1e-6,sortRule);
+    solver.compute(selectionRule,1000,tol,sortRule);
 
     if (solver.info()==Spectra::CompInfo::Successful)         { gsDebug<<"Spectra converged in "<<solver.num_iterations()<<" iterations and with "<<solver.num_operations()<<"operations. \n"; }
     else if (solver.info()==Spectra::CompInfo::NumericalIssue){ GISMO_ERROR("Spectra did not converge! Error code: NumericalIssue"); }
@@ -138,7 +140,7 @@ void gsEigenProblemBase<T>::computePower()
     v_old.setZero();
 
     index_t kmax = 100;
-    real_t error,tol = 1e-5;
+    real_t error,tol = m_options.getReal("tolerance");
     for (index_t k=0; k!=kmax; k++)
     {
       v = D*v;

@@ -78,6 +78,7 @@ public:
                                         "8: BothEnds",4);
 
         options.addInt("ncvFac","Factor for Spectra's ncv number. Ncv = ncvFac * numEigenvalues",3);
+	options.addReal("tolerance","Tolerance for spectra and the power method",1e-10);
         return options;
     }
 
