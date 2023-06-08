@@ -16,9 +16,11 @@
 #include <gsKLShell/gsThinShellAssembler.h>
 #include <gsKLShell/getMaterialMatrix.h>
 #include <gsKLShell/gsMaterialMatrixTFT.h>
+#include <gsKLShell/gsMaterialMatrixEval.h>
 
 #include <gsStructuralAnalysis/gsStaticDR.h>
 #include <gsStructuralAnalysis/gsStaticNewton.h>
+#include <gsStructuralAnalysis/gsStructuralAnalysisUtils.h>
 
 using namespace gismo;
 
@@ -28,22 +30,26 @@ int main (int argc, char** argv)
     int numElevate    = 0;
     int numRefine     = 1;
     bool plot         = false;
+    bool write        = false;
     bool stress       = false;
-    bool TFT       = false;
     bool quasiNewton  = false;
     int quasiNewtonInt= -1;
     bool adaptive     = false;
-    int step          = 21;
     int method        = 2; // (0: Load control; 1: Riks' method; 2: Crisfield's method; 3: consistent crisfield method; 4: extended iterations)
     int verbose = 0;
 
     bool membrane = false;
     bool nonfollow     = false;
 
+    index_t Compressibility = 0;
+    index_t material = 0;
+    index_t impl = 1; // 1= analytical, 2= generalized, 3= spectral
+    bool TFT = false;
+
     int result        = 0;
     index_t maxIt     = 1e3;
     // Arc length method options
-    real_t tol        = 1e-6;
+    real_t tol        = 1e-3;
 
     real_t alpha = 1.0;
     real_t damping = 0.1;
@@ -68,9 +74,14 @@ int main (int argc, char** argv)
     cmd.addReal( "a", "alpha", "alpha",  alpha );
     cmd.addReal( "c", "damping", "damping",  damping );
 
+    cmd.addInt( "M", "Material", "Material law",  material );
+    cmd.addInt( "C", "Compressibility", "1: compressible, 0: incompressible",  Compressibility );
+    cmd.addInt( "I", "Implementation", "Implementation: 1= analytical, 2= generalized, 3= spectral",  impl );
+    cmd.addSwitch( "TFT", "Use Tension-Field Theory",  TFT );
+
     cmd.addSwitch("plot", "Plot result in ParaView format", plot);
+    cmd.addSwitch("write", "Write data to file", write);
     cmd.addSwitch("stress", "Plot stress in ParaView format", stress);
-    cmd.addSwitch("TFT", "Use Tension Field Theory", TFT);
     cmd.addInt("v","verbose", "0: no; 1: iteration output; 2: Full matrix and vector output", verbose);
 
     try { cmd.getValues(argc,argv); } catch (int rv) { return rv; }
@@ -85,6 +96,8 @@ int main (int argc, char** argv)
     real_t Ratio;
     real_t thickness;
     real_t Density    = 1e0;
+
+    if (material==0) Compressibility = 0;
 
     gsMatrix<> box(2,2);
     if (testCase == 0)
@@ -161,16 +174,12 @@ int main (int argc, char** argv)
     // real_t pressure =0;
 
     std::string dirname = ".";
-    dirname = dirname + "/Pillow_r" + std::to_string(numRefine) + "_e" + std::to_string(numElevate);
+    dirname = dirname + "/Pillow_r" + std::to_string(numRefine) + "_e" + std::to_string(numElevate) + "-M" + std::to_string(material) + "-c" + std::to_string(Compressibility);
     if (TFT)
       dirname = dirname + "_TFT";
     std::string output =  "solution";
 
-    std::string commands = "mkdir -p " + dirname;
-    const char *command = commands.c_str();
-    int systemRet = system(command);
-    GISMO_ASSERT(systemRet!=-1,"Something went wrong with calling the system argument");
-
+    gsFileManager::mkdir(dirname);
 
     // plot geometry
     if (plot)
@@ -188,9 +197,40 @@ int main (int argc, char** argv)
     gsConstantFunction<> rho(Density,3);
     gsConstantFunction<> ratio(Ratio,3);
 
-    gsMaterialMatrixBase<real_t>* materialMatrix = new gsMaterialMatrixLinear<3,real_t>(mp,t,E,nu,rho);
-    gsMaterialMatrixTFT<3,real_t,false> * materialMatrixTFT = new gsMaterialMatrixTFT<3,real_t,false>(static_cast<gsMaterialMatrixBaseDim<3,real_t> * >(materialMatrix));
+    gsMaterialMatrixBase<real_t>* materialMatrix;
+    gsMaterialMatrixBase<real_t>* materialMatrixTFT;
+    gsOptionList options;
+
+    std::vector<gsFunction<>*> parameters;
+    parameters.resize(2);
+    parameters[0] = &E;
+    parameters[1] = &nu;
+    if      (material==0 && impl==1)
+    {
+      parameters.resize(2);
+      options.addInt("Material","Material model: (0): SvK | (1): NH | (2): NH_ext | (3): MR | (4): Ogden",0);
+      options.addInt("Implementation","Implementation: (0): Composites | (1): Analytical | (2): Generalized | (3): Spectral",1);
+      materialMatrix = getMaterialMatrix<3,real_t>(mp,t,parameters,rho,options);
+      materialMatrixTFT = new gsMaterialMatrixTFT<3,real_t,true>(static_cast<gsMaterialMatrixBaseDim<3,real_t> * >(materialMatrix));
+      // dynamic_cast<gsMaterialMatrixTFT<3,real_t,true> *>(materialMatrixTFT)->updateDeformed(&mp_def);
+    }
+    else if (material==1 || material==2)
+    {
+      options.addInt("Material","Material model: (0): SvK | (1): NH | (2): NH_ext | (3): MR | (4): Ogden",material);
+      options.addSwitch("Compressibility","Compressibility: (false): Imcompressible | (true): Compressible",Compressibility);
+      options.addInt("Implementation","Implementation: (0): Composites | (1): Analytical | (2): Generalized | (3): Spectral",impl);
+      materialMatrix = getMaterialMatrix<3,real_t>(mp,t,parameters,rho,options);
+      materialMatrixTFT = new gsMaterialMatrixTFT<3,real_t,false>(static_cast<gsMaterialMatrixBaseDim<3,real_t> * >(materialMatrix));
+      // dynamic_cast<gsMaterialMatrixTFT<3,real_t,false> *>(materialMatrixTFT)->updateDeformed(&mp_def);
+    }
+    else
+      GISMO_ERROR("Other materials not implemented in this example");
+
+    // gsMaterialMatrixBase<real_t>* materialMatrix = new gsMaterialMatrixLinear<3,real_t>(mp,t,E,nu,rho);
+    // gsMaterialMatrixTFT<3,real_t,false> * materialMatrixTFT = new gsMaterialMatrixTFT<3,real_t,false>(static_cast<gsMaterialMatrixBaseDim<3,real_t> * >(materialMatrix));
+
     materialMatrixTFT->options().setReal("SlackMultiplier",1e-6);    
+    // materialMatrixTFT->options().setSwitch("Explicit",true);    
 
     gsThinShellAssemblerBase<real_t>* assembler;
     if (membrane && TFT)
@@ -202,15 +242,25 @@ int main (int argc, char** argv)
     else
       assembler = new gsThinShellAssembler<3, real_t, false >(mp,dbasis,BCs,force,materialMatrix);
 
-    gsDebugVar("----------------------------------------------------------------------------");
+    // Assemble linear system to obtain the force vector
+    assembler->assemble();
+    gsSparseMatrix<> K = assembler->matrix();
+    gsVector<> Fneu = assembler->rhs();
+    real_t Fnorm = Fneu.norm();
+    gsDebugVar(assembler->numDofs());
 
+    // gsSparseMatrix<> diag(assembler->numDofs(),assembler->numDofs());
+    // diag.setIdentity();
+    // diag *= 0.14;
     // Function for the Jacobian
     gsStructuralAnalysisOps<real_t>::Jacobian_t Jacobian = [&assembler,&mp_def](gsVector<real_t> const &x, gsSparseMatrix<real_t> & m)
     {
+      // &diag,
       ThinShellAssemblerStatus status;
       assembler->constructSolution(x,mp_def);
       status = assembler->assembleMatrix(mp_def);
       m = assembler->matrix();
+      // m += diag;
       return status == ThinShellAssemblerStatus::Success;
     };
     // Function for the Residual
@@ -222,17 +272,6 @@ int main (int argc, char** argv)
       result = assembler->rhs();
       return status == ThinShellAssemblerStatus::Success;
     };
-
-    // Assemble linear system to obtain the force vector
-    assembler->assemble();
-    gsSparseMatrix<> K = assembler->matrix();
-    gsVector<> Fneu = assembler->rhs();
-    real_t Fnorm = Fneu.norm();
-
-    gsSparseMatrix<> diag(K.rows(),K.cols());
-    diag.setIdentity();
-    diag *= 0.14;
-    K+=diag;
 
     gsVector<> solVector(assembler->numDofs());
     solVector.setZero();
@@ -246,7 +285,19 @@ int main (int argc, char** argv)
     real_t load_fac = 0;
     real_t dload_fac= 1./maxIt;
     real_t dload_fac0 = dload_fac;
-    index_t k=0;
+    index_t step=0;
+    bool bisected = false;
+
+    gsMatrix<> writePoints(2,1);
+    writePoints<<0,1;
+
+    gsParaviewCollection TFcollection(dirname + "/" + "tensionfield");
+    gsParaviewCollection solcollection(dirname + "/" + "solution");
+
+    gsStructuralAnalysisOutput<real_t> writer(dirname + "/" + wn,writePoints);
+    std::vector<std::string> pointheaders = {"x","y","z"};
+    std::vector<std::string> otherheaders = {"load"};
+    writer.init(pointheaders,otherheaders);
     while (load_fac <= 1.)
     {
       /*
@@ -255,10 +306,21 @@ int main (int argc, char** argv)
        * - First 20 steps: tension on free boundaries of 4e3 N/m decreasing to 0 N/m
        * - First 20 steps: follower pressure increasing from 0 Pa to 5000 Pa
        */
-      neuDataX<<5e3*(1-load_fac),0,0;
-      neuDataY<<0,-5e3*(1-load_fac),0;
-      neuX.setValue(neuDataX,3);
-      neuY.setValue(neuDataY,3);
+      if (true)
+      {
+        neuDataX<<5e3*(1-load_fac),0,0;
+        neuDataY<<0,-5e3*(1-load_fac),0;
+        neuX.setValue(neuDataX,3);
+        neuY.setValue(neuDataY,3);        
+      }
+      else 
+      {
+        neuDataX<<0,0,0;
+        neuDataY<<0,0,0;
+        neuX.setValue(neuDataX,3);
+        neuY.setValue(neuDataY,3);
+      }
+
 
       assembler->updateBCs(BCs);
 
@@ -270,18 +332,19 @@ int main (int argc, char** argv)
       }
       else
       {
-
         pressFun.setValue(pressure*load_fac,3);
         assembler->setPressure(pressFun);
       }
 
-
-      gsInfo<<"Load step "<<k<<"; p = "<<pressure*load_fac<<"; load factor = "<<load_fac<<":\n";
-      real_t tol = 1e-4;
+      gsInfo<<"Load step "<<step<<"; p = "<<pressure*load_fac<<"; load factor = "<<load_fac<<":\n";
       real_t resNorm = 1;
+
+      // if (load_fac > 0.5)
+      //   diag.setZero();
 
       assembler->assemble();
       K = assembler->matrix();
+      // K += diag;
       gsVector<> F = assembler->rhs();
       assembler->assembleMass(true);
       gsVector<> M = assembler->rhs();
@@ -304,7 +367,7 @@ int main (int argc, char** argv)
       DRM.solve();
       // if (!DRM.converged())
       // {
-      //   gsWarn<<"Load step "<<k<<" did not converge\n";
+      //   gsWarn<<"Load step "<<step<<" did not converge\n";
       //   GISMO_ASSERT(load_fac!=0,"load_fac is zero but no convergence on the first step. Try to increase the number of iterations");
       //   load_fac -= dload_fac;
       //   dload_fac /= 2;
@@ -315,7 +378,7 @@ int main (int argc, char** argv)
 
       gsVector<> updateVector = DRM.solution() - solVector;
 
-      maxIt = 50;
+      maxIt = 1000;
       // gsVector<> updateVector(assembler->numDofs());
       // updateVector.setZero();
       gsStaticNewton<real_t> NWT(K,F,Jacobian,Residual);
@@ -330,7 +393,7 @@ int main (int argc, char** argv)
       NWT.solve();
       if (!NWT.converged())
       {
-        gsWarn<<"Load step "<<k<<" did not converge\n";
+        gsWarn<<"Load step "<<step<<" did not converge\n";
         GISMO_ASSERT(load_fac!=0,"load_fac is zero but no convergence on the first step. Try to increase the number of iterations");
         load_fac -= dload_fac;
         dload_fac /= 2;
@@ -341,18 +404,27 @@ int main (int argc, char** argv)
       solVector = NWT.solution();
 
       mp_def = assembler->constructSolution(solVector);
+      // if (material==0)
+      //   dynamic_cast<gsMaterialMatrixTFT<3,real_t,true> *>(materialMatrixTFT)->updateDeformed(&mp_def);
+      // else if (material==1 || material==2)
+      //   dynamic_cast<gsMaterialMatrixTFT<3,real_t,false> *>(materialMatrixTFT)->updateDeformed(&mp_def);
+      // else GISMO_ERROR("Material unknown");
 
       gsMultiPatch<> deformation = mp_def;
       for (size_t k = 0; k != mp_def.nPatches(); ++k)
           deformation.patch(k).coefs() -= mp.patch(k).coefs();
 
-
       // ! [Export visualization in ParaView]
       if (plot)
       {
+          std::string fileName;
           gsField<> solField(mp_def, deformation);
           gsInfo<<"Plotting in Paraview...\n";
-          gsWriteParaview<>( solField, dirname + "/" + "solution", 1000, true);
+          
+          fileName = dirname + "/" + "solution" + util::to_string(step);
+          gsWriteParaview<>( solField, fileName, 1000, true);
+          solcollection.addPart(gsFileManager::getFilename(fileName) + "0.vts",step);
+
           // ev.options().setSwitch("plot.elements", true);
           // ev.writeParaview( u_sol   , G, "solution");
 
@@ -363,13 +435,23 @@ int main (int argc, char** argv)
           gsPiecewiseFunction<> TFes;
           assembler->constructStress(mp_def,TFes,stress_type::tension_field);
           gsField<> TF(mp_def,TFes, true);
-          gsWriteParaview(TF, dirname + "/" + "tensionfield",5000);
+
+          fileName = dirname + "/" + "tensionfield" + util::to_string(step);
+          gsWriteParaview(TF, fileName,5000);
+          TFcollection.addPart(gsFileManager::getFilename(fileName) + "0.vts",step);
 
 
           gsInfo <<"Maximum deformation coef: "
                  << deformation.patch(0).coefs().colwise().maxCoeff() <<".\n";
           gsInfo <<"Minimum deformation coef: "
                  << deformation.patch(0).coefs().colwise().minCoeff() <<".\n";
+      }
+      if (write)
+      {
+        gsMatrix<> result = deformation.patch(0).eval(writePoints);
+        gsVector<> data(1);
+        data<<load_fac;
+        writer.add(result,data);
       }
 
 
@@ -407,16 +489,21 @@ int main (int argc, char** argv)
       // }
 
       if (bisected)
+      {
         bisected = false;
+        dload_fac *= 2;
+      }
       else
         dload_fac = dload_fac0;
       
-      k++;
-      if (1 - load_fac < dload_fac && 1 - load_fac > 0)
+      step++;
+      if (1 - load_fac < dload_fac && 1 - load_fac > 1e-10)
         dload_fac = 1 - load_fac;
       load_fac += dload_fac;
     }
 
+    solcollection.save();
+    TFcollection.save();
 
 
     // gsStaticDR<real_t> DRM(M,F,Residual);
@@ -453,29 +540,6 @@ int main (int argc, char** argv)
 
 
     // ! [Export visualization in ParaView]
-    if (plot)
-    {
-        gsField<> solField(mp_def, deformation);
-        gsInfo<<"Plotting in Paraview...\n";
-        gsWriteParaview<>( solField, dirname + "/" + "solution", 1000, true);
-        // ev.options().setSwitch("plot.elements", true);
-        // ev.writeParaview( u_sol   , G, "solution");
-
-        // gsFileManager::open("solution.pvd");
-
-
-        assembler->constructSolution(solVector,mp_def);
-        gsPiecewiseFunction<> TFes;
-        assembler->constructStress(mp_def,TFes,stress_type::tension_field);
-        gsField<> TF(mp_def,TFes, true);
-        gsWriteParaview(TF,dirname + "/" + "tensionfield",5000);
-
-
-        gsInfo <<"Maximum deformation coef: "
-               << deformation.patch(0).coefs().colwise().maxCoeff() <<".\n";
-        gsInfo <<"Minimum deformation coef: "
-               << deformation.patch(0).coefs().colwise().minCoeff() <<".\n";
-    }
     if (stress)
     {
       gsPiecewiseFunction<> membraneStresses;
@@ -523,11 +587,6 @@ int main (int argc, char** argv)
       gsField<> VMStress(mp_def,VMStresses, true);
 
 
-      gsPiecewiseFunction<> TFes;
-      assembler->constructStress(mp_def,TFes,stress_type::tension_field);
-      gsField<> TF(mp_def,TFes, true);
-
-
       gsWriteParaview(membraneStress,dirname + "/" + "MembraneStress",5000);
       gsWriteParaview(VMStress,dirname + "/" + "MembraneStressVM",5000);
       gsWriteParaview(Stretches,dirname + "/" + "PrincipalStretch",5000);
@@ -539,7 +598,7 @@ int main (int argc, char** argv)
       gsWriteParaview(stretchDir1,dirname + "/" + "PrincipalDirection1",5000);
       gsWriteParaview(stretchDir2,dirname + "/" + "PrincipalDirection2",5000);
       gsWriteParaview(stretchDir3,dirname + "/" + "PrincipalDirection3",5000);
-      gsWriteParaview(TF,dirname + "/" + "tensionfield",5000);
+      
     }
 
     delete materialMatrix;
