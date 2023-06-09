@@ -57,6 +57,7 @@ int main (int argc, char** argv)
     real_t dt = 0.1;
 
     index_t testCase = 0;
+    real_t maxLoad = 5e3;
 
     std::string wn("data.csv");
 
@@ -78,6 +79,8 @@ int main (int argc, char** argv)
     cmd.addInt( "C", "Compressibility", "1: compressible, 0: incompressible",  Compressibility );
     cmd.addInt( "I", "Implementation", "Implementation: 1= analytical, 2= generalized, 3= spectral",  impl );
     cmd.addSwitch( "TFT", "Use Tension-Field Theory",  TFT );
+
+    cmd.addReal( "L", "maxLoad", "Maximum load",  maxLoad );
 
     cmd.addSwitch("plot", "Plot result in ParaView format", plot);
     cmd.addSwitch("write", "Write data to file", write);
@@ -141,10 +144,10 @@ int main (int argc, char** argv)
     mp_def = mp;
 
     gsVector<> neuDataX(3);
-    neuDataX<<5e3,0,0;
+    neuDataX<<maxLoad,0,0;
     gsConstantFunction<> neuX(neuDataX,3);
     gsVector<> neuDataY(3);
-    neuDataY<<0,-5e3,0;
+    neuDataY<<0,-maxLoad,0;
     gsConstantFunction<> neuY(neuDataY,3);
 
     // Boundary conditions
@@ -170,7 +173,7 @@ int main (int argc, char** argv)
     BCs.setGeoMap(mp);
 
     // Pressure
-    real_t pressure = 5e3;
+    real_t pressure = maxLoad;
     // real_t pressure =0;
 
     std::string dirname = ".";
@@ -308,8 +311,8 @@ int main (int argc, char** argv)
        */
       if (true)
       {
-        neuDataX<<5e3*(1-load_fac),0,0;
-        neuDataY<<0,-5e3*(1-load_fac),0;
+        neuDataX<<maxLoad*(1-load_fac),0,0;
+        neuDataY<<0,-maxLoad*(1-load_fac),0;
         neuX.setValue(neuDataX,3);
         neuY.setValue(neuDataY,3);        
       }
@@ -396,8 +399,12 @@ int main (int argc, char** argv)
         gsWarn<<"Load step "<<step<<" did not converge\n";
         GISMO_ASSERT(load_fac!=0,"load_fac is zero but no convergence on the first step. Try to increase the number of iterations");
         load_fac -= dload_fac;
+        gsDebugVar(dload_fac);
         dload_fac /= 2;
+        gsDebugVar(load_fac);
+        gsDebugVar(dload_fac);
         load_fac += dload_fac;
+        gsDebugVar(load_fac);
         bisected = true;
         continue;
       }

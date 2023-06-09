@@ -70,7 +70,7 @@ int main (int argc, char** argv)
     bool write = false;
     bool writeG = false;
 
-    index_t maxit = 50;
+    index_t maxit = 100;
 
     // Arc length method options
     real_t dL = 1; // General arc length
@@ -424,6 +424,10 @@ int main (int argc, char** argv)
     }
     else
       GISMO_ERROR("Test case" << testCase<<" unknown.");
+
+
+    if (TFT)
+      dirname = dirname + "_TFT";
 
     mp.addAutoBoundaries();
     mp.computeTopology();

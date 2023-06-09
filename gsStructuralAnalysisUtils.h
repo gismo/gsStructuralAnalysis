@@ -121,7 +121,7 @@ public:
 
     void add(const gsMatrix<T> & pointSolutions, const gsVector<T> & otherData)
     {
-        GISMO_ASSERT(pointSolutions.rows()==m_nPointHeaders,"Number of solutions per point is different from the defined number of headers");
+        GISMO_ASSERT(pointSolutions.rows()==m_nPointHeaders,"Number of solutions per point is different from the defined number of headers. "<<pointSolutions.rows()<<" = pointSolutions.rows()==m_nPointHeaders = "<<m_nPointHeaders);
         GISMO_ASSERT(otherData.size()==m_nOtherHeaders,"Number of other data is different from the defined number of headers");
         std::ofstream file;
         file.open(m_fname,std::ofstream::out | std::ofstream::app);
