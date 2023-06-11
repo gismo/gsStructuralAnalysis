@@ -33,6 +33,7 @@ int main (int argc, char** argv)
     bool write        = false;
     bool stress       = false;
     bool quasiNewton  = false;
+    bool DR  = false;
     int quasiNewtonInt= -1;
     bool adaptive     = false;
     int method        = 2; // (0: Load control; 1: Riks' method; 2: Crisfield's method; 3: consistent crisfield method; 4: extended iterations)
@@ -85,6 +86,7 @@ int main (int argc, char** argv)
     cmd.addSwitch("plot", "Plot result in ParaView format", plot);
     cmd.addSwitch("write", "Write data to file", write);
     cmd.addSwitch("stress", "Plot stress in ParaView format", stress);
+    cmd.addSwitch("DR", "Use Dynamic Relaxation before Newton", DR);
     cmd.addInt("v","verbose", "0: no; 1: iteration output; 2: Full matrix and vector output", verbose);
 
     try { cmd.getValues(argc,argv); } catch (int rv) { return rv; }
@@ -356,18 +358,22 @@ int main (int argc, char** argv)
 
       maxIt = 1e4;
       gsStaticDR<real_t> DRM(M,F,Residual);
-      gsOptionList DROptions = DRM.options();
-      DROptions.setReal("damping",damping);
-      DROptions.setReal("alpha",alpha);
-      DROptions.setInt("maxIt",maxIt);
-      DROptions.setReal("tol",1e-1);
-      DROptions.setReal("tolE",1e-1);
-      DROptions.setInt("verbose",verbose);
-      DROptions.setInt("ResetIt",(index_t)(0.1*maxIt));
-      DRM.setDisplacement(solVector);
-      DRM.setOptions(DROptions);
-      DRM.initialize();
-      DRM.solve();
+      if (DR)
+      {
+        gsOptionList DROptions = DRM.options();
+        DROptions.setReal("damping",damping);
+        DROptions.setReal("alpha",alpha);
+        DROptions.setInt("maxIt",maxIt);
+        DROptions.setReal("tol",1e-1);
+        DROptions.setReal("tolE",1e-1);
+        DROptions.setInt("verbose",verbose);
+        DROptions.setInt("ResetIt",(index_t)(0.1*maxIt));
+        DRM.setDisplacement(solVector);
+        DRM.setOptions(DROptions);
+        DRM.initialize();
+        DRM.solve();
+      }
+
       // if (!DRM.converged())
       // {
       //   gsWarn<<"Load step "<<step<<" did not converge\n";
@@ -379,7 +385,9 @@ int main (int argc, char** argv)
       //   continue;
       // }
 
-      gsVector<> updateVector = DRM.solution() - solVector;
+      gsVector<> updateVector;
+      if (DR)
+        updateVector = DRM.solution() - solVector;
 
       maxIt = 1000;
       // gsVector<> updateVector(assembler->numDofs());
@@ -392,7 +400,7 @@ int main (int argc, char** argv)
       NWT.setOptions(NWTOptions);
       NWT.reset();
       NWT.setDisplacement(solVector);
-      NWT.setUpdate(updateVector);
+      if (DR) NWT.setUpdate(updateVector);
       NWT.solve();
       if (!NWT.converged())
       {
