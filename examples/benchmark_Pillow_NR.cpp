@@ -238,11 +238,11 @@ int main (int argc, char** argv)
     // materialMatrixTFT->options().setSwitch("Explicit",true);    
 
     gsThinShellAssemblerBase<real_t>* assembler;
-    if (membrane && TFT)
+    if (!membrane && TFT)
       assembler = new gsThinShellAssembler<3, real_t, true >(mp,dbasis,BCs,force,materialMatrixTFT);
-    else if (membrane && !TFT)
+    else if (!membrane && !TFT)
       assembler = new gsThinShellAssembler<3, real_t, true >(mp,dbasis,BCs,force,materialMatrix);
-    else if (!membrane && TFT)
+    else if (membrane && TFT)
       assembler = new gsThinShellAssembler<3, real_t, false >(mp,dbasis,BCs,force,materialMatrixTFT);
     else
       assembler = new gsThinShellAssembler<3, real_t, false >(mp,dbasis,BCs,force,materialMatrix);
@@ -291,7 +291,7 @@ int main (int argc, char** argv)
     real_t dload_fac= 1./maxIt;
     real_t dload_fac0 = dload_fac;
     index_t step=0;
-    bool bisected = false;
+    index_t bisected = 0;
 
     gsMatrix<> writePoints(2,1);
     writePoints<<0,1;
@@ -354,8 +354,6 @@ int main (int argc, char** argv)
       assembler->assembleMass(true);
       gsVector<> M = assembler->rhs();
 
-      bool bisected = false;
-
       maxIt = 1e4;
       gsStaticDR<real_t> DRM(M,F,Residual);
       if (DR)
@@ -404,16 +402,18 @@ int main (int argc, char** argv)
       NWT.solve();
       if (!NWT.converged())
       {
+        gsDebug<<"Number of failures: "<<bisected<<"\n";
+        if (bisected > 20) // failed already 20 times
+        {
+          gsWarn<<"Simulation terminated because of too many failures...\n";
+          break;
+        }
         gsWarn<<"Load step "<<step<<" did not converge\n";
         GISMO_ASSERT(load_fac!=0,"load_fac is zero but no convergence on the first step. Try to increase the number of iterations");
         load_fac -= dload_fac;
-        gsDebugVar(dload_fac);
         dload_fac /= 2;
-        gsDebugVar(load_fac);
-        gsDebugVar(dload_fac);
         load_fac += dload_fac;
-        gsDebugVar(load_fac);
-        bisected = true;
+        bisected++;
         continue;
       }
       solVector = NWT.solution();
@@ -503,9 +503,9 @@ int main (int argc, char** argv)
       //   continue;
       // }
 
-      if (bisected)
+      if (bisected!=0)
       {
-        bisected = false;
+        bisected = 0;
         dload_fac *= 2;
       }
       else
