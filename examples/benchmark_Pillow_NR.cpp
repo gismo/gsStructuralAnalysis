@@ -362,8 +362,8 @@ int main (int argc, char** argv)
         DROptions.setReal("damping",damping);
         DROptions.setReal("alpha",alpha);
         DROptions.setInt("maxIt",maxIt);
-        DROptions.setReal("tol",1e-1);
-        DROptions.setReal("tolE",1e-1);
+        DROptions.setReal("tol",1e-3);
+        DROptions.setReal("tolE",1e-3);
         DROptions.setInt("verbose",verbose);
         DROptions.setInt("ResetIt",(index_t)(0.1*maxIt));
         DRM.setDisplacement(solVector);
@@ -387,7 +387,7 @@ int main (int argc, char** argv)
       if (DR)
         updateVector = DRM.solution() - solVector;
 
-      maxIt = 1000;
+      maxIt = 100;
       // gsVector<> updateVector(assembler->numDofs());
       // updateVector.setZero();
       gsStaticNewton<real_t> NWT(K,F,Jacobian,Residual);
