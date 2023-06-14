@@ -105,27 +105,26 @@ int main (int argc, char** argv)
     if (material==0) Compressibility = 0;
 
     gsMatrix<> box(2,2);
-    if (testCase == 0)
+    if      (testCase == 0)
     {
-      //Jarasjarungkiat2009
+      //Jarasjarungkiat2009,Diaby2006
       E_modulus = 588e6;
       PoissonRatio = 0.4;
       thickness = 0.0006;
       box.col(0)<<0,0;
       real_t AM = 0.6;
       real_t AB = math::sqrt(math::pow(AM,2)/2.);
-      gsDebugVar(AB);
-      box.col(1)<<math::sqrt(0.18),math::sqrt(0.18);
+      box.col(1)<<AB,AB;
     }
-    if (testCase == 1)
+    else if (testCase == 1)
     {
-
       E_modulus = 2e9; // 2GPa
       PoissonRatio = 0.3;
       thickness = 0.1e-3;
       box.col(0)<<0,0;
       box.col(1)<<0.5,0.5;
     }
+
 
     gsMultiPatch<> mp,mp_def;
     mp.addPatch(gsNurbsCreator<>::BSplineSquare(box));
@@ -293,8 +292,10 @@ int main (int argc, char** argv)
     index_t step=0;
     index_t bisected = 0;
 
-    gsMatrix<> writePoints(2,1);
-    writePoints<<0,1;
+    gsMatrix<> writePoints(2,3);
+    writePoints.col(0)<<1,0;
+    writePoints.col(1)<<0,0;
+    writePoints.col(2)<<0,1;
 
     gsParaviewCollection TFcollection(dirname + "/" + "tensionfield");
     gsParaviewCollection solcollection(dirname + "/" + "solution");
