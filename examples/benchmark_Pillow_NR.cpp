@@ -366,7 +366,8 @@ int main (int argc, char** argv)
         DROptions.setReal("tol",1e-3);
         DROptions.setReal("tolE",1e-3);
         DROptions.setInt("verbose",verbose);
-        DROptions.setInt("ResetIt",(index_t)(0.1*maxIt));
+        DROptions.setInt("ResetIt",(index_t)(100));
+        // DROptions.setInt("ResetIt",(index_t)(0.1*maxIt));
         DRM.setDisplacement(solVector);
         DRM.setOptions(DROptions);
         DRM.initialize();
