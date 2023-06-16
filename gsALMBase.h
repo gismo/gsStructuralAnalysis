@@ -14,7 +14,7 @@
 #pragma once
 #include <gsCore/gsLinearAlgebra.h>
 
-#ifdef GISMO_WITH_SPECTRA
+#ifdef gsSpectra_ENABLED
 #include <gsSpectra/gsSpectra.h>
 #endif
 #include <gsIO/gsOptionList.h>

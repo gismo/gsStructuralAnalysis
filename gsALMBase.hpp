@@ -572,7 +572,7 @@ void gsALMBase<T>::_computeStability(gsVector<T> x, bool jacobian, T shift)
   }
   else if (m_bifurcationMethod == bifmethod::Eigenvalue)
   {
-    #ifdef GISMO_WITH_SPECTRA
+    #ifdef gsSpectra_ENABLED
     index_t number = std::min(static_cast<index_t>(std::floor(m_jacMat.cols()/5.)),10);
     /*
     // Without shift!

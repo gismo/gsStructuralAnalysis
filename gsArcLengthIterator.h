@@ -12,8 +12,9 @@
 */
 
 #pragma once
+#ifdef gsSpectra_ENABLED
 #include <gsSpectra/gsSpectra.h>
-
+#endif
 namespace gismo
 {
 

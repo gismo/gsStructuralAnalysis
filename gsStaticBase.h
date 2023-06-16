@@ -14,7 +14,7 @@
 #include <typeinfo>
 
 #include <gsCore/gsLinearAlgebra.h>
-#ifdef GISMO_WITH_SPECTRA
+#ifdef gsSpectra_ENABLED
 #include <gsSpectra/gsSpectra.h>
 #endif
 #include <gsIO/gsOptionList.h>
@@ -172,7 +172,7 @@ protected:
     /// Computes the stability vector using the eigenvalues of the Jacobian, optionally applying a shift
     virtual bool _computeStabilityEig(const gsSparseMatrix<T> & jacMat, T shift)
     {
-#ifdef GISMO_WITH_SPECTRA
+#ifdef gsSpectra_ENABLED
         index_t number = std::min(static_cast<index_t>(std::floor(jacMat.cols()/5.)),10);
         /*
         // Without shift!

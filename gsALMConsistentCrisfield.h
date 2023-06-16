@@ -18,10 +18,6 @@
 
 #pragma once
 
-#ifdef GISMO_WITH_SPECTRA
-#include <gsSpectra/gsSpectra.h>
-#endif
-
 #include <gsStructuralAnalysis/gsALMBase.h>
 
 namespace gismo

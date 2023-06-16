@@ -77,7 +77,7 @@ gsStatus gsEigenProblemBase<T>::computeSparse(const T shift, const index_t numbe
     if (m_status==gsStatus::AssemblyError)
         return m_status;
     
-    #ifdef GISMO_WITH_SPECTRA
+    #ifdef gsSpectra_ENABLED
         if (m_options.getInt("solver")==0)
             return computeSparse_impl<Spectra::GEigsMode::Cholesky>(shift,number);
         else if (m_options.getInt("solver")==1)
@@ -88,13 +88,18 @@ gsStatus gsEigenProblemBase<T>::computeSparse(const T shift, const index_t numbe
             return computeSparse_impl<Spectra::GEigsMode::Buckling>(shift,number);
         else if (m_options.getInt("solver")==4)
             return computeSparse_impl<Spectra::GEigsMode::Cayley>(shift,number);
+        else 
+        {
+            gsWarn<<"Solver index "<<m_options.getInt("solver")<<" unknown.\n";
+            return gsStatus::NotStarted;
+        }
     #else
         gsWarn<<"Sparse solver is not implemented without gsSpectra. Please compile gismo with Spectra.\n";
         return gsStatus::NotStarted;
     #endif
 };
 
-#ifdef GISMO_WITH_SPECTRA
+#ifdef gsSpectra_ENABLED
 template <class T>
 template< Spectra::GEigsMode _GEigsMode>
 typename std::enable_if<_GEigsMode==Spectra::GEigsMode::Cholesky ||
@@ -152,7 +157,7 @@ gsEigenProblemBase<T>::computeSparse_impl(T shift, index_t number)
 }
 #endif
 
-#ifdef GISMO_WITH_SPECTRA
+#ifdef gsSpectra_ENABLED
 template <class T>
 template< Spectra::GEigsMode _GEigsMode>
 typename std::enable_if<_GEigsMode==Spectra::GEigsMode::ShiftInvert ||

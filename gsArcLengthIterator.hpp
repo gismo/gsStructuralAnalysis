@@ -1227,7 +1227,7 @@ void gsArcLengthIterator<T>::computeStability(gsVector<T> x, bool jacobian)
   }
   else if (m_bifurcationMethod == bifmethod::Eigenvalue)
   {
-    #ifdef GISMO_WITH_SPECTRA
+    #ifdef gsSpectra_ENABLED
     index_t number = std::min(static_cast<index_t>(std::floor(m_jacMat.cols()/3.)),10);
     gsSpectraSymSolver<gsSparseMatrix<T>> es(m_jacMat,number,5*number);
     es.init();

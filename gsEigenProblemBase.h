@@ -14,7 +14,7 @@
 #include <typeinfo>
 
 #include <gsCore/gsLinearAlgebra.h>
-#ifdef GISMO_WITH_SPECTRA
+#ifdef gsSpectra_ENABLED
 #include <gsSpectra/gsSpectra.h>
 #endif
 #include <gsIO/gsOptionList.h>
@@ -95,10 +95,10 @@ public:
 
     virtual gsStatus computePower();
 
-    virtual gsMatrix<T> values() const { return m_values; };
+    virtual const gsMatrix<T> & values() const { return m_values; };
     virtual T value(int k) const { return m_values.at(k); };
 
-    virtual gsMatrix<T> vectors() const { return m_vectors; };
+    virtual const gsMatrix<T> & vectors() const { return m_vectors; };
     virtual gsMatrix<T> vector(int k) const { return m_vectors.col(k); };
 
     virtual std::vector<std::pair<T,gsMatrix<T>> > mode(int k) const {return makeMode(k); }
@@ -108,21 +108,21 @@ protected:
     virtual std::vector<std::pair<T,gsMatrix<T>> > makeMode(int k) const;
 
 private:
-    #ifdef GISMO_WITH_SPECTRA
+    #ifdef gsSpectra_ENABLED
     template<Spectra::GEigsMode _GEigsMode>
     typename std::enable_if<_GEigsMode==Spectra::GEigsMode::Cholesky ||
                             _GEigsMode==Spectra::GEigsMode::RegularInverse
                             ,
-                            void>::type computeSparse_impl(T shift, index_t number);
+                            gsStatus>::type computeSparse_impl(T shift, index_t number);
     #endif
 
-    #ifdef GISMO_WITH_SPECTRA
+    #ifdef gsSpectra_ENABLED
     template<Spectra::GEigsMode _GEigsMode>
     typename std::enable_if<_GEigsMode==Spectra::GEigsMode::ShiftInvert ||
                             _GEigsMode==Spectra::GEigsMode::Buckling ||
                             _GEigsMode==Spectra::GEigsMode::Cayley
                             ,
-                            void>::type computeSparse_impl(T shift, index_t number);
+                            gsStatus>::type computeSparse_impl(T shift, index_t number);
     #endif
 
 protected:

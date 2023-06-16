@@ -23,6 +23,7 @@ template <class T>
 void gsALMLoadControl<T>::quasiNewtonPredictor()
 {
   m_jacMat = computeJacobian();
+  this->factorizeMatrix(m_jacMat);
   computeUbar(); // rhs contains residual and should be computed every time
 
 }
@@ -31,6 +32,7 @@ template <class T>
 void gsALMLoadControl<T>::quasiNewtonIteration()
 {
   m_jacMat = computeJacobian();
+  this->factorizeMatrix(m_jacMat);
 }
 
 template <class T>
@@ -70,6 +72,7 @@ template <class T>
 void gsALMLoadControl<T>::predictor()
 {
   m_jacMat = computeJacobian();
+  this->factorizeMatrix(m_jacMat);
 
   m_DeltaL = m_deltaL = m_arcLength;
   m_deltaUt = this->solveSystem(m_forcing);
@@ -83,6 +86,7 @@ template <class T>
 void gsALMLoadControl<T>::predictorGuess()
 {
   m_jacMat = computeJacobian();
+  this->factorizeMatrix(m_jacMat);
 
   m_DeltaL = m_deltaL = m_Lguess - m_L;
   m_deltaUt = this->solveSystem(m_forcing);

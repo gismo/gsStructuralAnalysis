@@ -56,6 +56,7 @@ template <class T>
 void gsALMCrisfield<T>::quasiNewtonPredictor()
 {
   m_jacMat = computeJacobian();
+  this->factorizeMatrix(m_jacMat);
   computeUt(); // rhs does not depend on solution
   computeUbar(); // rhs contains residual and should be computed every time
 
@@ -65,6 +66,7 @@ template <class T>
 void gsALMCrisfield<T>::quasiNewtonIteration()
 {
   m_jacMat = computeJacobian();
+  this->factorizeMatrix(m_jacMat);
   computeUt(); // rhs does not depend on solution
 }
 
@@ -109,7 +111,7 @@ template <class T>
 void gsALMCrisfield<T>::predictor()
 {
   m_jacMat = computeJacobian();
-
+  this->factorizeMatrix(m_jacMat);
   m_deltaUt = this->solveSystem(m_forcing);
 
   // Choose Solution
@@ -161,7 +163,7 @@ void gsALMCrisfield<T>::predictorGuess()
   GISMO_ASSERT(m_Uguess.rows()!=0 && m_Uguess.cols()!=0,"Guess is empty");
 
   m_jacMat = computeJacobian();
-
+  this->factorizeMatrix(m_jacMat);
   m_deltaUt = this->solveSystem(m_forcing);
   if (!m_phi_user)
     m_phi = math::pow( m_deltaUt.dot(m_deltaUt) / m_forcing.dot(m_forcing),0.5);

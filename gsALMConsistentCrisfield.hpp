@@ -55,6 +55,7 @@ template <class T>
 void gsALMConsistentCrisfield<T>::quasiNewtonPredictor()
 {
   m_jacMat = computeJacobian();
+  this->factorizeMatrix(m_jacMat);
   computeUt(); // rhs does not depend on solution
   computeUbar(); // rhs contains residual and should be computed every time
 
@@ -65,6 +66,7 @@ template <class T>
 void gsALMConsistentCrisfield<T>::quasiNewtonIteration()
 {
   m_jacMat = computeJacobian();
+  this->factorizeMatrix(m_jacMat);
   computeUt(); // rhs does not depend on solution
 }
 
@@ -100,6 +102,7 @@ template <class T>
 void gsALMConsistentCrisfield<T>::predictor()
 {
   m_jacMat = computeJacobian();
+  this->factorizeMatrix(m_jacMat);
 
   // Check if the solution on start and prev are similar.
   // Then compute predictor of the method
@@ -138,6 +141,7 @@ template <class T>
 void gsALMConsistentCrisfield<T>::predictorGuess()
 {
   m_jacMat = computeJacobian();
+  this->factorizeMatrix(m_jacMat);
 
   // Check if the solution on start and prev are similar.
   // Then compute predictor of the method

@@ -60,7 +60,7 @@ public:
     }
 
     /// Return the displacements
-    gsVector<T> solutionU()
+    gsVector<T> & solutionU()
     {
         return m_U;
     }
