@@ -190,7 +190,7 @@ public:
     T indicator()
     {
         gsSparseMatrix<T> m;
-        GISMO_ASSERT(m_nonlinear(m_U, m),"Assembly failed");
+        GISMO_ENSURE(m_nonlinear(m_U, m),"Assembly failed");
         return indicator(m);
     }
 
@@ -198,7 +198,7 @@ public:
     gsVector<T> stabilityVec()
     {
         gsSparseMatrix<T> m;
-        GISMO_ASSERT(m_nonlinear(m_U, m),"Assembly failed");
+        GISMO_ENSURE(m_nonlinear(m_U, m),"Assembly failed");
         return stabilityVec(m);
     }
 
