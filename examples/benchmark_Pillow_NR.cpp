@@ -233,7 +233,7 @@ int main (int argc, char** argv)
     // gsMaterialMatrixBase<real_t>* materialMatrix = new gsMaterialMatrixLinear<3,real_t>(mp,t,E,nu,rho);
     // gsMaterialMatrixTFT<3,real_t,false> * materialMatrixTFT = new gsMaterialMatrixTFT<3,real_t,false>(static_cast<gsMaterialMatrixBaseDim<3,real_t> * >(materialMatrix));
 
-    materialMatrixTFT->options().setReal("SlackMultiplier",1e-6);    
+    materialMatrixTFT->options().setReal("SlackMultiplier",1e-3);    
     // materialMatrixTFT->options().setSwitch("Explicit",true);    
 
     gsThinShellAssemblerBase<real_t>* assembler;
@@ -355,7 +355,7 @@ int main (int argc, char** argv)
       assembler->assembleMass(true);
       gsVector<> M = assembler->rhs();
 
-      maxIt = 1e4;
+      maxIt = 1e6;
       gsStaticDR<real_t> DRM(M,F,Residual);
       if (DR)
       {
@@ -363,8 +363,8 @@ int main (int argc, char** argv)
         DROptions.setReal("damping",damping);
         DROptions.setReal("alpha",alpha);
         DROptions.setInt("maxIt",maxIt);
-        DROptions.setReal("tol",1e-3);
-        DROptions.setReal("tolE",1e-3);
+        DROptions.setReal("tol",1e-1);
+        DROptions.setReal("tolE",1e-1);
         DROptions.setInt("verbose",verbose);
         DROptions.setInt("ResetIt",(index_t)(100));
         // DROptions.setInt("ResetIt",(index_t)(0.1*maxIt));
