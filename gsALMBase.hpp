@@ -149,11 +149,11 @@ template <class T>
 void gsALMBase<T>::factorizeMatrix(const gsSparseMatrix<T> & M)
 {
   m_solver->compute(M);
-  GISMO_ASSERT(m_solver->info()==Eigen::ComputationInfo::Success,"Solver error with code "<<m_solver->info()<<". See Eigen documentation on ComputationInfo \n"
-                                                              <<Eigen::ComputationInfo::Success<<": Success"<<"\n"
-                                                              <<Eigen::ComputationInfo::NumericalIssue<<": NumericalIssue"<<"\n"
-                                                              <<Eigen::ComputationInfo::NoConvergence<<": NoConvergence"<<"\n"
-                                                              <<Eigen::ComputationInfo::InvalidInput<<": InvalidInput"<<"\n");
+  GISMO_ASSERT(m_solver->info()==gsEigen::ComputationInfo::Success,"Solver error with code "<<m_solver->info()<<". See Eigen documentation on ComputationInfo \n"
+                                                              <<gsEigen::ComputationInfo::Success<<": Success"<<"\n"
+                                                              <<gsEigen::ComputationInfo::NumericalIssue<<": NumericalIssue"<<"\n"
+                                                              <<gsEigen::ComputationInfo::NoConvergence<<": NoConvergence"<<"\n"
+                                                              <<gsEigen::ComputationInfo::InvalidInput<<": InvalidInput"<<"\n");
 }
 
 template <class T>
@@ -1086,7 +1086,7 @@ gsMatrix<T> gsALMBase<T>::computeModes(gsVector<T> x, bool jacobian, T shift)
   // if (es.info()==Spectra::CompInfo::NotComputed)
   // if (es.info()==Spectra::CompInfo::NotConverging)
   // if (es.info()==Spectra::CompInfo::NumericalIssue)
-  // Eigen::SelfAdjointEigenSolver< gsMatrix<T> > es(m_jacMat);
+  // gsEigen::SelfAdjointEigenSolver< gsMatrix<T> > es(m_jacMat);
   m_stabilityVec = es.eigenvalues();
 
   result.resize(m_numDof,countNegatives(m_stabilityVec));
@@ -1102,7 +1102,7 @@ gsMatrix<T> gsALMBase<T>::computeModes(gsVector<T> x, bool jacobian, T shift)
   }
 
 #else
-  Eigen::SelfAdjointEigenSolver<gsMatrix<T>> es2(m_jacMat);
+  gsEigen::SelfAdjointEigenSolver<gsMatrix<T>> es2(m_jacMat);
   m_stabilityVec = es2.eigenvalues();
 
   result.resize(m_numDof,countNegatives(m_stabilityVec));
@@ -1230,10 +1230,10 @@ void gsALMBase<T>::computeStability(gsVector<T> x, bool jacobian, T shift)
     // if (es.info()==Spectra::CompInfo::NotComputed)
     // if (es.info()==Spectra::CompInfo::NotConverging)
     // if (es.info()==Spectra::CompInfo::NumericalIssue)
-    // Eigen::SelfAdjointEigenSolver< gsMatrix<T> > es(m_jacMat);
+    // gsEigen::SelfAdjointEigenSolver< gsMatrix<T> > es(m_jacMat);
     m_stabilityVec = es.eigenvalues();
     #else
-    Eigen::SelfAdjointEigenSolver<gsMatrix<T>> es2(m_jacMat);
+    gsEigen::SelfAdjointEigenSolver<gsMatrix<T>> es2(m_jacMat);
     m_stabilityVec = es2.eigenvalues();
     #endif
   }
