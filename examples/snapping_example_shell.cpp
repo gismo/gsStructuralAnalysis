@@ -243,6 +243,10 @@ int main(int argc, char *argv[])
     for (int r =0; r < numHref; ++r)
         mp.uniformRefine();
 
+    gsInfo<<"Multi-patch info:\n";
+    gsInfo<<"* Number of patches: "<<mp.nPatches()<<"\n";
+    gsInfo<<"* First basis      : "<<mp.basis(0)<<"\n";
+
 
     // define basis
     gsMultiBasis<> dbasis(mp);
@@ -388,11 +392,14 @@ int main(int argc, char *argv[])
       arcLength->options().setString("Solver","SimplicialLDLT"); // LDLT solver
       arcLength->options().setInt("BifurcationMethod",0); // 0: determinant, 1: eigenvalue
       arcLength->options().setReal("Length",dLb);
-      arcLength->options().setInt("AngleMethod",0); // 0: step, 1: iteration
+      if (method==2)
+      {
+          arcLength->options().setInt("AngleMethod",0); // 0: step, 1: iteration
+          arcLength->options().setReal("Scaling",0.0);     
+      }
       arcLength->options().setSwitch("AdaptiveLength",adaptive);
       arcLength->options().setInt("AdaptiveIterations",5);
       arcLength->options().setReal("Perturbation",tau);
-      arcLength->options().setReal("Scaling",0.0);
       arcLength->options().setReal("Tol",tol);
       arcLength->options().setReal("TolU",tolU);
       arcLength->options().setReal("TolF",tolF);
