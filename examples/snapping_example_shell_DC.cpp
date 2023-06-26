@@ -23,10 +23,10 @@
 #include <gsStructuralAnalysis/gsStructuralAnalysisTools.h>
 
 #include <gsStructuralAnalysis/gsStaticNewton.h>
+#include <gsStructuralAnalysis/gsStaticComposite.h>
 #include <gsStructuralAnalysis/gsControlDisplacement.h>
 
 #include <gismo.h>
-#include <unordered_set>
 
 using namespace gismo;
 
@@ -126,7 +126,6 @@ int main(int argc, char *argv[])
 
     cmd.addSwitch("plot", "Plot result in ParaView format", plot);
     cmd.addSwitch("write", "Write convergence data to file", write);
-
 
     try { cmd.getValues(argc,argv); } catch (int rv) { return rv; }
 
@@ -228,7 +227,7 @@ int main(int argc, char *argv[])
 
     if (plot)
     {
-        gsWriteParaview<>(mp,"mp",1000,true,false);
+        gsWriteParaview<>(mp,"mp",100,true,false);
     }
 
     gsMultiPatch<> mp_def = mp;
@@ -257,7 +256,7 @@ int main(int argc, char *argv[])
     real_t band = 0.01 * (bbox(1,1) - bbox(1,0));
     real_t ymin = bbox(1,0);
     real_t ymax = bbox(1,1);
-    if (dL==0) dL = Ny*h / step;
+    if (dL==0) dL = Ny*h / step * 2;
     gsConstantFunction<> displ(dL,2);
     std::vector<patchSide> topBdr;
     for (typename gsBoxTopology::const_biterator bit = mp.bBegin(); bit!=mp.bEnd(); bit++)
@@ -328,12 +327,13 @@ int main(int argc, char *argv[])
     gsFunctionExpr<> t(std::to_string(b),2);
     gsFunctionExpr<> E(std::to_string(78e6),2);
     gsConstantFunction<> nu(0.4,2);
+    gsFunctionExpr<> rho(std::to_string(1.0),2);
     parameters[0] = &E;
     parameters[1] = &nu;
     options.addInt("Material","Material model: (0): SvK | (1): NH | (2): NH_ext | (3): MR | (4): Ogden",1);
     options.addInt("Implementation","Implementation: (0): Composites | (1): Analytical | (2): Generalized | (3): Spectral",1);
     options.addSwitch("Compressibility","Compressibility",true);
-    materialMatrix = getMaterialMatrix<2,real_t>(mp,t,parameters,options);
+    materialMatrix = getMaterialMatrix<2,real_t>(mp,t,parameters,rho,options);
 
     gsThinShellAssembler<2, real_t, false> assembler(mp,dbasis,bc,force,materialMatrix);
     // Set the penalty parameter for the interface C1 continuity
@@ -374,13 +374,16 @@ int main(int argc, char *argv[])
                   // Solving //
     //=============================================//
 
-    gsStaticNewton<real_t> staticSolver(matrix,vector,Jacobian,ALResidual);
-    gsOptionList solverOptions = staticSolver.options();
-    solverOptions.setInt("verbose",1);
-    solverOptions.setInt("maxIt",maxit);
-    solverOptions.setReal("tolU",tolU);
-    solverOptions.setReal("tolF",tolF);
-    staticSolver.setOptions(solverOptions);
+    gsStaticNewton<real_t> staticNR(matrix,vector,Jacobian,ALResidual);
+    gsOptionList NROptions = staticNR.options();
+    NROptions.setInt("verbose",1);
+    NROptions.setInt("maxIt",maxit);
+    NROptions.setReal("tolU",tolU);
+    NROptions.setReal("tolF",tolF);
+    staticNR.setOptions(NROptions);
+
+    gsStaticComposite<real_t> staticSolver({&staticNR});
+    staticSolver.initialize();
 
     gsControlDisplacement<real_t> control(&staticSolver);
 
@@ -414,11 +417,12 @@ int main(int argc, char *argv[])
     gsMultiPatch<> mp_def0 = mp_def;
     real_t indicator;
 
+    index_t  k = 0;
     real_t D = 0, eps = 0, sig = 0;
     displ.setValue(D - dL,2);
     assembler.updateBCs(bc);
     gsMatrix<> solVector;
-    for (index_t k=0; k<step; k++)
+    while (eps<=Emax && k < step)
     {
         gsInfo<<"Load step "<<k<<"; D = "<<D<<"; dL = "<<dL<<"\n";
 
@@ -431,12 +435,11 @@ int main(int argc, char *argv[])
             reset = 1;
             mp_def = mp_def0;
             gsInfo<<"Iterations did not converge\n";
-            k -= 1;
             continue;
         }
 
         solVector = control.solutionU();
-        indicator = staticSolver.indicator();
+        indicator = staticNR.indicator();
 
         // Recover force on the north boundaries
         assembler.constructSolution(solVector,mp_def);
@@ -479,14 +482,15 @@ int main(int argc, char *argv[])
         }
 
 
-//        if (reset!=1)
-//        {
+        // if (reset!=1)
+        // {
           dL = dL0;
-//        }
+        // }
         reset = 0;
 
         mp_def0 = mp_def;
         D += dL;
+        k++;
 
         gsInfo<<"--------------------------------------------------------------------------------------------------------------\n";
     }
