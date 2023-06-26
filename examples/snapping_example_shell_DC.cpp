@@ -384,7 +384,7 @@ int main(int argc, char *argv[])
 
     gsControlDisplacement<real_t> control(&staticSolver);
 
-    std::string dirname = "ArcLengthResults/snapping_DC_2D_al=" + std::to_string(al);
+    std::string dirname = "ArcLengthResults/snapping_DC_2D_" + std::to_string(Nx) + "x" + std::to_string(Ny+1) + "_al=" + std::to_string(al) + "_r=" + std::to_string(numHref) + "_e=" + std::to_string(numElevate);
 
     gsParaviewCollection collection(dirname + "/" + output);
     deformation = mp;
@@ -479,10 +479,10 @@ int main(int argc, char *argv[])
         }
 
 
-        if (reset!=1)
-        {
+//        if (reset!=1)
+//        {
           dL = dL0;
-        }
+//        }
         reset = 0;
 
         mp_def0 = mp_def;
