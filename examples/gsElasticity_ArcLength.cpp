@@ -20,9 +20,11 @@
 
 #include <gsStructuralAnalysis/gsStructuralAnalysisTools.h>
 
+#ifdef gsElasticity_ENABLED
 #include <gsElasticity/gsGeoUtils.h>
 #include <gsElasticity/gsElasticityAssembler.h>
 #include <gsElasticity/gsWriteParaviewMultiPhysics.h>
+#endif
 
 using namespace gismo;
 
@@ -42,6 +44,7 @@ void initSectionOutput( const std::string dirname, bool undeformed=false);
 template <class T>
 void writeSectionOutput(const gsMultiPatch<T> & mp, const std::string dirname, const index_t coordinate=0, const T coordVal=0.0, const index_t N=100, bool undeformed=false);
 
+#ifdef gsElasticity_ENABLED
 int main (int argc, char** argv)
 {
     // Input options
@@ -475,6 +478,13 @@ int main (int argc, char** argv)
 
   return result;
 }
+#else//gsElasticity_ENABLED
+int main(int argc, char *argv[])
+{
+    gsWarn<<"G+Smo is not compiled with the gsElasticity module.";
+    return EXIT_FAILURE;
+}
+#endif
 
 template <class T>
 gsMultiPatch<T> BrickDomain(int n, int p, T L, T B, T H)

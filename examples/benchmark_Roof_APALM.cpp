@@ -1,6 +1,11 @@
-/** @file gsThinShell_ArcLength.cpp
+/** @file benchmark_Roof_APALM.cpp
 
-    @brief Code for the arc-length method of a shell based on loads
+    @brief Collapse of a cylindrical roof using the APALM, from
+
+    Guo, Y., Do, H., & Ruess, M. (2019). Isogeometric stability analysis of thin shells:
+    From simple geometries to engineering models.
+    International Journal for Numerical Methods in Engineering.
+    https://doi.org/10.1002/nme.6020
 
     This file is part of the G+Smo library.
 
@@ -13,8 +18,11 @@
 
 #include <gismo.h>
 
+#ifdef gsKLShell_ENABLED
 #include <gsKLShell/gsThinShellAssembler.h>
 #include <gsKLShell/getMaterialMatrix.h>
+#endif
+
 #include <gsStructuralAnalysis/gsALMBase.h>
 #include <gsStructuralAnalysis/gsALMCrisfield.h>
 #include <gsStructuralAnalysis/gsALMRiks.h>
@@ -27,6 +35,7 @@
 
 using namespace gismo;
 
+#ifdef gsKLShell_ENABLED
 template<class T>
 class gsAPALMRoof : public gsAPALM<T>
 {
@@ -137,7 +146,7 @@ int main (int argc, char** argv)
 
   std::string assemberOptionsFile("options/solver_options.xml");
 
-  gsCmdLine cmd("Arc-length analysis for thin shells.");
+  gsCmdLine cmd("APALM analysis of a collapsing roof.");
   cmd.addString( "f", "file", "Input XML file for assembler options", assemberOptionsFile );
 
   cmd.addInt("t", "testcase", "Test case: 0: clamped-clamped, 1: pinned-pinned, 2: clamped-free", testCase);
@@ -669,3 +678,10 @@ int main (int argc, char** argv)
   delete arcLength;
   return result;
 }
+#else//gsKLShell_ENABLED
+int main(int argc, char *argv[])
+{
+    gsWarn<<"G+Smo is not compiled with the gsKLShell module.";
+    return EXIT_FAILURE;
+}
+#endif

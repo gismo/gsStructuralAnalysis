@@ -1,6 +1,6 @@
-/** @file gsThinShell_ArcLength.cpp
+/** @file benchmark_Elasticity_Beam_APALM.cpp
 
-    @brief Code for the arc-length method of a shell based on loads
+    @brief Code for arc-length analysis of a solid beam using the APALM
 
     This file is part of the G+Smo library.
 
@@ -13,9 +13,11 @@
 
 #include <gismo.h>
 
+#ifdef gsElasticity_ENABLED
 #include <gsElasticity/gsGeoUtils.h>
 #include <gsElasticity/gsElasticityAssembler.h>
 #include <gsElasticity/gsWriteParaviewMultiPhysics.h>
+#endif
 
 #include <gsStructuralAnalysis/gsALMBase.h>
 #include <gsStructuralAnalysis/gsALMLoadControl.h>
@@ -36,6 +38,7 @@ gsMultiPatch<T> BrickDomain(int n, int m, int o, int p, int q ,int r, T L, T B, 
 template <class T>
 gsMultiPatch<T> BrickDomain(int n, int p, T L, T B, T H);
 
+#ifdef gsElasticity_ENABLED
 template<class T>
 class gsAPALMBeam : public gsAPALM<T>
 {
@@ -544,6 +547,13 @@ int main (int argc, char** argv)
   delete arcLength;
   return result;
 }
+#else//gsElasticity_ENABLED
+int main(int argc, char *argv[])
+{
+    gsWarn<<"G+Smo is not compiled with the gsElasticity module.";
+    return EXIT_FAILURE;
+}
+#endif
 
 template <class T>
 gsMultiPatch<T> BrickDomain(int n, int p, T L, T B, T H)

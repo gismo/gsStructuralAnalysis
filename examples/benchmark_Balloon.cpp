@@ -20,8 +20,10 @@
 
 #include <gismo.h>
 
+#ifdef gsKLShell_ENABLED
 #include <gsKLShell/gsThinShellAssembler.h>
 #include <gsKLShell/getMaterialMatrix.h>
+#endif
 
 #include <gsStructuralAnalysis/gsStructuralAnalysisTools.h>
 
@@ -32,6 +34,7 @@
 
 using namespace gismo;
 
+#ifdef gsKLShell_ENABLED
 int main (int argc, char** argv)
 {
     // Input options
@@ -433,3 +436,10 @@ int main (int argc, char** argv)
 
   return result;
 }
+#else//gsKLShell_ENABLED
+int main(int argc, char *argv[])
+{
+    gsWarn<<"G+Smo is not compiled with the gsKLShell module.";
+    return EXIT_FAILURE;
+}
+#endif

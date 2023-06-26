@@ -17,8 +17,12 @@
 
 #include <gismo.h>
 
+#ifdef gsKLShell_ENABLED
 #include <gsKLShell/gsThinShellAssembler.h>
 #include <gsKLShell/getMaterialMatrix.h>
+#include <gsKLShell/gsMaterialMatrixIntegrate.h>
+#include <gsKLShell/gsThinShellUtils.h>
+#endif
 
 #include <gsStructuralAnalysis/gsStructuralAnalysisTools.h>
 
@@ -36,6 +40,7 @@ void initStepOutput( const std::string name, const gsMatrix<T> & points);
 template <class T>
 void writeStepOutput(const gsMultiPatch<T> & deformation, const gsMatrix<T> solVector, const T indicator, const T load, const std::string name, const gsMatrix<T> & points, const index_t extreme=-1, const index_t kmax=100); // extreme: the column of point indices to compute the extreme over (default -1);
 
+#ifdef gsKLShell_ENABLED
 int main (int argc, char** argv)
 {
     // Input options
@@ -280,7 +285,7 @@ int main (int argc, char** argv)
     gsParaviewCollection collection(dirname + "/" + output);
     gsMultiPatch<> deformation = mp;
 
-    gsMatrix<> updateVector, solVector;
+    gsMatrix<> solVector;
     gsThinShellAssemblerBase<real_t>* assembler;
 
     gsStopwatch stopwatch,stopwatch2;
@@ -288,7 +293,6 @@ int main (int argc, char** argv)
     real_t totaltime = 0.0;
 
     real_t D = 0;
-
 
     // Function for the Jacobian
     gsStructuralAnalysisOps<real_t>::Jacobian_t Jacobian = [&time,&stopwatch,&assembler,&mp_def](gsVector<real_t> const &x, gsSparseMatrix<real_t> & m)
@@ -312,7 +316,6 @@ int main (int argc, char** argv)
       time += stopwatch.stop();
       return status == ThinShellAssemblerStatus::Success;
     };
-
     // Function for the Residual
     gsStructuralAnalysisOps<real_t>::ALResidual_t ALResidual = [&displ,&BCs,&time,&stopwatch,&assembler,&mp_def](gsVector<real_t> const &x, real_t lambda, gsVector<real_t> & result)
     {
@@ -389,8 +392,8 @@ int main (int argc, char** argv)
 
       assembler->constructSolution(solVector,mp_def);
       patchSide ps(0,boundary::north);
-      gsVector<real_t> Fint = assembler->boundaryForceVector(mp_def,ps,2);
-      real_t Load = Fint.sum() / (0.5*3.14159265358979);
+      gsVector<real_t> Fint = assembler->boundaryForce(mp_def,ps);
+      real_t Load = Fint[2] / (0.5*3.14159265358979);
 
       deformation = mp_def;
       deformation.patch(0).coefs() -= mp.patch(0).coefs();// assuming 1 patch here
@@ -502,7 +505,13 @@ gsMultiPatch<T> FrustrumDomain(int n, int p, T R1, T R2, T h)
 
   return mp;
 }
-
+#else//gsKLShell_ENABLED
+int main(int argc, char *argv[])
+{
+    gsWarn<<"G+Smo is not compiled with the gsKLShell module.";
+    return EXIT_FAILURE;
+}
+#endif
 
 
 template <class T>

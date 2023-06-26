@@ -18,8 +18,10 @@
 
 #include <gismo.h>
 
+#ifdef gsKLShell_ENABLED
 #include <gsKLShell/gsThinShellAssembler.h>
 #include <gsKLShell/getMaterialMatrix.h>
+#endif
 
 #include <gsStructuralAnalysis/gsTimeIntegrator.h>
 #include <gsStructuralAnalysis/gsStructuralAnalysisTools.h>
@@ -27,6 +29,7 @@
 using namespace gismo;
 
 // Choose among various shell examples, default = Thin Plate
+#ifdef gsKLShell_ENABLED
 int main (int argc, char** argv)
 {
     // Input options
@@ -339,3 +342,10 @@ delete assembler;
 
 return result;
 }
+#else//gsKLShell_ENABLED
+int main(int argc, char *argv[])
+{
+    gsWarn<<"G+Smo is not compiled with the gsKLShell module.";
+    return EXIT_FAILURE;
+}
+#endif

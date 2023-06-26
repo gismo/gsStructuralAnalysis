@@ -1,6 +1,6 @@
-/** @file benchmark_FrustrumALM.cpp
+/** @file benchmark_Frustrum_APALM.cpp
 
-    @brief Benchmark for the collapsing frustrum with the Arc-Length Method
+    @brief Benchmark for the collapsing frustrum with the APALM
 
     Based on:
     Başar, Y., & Itskov, M. (1998). Finite element formulation of the Ogden material model with application to ruber-like shells.
@@ -17,8 +17,11 @@
 
 #include <gismo.h>
 
+#ifdef gsKLShell_ENABLED
 #include <gsKLShell/gsThinShellAssembler.h>
 #include <gsKLShell/getMaterialMatrix.h>
+#endif
+
 #include <gsStructuralAnalysis/gsALMBase.h>
 #include <gsStructuralAnalysis/gsALMCrisfield.h>
 #include <gsStructuralAnalysis/gsALMRiks.h>
@@ -41,6 +44,7 @@ void initStepOutput( const std::string name, const gsMatrix<T> & points);
 template <class T>
 void writeStepOutput(const gsALMBase<T> * arcLength, const gsMultiPatch<T> & deformation, const std::string name, const gsMatrix<T> & points, const index_t extreme=-1, const index_t kmax=100);
 
+#ifdef gsKLShell_ENABLED
 template<class T>
 class gsAPALMFrustrum : public gsAPALM<T>
 {
@@ -154,7 +158,7 @@ int main (int argc, char** argv)
 
     std::string assemberOptionsFile("options/solver_options.xml");
 
-    gsCmdLine cmd("Arc-length analysis of a collapsing frustrum.");
+    gsCmdLine cmd("APALM analysis of a collapsing frustrum.");
     cmd.addString( "f", "file", "Input XML file for assembler options", assemberOptionsFile );
 
     cmd.addInt("t", "testcase", "Test case: 0: clamped-clamped, 1: pinned-pinned, 2: clamped-free", testCase);
@@ -742,7 +746,13 @@ int main (int argc, char** argv)
 
   return result;
 }
-
+#else//gsKLShell_ENABLED
+int main(int argc, char *argv[])
+{
+    gsWarn<<"G+Smo is not compiled with the gsKLShell module.";
+    return EXIT_FAILURE;
+}
+#endif
 
 template <class T>
 gsMultiPatch<T> FrustrumDomain(int n, int p, T R1, T R2, T h)

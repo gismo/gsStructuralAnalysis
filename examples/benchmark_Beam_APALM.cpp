@@ -13,8 +13,11 @@
 
 #include <gismo.h>
 
+#ifdef gsKLShell_ENABLED
 #include <gsKLShell/gsThinShellAssembler.h>
 #include <gsKLShell/getMaterialMatrix.h>
+#endif
+
 #include <gsStructuralAnalysis/gsALMBase.h>
 #include <gsStructuralAnalysis/gsALMCrisfield.h>
 #include <gsStructuralAnalysis/gsALMRiks.h>
@@ -35,6 +38,7 @@ gsMultiPatch<T> RectangularDomain(int n, int p, T L, T B, bool clamped = false, 
 template <class T>
 gsMultiPatch<T> Rectangle(T L, T B);
 
+#ifdef gsKLShell_ENABLED
 template<class T>
 class gsAPALMBeam : public gsAPALM<T>
 {
@@ -639,6 +643,13 @@ int main (int argc, char** argv)
   delete arcLength;
   return result;
 }
+#else//gsKLShell_ENABLED
+int main(int argc, char *argv[])
+{
+    gsWarn<<"G+Smo is not compiled with the gsKLShell module.";
+    return EXIT_FAILURE;
+}
+#endif
 
 template <class T>
 gsMultiPatch<T> RectangularDomain(int n, int p, T L, T B, bool clamped, T clampoffset)

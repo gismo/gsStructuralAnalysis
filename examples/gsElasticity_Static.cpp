@@ -13,9 +13,11 @@
 
 #include <gismo.h>
 
+#ifdef gsElasticity_ENABLED
 #include <gsElasticity/gsGeoUtils.h>
 #include <gsElasticity/gsElasticityAssembler.h>
 #include <gsElasticity/gsWriteParaviewMultiPhysics.h>
+#endif
 
 #include <gsStructuralAnalysis/gsStructuralAnalysisTools.h>
 
@@ -45,6 +47,7 @@ void writeToCSVfile(std::string name, gsMatrix<> matrix)
     }
   }
 
+#ifdef gsElasticity_ENABLED
 int main (int argc, char** argv)
 {
     // Input options
@@ -393,7 +396,13 @@ int main (int argc, char** argv)
 
     return 1;
 }
-
+#else//gsElasticity_ENABLED
+int main(int argc, char *argv[])
+{
+    gsWarn<<"G+Smo is not compiled with the gsElasticity module.";
+    return EXIT_FAILURE;
+}
+#endif
 
 template <class T>
 gsMultiPatch<T> BrickDomain(int n, int p, T L, T B, T H)
