@@ -177,8 +177,9 @@ int main (int argc, char** argv)
       Ratio = 0;
       MU1 = 749.18;
       ALPHA1 = 17.14;
-      // material = 4;
-      // impl = 3;
+      material = 4;
+      impl = 3;
+      Compressibility = false;
     }
     else if (testCase==4)
     {
@@ -713,8 +714,12 @@ int main (int argc, char** argv)
         materialMatrix_NL = getMaterialMatrix<2,real_t>(geom,t,parameters_NL,rho,options);
     }
 
+    if (testCase==3)
+      materialMatrix_NL->options().setInt("TensionField",1);    
+
     gsMaterialMatrixTFT<2,real_t,false> * materialMatrixTFT = new gsMaterialMatrixTFT<2,real_t,false>(materialMatrix_NL);
-    materialMatrixTFT->options().setReal("SlackMultiplier",1e-3);    
+    materialMatrixTFT->options().setReal("SlackMultiplier",1e-6);  
+
     gsMaterialMatrixContainer<real_t> materialMats(geom.nPatches());
     // materialMatrixTFT->options().setSwitch("Explicit",true);    
     // materialMatrixTFT->updateDeformed(&mp_def);

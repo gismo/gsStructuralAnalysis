@@ -50,7 +50,7 @@ int main (int argc, char** argv)
     int result        = 0;
     index_t maxIt     = 1e3;
     // Arc length method options
-    real_t tol        = 1e-3;
+    real_t tol        = 1e-4;
 
     real_t alpha = 1.0;
     real_t damping = 0.1;
@@ -216,7 +216,7 @@ int main (int argc, char** argv)
       options.addInt("Implementation","Implementation: (0): Composites | (1): Analytical | (2): Generalized | (3): Spectral",1);
       materialMatrix = getMaterialMatrix<3,real_t>(mp,t,parameters,rho,options);
       materialMatrixTFT = new gsMaterialMatrixTFT<3,real_t,true>(static_cast<gsMaterialMatrixBaseDim<3,real_t> * >(materialMatrix));
-      // dynamic_cast<gsMaterialMatrixTFT<3,real_t,true> *>(materialMatrixTFT)->updateDeformed(&mp_def);
+      // materialMatrixTFT = new gsMaterialMatrixTFT<3,real_t,false>(static_cast<gsMaterialMatrixBaseDim<3,real_t> * >(materialMatrix));
     }
     else if (material==1 || material==2)
     {
