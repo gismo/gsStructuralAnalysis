@@ -51,7 +51,7 @@ int main (int argc, char** argv)
     int result        = 0;
     index_t maxIt     = 1e3;
     // Arc length method options
-    real_t tol        = 1e-3;
+    real_t tol        = 1e-4;
 
     real_t alpha = 1.0;
     real_t damping = 0.1;
@@ -218,7 +218,7 @@ int main (int argc, char** argv)
       options.addInt("Implementation","Implementation: (0): Composites | (1): Analytical | (2): Generalized | (3): Spectral",1);
       materialMatrix = getMaterialMatrix<3,real_t>(mp,t,parameters,rho,options);
       materialMatrixTFT = new gsMaterialMatrixTFT<3,real_t,true>(static_cast<gsMaterialMatrixBaseDim<3,real_t> * >(materialMatrix));
-      // dynamic_cast<gsMaterialMatrixTFT<3,real_t,true> *>(materialMatrixTFT)->updateDeformed(&mp_def);
+      // materialMatrixTFT = new gsMaterialMatrixTFT<3,real_t,false>(static_cast<gsMaterialMatrixBaseDim<3,real_t> * >(materialMatrix));
     }
     else if (material==1 || material==2)
     {
@@ -235,7 +235,7 @@ int main (int argc, char** argv)
     // gsMaterialMatrixBase<real_t>* materialMatrix = new gsMaterialMatrixLinear<3,real_t>(mp,t,E,nu,rho);
     // gsMaterialMatrixTFT<3,real_t,false> * materialMatrixTFT = new gsMaterialMatrixTFT<3,real_t,false>(static_cast<gsMaterialMatrixBaseDim<3,real_t> * >(materialMatrix));
 
-    materialMatrixTFT->options().setReal("SlackMultiplier",1e-6);    
+    materialMatrixTFT->options().setReal("SlackMultiplier",1e-3);    
     // materialMatrixTFT->options().setSwitch("Explicit",true);    
 
     gsThinShellAssemblerBase<real_t>* assembler;
@@ -357,7 +357,7 @@ int main (int argc, char** argv)
       assembler->assembleMass(true);
       gsVector<> M = assembler->rhs();
 
-      maxIt = 1e4;
+      maxIt = 1e6;
       gsStaticDR<real_t> DRM(M,F,Residual);
       if (DR)
       {
@@ -365,8 +365,8 @@ int main (int argc, char** argv)
         DROptions.setReal("damping",damping);
         DROptions.setReal("alpha",alpha);
         DROptions.setInt("maxIt",maxIt);
-        DROptions.setReal("tol",1e-3);
-        DROptions.setReal("tolE",1e-3);
+        DROptions.setReal("tol",1e-1);
+        DROptions.setReal("tolE",1e-1);
         DROptions.setInt("verbose",verbose);
 //        DROptions.setInt("ResetIt",(index_t)(100));
         DROptions.setInt("ResetIt",(index_t)(0.1*maxIt));

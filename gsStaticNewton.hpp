@@ -46,6 +46,7 @@ void gsStaticNewton<T>::initOutput()
     gsInfo<<std::setw(4)<<std::left<<"It.";
     gsInfo<<std::setw(17)<<std::left<<"|R|";
     gsInfo<<std::setw(17)<<std::left<<"|R|/|R0|";
+    gsInfo<<std::setw(17)<<std::left<<"|DU|";
     gsInfo<<std::setw(17)<<std::left<<"|dU|";
     gsInfo<<std::setw(17)<<std::left<<"|dU|/|DU|";
     gsInfo<<std::setw(17)<<std::left<<"|dU|/|U+DU|";
@@ -61,6 +62,7 @@ void gsStaticNewton<T>::stepOutput(index_t k)
     gsInfo<<std::setw(4)<<std::left<<k;
     gsInfo<<std::setw(17)<<std::left<<m_residual;
     gsInfo<<std::setw(17)<<std::left<<m_residual/m_residualIni;
+    gsInfo<<std::setw(17)<<std::left<<m_DeltaU.norm();
     gsInfo<<std::setw(17)<<std::left<<m_relax * m_deltaU.norm();
     gsInfo<<std::setw(17)<<std::left<<m_relax * m_deltaU.norm()/m_DeltaU.norm();
     gsInfo<<std::setw(17)<<std::left<<m_relax * m_deltaU.norm()/(m_U+m_DeltaU).norm();
