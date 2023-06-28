@@ -33,7 +33,8 @@ int main (int argc, char** argv)
     bool write        = false;
     bool stress       = false;
     bool quasiNewton  = false;
-    bool DR  = false;
+    bool DR = false;
+    bool NR = false;
     int quasiNewtonInt= -1;
     bool adaptive     = false;
     int method        = 2; // (0: Load control; 1: Riks' method; 2: Crisfield's method; 3: consistent crisfield method; 4: extended iterations)
@@ -86,7 +87,8 @@ int main (int argc, char** argv)
     cmd.addSwitch("plot", "Plot result in ParaView format", plot);
     cmd.addSwitch("write", "Write data to file", write);
     cmd.addSwitch("stress", "Plot stress in ParaView format", stress);
-    cmd.addSwitch("DR", "Use Dynamic Relaxation before Newton", DR);
+    cmd.addSwitch("DR", "Use Dynamic Relaxation", DR);
+    cmd.addSwitch("NR", "Use Newton", NR);
     cmd.addInt("v","verbose", "0: no; 1: iteration output; 2: Full matrix and vector output", verbose);
 
     try { cmd.getValues(argc,argv); } catch (int rv) { return rv; }
@@ -366,59 +368,75 @@ int main (int argc, char** argv)
         DROptions.setReal("tol",1e-3);
         DROptions.setReal("tolE",1e-3);
         DROptions.setInt("verbose",verbose);
-        DROptions.setInt("ResetIt",(index_t)(100));
-        // DROptions.setInt("ResetIt",(index_t)(0.1*maxIt));
+//        DROptions.setInt("ResetIt",(index_t)(100));
+        DROptions.setInt("ResetIt",(index_t)(0.1*maxIt));
         DRM.setDisplacement(solVector);
         DRM.setOptions(DROptions);
         DRM.initialize();
         DRM.solve();
+
+	if (!DRM.converged())
+      	{
+       		gsDebug<<"Number of failures: "<<bisected<<"\n";
+        	if (bisected > 20) // failed already 20 times
+        	{
+          		gsWarn<<"Simulation terminated because of too many failures...\n";
+          		break;
+        	}
+		gsWarn<<"Load step "<<step<<" did not converge\n";
+        	GISMO_ASSERT(load_fac!=0,"load_fac is zero but no convergence on the first step. Try to increase the number of iterations");
+        	load_fac -= dload_fac;
+        	dload_fac /= 2;
+        	load_fac += dload_fac;
+        	bisected++;
+        	continue;
+      	}
       }
-
-      // if (!DRM.converged())
-      // {
-      //   gsWarn<<"Load step "<<step<<" did not converge\n";
-      //   GISMO_ASSERT(load_fac!=0,"load_fac is zero but no convergence on the first step. Try to increase the number of iterations");
-      //   load_fac -= dload_fac;
-      //   dload_fac /= 2;
-      //   load_fac += dload_fac;
-      //   bisected = true;
-      //   continue;
-      // }
-
-      gsVector<> updateVector;
-      if (DR)
-        updateVector = DRM.solution() - solVector;
 
       maxIt = 100;
       // gsVector<> updateVector(assembler->numDofs());
       // updateVector.setZero();
       gsStaticNewton<real_t> NWT(K,F,Jacobian,Residual);
-      gsOptionList NWTOptions = NWT.options();
-      NWTOptions.setInt("maxIt",maxIt);
-      NWTOptions.setReal("tol",tol);
-      NWTOptions.setInt("verbose",verbose);
-      NWT.setOptions(NWTOptions);
-      NWT.reset();
-      NWT.setDisplacement(solVector);
-      if (DR) NWT.setUpdate(updateVector);
-      NWT.solve();
-      if (!NWT.converged())
+      if (NR)
       {
-        gsDebug<<"Number of failures: "<<bisected<<"\n";
-        if (bisected > 20) // failed already 20 times
-        {
-          gsWarn<<"Simulation terminated because of too many failures...\n";
-          break;
-        }
-        gsWarn<<"Load step "<<step<<" did not converge\n";
-        GISMO_ASSERT(load_fac!=0,"load_fac is zero but no convergence on the first step. Try to increase the number of iterations");
-        load_fac -= dload_fac;
-        dload_fac /= 2;
-        load_fac += dload_fac;
-        bisected++;
-        continue;
+	gsVector<> updateVector;
+      	gsOptionList NWTOptions = NWT.options();
+	NWTOptions.setInt("maxIt",maxIt);
+      	NWTOptions.setReal("tol",tol);
+      	NWTOptions.setInt("verbose",verbose);
+      	NWT.setOptions(NWTOptions);
+      	NWT.reset();
+      	NWT.setDisplacement(solVector);
+      	if (DR) 
+	{
+		updateVector = DRM.solution() - solVector;
+		NWT.setUpdate(updateVector);
+	}
+      	NWT.solve();
+//*/
+      	if (!NWT.converged())
+      	{
+        	gsDebug<<"Number of failures: "<<bisected<<"\n";
+	        if (bisected > 20) // failed already 20 times
+        	{
+          		gsWarn<<"Simulation terminated because of too many failures...\n";
+          		break;
+        	}
+        	gsWarn<<"Load step "<<step<<" did not converge\n";
+        	GISMO_ASSERT(load_fac!=0,"load_fac is zero but no convergence on the first step. Try to increase the number of iterations");
+        	load_fac -= dload_fac;
+        	dload_fac /= 2;
+        	load_fac += dload_fac;
+        	bisected++;
+        	continue;
+	}
       }
-      solVector = NWT.solution();
+      if (NR)
+      	solVector = NWT.solution();
+      else if (DR && !NR)
+	solVector = DRM.solution();
+      else
+    	GISMO_ERROR("No solution computed");
 
       mp_def = assembler->constructSolution(solVector);
       // if (material==0)
