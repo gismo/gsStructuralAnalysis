@@ -583,7 +583,7 @@ int main (int argc, char** argv)
       if (apalm.isMain())
       {
         std::ofstream file;
-        file.open("times");
+        file.open(dirname + "/times.txt");
         file<<"solution time: "<<time<<" s\n";
         file.close();
       }
@@ -737,7 +737,7 @@ int main (int argc, char** argv)
     if (apalm.isMain())
     {
       std::ofstream file;
-      file.open("times");
+      file.open(dirname + "/times.txt");
       file<<"serial   time: "<<serialTime<<" s\n";
       file<<"parallel time: "<<parallelTime<<" s\n";
       file.close();

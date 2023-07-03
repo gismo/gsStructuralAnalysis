@@ -411,7 +411,7 @@ int main (int argc, char** argv)
   gsAPALMData<real_t,solution_t> apalmData;
   apalmData.options().setInt("MaxLevel",maxLevel);
   apalmData.options().setInt("Verbose",verbose);
-  apalmData.options().setReal("Tolerance",1e-3);
+  apalmData.options().setReal("Tolerance",APALM_tol);
 
   gsAPALMBeam<real_t> apalm(comm,arcLength,apalmData,assembler,dirname,refPoints,refPatches);
   apalm.options().setSwitch("Verbose",(verbose>0));
@@ -487,7 +487,7 @@ int main (int argc, char** argv)
     if (apalm.isMain())
     {
       std::ofstream file;
-      file.open("times");
+      file.open(dirname + "/times.txt");
       file<<"solution time: "<<time<<" s\n";
       file.close();
     }
@@ -630,7 +630,7 @@ int main (int argc, char** argv)
     if (apalm.isMain())
     {
       std::ofstream file;
-      file.open("times");
+      file.open(dirname + "/times.txt");
       file<<"serial   time: "<<serialTime<<" s\n";
       file<<"parallel time: "<<parallelTime<<" s\n";
       file.close();

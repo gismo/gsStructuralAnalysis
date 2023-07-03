@@ -591,7 +591,7 @@ int main(int argc, char *argv[])
     if (apalm.isMain())
     {
         std::ofstream file;
-        file.open("times");
+        file.open(dirname + "/times.txt");
         file<<"solution time: "<<time<<" s\n";
         file.close();
     }
