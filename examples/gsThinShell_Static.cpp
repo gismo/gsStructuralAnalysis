@@ -13,10 +13,12 @@
 
 #include <gismo.h>
 
+#ifdef gsKLShell_ENABLED
 #include <gsKLShell/gsThinShellAssembler.h>
 #include <gsKLShell/getMaterialMatrix.h>
+#endif
 
-#ifdef GISMO_ELASTICITY
+#ifdef gsElasticity_ENABLED
 #include <gsElasticity/gsWriteParaviewMultiPhysics.h>
 #endif
 
@@ -49,6 +51,7 @@ template <class T>
 gsMultiPatch<T> FrustrumDomain(int n, int p, T R1, T R2, T h);
 
 // Choose among various shell examples, default = Thin Plate
+#ifdef gsKLShell_ENABLED
 int main(int argc, char *argv[])
 {
     //! [Parse command line]
@@ -1445,6 +1448,13 @@ int main(int argc, char *argv[])
     return EXIT_SUCCESS;
 
 }// end main
+#else//gsKLShell_ENABLED
+int main(int argc, char *argv[])
+{
+    gsWarn<<"G+Smo is not compiled with the gsKLShell module.";
+    return EXIT_FAILURE;
+}
+#endif
 
 template <class T>
 gsMultiPatch<T> RectangularDomain(int n, int p, T L, T B)

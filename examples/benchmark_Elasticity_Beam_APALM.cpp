@@ -1,6 +1,6 @@
-/** @file gsThinShell_ArcLength.cpp
+/** @file benchmark_Elasticity_Beam_APALM.cpp
 
-    @brief Code for the arc-length method of a shell based on loads
+    @brief Code for arc-length analysis of a solid beam using the APALM
 
     This file is part of the G+Smo library.
 
@@ -13,9 +13,11 @@
 
 #include <gismo.h>
 
+#ifdef gsElasticity_ENABLED
 #include <gsElasticity/gsGeoUtils.h>
 #include <gsElasticity/gsElasticityAssembler.h>
 #include <gsElasticity/gsWriteParaviewMultiPhysics.h>
+#endif
 
 #include <gsStructuralAnalysis/gsALMBase.h>
 #include <gsStructuralAnalysis/gsALMLoadControl.h>
@@ -36,6 +38,7 @@ gsMultiPatch<T> BrickDomain(int n, int m, int o, int p, int q ,int r, T L, T B, 
 template <class T>
 gsMultiPatch<T> BrickDomain(int n, int p, T L, T B, T H);
 
+#ifdef gsElasticity_ENABLED
 template<class T>
 class gsAPALMBeam : public gsAPALM<T>
 {
@@ -44,14 +47,16 @@ class gsAPALMBeam : public gsAPALM<T>
   typedef typename Base::solution_t solution_t;
 
 public:
-  gsAPALMBeam(gsALMBase<T> * ALM,
+  gsAPALMBeam(
+              const gsMpiComm & comm,
+              gsALMBase<T> * ALM,
               const gsAPALMData<T,solution_t> & Data,
               const gsElasticityAssembler<T> & assembler,
               std::string & dirname,
               const gsMatrix<T> & refPoints,
               const gsVector<index_t> & refPatches          )
   :
-  Base(ALM,Data),
+  Base(ALM,Data,comm),
   m_assembler(assembler),
   m_dirname(dirname),
   m_refPoints(refPoints),
@@ -400,7 +405,10 @@ int main (int argc, char** argv)
   apalmData.options().setInt("Verbose",verbose);
   apalmData.options().setReal("Tolerance",1e-3);
 
-  gsAPALMBeam<real_t> apalm(arcLength,apalmData,assembler,dirname,refPoints,refPatches);
+  const gsMpi & mpi = gsMpi::init(argc, argv);
+  gsMpiComm comm = mpi.worldComm();
+
+  gsAPALMBeam<real_t> apalm(comm,arcLength,apalmData,assembler,dirname,refPoints,refPatches);
   apalm.options().setSwitch("Verbose",(verbose>0));
   apalm.options().setInt("SubIntervals",SubIntervals);
   apalm.options().setSwitch("SingularPoint",true);
@@ -544,6 +552,13 @@ int main (int argc, char** argv)
   delete arcLength;
   return result;
 }
+#else//gsElasticity_ENABLED
+int main(int argc, char *argv[])
+{
+    gsWarn<<"G+Smo is not compiled with the gsElasticity module.";
+    return EXIT_FAILURE;
+}
+#endif
 
 template <class T>
 gsMultiPatch<T> BrickDomain(int n, int p, T L, T B, T H)

@@ -13,15 +13,15 @@
 
 #include <gismo.h>
 
+#ifdef gsKLShell_ENABLED
 #include <gsKLShell/gsThinShellAssembler.h>
 #include <gsKLShell/getMaterialMatrix.h>
+#endif
 
 #include <gsStructuralAnalysis/gsStaticDR.h>
 #include <gsStructuralAnalysis/gsStaticNewton.h>
 #include <gsStructuralAnalysis/gsControlDisplacement.h>
 #include <gsStructuralAnalysis/gsStructuralAnalysisTools.h>
-
-//#include <gsThinShell/gsNewtonIterator.h>
 
 using namespace gismo;
 
@@ -42,6 +42,7 @@ void writeToCSVfile(std::string name, gsMatrix<> matrix)
 }
 
 // Choose among various shell examples, default = Thin Plate
+#ifdef gsKLShell_ENABLED
 int main(int argc, char *argv[])
 {
     //! [Parse command line]
@@ -322,3 +323,10 @@ int main(int argc, char *argv[])
     return EXIT_SUCCESS;
 
 }// end main
+#else//gsKLShell_ENABLED
+int main(int argc, char *argv[])
+{
+    gsWarn<<"G+Smo is not compiled with the gsKLShell module.";
+    return EXIT_FAILURE;
+}
+#endif

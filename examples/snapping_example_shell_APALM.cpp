@@ -11,21 +11,25 @@
     Author(s): A. Mantzaflaris
 */
 
-#include <iostream>
+#include <gismo.h>
 
+#ifdef gsKLShell_ENABLED
 #include <gsKLShell/gsThinShellAssembler.h>
 #include <gsKLShell/gsMaterialMatrixBase.h>
 #include <gsKLShell/gsMaterialMatrixLinear.h>
 #include <gsKLShell/getMaterialMatrix.h>
+#endif
 
 #include <gsStructuralAnalysis/gsStructuralAnalysisTools.h>
+#include <gsStructuralAnalysis/gsStructuralAnalysisUtils.h>
 
 #include <gsStructuralAnalysis/gsALMBase.h>
 #include <gsStructuralAnalysis/gsALMLoadControl.h>
 #include <gsStructuralAnalysis/gsALMRiks.h>
 #include <gsStructuralAnalysis/gsALMCrisfield.h>
+#include <gsStructuralAnalysis/gsAPALMData.h>
+#include <gsStructuralAnalysis/gsAPALM.h>
 
-#include <gismo.h>
 
 using namespace gismo;
 
@@ -47,30 +51,110 @@ gsMultiPatch<T> makeBottom(const T tw, const T tg, const T tb, const T ts, const
 template <class T>
 gsMultiPatch<T> makeBottom(const T tw, const T tg, const T tb, const T ts, const T l, const T a, const std::vector<gsBSpline<T>> & curves);
 
+#ifdef gsKLShell_ENABLED
+template<class T>
+class gsAPALMSnapping : public gsAPALM<T>
+{
+
+  using Base = gsAPALM<T>;
+  typedef typename Base::solution_t solution_t;
+
+public:
+  gsAPALMSnapping(
+                    const gsMpiComm & comm,
+                    gsALMBase<T> * ALM,
+                    const gsAPALMData<T,solution_t> & Data,
+                    const gsThinShellAssemblerBase<T> * assembler,
+                    std::string dirname,
+                    const gsMatrix<T> & refPoints,
+                    const gsVector<index_t> & refPatches,
+                    const index_t Nx, const index_t Ny, const T l, const T h, const T b)
+  :
+  Base(ALM,Data,comm),
+  m_assembler(assembler),
+  m_dirname(dirname),
+  m_refPoints(refPoints),
+  m_refPatches(refPatches),
+  m_Nx(Nx),
+  m_Ny(Ny),
+  m_l(l),
+  m_h(h),
+  m_b(b)
+  {
+    GISMO_ASSERT(refPoints.cols()==1,"Only one point will be used");
+    GISMO_ASSERT(refPatches.size()==1,"Only one point will be used");
+  }
+
+  void parallelIntervalOutput(const std::vector<std::pair<gsVector<T>,T>> & stepSolutions, const std::vector<T> & stepTimes, index_t level, index_t ID)
+  {
+    GISMO_ASSERT(stepSolutions.size()==stepTimes.size(),"Solutions and times must have same size, but solutions.size() = "<<stepSolutions.size()<<" and times.size() = "<<stepTimes.size());
+
+    gsStructuralAnalysisOutput<real_t> data(m_dirname + "/interval_"+std::to_string(ID)+".csv",m_refPoints);
+    gsMultiPatch<T> deformation,mp_tmp, mp;
+    deformation = mp = m_assembler->geometry();
+    std::vector<std::string> pointheaders = {"u_x","u_y"};
+    std::vector<std::string> otherheaders = {"U-norm","Eps","Sigma","Lambda","time","level"};
+
+    data.init(pointheaders,otherheaders);
+
+    for (size_t k=0; k!=stepSolutions.size(); k++)
+    {
+        m_assembler->constructDisplacement(stepSolutions[k].first,mp_tmp);
+        gsField<T> solField(mp,deformation);
+
+        gsMatrix<> pointResults = mp_tmp.patch(m_refPatches(0)).eval(m_refPoints.col(0));
+
+        T eps = pointResults(1,0) / (m_Ny*m_h);
+        T sig = stepSolutions[k].second / (m_Nx*m_b*m_l);
+
+        gsVector<> otherData(6);
+        otherData<<stepSolutions[k].first.norm(),eps,sig,stepSolutions[k].second,stepTimes[k],level;
+        data.add(pointResults,otherData);
+    }
+  }
+
+protected:
+  const gsThinShellAssemblerBase<T> * m_assembler;
+
+  const std::string m_dirname;
+
+  const gsMatrix<T> m_refPoints;
+  const gsVector<index_t> m_refPatches;
+
+  const index_t m_Nx;
+  const index_t m_Ny;
+
+  const T m_l;
+  const T m_h;
+  const T m_b;
+};
+
+
 int main(int argc, char *argv[])
 {
     // Input options
-    int numElevate  = 0;
-    int numHref     = 0;
-    bool plot       = false;
-    bool write = false;
+    index_t numElevate  = 0;
+    index_t numHref     = 0;
+    bool    plot       = false;
+    bool    write = false;
 
     // Arc length method options
-    real_t dL = 0; // General arc length
-    real_t dLb = 0.1; // Ard length to find bifurcation
-    real_t tol = 1e-6;
-    real_t tolU = 1e-6;
-    real_t tolF = 1e-3;
-    real_t relax = 1.0;
-    real_t tau = 1e4;
-    int method = 2; // (0: Load control; 1: Riks' method; 2: Crisfield's method; 3: consistent crisfield method; 4: extended iterations)
-    bool SingularPoint = false;
-    bool quasiNewton = false;
-    int quasiNewtonInt = -1;
-    bool adaptive = false;
-    real_t perturbation = 0;
-    int step = 10;
+    real_t  dL = 0.1; // Arc length
+    real_t  tol = 1e-6;
+    real_t  tolU = 1e-6;
+    real_t  tolF = 1e-3;
+    real_t  relax = 1.0;
+    real_t  tau = 1e4;
+    index_t SubIntervals  = 2;
+    index_t method = 2; // (0: Load control; 1: Riks' method; 2: Crisfield's method; 3: consistent crisfield method; 4: extended iterations)
+    bool    quasiNewton = false;
+    index_t quasiNewtonInt = -1;
+    bool    adaptive = false;
+    real_t  perturbation = 0;
+    index_t step = 10;
     index_t maxit = 20;
+
+    index_t verbose = 0;
 
     std::string wn("data.csv");
 
@@ -94,10 +178,12 @@ int main(int argc, char *argv[])
     real_t b  = 3e-3;
     real_t h  = 2*tg+tb+ts;
 
-    real_t Emax = 1.5;
+    index_t maxLevel  = 2;
+
+    // real_t Emax = 1.5;
 
     gsCmdLine cmd("");
-    cmd.addInt("n","interior","Number of interior knots",interior);
+    cmd.addInt("i","interior","Number of interior knots",interior);
     cmd.addInt("X","Nx","Number of element in x-direction",Nx);
     cmd.addInt("Y","Ny","Number of element in y-direction",Ny);
 
@@ -109,20 +195,22 @@ int main(int argc, char *argv[])
       numElevate);
 
     cmd.addReal("a","a/l", "Value of a/l", al);
-    cmd.addReal("E","Emax", "Maximum strain", Emax);
+    // cmd.addReal("E","Emax", "Maximum strain", Emax);
 
     cmd.addInt("m","Method", "Arc length method; 1: Crisfield's method; 2: RIks' method.", method);
-    cmd.addReal("L","dLb", "arc length", dLb);
-    cmd.addReal("l","dL", "arc length after bifurcation", dL);
+    cmd.addReal("L","dL", "arc length", dL);
+    cmd.addInt("l","level", "Max level", maxLevel);
     cmd.addReal("A","relaxation", "Relaxation factor for arc length method", relax);
 
     cmd.addReal("P","perturbation", "perturbation factor", tau);
 
     cmd.addInt("q","QuasiNewtonInt","Use the Quasi Newton method every INT iterations",quasiNewtonInt);
     cmd.addInt("N", "maxsteps", "Maximum number of steps", step);
+    cmd.addInt("n", "SubIntervals", "Number of steps in subintervals", SubIntervals);
+
+    cmd.addInt("v", "verbose", "verbose", verbose);
 
     cmd.addSwitch("adaptive", "Adaptive length ", adaptive);
-    cmd.addSwitch("bifurcation", "Compute singular points and bifurcation paths", SingularPoint);
     cmd.addSwitch("quasi", "Use the Quasi Newton method", quasiNewton);
 
     cmd.addSwitch("plot", "Plot result in ParaView format", plot);
@@ -148,7 +236,6 @@ int main(int argc, char *argv[])
     gsInfo<<"-----------------------------------Making the element------------------------------------------------\n";
     gsInfo<<"-----------------------------------------------------------------------------------------------------\n";
     gsMultiPatch<> element = makeElement(tw,tg,tb,ts,l,a,curves);
-    auto elementlabels = element.getBoxProperty<std::string>("label");
 
     gsWriteParaview(element,"element",1000,true);
 
@@ -156,7 +243,6 @@ int main(int argc, char *argv[])
     gsInfo<<"-----------------------------------Making the bottom block-------------------------------------------\n";
     gsInfo<<"-----------------------------------------------------------------------------------------------------\n";
     gsMultiPatch<> bottom = makeBottom(tw,tg,tb,ts,l,a,curves);
-    auto bottomlabels = bottom.getBoxProperty<std::string>("label");
 
     gsWriteParaview(bottom,"bottom",1000,true);
 
@@ -164,7 +250,6 @@ int main(int argc, char *argv[])
     gsInfo<<"-----------------------------------Making the top block-------------------------------------------\n";
     gsInfo<<"-----------------------------------------------------------------------------------------------------\n";
     gsMultiPatch<> top = makeTop(tw,tg,tb,ts,l,a,curves);
-    auto toplabels = top.getBoxProperty<std::string>("label");
 
     gsWriteParaview(top,"top",1000,true);
 
@@ -172,7 +257,6 @@ int main(int argc, char *argv[])
     gsInfo<<"-----------------------------------Making the geometry--------------------------------------------\n";
     gsInfo<<"-----------------------------------------------------------------------------------------------------\n";
     gsMultiPatch<> mp;
-    auto labels = mp.addBoxProperty("label",std::string());
 
     real_t dx = l;
     real_t dy = 2*tg+ts+tb;
@@ -184,20 +268,14 @@ int main(int argc, char *argv[])
         tmp = bottom;
         gsNurbsCreator<>::shift2D(tmp,kx*dx,0);
         for (auto patch = tmp.begin(); patch != tmp.end(); patch++)
-        {
             pIndex = mp.addPatch(**patch);
-            labels[pIndex] = bottomlabels[(*patch)->id()];
-        }
 
         for (index_t ky = 0; ky!=Ny; ky++)
         {
             tmp = element;
             gsNurbsCreator<>::shift2D(tmp,kx*dx,ky*dy);
             for (auto patch = tmp.begin(); patch != tmp.end(); patch++)
-            {
                 pIndex = mp.addPatch(**patch);
-                labels[pIndex] = elementlabels[(*patch)->id()];
-            }
         }
         tmp = top;
         gsNurbsCreator<>::shift2D(tmp,kx*dx,Ny*dy);
@@ -211,21 +289,9 @@ int main(int argc, char *argv[])
             gsDebugVar(topmid_ID);
         }
         for (auto patch = tmp.begin(); patch != tmp.end(); patch++)
-        {
             pIndex = mp.addPatch(**patch);
-            labels[pIndex] = toplabels[(*patch)->id()];
-        }
     }
     mp.computeTopology();
-
-    // For different materials for snapping or bearing patches.
-    index_t i=0;
-    std::vector<size_t> snapIdx, bearIdx;
-    for (auto label = labels.vector().begin(); label!=labels.vector().end(); label++, i++)
-    {
-        if      (*label=="snapping") snapIdx.push_back(i);
-        else if (*label=="bearing")  bearIdx.push_back(i);
-    }
 
     if (plot)
     {
@@ -391,11 +457,11 @@ int main(int argc, char *argv[])
 
       arcLength->options().setString("Solver","SimplicialLDLT"); // LDLT solver
       arcLength->options().setInt("BifurcationMethod",0); // 0: determinant, 1: eigenvalue
-      arcLength->options().setReal("Length",dLb);
+      arcLength->options().setReal("Length",dL);
       if (method==2)
       {
           arcLength->options().setInt("AngleMethod",0); // 0: step, 1: iteration
-          arcLength->options().setReal("Scaling",0.0);     
+          arcLength->options().setReal("Scaling",0.0);
       }
       arcLength->options().setSwitch("AdaptiveLength",adaptive);
       arcLength->options().setInt("AdaptiveIterations",5);
@@ -404,7 +470,7 @@ int main(int argc, char *argv[])
       arcLength->options().setReal("TolU",tolU);
       arcLength->options().setReal("TolF",tolF);
       arcLength->options().setInt("MaxIter",maxit);
-      arcLength->options().setSwitch("Verbose",true);
+      arcLength->options().setSwitch("Verbose",verbose);
       arcLength->options().setReal("Relaxation",relax);
       if (quasiNewtonInt>0)
       {
@@ -428,137 +494,118 @@ int main(int argc, char *argv[])
     gsMatrix<> Uold = Force;
     Uold.setZero();
 
-    gsMatrix<> solVector;
-    real_t indicator = 0.0;
-    arcLength->setIndicator(indicator); // RESET INDICATOR
-    bool bisected = false;
-    real_t dLb0 = dLb;
+    typedef std::pair<gsVector<real_t>,real_t> solution_t;
 
-    if (write)
+    /*
+      \a solutions is a container the for each level contains the solutions per point
+      \a points contains all the points across levels in the format (level, U, lambda)
+      \a refPoints is a container that contains (level, U, lambda) of the points from which a refinement should START in level+1
+      \a errors is a container that contains the error[l][i] e_i at the ith point of level l
+    */
+
+    std::vector<solution_t> solutions;
+    std::vector<real_t> times;
+    std::vector<index_t> levels;
+
+    index_t level = 0;
+    gsInfo<<"------------------------------------------------------------------------------------\n";
+    gsInfo<<"\t\t\tLevel "<<level<<" (dL = "<<dL<<") -- Coarse grid \n";
+    gsInfo<<"------------------------------------------------------------------------------------\n";
+
+    gsAPALMData<real_t,solution_t> apalmData;
+    apalmData.options().setInt("MaxLevel",maxLevel);
+    apalmData.options().setInt("Verbose",verbose);
+    apalmData.options().setReal("Tolerance",1e-2);
+
+    const gsMpi & mpi = gsMpi::init(argc, argv);
+    gsMpiComm comm = mpi.worldComm();
+
+    gsAPALMSnapping<real_t> apalm(comm,arcLength,apalmData,&assembler,dirname,writePoints,writePatches,Nx,Ny,l,h,b);
+    apalm.options().setSwitch("Verbose",(verbose>0));
+    apalm.options().setInt("SubIntervals",SubIntervals);
+    apalm.initialize();
+
+    real_t time = mpi.wallTime();
+    apalm.solve(step+1);
+    time = mpi.wallTime() - time;
+    if (apalm.isMain()) gsInfo<<"Time = "<<time<<"\n";
+
+    if (apalm.isMain())
+    {
+        solutions = apalm.getFlatSolutions();
+        times     = apalm.getFlatTimes();
+        levels    = apalm.getFlatLevels();
+
+        if (plot || write)
+        {
+            gsField<> solField;
+            gsMultiPatch<> mp_tmp, displacement;
+            std::vector<std::string> pointheaders = {"u_x","u_y"};
+            std::vector<std::string> otherheaders = {"U-norm","Eps","Sigma","Lambda","time","level"};
+
+            gsParaviewCollection dataCollection(dirname + "/" + "data");
+            gsStructuralAnalysisOutput<real_t> data(dirname + "/data.csv",writePoints);
+            if (write)
+                data.init(pointheaders,otherheaders);
+
+            for (size_t k=0; k!= solutions.size(); k++)
+            {
+                Lold = solutions[k].second;
+                Uold = solutions[k].first;
+
+                assembler.constructDisplacement(Uold,mp_tmp);
+                solField = gsField<>(mp,mp_tmp);
+
+                if (write)
+                    if (writePoints.cols()!=0)
+                    {
+                        gsMatrix<> pointResults = mp_def.patch(writePatches(0)).eval(writePoints.col(0));
+
+                        real_t eps = pointResults(1,0) / (Ny*h);
+                        real_t sig = arcLength->solutionL() / (Nx*b*l);
+
+                        gsVector<> otherData(6);
+                        otherData<<solutions[k].first.norm(),eps,sig,solutions[k].second,times[k],times[k],levels[k];
+                        data.add(pointResults,otherData);
+                    }
+
+                if (plot)
+                {
+                    std::string fileName = dirname + "/" + output + util::to_string(k) + "_";
+                    // creating a container to plot all fields to one Paraview file
+                    gsWriteParaview<>(solField, fileName, 200,true);
+                    fileName = gsFileManager::getFilename(fileName);
+                    for (size_t p=0; p!=mp.nPatches(); p++)
+                    {
+                        collection.addPart(fileName + std::to_string(p) + ".vts",k,"",p);
+                        collection.addPart(fileName + std::to_string(p) + "_mesh.vtp",k,"",p);
+                    }
+                }
+            }
+            if (plot)
+            {
+                collection.save();
+            }
+        }
+    }
+    if (apalm.isMain())
     {
         std::ofstream file;
-        file.open(dirname + "/" + wn,std::ofstream::out);
-        file    << std::setprecision(20)
-        << "Deformation norm" << ",";
-        for (index_t k=0; k!=writePatches.size(); k++)
-        {
-            file<< "point "<<k<<" - x" << ","
-            << "point "<<k<<" - y" << ",";
-
-        }
-        file  << "Eps" << ",";
-        file  << "Sigma" << ",";
-        file  << "Lambda" << ","
-        << "Indicator"
-        << "\n";
+        file.open("times");
+        file<<"solution time: "<<time<<" s\n";
         file.close();
     }
 
-    index_t  k = 0;
-    real_t eps = 0;
-    real_t sig = 0;
-    while (eps<=Emax && k < step)
-    {
-
-        gsInfo<<"Load step "<< k<<"\n";
-        gsStatus status = arcLength->step();
-        if      (status==gsStatus::Success)
-            gsDebug<<"Step successful\n";
-        else if (status==gsStatus::NotConverged)
-            gsDebug<<"Not converged\n";
-        else if (status==gsStatus::AssemblyError)
-            gsDebug<<"Assembly error\n";
-        else if (status==gsStatus::SolverError)
-            gsDebug<<"Solver error\n";
-        else if (status==gsStatus::OtherError)
-            gsDebug<<"Other error\n";
-        
-        if (status==gsStatus::NotConverged || status==gsStatus::AssemblyError)
-        {
-            gsInfo<<"Error: Loop terminated, arc length method failed.\n";
-            dLb = dLb / 2.;
-            arcLength->setLength(dLb);
-            arcLength->setSolution(Uold,Lold);
-            bisected = true;
-            continue;
-        }
-
-        if (SingularPoint)
-        {
-            arcLength->computeStability(arcLength->solutionU(),quasiNewton);
-            if (arcLength->stabilityChange())
-            {
-                gsInfo<<"Bifurcation spotted!"<<"\n";
-                arcLength->computeSingularPoint(1e-4, 5, Uold, Lold, 1e-10, 1e-1, false);
-                arcLength->switchBranch();
-                dLb0 = dLb = dL;
-                arcLength->setLength(dLb);
-            }
-        }
-        indicator = arcLength->indicator();
-
-        solVector = arcLength->solutionU();
-        Uold = solVector;
-        Lold = arcLength->solutionL();
-        gsPiecewiseFunction<> stresses;
-        assembler.constructDisplacement(solVector,mp_def);
-
-        gsInfo<<"Total ellapsed assembly time: "<<time<<" s\n";
-
-        if (plot)
-        {
-            std::string fileName = dirname + "/" + output + util::to_string(k) + "_";
-            // creating a container to plot all fields to one Paraview file
-            gsField<> solField(mp,mp_def);
-            gsWriteParaview<>(solField, fileName, 200,true);
-            fileName = gsFileManager::getFilename(fileName);
-            for (size_t p=0; p!=mp.nPatches(); p++)
-            {
-                collection.addPart(fileName + std::to_string(p) + ".vts",k,"",p);
-                collection.addPart(fileName + std::to_string(p) + "_mesh.vtp",k,"",p);
-            }
-        }
-
-        gsMatrix<> out_def = mp_def.patch(writePatches(0)).eval(writePoints.col(0));
-        gsDebugVar(out_def);
-        eps = out_def(1,0) / (Ny*h);
-        sig = arcLength->solutionL() / (Nx*b*l);
-        gsDebugVar(eps);
-        if (write)
-        {
-
-            std::ofstream file;
-            file.open(dirname + "/" + wn,std::ofstream::out | std::ofstream::app);
-            file    << std::setprecision(6)
-            << arcLength->solutionU().norm() << ",";
-            file<< out_def(0,0) << ","
-            << out_def(1,0) << ",";
-            file<< eps<<",";
-            file<< sig<<",";
-            file    << arcLength->solutionL() << "," << arcLength->indicator()<<"\n";
-            file.close();
-        }
-
-
-        if (!bisected)
-        {
-          dLb = dLb0;
-          arcLength->setLength(dLb);
-        }
-
-        bisected = false;
-        k++;
-    }
-
-    if (plot)
-    {
-        collection.save();
-    }
-
     delete arcLength;
-    delete materialMatrix;
-    return 1;
+    return EXIT_SUCCESS;
 }
+#else//gsKLShell_ENABLED
+int main(int argc, char *argv[])
+{
+    gsWarn<<"G+Smo is not compiled with the gsKLShell module.";
+    return EXIT_FAILURE;
+}
+#endif
 
 template <class T>
 std::vector<gsBSpline<T>> makeCurve(const T tw, const T tg, const T tb, const T ts, const T l, const T a, const std::string expr, const gsKnotVector<T> & kv1)

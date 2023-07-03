@@ -13,10 +13,12 @@
 
 #include <gismo.h>
 
+#ifdef gsKLShell_ENABLED
 #include <gsKLShell/gsThinShellAssembler.h>
 #include <gsKLShell/getMaterialMatrix.h>
+#endif
 
-#ifdef GISMO_ELASTICITY
+#ifdef gsElasticity_ENABLED
 #include <gsElasticity/gsWriteParaviewMultiPhysics.h>
 #endif
 
@@ -28,6 +30,7 @@
 using namespace gismo;
 
 // Choose among various shell examples, default = Thin Plate
+#ifdef gsKLShell_ENABLED
 int main(int argc, char *argv[])
 {
     //! [Parse command line]
@@ -486,3 +489,10 @@ int main(int argc, char *argv[])
     return EXIT_SUCCESS;
 
 }// end main
+#else//gsKLShell_ENABLED
+int main(int argc, char *argv[])
+{
+    gsWarn<<"G+Smo is not compiled with the gsKLShell module.";
+    return EXIT_FAILURE;
+}
+#endif

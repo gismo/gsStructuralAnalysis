@@ -13,9 +13,11 @@
 
 #include <gismo.h>
 
+#ifdef gsElasticity_ENABLED
 #include <gsElasticity/gsGeoUtils.h>
 #include <gsElasticity/gsElasticityAssembler.h>
 #include <gsElasticity/gsWriteParaviewMultiPhysics.h>
+#endif
 
 #include <gsStructuralAnalysis/gsStructuralAnalysisTools.h>
 
@@ -24,11 +26,7 @@
 
 using namespace gismo;
 
-template <class T>
-gsMultiPatch<T> BrickDomain(int n, int m, int o, int p, int q ,int r, T L, T B, T H);
-template <class T>
-gsMultiPatch<T> BrickDomain(int n, int p, T L, T B, T H);
-
+#ifdef gsElasticity_ENABLED
 int main (int argc, char** argv)
 {
     // Input options
@@ -219,81 +217,10 @@ int main (int argc, char** argv)
 
     return 1;
 }
-
-
-template <class T>
-gsMultiPatch<T> BrickDomain(int n, int p, T L, T B, T H)
+#else//gsElasticity_ENABLED
+int main(int argc, char *argv[])
 {
-  int q = p;
-  int r = p;
-
-  int m = n;
-  int o = n;
-  gsMultiPatch<T> mp = BrickDomain(n, m, o, p, q, r, L, B, H);
-  return mp;
+    gsWarn<<"G+Smo is not compiled with the gsElasticity module.";
+    return EXIT_FAILURE;
 }
-
-template <class T>
-gsMultiPatch<T> BrickDomain(int n, int m, int o, int p, int q ,int r, T L, T B, T H)
-{
-  // -------------------------------------------------------------------------
-  // --------------------------Make beam geometry-----------------------------
-  // -------------------------------------------------------------------------
-  int dim = 3; //physical dimension
-  gsKnotVector<> kv0;
-  kv0.initUniform(0,1,0,p+1,1);
-  gsKnotVector<> kv1;
-  kv1.initUniform(0,1,0,q+1,1);
-  gsKnotVector<> kv2;
-  kv2.initUniform(0,1,0,r+1,1);
-
-  for(index_t i = 0; i< n; ++i)
-      kv0.uniformRefine();
-  for(index_t i = 0; i< m; ++i)
-      kv1.uniformRefine();
-  for(index_t i = 0; i< o; ++i)
-      kv2.uniformRefine();
-
-  // Make basis
-  gsTensorBSplineBasis<3,T> basis(kv0,kv1,kv2);
-
-  // Initiate coefficient matrix
-  gsMatrix<> coefs(basis.size(),dim);
-  // Number of control points needed per component
-  size_t len0 = basis.component(0).size();
-  size_t len1 = basis.component(1).size();
-  size_t len2 = basis.component(2).size();
-  // Uniformly distribute control points per component
-  gsVector<> coefvec0(len0);
-  coefvec0.setLinSpaced(len0,0.0,L);
-  gsVector<> coefvec1(basis.component(1).size());
-  coefvec1.setLinSpaced(len1,0.0,B);
-  gsVector<> coefvec2(basis.component(2).size());
-  coefvec2.setLinSpaced(len2,0.0,H);
-
-  // Define a matrix with ones
-  gsVector<> temp(len0);
-  temp.setOnes();
-  for (index_t l = 0; l < len2; l++)
-    {
-        for (index_t k = 0; k < len1; k++)
-        {
-            index_t offset = l*len0*len1;
-            // First column contains x-coordinates (length)
-            coefs.col(0).segment(k*len0+offset,len0) = coefvec0;
-            // Second column contains y-coordinates (width)
-            coefs.col(1).segment(k*len0+offset,len0) = temp*coefvec1.at(k);
-
-            coefs.col(2).segment(k*len0+offset,len0) = temp*coefvec2.at(l);
-        }
-    }
-  // gsInfo<<"\n"<<coefs<<"\n";
-  // Create gsGeometry-derived object for the patch
-  gsTensorBSpline<3,real_t> shape(basis,coefs);
-
-  gsMultiPatch<T> mp;
-  mp.addPatch(shape);
-  mp.addAutoBoundaries();
-
-  return mp;
-}
+#endif

@@ -13,10 +13,12 @@
 
 #include <gismo.h>
 
+#ifdef gsKLShell_ENABLED
 #include <gsKLShell/gsThinShellAssembler.h>
 #include <gsKLShell/getMaterialMatrix.h>
-#include <gsStructuralAnalysis/gsBucklingSolver.h>
+#endif
 
+#include <gsStructuralAnalysis/gsBucklingSolver.h>
 #include <gsStructuralAnalysis/gsStructuralAnalysisTools.h>
 
 using namespace gismo;
@@ -46,6 +48,7 @@ gsMultiPatch<T> Rectangle(T L, T B);
 template <class T>
 gsMultiPatch<T> AnnularDomain(int n, int p, T R1, T R2);
 
+#ifdef gsKLShell_ENABLED
 int main (int argc, char** argv)
 {
     // Input options
@@ -731,6 +734,13 @@ int main (int argc, char** argv)
 
     return result;
 }
+#else//gsKLShell_ENABLED
+int main(int argc, char *argv[])
+{
+    gsWarn<<"G+Smo is not compiled with the gsKLShell module.";
+    return EXIT_FAILURE;
+}
+#endif
 
 template <class T>
 gsMultiPatch<T> RectangularDomain(int n, int p, T L, T B)

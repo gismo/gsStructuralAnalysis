@@ -16,8 +16,10 @@
 
 #include <gismo.h>
 
+#ifdef gsKLShell_ENABLED
 #include <gsKLShell/gsThinShellAssembler.h>
 #include <gsKLShell/getMaterialMatrix.h>
+#endif
 
 #include <gsStructuralAnalysis/gsStructuralAnalysisTools.h>
 
@@ -39,6 +41,7 @@ void initStepOutput( const std::string name, const gsMatrix<T> & points);
 template <class T>
 void writeStepOutput(const gsALMBase<T> * arcLength, const gsMultiPatch<T> & deformation, const std::string name, const gsMatrix<T> & points, const index_t extreme=-1, const index_t kmax=100);
 
+#ifdef gsKLShell_ENABLED
 int main (int argc, char** argv)
 {
     // Input options
@@ -396,6 +399,13 @@ int main (int argc, char** argv)
 
   return result;
 }
+#else//gsKLShell_ENABLED
+int main(int argc, char *argv[])
+{
+    gsWarn<<"G+Smo is not compiled with the gsKLShell module.";
+    return EXIT_FAILURE;
+}
+#endif
 
 template <class T>
 gsMultiPatch<T> RectangularDomain(int n, int p, T L, T B, bool clamped, T clampoffset)

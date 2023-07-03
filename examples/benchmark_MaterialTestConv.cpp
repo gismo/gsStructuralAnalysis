@@ -16,8 +16,10 @@
 
 #include <gismo.h>
 
+#ifdef gsKLShell_ENABLED
 #include <gsKLShell/gsThinShellAssembler.h>
 #include <gsKLShell/getMaterialMatrix.h>
+#endif
 
 #include <gsStructuralAnalysis/gsStructuralAnalysisTools.h>
 
@@ -28,6 +30,7 @@ using namespace gismo;
 template <class T>
 gsMultiPatch<T> Rectangle(T L, T B);
 
+#ifdef gsKLShell_ENABLED
 int main (int argc, char** argv)
 {
     // Input options
@@ -332,6 +335,13 @@ int main (int argc, char** argv)
 
   return result;
 }
+#else//gsKLShell_ENABLED
+int main(int argc, char *argv[])
+{
+    gsWarn<<"G+Smo is not compiled with the gsKLShell module.";
+    return EXIT_FAILURE;
+}
+#endif
 
 template <class T>
 gsMultiPatch<T> Rectangle(T L, T B) //, int n, int m, std::vector<boxSide> sides, T offset)

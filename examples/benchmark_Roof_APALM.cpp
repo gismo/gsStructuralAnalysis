@@ -1,6 +1,11 @@
-/** @file gsThinShell_ArcLength.cpp
+/** @file benchmark_Roof_APALM.cpp
 
-    @brief Code for the arc-length method of a shell based on loads
+    @brief Collapse of a cylindrical roof using the APALM, from
+
+    Guo, Y., Do, H., & Ruess, M. (2019). Isogeometric stability analysis of thin shells:
+    From simple geometries to engineering models.
+    International Journal for Numerical Methods in Engineering.
+    https://doi.org/10.1002/nme.6020
 
     This file is part of the G+Smo library.
 
@@ -13,8 +18,11 @@
 
 #include <gismo.h>
 
+#ifdef gsKLShell_ENABLED
 #include <gsKLShell/gsThinShellAssembler.h>
 #include <gsKLShell/getMaterialMatrix.h>
+#endif
+
 #include <gsStructuralAnalysis/gsALMBase.h>
 #include <gsStructuralAnalysis/gsALMCrisfield.h>
 #include <gsStructuralAnalysis/gsALMRiks.h>
@@ -27,6 +35,7 @@
 
 using namespace gismo;
 
+#ifdef gsKLShell_ENABLED
 template<class T>
 class gsAPALMRoof : public gsAPALM<T>
 {
@@ -35,14 +44,15 @@ class gsAPALMRoof : public gsAPALM<T>
   typedef typename Base::solution_t solution_t;
 
 public:
-  gsAPALMRoof(gsALMBase<T> * ALM,
+  gsAPALMRoof(const gsMpiComm & comm,
+              gsALMBase<T> * ALM,
               const gsAPALMData<T,solution_t> & Data,
               const gsThinShellAssemblerBase<T> * assembler,
               std::string dirname,
               const gsMatrix<T> & refPoints,
               const gsVector<index_t> & refPatches          )
   :
-  Base(ALM,Data),
+  Base(ALM,Data,comm),
   m_assembler(assembler),
   m_dirname(dirname),
   m_refPoints(refPoints),
@@ -137,7 +147,7 @@ int main (int argc, char** argv)
 
   std::string assemberOptionsFile("options/solver_options.xml");
 
-  gsCmdLine cmd("Arc-length analysis for thin shells.");
+  gsCmdLine cmd("APALM analysis of a collapsing roof.");
   cmd.addString( "f", "file", "Input XML file for assembler options", assemberOptionsFile );
 
   cmd.addInt("t", "testcase", "Test case: 0: clamped-clamped, 1: pinned-pinned, 2: clamped-free", testCase);
@@ -443,17 +453,16 @@ int main (int argc, char** argv)
   // apalmData.initEmptyQueue();
   // apalmData.submit()
 
-
-  gsAPALMRoof<real_t> apalm(arcLength,apalmData,assembler,dirname,refPoints,refPatches);
+  gsAPALMRoof<real_t> apalm(comm,arcLength,apalmData,assembler,dirname,refPoints,refPatches);
   apalm.options().setSwitch("Verbose",(verbose>0));
   apalm.options().setInt("SubIntervals",SubIntervals);
   apalm.initialize();
 
   if (!sequential)
   {
-    real_t time = apalm.wallTime();
+    real_t time = mpi.wallTime();
     apalm.solve(step+1);
-    time = apalm.wallTime() - time;
+    time = mpi.wallTime() - time;
     if (apalm.isMain()) gsInfo<<"Time = "<<time<<"\n";
 
     if (apalm.isMain())
@@ -520,9 +529,9 @@ int main (int argc, char** argv)
   }
   else
   {
-    real_t serialTime = apalm.wallTime();
+    real_t serialTime = mpi.wallTime();
     apalm.serialSolve(step+1);
-    serialTime = apalm.wallTime() - serialTime;
+    serialTime = mpi.wallTime() - serialTime;
     if (apalm.isMain()) gsInfo<<"Serial time = "<<serialTime<<"\n";
 
     if (apalm.isMain())
@@ -588,9 +597,9 @@ int main (int argc, char** argv)
 
     gsInfo<<"-----------------------------------------------------------------------------------\n";
 
-    real_t parallelTime = apalm.wallTime();
+    real_t parallelTime = mpi.wallTime();
     apalm.parallelSolve();
-    parallelTime = apalm.wallTime() - parallelTime;
+    parallelTime = mpi.wallTime() - parallelTime;
     if (apalm.isMain()) gsInfo<<"Parallel time = "<<parallelTime<<"\n";
 
     if (apalm.isMain())
@@ -667,5 +676,12 @@ int main (int argc, char** argv)
 
   delete assembler;
   delete arcLength;
-  return result;
+  return EXIT_SUCCESS;
 }
+#else//gsKLShell_ENABLED
+int main(int argc, char *argv[])
+{
+    gsWarn<<"G+Smo is not compiled with the gsKLShell module.";
+    return EXIT_FAILURE;
+}
+#endif

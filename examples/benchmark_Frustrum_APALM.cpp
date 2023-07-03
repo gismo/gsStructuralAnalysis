@@ -1,6 +1,6 @@
-/** @file benchmark_FrustrumALM.cpp
+/** @file benchmark_Frustrum_APALM.cpp
 
-    @brief Benchmark for the collapsing frustrum with the Arc-Length Method
+    @brief Benchmark for the collapsing frustrum with the APALM
 
     Based on:
     Başar, Y., & Itskov, M. (1998). Finite element formulation of the Ogden material model with application to ruber-like shells.
@@ -17,8 +17,11 @@
 
 #include <gismo.h>
 
+#ifdef gsKLShell_ENABLED
 #include <gsKLShell/gsThinShellAssembler.h>
 #include <gsKLShell/getMaterialMatrix.h>
+#endif
+
 #include <gsStructuralAnalysis/gsALMBase.h>
 #include <gsStructuralAnalysis/gsALMCrisfield.h>
 #include <gsStructuralAnalysis/gsALMRiks.h>
@@ -41,6 +44,7 @@ void initStepOutput( const std::string name, const gsMatrix<T> & points);
 template <class T>
 void writeStepOutput(const gsALMBase<T> * arcLength, const gsMultiPatch<T> & deformation, const std::string name, const gsMatrix<T> & points, const index_t extreme=-1, const index_t kmax=100);
 
+#ifdef gsKLShell_ENABLED
 template<class T>
 class gsAPALMFrustrum : public gsAPALM<T>
 {
@@ -49,14 +53,15 @@ class gsAPALMFrustrum : public gsAPALM<T>
   typedef typename Base::solution_t solution_t;
 
 public:
-  gsAPALMFrustrum(gsALMBase<T> * ALM,
-              const gsAPALMData<T,solution_t> & Data,
-              const gsThinShellAssemblerBase<T> * assembler,
-              std::string dirname,
-              const gsMatrix<T> & refPoints,
-              const gsVector<index_t> & refPatches          )
+  gsAPALMFrustrum(const gsMpiComm & comm,
+                  gsALMBase<T> * ALM,
+                  const gsAPALMData<T,solution_t> & Data,
+                  const gsThinShellAssemblerBase<T> * assembler,
+                  std::string dirname,
+                  const gsMatrix<T> & refPoints,
+                  const gsVector<index_t> & refPatches          )
   :
-  Base(ALM,Data),
+  Base(ALM,Data,comm),
   m_assembler(assembler),
   m_dirname(dirname),
   m_refPoints(refPoints),
@@ -154,7 +159,7 @@ int main (int argc, char** argv)
 
     std::string assemberOptionsFile("options/solver_options.xml");
 
-    gsCmdLine cmd("Arc-length analysis of a collapsing frustrum.");
+    gsCmdLine cmd("APALM analysis of a collapsing frustrum.");
     cmd.addString( "f", "file", "Input XML file for assembler options", assemberOptionsFile );
 
     cmd.addInt("t", "testcase", "Test case: 0: clamped-clamped, 1: pinned-pinned, 2: clamped-free", testCase);
@@ -488,7 +493,7 @@ int main (int argc, char** argv)
     apalmData.options().setInt("Verbose",verbose);
     apalmData.options().setReal("Tolerance",APALM_tol);
 
-    gsAPALMFrustrum<real_t> apalm(arcLength,apalmData,assembler,dirname,refPoints,refPatches);
+    gsAPALMFrustrum<real_t> apalm(comm,arcLength,apalmData,assembler,dirname,refPoints,refPatches);
 
 #ifdef GISMO_WITH_MPI
 #   ifdef _OPENMP
@@ -507,9 +512,9 @@ int main (int argc, char** argv)
 
     if(!sequential)
     {
-      real_t time = apalm.wallTime();
+      real_t time = mpi.wallTime();
       apalm.solve(step+1);
-      time = apalm.wallTime() - time;
+      time = mpi.wallTime() - time;
       if (apalm.isMain()) gsInfo<<"Time = "<<time<<"\n";
 
       // plot geometry
@@ -586,7 +591,7 @@ int main (int argc, char** argv)
     else
     {
 
-      real_t serialTime = apalm.wallTime();
+      real_t serialTime = mpi.wallTime();
       if (apalm.isMain())
       {
         gsInfo<<"------------------------------------------------------------------------------------\n";
@@ -594,7 +599,7 @@ int main (int argc, char** argv)
         gsInfo<<"------------------------------------------------------------------------------------\n";
       }
       apalm.serialSolve(step+1);
-      serialTime = apalm.wallTime() - serialTime;
+      serialTime = mpi.wallTime() - serialTime;
       if (apalm.isMain()) gsInfo<<"Serial time = "<<serialTime<<"\n";
 
       // plot geometry
@@ -665,9 +670,9 @@ int main (int argc, char** argv)
       /////////////////////////////////////////////////////////////////////////////////////////////
       /////////////////////////////////////////////////////////////////////////////////////////////
 
-      real_t parallelTime = apalm.wallTime();
+      real_t parallelTime = mpi.wallTime();
       apalm.parallelSolve();
-      parallelTime = apalm.wallTime() - parallelTime;
+      parallelTime = mpi.wallTime() - parallelTime;
       if (apalm.isMain()) gsInfo<<"Parallel time = "<<parallelTime<<"\n";
 
       /////////////////////////////////////////////////////////////////////////////////////////////
@@ -740,9 +745,15 @@ int main (int argc, char** argv)
   }
   delete arcLength;
 
-  return result;
+  return EXIT_SUCCESS;
 }
-
+#else//gsKLShell_ENABLED
+int main(int argc, char *argv[])
+{
+    gsWarn<<"G+Smo is not compiled with the gsKLShell module.";
+    return EXIT_FAILURE;
+}
+#endif
 
 template <class T>
 gsMultiPatch<T> FrustrumDomain(int n, int p, T R1, T R2, T h)
