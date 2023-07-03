@@ -424,7 +424,7 @@ int main(int argc, char *argv[])
     gsMatrix<> solVector;
     while (eps<=Emax && k < step)
     {
-        gsInfo<<"Load step "<<k<<"; D = "<<D<<"; dL = "<<dL<<"\n";
+        gsInfo<<"Load step "<<k<<"; D = "<<D<<"; dL = "<<dL<<"eps = "<<eps<<"\n";
 
         gsStatus status = control.step(dL);
 

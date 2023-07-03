@@ -280,7 +280,7 @@ int main(int argc, char *argv[])
     arcLength->options().setSwitch("AdaptiveLength",adaptive);
     arcLength->options().setInt("AdaptiveIterations",5);
     arcLength->options().setReal("Perturbation",tau);
-    arcLength->options().setReal("Scaling",0.0);
+//    arcLength->options().setReal("Scaling",1.0);
     arcLength->options().setReal("Tol",tol);
     arcLength->options().setReal("TolU",tolU);
     arcLength->options().setReal("TolF",tolF);

@@ -54,6 +54,7 @@ int main(int argc, char *argv[])
     int numHref     = 0;
     bool plot       = false;
     bool write = false;
+    bool mesh  = false;
 
     // Arc length method options
     real_t dL = 0; // General arc length
@@ -127,6 +128,7 @@ int main(int argc, char *argv[])
 
     cmd.addSwitch("plot", "Plot result in ParaView format", plot);
     cmd.addSwitch("write", "Write convergence data to file", write);
+    cmd.addSwitch("mesh", "Plot the mesh", mesh);
 
 
     try { cmd.getValues(argc,argv); } catch (int rv) { return rv; }
@@ -150,7 +152,7 @@ int main(int argc, char *argv[])
     gsMultiPatch<> element = makeElement(tw,tg,tb,ts,l,a,curves);
     auto elementlabels = element.getBoxProperty<std::string>("label");
 
-    gsWriteParaview(element,"element",1000,true);
+    //gsWriteParaview(element,"element",1000,true);
 
     gsInfo<<"-----------------------------------------------------------------------------------------------------\n";
     gsInfo<<"-----------------------------------Making the bottom block-------------------------------------------\n";
@@ -158,7 +160,7 @@ int main(int argc, char *argv[])
     gsMultiPatch<> bottom = makeBottom(tw,tg,tb,ts,l,a,curves);
     auto bottomlabels = bottom.getBoxProperty<std::string>("label");
 
-    gsWriteParaview(bottom,"bottom",1000,true);
+    //gsWriteParaview(bottom,"bottom",1000,true);
 
     gsInfo<<"-----------------------------------------------------------------------------------------------------\n";
     gsInfo<<"-----------------------------------Making the top block-------------------------------------------\n";
@@ -166,7 +168,7 @@ int main(int argc, char *argv[])
     gsMultiPatch<> top = makeTop(tw,tg,tb,ts,l,a,curves);
     auto toplabels = top.getBoxProperty<std::string>("label");
 
-    gsWriteParaview(top,"top",1000,true);
+    //gsWriteParaview(top,"top",1000,true);
 
     gsInfo<<"-----------------------------------------------------------------------------------------------------\n";
     gsInfo<<"-----------------------------------Making the geometry--------------------------------------------\n";
@@ -229,7 +231,7 @@ int main(int argc, char *argv[])
 
     if (plot)
     {
-        gsWriteParaview<>(mp,"mp",1000,true,false);
+        gsWriteParaview<>(mp,"mp",1000,mesh,false);
     }
 
     gsMultiPatch<> mp_def = mp;
@@ -395,7 +397,7 @@ int main(int argc, char *argv[])
       if (method==2)
       {
           arcLength->options().setInt("AngleMethod",0); // 0: step, 1: iteration
-          arcLength->options().setReal("Scaling",0.0);     
+          arcLength->options().setReal("Scaling",0.0);
       }
       arcLength->options().setSwitch("AdaptiveLength",adaptive);
       arcLength->options().setInt("AdaptiveIterations",5);
@@ -418,7 +420,7 @@ int main(int argc, char *argv[])
     arcLength->applyOptions();
     arcLength->initialize();
 
-    std::string dirname = "ArcLengthResults/snapping_2D_al=" + std::to_string(al);
+    std::string dirname = "ArcLengthResults/snapping_2D_"+ std::to_string(Nx) + "x" + std::to_string(Ny+1) + "_al=" + std::to_string(al) + "-r" + std::to_string(numHref) + "-e" + std::to_string(numElevate) + "-L=" + std::to_string(dLb);
 
     gsParaviewCollection collection(dirname + "/" + output);
     deformation = mp;
@@ -510,12 +512,12 @@ int main(int argc, char *argv[])
             std::string fileName = dirname + "/" + output + util::to_string(k) + "_";
             // creating a container to plot all fields to one Paraview file
             gsField<> solField(mp,mp_def);
-            gsWriteParaview<>(solField, fileName, 200,true);
+            gsWriteParaview<>(solField, fileName, 200,mesh);
             fileName = gsFileManager::getFilename(fileName);
             for (size_t p=0; p!=mp.nPatches(); p++)
             {
                 collection.addPart(fileName + std::to_string(p) + ".vts",k,"",p);
-                collection.addPart(fileName + std::to_string(p) + "_mesh.vtp",k,"",p);
+                if (mesh) collection.addPart(fileName + std::to_string(p) + "_mesh.vtp",k,"",p);
             }
         }
 
@@ -523,7 +525,7 @@ int main(int argc, char *argv[])
         gsDebugVar(out_def);
         eps = out_def(1,0) / (Ny*h);
         sig = arcLength->solutionL() / (Nx*b*l);
-        gsDebugVar(eps);
+        gsInfo<<"Eps = "<<eps<<"\n";
         if (write)
         {
 
@@ -600,7 +602,7 @@ std::vector<gsBSpline<T>> makeCurve(const T tw, const T tg, const T tb, const T 
     sol.extract(spline_coefs);
 
     gsTensorBSpline<2,real_t> spline(basis2,spline_coefs);
-    gsWriteParaview<T>(spline,"spline",1000,true,true);
+//    gsWriteParaview<T>(spline,"spline",1000,true,true);
 
     gsTensorBSpline<2,real_t> left, midleft, mid, midright, right;
     real_t splitleft    = tw/2. / l;
