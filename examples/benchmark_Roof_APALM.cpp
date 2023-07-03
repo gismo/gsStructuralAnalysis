@@ -137,9 +137,11 @@ int main (int argc, char** argv)
 
   // Arc length method options
   real_t dL        = 0.5; // Ard length to find bifurcation
-  real_t tol        = 1e-6;
-  real_t tolU       = 1e-6;
-  real_t tolF       = 1e-3;
+  real_t ALM_tol        = 1e-6;
+  real_t ALM_tolU       = 1e-6;
+  real_t ALM_tolF       = 1e-3;
+
+  real_t APALM_tol  = 1e-2;
 
   index_t verbose = 0;
 
@@ -160,6 +162,7 @@ int main (int argc, char** argv)
   cmd.addReal("L","dL", "arc length", dL);
   // cmd.addInt("I","inilvl", "Initial levels", iniLevels);
   // cmd.addInt("M","maxlvl", "Max levels", maxLevels);
+  cmd.addReal("T", "APALM_tol", "APALM Tolerance", APALM_tol);
   cmd.addInt("l","level", "Max level", maxLevel);
   cmd.addReal("A","relaxation", "Relaxation factor for arc length method", relax);
 
@@ -397,9 +400,9 @@ int main (int argc, char** argv)
   arcLength->options().setSwitch("AdaptiveLength",adaptive);
   arcLength->options().setInt("AdaptiveIterations",5);
   arcLength->options().setReal("Scaling",1.0);
-  arcLength->options().setReal("Tol",tol);
-  arcLength->options().setReal("TolU",tolU);
-  arcLength->options().setReal("TolF",tolF);
+  arcLength->options().setReal("Tol",ALM_tol);
+  arcLength->options().setReal("TolU",ALM_tolU);
+  arcLength->options().setReal("TolF",ALM_tolF);
   arcLength->options().setInt("MaxIter",maxit);
   arcLength->options().setSwitch("Verbose",(verbose>0));
   arcLength->options().setReal("Relaxation",relax);
@@ -448,7 +451,7 @@ int main (int argc, char** argv)
   gsAPALMData<real_t,solution_t> apalmData;
   apalmData.options().setInt("MaxLevel",maxLevel);
   apalmData.options().setInt("Verbose",verbose);
-  apalmData.options().setReal("Tolerance",1e-2);
+  apalmData.options().setReal("Tolerance",APALM_tol);
 
   // apalmData.initEmptyQueue();
   // apalmData.submit()
