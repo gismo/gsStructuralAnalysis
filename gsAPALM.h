@@ -44,19 +44,23 @@ class gsAPALM
 public:
   typedef typename std::pair<gsVector<T>,T> solution_t;
 
-  virtual ~gsAPALM() { }
+  // virtual ~gsAPALM() { }
 
   /**
    * @brief      Constructs a new instance.
    *
    * @param[in]  ALM   The alms
    */
-  gsAPALM(      gsALMBase<T> * ALM,
-              const gsAPALMData<T,solution_t> & Data);
+  gsAPALM(  gsALMBase<T> * ALM,
+            const gsAPALMData<T,solution_t> & Data,
+            const gsMpiComm & comm);
+
+  gsAPALM(  gsALMBase<T> * ALM,
+            const gsAPALMData<T,solution_t> & Data);
 
   gsAPALM()
 #ifdef GISMO_WITH_MPI
-  :m_mpi(gsMpi::init())
+  : m_comm(gsSerialComm())
 #endif
   {};
 
@@ -133,8 +137,6 @@ public:
 #ifdef GISMO_WITH_MPI
   bool isMain() {return (m_rank==0); }
   index_t rank() {return (m_rank); }
-  const gsMpi & mpi() { return m_mpi; }
-  real_t wallTime() { return m_mpi.wallTime(); }
   index_t size() { return m_proc_count; };
 
 #else
@@ -218,7 +220,7 @@ protected:
                           bool &                      bifurcation);
 
 
-  gsMpiComm & comm() { return m_comm; }
+  const gsMpiComm & comm() { return m_comm; }
 #endif
 
   template <bool _hasWorkers>
@@ -283,8 +285,7 @@ protected:
 
   // Conditional compilation
 #ifdef GISMO_WITH_MPI
-  const gsMpi & m_mpi;
-  mutable gsMpiComm m_comm ;
+  const gsMpiComm & m_comm ;
   std::queue<index_t> m_workers;
 #endif
 

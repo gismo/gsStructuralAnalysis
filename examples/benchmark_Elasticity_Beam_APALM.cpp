@@ -47,14 +47,16 @@ class gsAPALMBeam : public gsAPALM<T>
   typedef typename Base::solution_t solution_t;
 
 public:
-  gsAPALMBeam(gsALMBase<T> * ALM,
+  gsAPALMBeam(
+              const gsMpiComm & comm,
+              gsALMBase<T> * ALM,
               const gsAPALMData<T,solution_t> & Data,
               const gsElasticityAssembler<T> & assembler,
               std::string & dirname,
               const gsMatrix<T> & refPoints,
               const gsVector<index_t> & refPatches          )
   :
-  Base(ALM,Data),
+  Base(ALM,Data,comm),
   m_assembler(assembler),
   m_dirname(dirname),
   m_refPoints(refPoints),
@@ -403,7 +405,10 @@ int main (int argc, char** argv)
   apalmData.options().setInt("Verbose",verbose);
   apalmData.options().setReal("Tolerance",1e-3);
 
-  gsAPALMBeam<real_t> apalm(arcLength,apalmData,assembler,dirname,refPoints,refPatches);
+  const gsMpi & mpi = gsMpi::init(argc, argv);
+  gsMpiComm comm = mpi.worldComm();
+
+  gsAPALMBeam<real_t> apalm(comm,arcLength,apalmData,assembler,dirname,refPoints,refPatches);
   apalm.options().setSwitch("Verbose",(verbose>0));
   apalm.options().setInt("SubIntervals",SubIntervals);
   apalm.options().setSwitch("SingularPoint",true);

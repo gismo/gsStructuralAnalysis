@@ -17,25 +17,19 @@ namespace gismo
 {
 
 template <class T>
-gsAPALM<T>::gsAPALM(       gsALMBase<T> * ALM,
-                                        const gsAPALMData<T,solution_t> & Data)
+gsAPALM<T>::gsAPALM(  gsALMBase<T> * ALM,
+                      const gsAPALMData<T,solution_t> & Data,
+                      const gsMpiComm & comm                 )
 :
 m_ALM(ALM),
-m_dataEmpty(Data)
-#ifdef GISMO_WITH_MPI
-,m_mpi(gsMpi::init())
-#endif
+m_dataEmpty(Data),
+m_comm(comm)
 {
   GISMO_ASSERT(m_dataEmpty.empty(),"gsAPALMData must be empty; it will be used to define the options!");
   this->_defaultOptions();
   this->_getOptions();
 
 #ifdef GISMO_WITH_MPI
-  // Initialize the MPI environment
-  // Get the world communicator
-  m_comm = m_mpi.worldComm();
-  // MPI_Request req;
-
   //Get size and rank of the processor
   m_proc_count = m_comm.size();
   m_rank = m_comm.rank();
@@ -43,6 +37,25 @@ m_dataEmpty(Data)
   m_proc_count = 1;
   m_rank = 0;
 #endif
+}
+
+template <class T>
+gsAPALM<T>::gsAPALM(  gsALMBase<T> * ALM,
+                      const gsAPALMData<T,solution_t> & Data)
+:
+m_ALM(ALM),
+m_dataEmpty(Data)
+#ifdef GISMO_WITH_MPI
+,
+m_comm(gsSerialComm())
+#endif
+{
+  GISMO_ASSERT(m_dataEmpty.empty(),"gsAPALMData must be empty; it will be used to define the options!");
+  this->_defaultOptions();
+  this->_getOptions();
+
+  m_proc_count = 1;
+  m_rank = 0;
 }
 
 template <class T>
@@ -1210,6 +1223,7 @@ void gsAPALM<T>::_sendMainToWorker( const index_t & workerID,
   m_comm.isend(&branch        ,1,workerID,&req[0] ,0 );
   m_comm.isend(&jobID         ,1,workerID,&req[1] ,1 );
   m_comm.isend(&dataLevel     ,1,workerID,&req[2] ,2 );
+  MPI_Waitall( 3, req, MPI_STATUSES_IGNORE );
 }
 
 template <class T>
@@ -1240,7 +1254,7 @@ void gsAPALM<T>::_sendMainToWorker( const index_t &         workerID,
   refSize   = refU.size();
 
   // Put all data 0-14 in a struct and send a single struct
-  MPI_Request req[13];
+  MPI_Request req[10];
   m_comm.isend(&ID        ,1,workerID,&req[0] ,0 );
   m_comm.isend(&dL0       ,1,workerID,&req[1] ,1 );
   m_comm.isend(&tstart    ,1,workerID,&req[2] ,2 );
@@ -1252,12 +1266,16 @@ void gsAPALM<T>::_sendMainToWorker( const index_t &         workerID,
   m_comm.isend(&prevSize  ,1,workerID,&req[6] ,6 );
   m_comm.isend(&prevL     ,1,workerID,&req[7] ,7 );
 
-  m_comm.isend(&refSize   ,1,workerID,&req[8],8);
-  m_comm.isend(&refL      ,1,workerID,&req[9],9);
+  m_comm.isend(&refSize   ,1,workerID,&req[8] ,8 );
+  m_comm.isend(&refL      ,1,workerID,&req[9] ,9 );
 
-  m_comm.isend(startU.data(), startSize,workerID,&req[10],10);
-  m_comm.isend(prevU.data(),  prevSize, workerID,&req[11],11);
-  m_comm.isend(refU.data(),   refSize,  workerID,&req[12],12);
+  MPI_Waitall( 10, req     , MPI_STATUSES_IGNORE );
+  MPI_Request req_data[3];
+  m_comm.isend(startU.data(), startSize,workerID,&req_data[0],10);
+  m_comm.isend(prevU.data(),  prevSize, workerID,&req_data[1],11);
+  m_comm.isend(refU.data(),   refSize,  workerID,&req_data[2],12);
+
+  MPI_Waitall( 3 , req_data, MPI_STATUSES_IGNORE );
 }
 
 template <class T>
@@ -1285,7 +1303,7 @@ void gsAPALM<T>::_sendMainToWorker( const index_t &         workerID,
   prevSize  = prevU.size();
 
   // Put all data 0-10 in a struct and send a single struct
-  MPI_Request req[9];
+  MPI_Request req[7];
   m_comm.isend(&ID        ,1,workerID,&req[0] ,0 );
   m_comm.isend(&dL0       ,1,workerID,&req[1] ,1 );
   m_comm.isend(&tstart    ,1,workerID,&req[2] ,2 );
@@ -1295,9 +1313,13 @@ void gsAPALM<T>::_sendMainToWorker( const index_t &         workerID,
 
   m_comm.isend(&prevSize  ,1,workerID,&req[5] ,5 );
   m_comm.isend(&prevL     ,1,workerID,&req[6] ,6 );
+  MPI_Waitall( 7, req     , MPI_STATUSES_IGNORE );
 
-  m_comm.isend(startU.data(), startSize,workerID,&req[7],7);
-  m_comm.isend(prevU.data(),  prevSize, workerID,&req[8],8);
+  MPI_Request req_data[2];
+  m_comm.isend(startU.data(), startSize,workerID,&req_data[0],7);
+  m_comm.isend(prevU.data(),  prevSize, workerID,&req_data[1],8);
+
+  MPI_Waitall( 2, req_data, MPI_STATUSES_IGNORE );
 }
 
 template <class T>
@@ -1362,8 +1384,8 @@ void gsAPALM<T>::_recvMainToWorker( const index_t &         sourceID,
   m_comm.irecv(&prevSize  ,1,sourceID,&req[6] ,6 );
   m_comm.irecv(&prevL     ,1,sourceID,&req[7] ,7 );
 
-  m_comm.irecv(&refSize   ,1,sourceID,&req[8],8);
-  m_comm.irecv(&refL      ,1,sourceID,&req[9],9);
+  m_comm.irecv(&refSize   ,1,sourceID,&req[8] ,8 );
+  m_comm.irecv(&refL      ,1,sourceID,&req[9] ,9 );
 
   MPI_Waitall( 10, req, MPI_STATUSES_IGNORE );
   dataInterval = std::make_pair(tstart,tend);
@@ -1373,9 +1395,9 @@ void gsAPALM<T>::_recvMainToWorker( const index_t &         sourceID,
   refU  .resize(refSize);
 
   MPI_Request req_data[3];
-  m_comm.irecv(startU.data(), startU.size(),sourceID,&req_data[0],10);
-  m_comm.irecv(prevU.data(),  prevU.size(), sourceID,&req_data[1],11);
-  m_comm.irecv(refU.data(),   refU.size(),  sourceID,&req_data[2],12);
+  m_comm.irecv(startU.data(), startSize,sourceID,&req_data[0],10);
+  m_comm.irecv(prevU.data(),  prevSize, sourceID,&req_data[1],11);
+  m_comm.irecv(refU.data(),   refSize,  sourceID,&req_data[2],12);
 
   MPI_Waitall( 3, req_data, MPI_STATUSES_IGNORE );
 
