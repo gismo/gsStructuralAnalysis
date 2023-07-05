@@ -156,7 +156,7 @@ public:
 public:
 
     /// See \ref gsStaticBase
-    gsStatus solve() { return solveNonlinear(); }
+    gsStatus solve() override { return solveNonlinear(); }
     /// Perform a linear solve
     gsStatus solveLinear();
     gsStatus solveLinear(gsVector<T> & solution)
@@ -175,17 +175,16 @@ public:
     gsStatus solveNonlinear();
 
     /// See \ref gsStaticBase
-    void initialize() {_init(); };
+    void initOutput() override;
 
     /// See \ref gsStaticBase
-    void initOutput();
-    /// See \ref gsStaticBase
-    void stepOutput(index_t k);
+    void stepOutput(index_t k) override;
 
     /// See \ref gsStaticBase
-    void defaultOptions();
+    void defaultOptions() override;
+
     /// See \ref gsStaticBase
-    void getOptions();
+    void getOptions() override;
 
     using Base::indicator;
     using Base::stabilityVec;
