@@ -71,7 +71,7 @@ int main(int argc, char *argv[])
     bool adaptive = false;
     real_t perturbation = 0;
     int step = 10;
-    index_t maxit = 20;
+    index_t maxit = 10;
 
     std::string wn("data.csv");
 

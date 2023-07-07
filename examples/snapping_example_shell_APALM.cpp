@@ -152,7 +152,7 @@ int main(int argc, char *argv[])
     bool    adaptive = false;
     real_t  perturbation = 0;
     index_t step = 10;
-    index_t maxit = 20;
+    index_t maxit = 10;
 
     index_t verbose = 0;
 
@@ -519,6 +519,8 @@ int main(int argc, char *argv[])
 
     const gsMpi & mpi = gsMpi::init(argc, argv);
     gsMpiComm comm = mpi.worldComm();
+    std::string cores = "_ncores="+std::to_string(comm.size());
+    dirname = dirname + cores;
 
     gsAPALMSnapping<real_t> apalm(comm,arcLength,apalmData,&assembler,dirname,writePoints,writePatches,Nx,Ny,l,h,b);
     apalm.options().setSwitch("Verbose",(verbose>0));
