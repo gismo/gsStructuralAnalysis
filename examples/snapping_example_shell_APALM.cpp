@@ -484,9 +484,6 @@ int main(int argc, char *argv[])
     arcLength->applyOptions();
     arcLength->initialize();
 
-    std::string dirname = "ArcLengthResults/snapping_2D_al=" + std::to_string(al);
-
-    gsParaviewCollection collection(dirname + "/" + output);
     deformation = mp;
 
     // Make objects for previous solutions
@@ -519,8 +516,13 @@ int main(int argc, char *argv[])
 
     const gsMpi & mpi = gsMpi::init(argc, argv);
     gsMpiComm comm = mpi.worldComm();
+
+    std::string dirname = "ArcLengthResults/snapping_2D_al=" + std::to_string(al);
     std::string cores = "_ncores="+std::to_string(comm.size());
     dirname = dirname + cores;
+
+    gsFileManager::mkdir(dirname);
+    gsParaviewCollection collection(dirname + "/" + output);
 
     gsAPALMSnapping<real_t> apalm(comm,arcLength,apalmData,&assembler,dirname,writePoints,writePatches,Nx,Ny,l,h,b);
     apalm.options().setSwitch("Verbose",(verbose>0));
@@ -561,13 +563,13 @@ int main(int argc, char *argv[])
                 if (write)
                     if (writePoints.cols()!=0)
                     {
-                        gsMatrix<> pointResults = mp_def.patch(writePatches(0)).eval(writePoints.col(0));
+                        gsMatrix<> pointResults = mp_tmp.patch(writePatches(0)).eval(writePoints.col(0));
 
                         real_t eps = pointResults(1,0) / (Ny*h);
                         real_t sig = arcLength->solutionL() / (Nx*b*l);
 
                         gsVector<> otherData(6);
-                        otherData<<solutions[k].first.norm(),eps,sig,solutions[k].second,times[k],times[k],levels[k];
+                        otherData<<solutions[k].first.norm(),eps,sig,solutions[k].second,times[k],levels[k];
                         data.add(pointResults,otherData);
                     }
 
