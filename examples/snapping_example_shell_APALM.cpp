@@ -517,7 +517,7 @@ int main(int argc, char *argv[])
     const gsMpi & mpi = gsMpi::init(argc, argv);
     gsMpiComm comm = mpi.worldComm();
 
-    std::string dirname = "ArcLengthResults/snapping_2D_al=" + std::to_string(al);
+    std::string dirname = "ArcLengthResults/snapping_2D_al=" + std::to_string(al) + "_r=" + std::to_string(numHref) + "_e=" + std::to_string(numElevate);
     std::string cores = "_ncores="+std::to_string(comm.size());
     dirname = dirname + cores;
 
