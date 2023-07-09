@@ -566,10 +566,10 @@ int main(int argc, char *argv[])
                         gsMatrix<> pointResults = mp_tmp.patch(writePatches(0)).eval(writePoints.col(0));
 
                         real_t eps = pointResults(1,0) / (Ny*h);
-                        real_t sig = arcLength->solutionL() / (Nx*b*l);
+                        real_t sig = Lold / (Nx*b*l);
 
                         gsVector<> otherData(6);
-                        otherData<<solutions[k].first.norm(),eps,sig,solutions[k].second,times[k],levels[k];
+                        otherData<<Uold.norm(),eps,sig,Lold,times[k],levels[k];
                         data.add(pointResults,otherData);
                     }
 
