@@ -57,10 +57,8 @@ void initStepOutput( const std::string name, const gsMatrix<T> & points);
 template <class T>
 void writeStepOutput(const gsALMBase<T> * arcLength, const gsMultiPatch<T> & deformation, const std::string name, const gsMatrix<T> & points, const index_t extreme=-1, const index_t kmax=100);
 
-void initSectionOutput( const std::string dirname, bool undeformed=false);
-
 template <class T>
-void writeSectionOutput(const gsMultiPatch<T> & mp, const std::string dirname, const index_t coordinate=0, const T coordVal=0.0, const index_t N=100, bool undeformed=false);
+void writeSectionOutput(const gsMultiPatch<T> & mp, const std::string filename, const index_t coordinate=0, const T coordVal=0.0, const index_t N=100, bool undeformed=false);
 
 int main (int argc, char** argv)
 {
@@ -244,8 +242,8 @@ int main (int argc, char** argv)
     wn = output + "data.txt";
     SingularPoint = true;
 
-    index_t cross_coordinate = 0;
-    real_t cross_val = 0.0;
+    index_t cross_coordinate = 1;
+    real_t cross_val = 1.0;
 
 
     std::string commands = "mkdir -p " + dirname;
@@ -268,9 +266,7 @@ int main (int argc, char** argv)
       initStepOutput(dirname + "/" + wn, writePoints);
     if (crosssection && cross_coordinate!=-1)
     {
-      initSectionOutput(dirname,false); // write pointdataX.txt, pointdataY.txt, pointdataZ.txt
-      initSectionOutput(dirname,true); // write pointdataX0.txt, pointdataY0.txt, pointdataZ0.txt
-      writeSectionOutput(mp,dirname,cross_coordinate,cross_val,201,true);
+      writeSectionOutput(mp,dirname + "/section0.csv",cross_coordinate,cross_val,201,true);
     }
     else if (crosssection && cross_coordinate==-1)
     {
@@ -397,11 +393,14 @@ int main (int argc, char** argv)
     arcLength->options().setString("Solver","SimplicialLDLT"); // LDLT solver
     arcLength->options().setInt("BifurcationMethod",0); // 0: determinant, 1: eigenvalue
     arcLength->options().setReal("Length",dLb);
-    arcLength->options().setInt("AngleMethod",0); // 0: step, 1: iteration
+    if (method==2)
+    {
+      arcLength->options().setInt("AngleMethod",0); // 0: step, 1: iteration
+      arcLength->options().setReal("Scaling",0.0);
+    }
     arcLength->options().setSwitch("AdaptiveLength",adaptive);
     arcLength->options().setInt("AdaptiveIterations",5);
     arcLength->options().setReal("Perturbation",tau);
-    arcLength->options().setReal("Scaling",0.0);
     arcLength->options().setReal("Tol",tol);
     arcLength->options().setReal("TolU",tolU);
     arcLength->options().setReal("TolF",tolF);
@@ -546,7 +545,7 @@ int main (int argc, char** argv)
         writeStepOutput(arcLength,deformation, dirname + "/" + wn, writePoints,1, 201);
 
       if (crosssection && cross_coordinate!=-1)
-        writeSectionOutput(deformation,dirname,cross_coordinate,cross_val,201,false);
+        writeSectionOutput(mp_def,dirname + "/" + std::to_string(k),cross_coordinate,cross_val,201,false);
 
       if (!bisected)
       {
@@ -783,61 +782,29 @@ void initSectionOutput(const std::string dirname, bool undeformed)
 }
 
 template <class T>
-void writeSectionOutput(const gsMultiPatch<T> & mp, const std::string dirname, const index_t coordinate, const T coordVal, const index_t N, bool undeformed) // coordinate: the column which remains constant at coordVal
+void writeSectionOutput(const gsMultiPatch<T> & mp, const std::string filename, const index_t coordinate, const T coordVal, const index_t N, bool undeformed) // coordinate: the column which remains constant at coordVal
 {
   gsMatrix<T> P(2,1);
   gsMatrix<T> tmp;
   P.setZero();
   P.at(coordinate) = coordVal;
 
-  std::ofstream file2, file3, file4;
-  std::string wn2,wn3,wn4;
+  std::ofstream file;
+  std::string wn = filename;
+  if (gsFileManager::getExtension(filename)=="") wn = wn + ".csv";
+  file.open(wn,std::ofstream::out);
 
-  if (! undeformed)
+  gsMatrix<T> points(2,N);
+  points.col(coordinate).setConstant(coordVal);
+  tmp.setLinSpaced(N,0,1);
+  points.col(1-coordinate) = tmp;
+  gsMatrix<T> result;
+  mp.patch(0).eval_into(points,result);
+  for (index_t k=0; k!=result.cols(); k++)
   {
-    wn2 = dirname + "/" + "pointdataX.txt";
-    wn3 = dirname + "/" + "pointdataY.txt";
-    wn4 = dirname + "/" + "pointdataZ.txt";
+    std::string str2 = std::to_string(result(0,k));
+    std::string str3 = std::to_string(result(1,k));
+    file<<std::to_string(result(0,k))<<","<<std::to_string(result(1,k))<<"\n";
   }
-  else
-  {
-    wn2 = dirname + "/" + "pointdataX0.txt";
-    wn3 = dirname + "/" + "pointdataY0.txt";
-    wn4 = dirname + "/" + "pointdataZ0.txt";
-  }
-
-  file2.open(wn2,std::ofstream::out | std::ofstream::app);
-  file3.open(wn3,std::ofstream::out | std::ofstream::app);
-  file4.open(wn4,std::ofstream::out | std::ofstream::app);
-
-
-  gsMatrix<T> out(3,N); // evaluation points in the rows, output (per coordinate) in columns
-    for (int k = 0; k != N; k ++)
-    {
-      P.at(1-coordinate) = 1.0*k/(N-1);
-
-      mp.patch(0).eval_into(P,tmp);
-      out.col(k) = tmp; // z coordinate
-
-      std::string str2 = std::to_string(out(0,k));
-      std::string str3 = std::to_string(out(1,k));
-      std::string str4 = std::to_string(out(2,k));
-      if(k+1 == N)
-      {
-          file2<<str2;
-          file3<<str3;
-          file4<<str4;
-      }
-      else{
-          file2<<str2<<',';
-          file3<<str3<<',';
-          file4<<str4<<',';
-      }
-    }
-    file2<<'\n';
-    file2.close();
-    file3<<'\n';
-    file3.close();
-    file4<<'\n';
-    file4.close();
+  file.close();
 }
