@@ -95,6 +95,10 @@ public:
 
     /// See \ref gsStaticBase
     void defaultOptions() override;
+
+    /// See \ref gsStaticBase
+    void reset() override;
+
     /// See \ref gsStaticBase
     void getOptions() override;
 
@@ -139,8 +143,8 @@ public:
     T residualNorm() const { return m_R.norm(); }
 
 protected:
-    const gsVector<T> m_mass;
-    const gsVector<T> m_forcing;
+    const gsVector<T> & m_mass;
+    const gsVector<T> & m_forcing;
     Residual_t m_residualFun;
     const ALResidual_t m_ALresidualFun;
 

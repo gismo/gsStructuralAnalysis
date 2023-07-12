@@ -241,20 +241,27 @@ gsVector<T> gsStaticNewton<T>::_solveSystem(const gsVector<T> & F)
 }
 
 template <class T>
+void gsStaticNewton<T>::reset()
+{
+    m_dofs = m_force.rows();
+    // resets m_U, m_DeltaU, m_deltaU, m_R, m_L, m_DeltaL, m_deltaL and m_headstart
+    Base::reset();
+}
+
+template <class T>
 void gsStaticNewton<T>::_init()
 {
+    this->reset();
+    if( m_dnonlinear==nullptr || m_residualFun==nullptr)
+        m_NL=false;
+    else
+        m_NL = true;
+
     m_stabilityMethod = 0;
     m_start = false;
-    m_headstart = false;
-    m_dofs = m_force.rows();
 
     if (m_dofs==0)
         gsWarn<<"The number of degrees of freedom is equal to zero. This can lead to bad initialization.\n";
-
-    m_U.setZero(m_dofs);
-    m_DeltaU.setZero(m_dofs);
-    m_deltaU.setZero(m_dofs);
-    m_R.setZero(m_dofs);
 
     m_residual = m_residualIni = m_residualOld = 0;
 

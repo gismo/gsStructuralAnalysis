@@ -60,8 +60,6 @@ public:
         m_residualFun(nullptr)
     {
         this->_init();
-        m_NL = false;
-        m_U.setZero(m_dofs);
     }
 
     /**
@@ -90,7 +88,6 @@ public:
         };
 
         this->_init();
-        m_NL = true;
     }
 
     /**
@@ -125,7 +122,6 @@ public:
         };
 
         this->_init();
-        m_NL = true;
     }
 
     /**
@@ -150,13 +146,18 @@ public:
         m_ALresidualFun(nullptr)
     {
         this->_init();
-        m_NL = true;
     }
 
 public:
 
     /// See \ref gsStaticBase
-    gsStatus solve() override { return solveNonlinear(); }
+    gsStatus solve() override
+    {
+        if (m_NL)
+            return solveNonlinear();
+        else
+            return solveLinear();
+    }
     /// Perform a linear solve
     gsStatus solveLinear();
     gsStatus solveLinear(gsVector<T> & solution)
@@ -182,6 +183,9 @@ public:
 
     /// See \ref gsStaticBase
     void defaultOptions() override;
+
+    /// See \ref gsStaticBase
+    void reset() override;
 
     /// See \ref gsStaticBase
     void getOptions() override;

@@ -20,6 +20,8 @@
 
 #include <gsStructuralAnalysis/gsStaticDR.h>
 #include <gsStructuralAnalysis/gsStaticNewton.h>
+#include <gsStructuralAnalysis/gsStaticComposite.h>
+
 #include <gsStructuralAnalysis/gsStructuralAnalysisUtils.h>
 
 using namespace gismo;
@@ -32,11 +34,10 @@ int main (int argc, char** argv)
     bool plot         = false;
     bool write        = false;
     bool stress       = false;
-    bool quasiNewton  = false;
+    bool split        = false;
+    bool smooth       = false;
     bool DR  = false;
-    int quasiNewtonInt= -1;
-    bool adaptive     = false;
-    int method        = 2; // (0: Load control; 1: Riks' method; 2: Crisfield's method; 3: consistent crisfield method; 4: extended iterations)
+    bool NR  = false;
     int verbose = 0;
 
     bool membrane = false;
@@ -47,7 +48,6 @@ int main (int argc, char** argv)
     index_t impl = 1; // 1= analytical, 2= generalized, 3= spectral
     bool TFT = false;
 
-    int result        = 0;
     index_t maxIt     = 1e3;
     // Arc length method options
     real_t tol        = 1e-4;
@@ -86,20 +86,23 @@ int main (int argc, char** argv)
     cmd.addSwitch("plot", "Plot result in ParaView format", plot);
     cmd.addSwitch("write", "Write data to file", write);
     cmd.addSwitch("stress", "Plot stress in ParaView format", stress);
-    cmd.addSwitch("DR", "Use Dynamic Relaxation before Newton", DR);
+    cmd.addSwitch("DR", "Use Dynamic Relaxation", DR);
+    cmd.addSwitch("NR", "Use Newton Raphson", NR);
+    cmd.addSwitch("split", "Split to a multi-patch", split);
+    cmd.addSwitch("smooth", "Use a smooth basis (maximum regularity)", smooth);
     cmd.addInt("v","verbose", "0: no; 1: iteration output; 2: Full matrix and vector output", verbose);
 
     try { cmd.getValues(argc,argv); } catch (int rv) { return rv; }
+    GISMO_ASSERT(NR || DR,"At least a Newton Raphson or a Dynamic Relaxation solver needs to be enabled. Run with option NR or DR.");
 
     /*
       Uniaxial tension of a square plate                            --- Validation settings: -L 1eX -l 1eX -M 14 -N 500 -r X -e X
       (bottom boundary fixed in Y, left boundary fixed in X, right boundary normal load)
     */
-    real_t E_modulus;
-    real_t PoissonRatio;
-    real_t mu;
-    real_t Ratio;
-    real_t thickness;
+    real_t E_modulus = 0;
+    real_t PoissonRatio = 0;
+    real_t Ratio = 0;
+    real_t thickness = 0;
     real_t Density    = 1e0;
 
     if (material==0) Compressibility = 0;
@@ -205,7 +208,7 @@ int main (int argc, char** argv)
     gsMaterialMatrixBase<real_t>* materialMatrixTFT;
     gsOptionList options;
 
-    std::vector<gsFunction<>*> parameters;
+    std::vector<gsFunctionSet<>*> parameters;
     parameters.resize(2);
     parameters[0] = &E;
     parameters[1] = &nu;
@@ -250,7 +253,6 @@ int main (int argc, char** argv)
     assembler->assemble();
     gsSparseMatrix<> K = assembler->matrix();
     gsVector<> Fneu = assembler->rhs();
-    real_t Fnorm = Fneu.norm();
     gsDebugVar(assembler->numDofs());
 
     // gsSparseMatrix<> diag(assembler->numDofs(),assembler->numDofs());
@@ -304,6 +306,33 @@ int main (int argc, char** argv)
     std::vector<std::string> pointheaders = {"x","y","z"};
     std::vector<std::string> otherheaders = {"load"};
     writer.init(pointheaders,otherheaders);
+
+    gsVector<> F, M;
+    gsStaticDR<real_t> DRM(M,F,Residual);
+    gsOptionList DROptions = DRM.options();
+    DROptions.setReal("damping",damping);
+    DROptions.setReal("alpha",alpha);
+    DROptions.setInt("maxIt",1e6);
+    DROptions.setReal("tol",1e-1);
+    DROptions.setReal("tolE",1e-1);
+    DROptions.setInt("verbose",verbose);
+    DROptions.setInt("ResetIt",(index_t)(100));
+    DRM.setOptions(DROptions);
+
+    gsStaticNewton<real_t> NWT(K,F,Jacobian,Residual);
+    gsOptionList NWTOptions = NWT.options();
+    NWTOptions.setInt("maxIt",100);
+    NWTOptions.setReal("tol",tol);
+    NWTOptions.setInt("verbose",verbose);
+    NWT.setOptions(NWTOptions);
+
+    std::vector<gsStaticBase<real_t> *> solvers;
+    if (DR)
+      solvers.push_back(&DRM);
+    if (NR)
+      solvers.push_back(&NWT);
+    gsStaticComposite<real_t> solver(solvers);
+
     while (load_fac <= 1.)
     {
       /*
@@ -343,66 +372,17 @@ int main (int argc, char** argv)
       }
 
       gsInfo<<"Load step "<<step<<"; p = "<<pressure*load_fac<<"; load factor = "<<load_fac<<":\n";
-      real_t resNorm = 1;
-
-      // if (load_fac > 0.5)
-      //   diag.setZero();
-
       assembler->assemble();
       K = assembler->matrix();
       // K += diag;
-      gsVector<> F = assembler->rhs();
+      F = assembler->rhs();
       assembler->assembleMass(true);
-      gsVector<> M = assembler->rhs();
+      M = assembler->rhs();
 
-      maxIt = 1e6;
-      gsStaticDR<real_t> DRM(M,F,Residual);
-      if (DR)
-      {
-        gsOptionList DROptions = DRM.options();
-        DROptions.setReal("damping",damping);
-        DROptions.setReal("alpha",alpha);
-        DROptions.setInt("maxIt",maxIt);
-        DROptions.setReal("tol",1e-1);
-        DROptions.setReal("tolE",1e-1);
-        DROptions.setInt("verbose",verbose);
-        DROptions.setInt("ResetIt",(index_t)(100));
-        // DROptions.setInt("ResetIt",(index_t)(0.1*maxIt));
-        DRM.setDisplacement(solVector);
-        DRM.setOptions(DROptions);
-        DRM.initialize();
-        DRM.solve();
-      }
+      solver.initialize();
+      solver.solve();
 
-      // if (!DRM.converged())
-      // {
-      //   gsWarn<<"Load step "<<step<<" did not converge\n";
-      //   GISMO_ASSERT(load_fac!=0,"load_fac is zero but no convergence on the first step. Try to increase the number of iterations");
-      //   load_fac -= dload_fac;
-      //   dload_fac /= 2;
-      //   load_fac += dload_fac;
-      //   bisected = true;
-      //   continue;
-      // }
-
-      gsVector<> updateVector;
-      if (DR)
-        updateVector = DRM.solution() - solVector;
-
-      maxIt = 100;
-      // gsVector<> updateVector(assembler->numDofs());
-      // updateVector.setZero();
-      gsStaticNewton<real_t> NWT(K,F,Jacobian,Residual);
-      gsOptionList NWTOptions = NWT.options();
-      NWTOptions.setInt("maxIt",maxIt);
-      NWTOptions.setReal("tol",tol);
-      NWTOptions.setInt("verbose",verbose);
-      NWT.setOptions(NWTOptions);
-      NWT.reset();
-      NWT.setDisplacement(solVector);
-      if (DR) NWT.setUpdate(updateVector);
-      NWT.solve();
-      if (!NWT.converged())
+      if (!solver.converged())
       {
         gsDebug<<"Number of failures: "<<bisected<<"\n";
         if (bisected > 20) // failed already 20 times
@@ -418,7 +398,7 @@ int main (int argc, char** argv)
         bisected++;
         continue;
       }
-      solVector = NWT.solution();
+      solVector = solver.solution();
 
       mp_def = assembler->constructSolution(solVector);
       // if (material==0)
@@ -471,40 +451,6 @@ int main (int argc, char** argv)
         writer.add(result,data);
       }
 
-
-      // for (index_t i=0; i!=10; i++)
-      // {
-      //   gsVector<> R = Residual(solVector);
-      //   gsSparseMatrix<> K_NL = Jacobian(solVector);
-
-      //   // if (k < 3)
-      //   //   K_NL += diag;
-      //   // gsDebugVar(K_NL.toDense());
-      //   // gsDebugVar(R.transpose());
-
-      //   solver.compute(K_NL);
-      //   gsVector<> updateVector = solver.solve(R);
-      //   // gsDebugVar(updateVector);
-      //   // gsDebugVar(Fneu.norm());
-
-      //   solVector+= updateVector;
-      //   // gsDebugVar(solVector);
-      //   resNorm = math::abs(R.norm()/Fnorm);
-      //   gsInfo<<"\titeration "<<i<<": resNorm = "<<resNorm<<"; Unorm = "<<solVector.norm()<<"; dUnorm = "<<updateVector.norm()<<"\n";
-
-      //   if (resNorm < tol)
-      //     break;
-      // }
-      // if (resNorm > tol)
-      // {
-      //   gsWarn<<"Load step "<<k<<" did not converge\n";
-      //   GISMO_ASSERT(load_fac!=0,"load_fac is zero but no convergence on the first step. Try to increase the number of iterations");
-      //   load_fac -= dload_fac;
-      //   dload_fac /= 2;
-      //   load_fac += dload_fac;
-      //   continue;
-      // }
-
       if (bisected!=0)
       {
         bisected = 0;
@@ -521,33 +467,6 @@ int main (int argc, char** argv)
 
     solcollection.save();
     TFcollection.save();
-
-
-    // gsStaticDR<real_t> DRM(M,F,Residual);
-    // gsOptionList DROptions = DRM.options();
-    // DROptions.setReal("damping",damping);
-    // DROptions.setReal("alpha",alpha);
-    // DROptions.setInt("maxIt",maxIt);
-    // DROptions.setReal("tol",1e-1);
-    // DROptions.setReal("tolE",1e-1);
-    // DROptions.setInt("verbose",verbose);
-    // DRM.setOptions(DROptions);
-    // DRM.initialize();
-    // DRM.solve();
-
-    // maxIt = 100;
-    // gsStaticNewton<real_t> NWT(K,F,Jacobian,Residual);
-    // gsOptionList NWTOptions = NWT.options();
-    // NWTOptions.setInt("maxIt",maxIt);
-    // NWTOptions.setReal("tol",1e-6);
-    // NWTOptions.setInt("verbose",verbose);
-    // NWT.setOptions(NWTOptions);
-    // NWT.reset();
-    // NWT.setUpdate(DRM.update());
-    // gsDebugVar(DRM.update().norm());
-    // gsDebugVar(NWT.update().norm());
-    // NWT.solve();
-    // gsMatrix<> solVector = NWT.solution();
 
     mp_def = assembler->constructSolution(solVector);
 

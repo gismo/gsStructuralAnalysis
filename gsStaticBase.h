@@ -51,7 +51,11 @@ public:
     virtual gsStatus solve() = 0;
 
     /// See \ref gsStaticBase
-    virtual void initialize() { this->getOptions(); }
+    virtual void initialize()
+    {
+        this->reset();
+        this->getOptions();
+    }
 
     /// Initialize output
     virtual void initOutput() {};
@@ -62,8 +66,8 @@ public:
     virtual void defaultOptions()
     {
         m_options.addReal("tol","Relative Tolerance",1e-6);
-        m_options.addReal("tolF","(Force) Residual tolerance",-1);
-        m_options.addReal("tolU","(Force) Residual tolerance",-1);
+        m_options.addReal("tolF","Residual relative tolerance",-1);
+        m_options.addReal("tolU","Solution step relative tolerance",-1);
         m_options.addInt("maxIt","Maximum number of iterations",25);
         m_options.addInt("verbose","Verbose output",0);
         m_options.addInt ("BifurcationMethod","Bifurcation Identification based on: 0: Determinant;  1: Eigenvalue",stabmethod::Eigenvalue);
@@ -130,9 +134,10 @@ public:
     /// Reset the stored solution
     virtual void reset()
     {
-        m_U.setZero();
-        m_DeltaU.setZero();
-        m_deltaU.setZero();
+        m_U.setZero(m_dofs);
+        m_DeltaU.setZero(m_dofs);
+        m_deltaU.setZero(m_dofs);
+        m_R.setZero(m_dofs);
         m_L = m_DeltaL = m_deltaL = 0.0;
         m_headstart = false;
     }

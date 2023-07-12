@@ -661,11 +661,11 @@ int main (int argc, char** argv)
     gsConstantFunction<> mu1(MU1,2);
     gsConstantFunction<> alpha1(ALPHA1,2);
 
-    std::vector<gsFunction<>*> parameters_L(2);
+    std::vector<gsFunctionSet<>*> parameters_L(2);
     parameters_L[0] = &E_L;
     parameters_L[1] = &nu_L;
 
-    std::vector<gsFunction<>*> parameters_NL(2);
+    std::vector<gsFunctionSet<>*> parameters_NL(2);
     if (material==0) // SvK
     {
       parameters_NL.resize(2);
