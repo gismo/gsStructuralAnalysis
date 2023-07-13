@@ -50,6 +50,7 @@ public:
     :
     m_solvers(solvers)
     {
+        this->defaultOptions();
     }
 
 public:

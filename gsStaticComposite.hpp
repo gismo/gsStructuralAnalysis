@@ -20,8 +20,10 @@ namespace gismo
 template <class T>
 gsStatus gsStaticComposite<T>::solve()
 {
+    this->getOptions();
     m_numIterations = 0;
     m_status = gsStatus::Success;
+    gsDebugVar(m_verbose);
     for (size_t k=0; k!=m_solvers.size() && m_status==gsStatus::Success; k++)
     {
         if (m_verbose > 0)
@@ -50,8 +52,8 @@ void gsStaticComposite<T>::initialize()
 template <class T>
 void gsStaticComposite<T>::defaultOptions()
 {
-    for (typename std::vector<gsStaticBase<T> *>::iterator solver = m_solvers.begin(); solver!=m_solvers.end(); solver++)
-        (*solver)->defaultOptions();
+    // for (typename std::vector<gsStaticBase<T> *>::iterator solver = m_solvers.begin(); solver!=m_solvers.end(); solver++)
+    //     (*solver)->defaultOptions();
 
     m_options.addInt("verbose","Verbose output",0);
 };
@@ -59,8 +61,8 @@ void gsStaticComposite<T>::defaultOptions()
 template <class T>
 void gsStaticComposite<T>::getOptions()
 {
-    for (typename std::vector<gsStaticBase<T> *>::iterator solver = m_solvers.begin(); solver!=m_solvers.end(); solver++)
-        (*solver)->getOptions();
+    // for (typename std::vector<gsStaticBase<T> *>::iterator solver = m_solvers.begin(); solver!=m_solvers.end(); solver++)
+    //     (*solver)->getOptions();
 
     m_verbose = m_options.getInt("verbose");
 };
