@@ -83,22 +83,24 @@ public:
 /// gsStaticBase base functions
 public:
     /// See \ref gsStaticBase
-    gsStatus solve();
-    /// See \ref gsStaticBase
-    void initialize();
+    gsStatus solve() override;
 
     /// See \ref gsStaticBase
-    void initOutput();
-    /// See \ref gsStaticBase
-    void stepOutput(index_t k);
+    void initialize() override;
 
     /// See \ref gsStaticBase
-    void defaultOptions();
+    void initOutput() override;
     /// See \ref gsStaticBase
-    void getOptions();
+    void stepOutput(index_t k) override;
 
     /// See \ref gsStaticBase
-    void setOptions(gsOptionList & options) {m_options.update(options,gsOptionList::addIfUnknown); }
+    void defaultOptions() override;
+
+    /// See \ref gsStaticBase
+    void reset() override;
+
+    /// See \ref gsStaticBase
+    void getOptions() override;
 
 public:
     /// Returns the kinetic energy
@@ -141,8 +143,8 @@ public:
     T residualNorm() const { return m_R.norm(); }
 
 protected:
-    const gsVector<T> m_mass;
-    const gsVector<T> m_forcing;
+    const gsVector<T> & m_mass;
+    const gsVector<T> & m_forcing;
     Residual_t m_residualFun;
     const ALResidual_t m_ALresidualFun;
 

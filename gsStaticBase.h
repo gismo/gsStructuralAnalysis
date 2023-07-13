@@ -50,17 +50,24 @@ public:
     /// Solve
     virtual gsStatus solve() = 0;
 
+    /// See \ref gsStaticBase
+    virtual void initialize()
+    {
+        this->reset();
+        this->getOptions();
+    }
+
     /// Initialize output
-    virtual void initOutput() = 0;
+    virtual void initOutput() {};
     /// Stepwise output
-    virtual void stepOutput(index_t k) = 0;
+    virtual void stepOutput(index_t k) {};
 
     /// Get default options
     virtual void defaultOptions()
     {
         m_options.addReal("tol","Relative Tolerance",1e-6);
-        m_options.addReal("tolF","(Force) Residual tolerance",-1);
-        m_options.addReal("tolU","(Force) Residual tolerance",-1);
+        m_options.addReal("tolF","Residual relative tolerance",-1);
+        m_options.addReal("tolU","Solution step relative tolerance",-1);
         m_options.addInt("maxIt","Maximum number of iterations",25);
         m_options.addInt("verbose","Verbose output",0);
         m_options.addInt ("BifurcationMethod","Bifurcation Identification based on: 0: Determinant;  1: Eigenvalue",stabmethod::Eigenvalue);
@@ -79,70 +86,71 @@ public:
     }
 
     /// Set the options from \a options
-    void setOptions(gsOptionList & options) {m_options.update(options,gsOptionList::addIfUnknown); }
+    virtual void setOptions(gsOptionList & options) {m_options.update(options,gsOptionList::addIfUnknown); }
 
     /// Get options
-    gsOptionList options() const {return m_options;}
+    virtual gsOptionList options() const {return m_options;}
 
     /// Access the solution
-    gsVector<T> solution() const {return m_U;}
+    virtual gsVector<T> solution() const {return m_U;}
 
     /// Access the update
-    gsVector<T> update() const {return m_DeltaU;}
+    virtual gsVector<T> update() const {return m_DeltaU;}
 
     /// Set the displacement
-    void setDisplacement(const gsVector<T> displacement)
+    virtual void setDisplacement(const gsVector<T> & displacement)
     {
         m_start = true;
         m_U = displacement;
     }
 
     /// Set the load
-    void setLoad(const T L) { m_L = L;}
+    virtual void setLoad(const T L) { m_L = L;}
 
     /// Set the displacement and the load
-    void setSolution(const gsVector<T> displacement, const T L)
+    virtual void setSolution(const gsVector<T> & displacement, const T L)
     {
         this->setDisplacement(displacement);
         this->setLoad(L);
     }
-    virtual void setUpdate(const gsVector<T> update)
+    virtual void setUpdate(const gsVector<T> & update)
     {
         m_headstart = true;
         m_DeltaU = update;
     }
 
     /// Returns the number of iterations
-    index_t iterations() const { return m_numIterations; }
+    virtual index_t iterations() const { return m_numIterations; }
 
     /// Returns whether the solver converged or not
-    bool converged() const { return m_status==gsStatus::Success; }
+    virtual bool converged() const { return m_status==gsStatus::Success; }
 
     /// Returns the status
-    gsStatus status() const { return m_status; }
+    virtual gsStatus status() const { return m_status; }
 
     /// Returns the number of DoFs of the system
-    index_t numDofs() { return m_dofs; }
+    virtual index_t numDofs() { return m_dofs; }
 
     /// Reset the stored solution
-    void reset()
+    virtual void reset()
     {
-        m_U.setZero();
-        m_DeltaU.setZero();
-        m_deltaU.setZero();
+        m_U.setZero(m_dofs);
+        m_DeltaU.setZero(m_dofs);
+        m_deltaU.setZero(m_dofs);
+        m_R.setZero(m_dofs);
         m_L = m_DeltaL = m_deltaL = 0.0;
         m_headstart = false;
     }
 
     /// Returns the stability indicator
-    T indicator(const gsSparseMatrix<T> & jacMat, T shift = -1e-2)
+    virtual T indicator(const gsSparseMatrix<T> & jacMat, T shift = -1e-2)
     {
        _computeStability(jacMat, shift);
        return m_indicator;
     }
 
     /// Returns the stability vector
-    gsVector<T> stabilityVec(const gsSparseMatrix<T> & jacMat, T shift = -1e-2)
+    virtual gsVector<T> stabilityVec(const gsSparseMatrix<T> & jacMat, T shift = -1e-2)
     {
        _computeStability(jacMat, shift);
        return m_stabilityVec;

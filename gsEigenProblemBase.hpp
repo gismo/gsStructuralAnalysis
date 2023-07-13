@@ -88,8 +88,15 @@ gsStatus gsEigenProblemBase<T>::computeSparse(const T shift, const index_t numbe
             return computeSparse_impl<Spectra::GEigsMode::Buckling>(shift,number);
         else if (m_options.getInt("solver")==4)
             return computeSparse_impl<Spectra::GEigsMode::Cayley>(shift,number);
+        else
+        {
+            gsWarn<<"Solver type unknown\n";
+            m_status=gsStatus::NotStarted;
+            return m_status;
+        }
     #else
         gsWarn<<"Sparse solver is not implemented without gsSpectra. Please compile gismo with Spectra.\n";
+        m_status=gsStatus::NotStarted;
         return gsStatus::NotStarted;
     #endif
 };

@@ -144,30 +144,30 @@ void gsStaticDR<T>::_solve()
 template <class T>
 void gsStaticDR<T>::initialize()
 {
+    this->reset();
     getOptions();
     m_massInv *= 1./m_alpha;
     m_damp = m_c * m_mass;
 }
 
 template <class T>
+void gsStaticDR<T>::reset()
+{
+    m_dofs = m_mass.rows();
+    m_massInv = m_mass.array().inverse();
+    m_Ek = m_Ek0 = 0.0;
+    // resets m_U, m_DeltaU, m_deltaU, m_R, m_L, m_DeltaL, m_deltaL and m_headstart
+    Base::reset();
+    m_v.setZero(m_dofs);
+    m_status = gsStatus::NotStarted;
+}
+
+template <class T>
 void gsStaticDR<T>::_init()
 {
-    m_headstart = false;
-
-    m_Ek = m_Ek0 = 0.0;
+    this->reset();
     m_dt = 1.0;
-    m_dofs = m_mass.rows();
-    m_v = m_U = m_DeltaU = m_deltaU = gsVector<T>(m_dofs);
-    m_v.setZero();
-    m_U.setZero();
-    m_DeltaU.setZero();
-    m_deltaU.setZero();
-    m_R.setZero();
-
     defaultOptions();
-    m_massInv = m_mass.array().inverse();
-
-    m_status = gsStatus::NotStarted;
 }
 
 template <class T>
@@ -260,7 +260,6 @@ void gsStaticDR<T>::_start()
     m_DeltaU += m_deltaU;
 
     m_Ek = m_v.transpose() * m_mass.cwiseProduct(m_v);
-
 }
 
 } // namespace gismo
