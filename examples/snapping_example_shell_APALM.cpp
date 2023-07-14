@@ -461,7 +461,7 @@ int main(int argc, char *argv[])
       if (method==2)
       {
           arcLength->options().setInt("AngleMethod",0); // 0: step, 1: iteration
-          arcLength->options().setReal("Scaling",0.0);
+//          arcLength->options().setReal("Scaling",0.0);
       }
       arcLength->options().setSwitch("AdaptiveLength",adaptive);
       arcLength->options().setInt("AdaptiveIterations",5);
@@ -512,7 +512,7 @@ int main(int argc, char *argv[])
     gsAPALMData<real_t,solution_t> apalmData;
     apalmData.options().setInt("MaxLevel",maxLevel);
     apalmData.options().setInt("Verbose",verbose);
-    apalmData.options().setReal("Tolerance",1e-2);
+    apalmData.options().setReal("Tolerance",1e-4);
 
     const gsMpi & mpi = gsMpi::init(argc, argv);
     gsMpiComm comm = mpi.worldComm();
