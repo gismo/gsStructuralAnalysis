@@ -215,13 +215,13 @@ template <class T>
 void gsStaticNewton<T>::_factorizeMatrix(const gsSparseMatrix<T> & jacMat) const
 {
     m_solver->compute(jacMat);
-    if (m_solver->info()!=Eigen::ComputationInfo::Success)
+    if (m_solver->info()!=gsEigen::ComputationInfo::Success)
     {
       gsInfo<<"Solver error with code "<<m_solver->info()<<". See Eigen documentation on ComputationInfo \n"
-                                                                    <<Eigen::ComputationInfo::Success<<": Success"<<"\n"
-                                                                    <<Eigen::ComputationInfo::NumericalIssue<<": NumericalIssue"<<"\n"
-                                                                    <<Eigen::ComputationInfo::NoConvergence<<": NoConvergence"<<"\n"
-                                                                    <<Eigen::ComputationInfo::InvalidInput<<": InvalidInput"<<"\n";
+                                                                    <<gsEigen::ComputationInfo::Success<<": Success"<<"\n"
+                                                                    <<gsEigen::ComputationInfo::NumericalIssue<<": NumericalIssue"<<"\n"
+                                                                    <<gsEigen::ComputationInfo::NoConvergence<<": NoConvergence"<<"\n"
+                                                                    <<gsEigen::ComputationInfo::InvalidInput<<": InvalidInput"<<"\n";
       throw 3;
     }
 }

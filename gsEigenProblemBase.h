@@ -132,7 +132,7 @@ protected:
 
     gsOptionList m_options;
 
-    Eigen::GeneralizedSelfAdjointEigenSolver< typename gsMatrix<T>::Base >  m_eigSolver;
+    gsEigen::GeneralizedSelfAdjointEigenSolver< typename gsMatrix<T>::Base >  m_eigSolver;
 
     gsMatrix<T> m_values,m_vectors;
 
