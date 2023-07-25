@@ -422,12 +422,14 @@ int main(int argc, char *argv[])
     displ.setValue(D - dL,2);
     assembler.updateBCs(bc);
     gsMatrix<> solVector;
+    real_t time = 0;
     while (eps<=Emax && k < step)
     {
         gsInfo<<"Load step "<<k<<"; D = "<<D<<"; dL = "<<dL<<"eps = "<<eps<<"\n";
 
+	gsStopwatch timer;
         gsStatus status = control.step(dL);
-
+	time += timer.stop();
         if (status==gsStatus::NotConverged || status==gsStatus::AssemblyError)
         {
             dL = dL/2;
@@ -498,6 +500,14 @@ int main(int argc, char *argv[])
     if (plot)
     {
         collection.save();
+    }
+
+    if (write)
+    {
+        std::ofstream file;
+        file.open(dirname + "/times.txt");
+        file<<"solution time: "<<time<<" s\n";
+        file.close();
     }
 
     delete materialMatrix;

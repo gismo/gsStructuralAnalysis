@@ -297,10 +297,10 @@ int main (int argc, char** argv)
 
     wn = output + "data.txt";
 
-    std::string commands = "mkdir -p " + dirname;
-    const char *command = commands.c_str();
-    int systemRet = system(command);
-    GISMO_ASSERT(systemRet!=-1,"Something went wrong with calling the system argument");
+    if (sequential)
+    	dirname = dirname + "_seq";
+
+    gsFileManager::mkdir(dirname);
 
     // Linear isotropic material model
     gsFunctionExpr<> force("0","0","0",3);
@@ -590,7 +590,6 @@ int main (int argc, char** argv)
     }
     else
     {
-
       real_t serialTime = mpi.wallTime();
       if (apalm.isMain())
       {

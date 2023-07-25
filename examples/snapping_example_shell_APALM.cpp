@@ -461,7 +461,7 @@ int main(int argc, char *argv[])
       if (method==2)
       {
           arcLength->options().setInt("AngleMethod",0); // 0: step, 1: iteration
-//          arcLength->options().setReal("Scaling",0.0);
+          arcLength->options().setReal("Scaling",0.0);
       }
       arcLength->options().setSwitch("AdaptiveLength",adaptive);
       arcLength->options().setInt("AdaptiveIterations",5);
@@ -512,7 +512,7 @@ int main(int argc, char *argv[])
     gsAPALMData<real_t,solution_t> apalmData;
     apalmData.options().setInt("MaxLevel",maxLevel);
     apalmData.options().setInt("Verbose",verbose);
-    apalmData.options().setReal("Tolerance",1e-4);
+    apalmData.options().setReal("Tolerance",1e-3);
 
     const gsMpi & mpi = gsMpi::init(argc, argv);
     gsMpiComm comm = mpi.worldComm();
@@ -527,6 +527,7 @@ int main(int argc, char *argv[])
     gsAPALMSnapping<real_t> apalm(comm,arcLength,apalmData,&assembler,dirname,writePoints,writePatches,Nx,Ny,l,h,b);
     apalm.options().setSwitch("Verbose",(verbose>0));
     apalm.options().setInt("SubIntervals",SubIntervals);
+    apalm.options().setInt("MaxIt",10000);
     apalm.initialize();
 
     real_t time = mpi.wallTime();

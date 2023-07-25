@@ -293,9 +293,10 @@ int main (int argc, char** argv)
   wn = "data.txt";
   std::string line = "line.txt";
 
-  std::string commands = "mkdir -p " + dirname;
-  const char *command = commands.c_str();
-  system(command);
+  if (sequential)
+    dirname = dirname + "_seq";
+
+  gsFileManager::mkdir(dirname);
 
   // plot geometry
   if (plot)

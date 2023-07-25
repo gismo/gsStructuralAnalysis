@@ -481,7 +481,7 @@ int main(int argc, char *argv[])
             dLb = dLb / 2.;
             arcLength->setLength(dLb);
             arcLength->setSolution(Uold,Lold);
-            bisected = true;
+//            bisected = true;
             continue;
         }
 
@@ -542,13 +542,13 @@ int main(int argc, char *argv[])
         }
 
 
-        if (!bisected)
-        {
+//        if (!bisected)
+//        {
           dLb = dLb0;
           arcLength->setLength(dLb);
-        }
+//        }
 
-        bisected = false;
+//        bisected = false;
         k++;
     }
 

@@ -301,10 +301,10 @@ int main (int argc, char** argv)
     wn = output + "data.txt";
   }
 
-  std::string commands = "mkdir -p " + dirname;
-  const char *command = commands.c_str();
-  system(command);
+  if (sequential)
+    dirname = dirname + "_seq";
 
+  gsFileManager::mkdir(dirname);
 
   gsConstantFunction<> pressFun(pressure,3);
   // Initialise solution object
