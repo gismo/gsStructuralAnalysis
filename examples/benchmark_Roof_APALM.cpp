@@ -293,10 +293,13 @@ int main (int argc, char** argv)
   wn = "data.txt";
   std::string line = "line.txt";
 
+  // Prepare and create directory with dirname
+  dirname = gsFileManager::getCurrentPath() + dirname;
   if (sequential)
     dirname = dirname + "_seq";
 
-  gsFileManager::mkdir(dirname);
+  GISMO_ENSURE(gsFileManager::mkdir(dirname),"Failed to create directory " + dirname);
+  // Made directory
 
   // plot geometry
   if (plot)

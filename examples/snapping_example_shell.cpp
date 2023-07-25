@@ -422,6 +422,11 @@ int main(int argc, char *argv[])
 
     std::string dirname = "ArcLengthResults/snapping_2D_"+ std::to_string(Nx) + "x" + std::to_string(Ny+1) + "_al=" + std::to_string(al) + "-r" + std::to_string(numHref) + "-e" + std::to_string(numElevate) + "-L=" + std::to_string(dLb);
 
+    // Prepare and create directory with dirname
+    dirname = gsFileManager::getCurrentPath() + dirname;
+    GISMO_ENSURE(gsFileManager::mkdir(dirname),"Failed to create directory " + dirname);
+    // Made directory
+
     gsParaviewCollection collection(dirname + "/" + output);
     deformation = mp;
 

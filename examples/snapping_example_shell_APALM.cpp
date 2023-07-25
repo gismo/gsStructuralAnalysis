@@ -521,7 +521,10 @@ int main(int argc, char *argv[])
     std::string cores = "_ncores="+std::to_string(comm.size());
     dirname = dirname + cores;
 
-    gsFileManager::mkdir(dirname);
+    // Prepare and create directory with dirname
+    dirname = gsFileManager::getCurrentPath() + dirname;
+    GISMO_ENSURE(gsFileManager::mkdir(dirname),"Failed to create directory " + dirname);
+    // Made directory
     gsParaviewCollection collection(dirname + "/" + output);
 
     gsAPALMSnapping<real_t> apalm(comm,arcLength,apalmData,&assembler,dirname,writePoints,writePatches,Nx,Ny,l,h,b);
