@@ -37,9 +37,7 @@ m_initialized(false),
 m_dt(1.0)
 {
   // Initialize the knot vectors
-  m_t = gsKnotVector<T>(times,1,0);
-  m_t.degreeDecrease(1);
-
+  m_t = gsKnotVector<T>(times);
   m_xi = m_t;
   m_xi.transform(0,1);
 
@@ -180,11 +178,7 @@ template <class T, class solution_t >
 void gsAPALMData<T,solution_t>::setData(const std::vector<T> & times,const  std::vector<solution_t> & solutions)
 {
   // Initialize the knot vectors
-  m_t = gsKnotVector<T>(times,1,0);
-  m_t.degreeDecrease(1);
-
-  gsDebugVar(m_t);
-
+  m_t = gsKnotVector<T>(times);
   m_xi = m_t;
   m_xi.transform(0,1);
 

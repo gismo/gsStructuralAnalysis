@@ -127,8 +127,8 @@ void gsAPALM<T>::serialSolve(index_t Nsteps)
 #endif
   GISMO_ASSERT(m_starts.size()>0,"No start point is created. Call initialize first?");
 
-  T Lold, L0;
-  gsMatrix<T> Uold, U0;
+  T Lold, Lprev, L0;
+  gsMatrix<T> Uold, Uprev, U0;
   T dL, dL0;
   bool bisected, finished, diverged;
   std::vector<solution_t>   solutions;
@@ -142,8 +142,8 @@ void gsAPALM<T>::serialSolve(index_t Nsteps)
     times.clear();
     levels.clear();
     // Initialize solutions
-    U0 = Uold = std::get<0>(m_starts.front()).first;
-    L0 = Lold = std::get<0>(m_starts.front()).second;
+    U0 = Uold = Uprev = std::get<0>(m_starts.front()).first;
+    L0 = Lold = Lprev = std::get<0>(m_starts.front()).second;
     dL = dL0  = std::get<1>(m_starts.front());
     bisected  = std::get<2>(m_starts.front());
     m_starts.pop();
@@ -160,81 +160,50 @@ void gsAPALM<T>::serialSolve(index_t Nsteps)
       levels.push_back(0);
     }
 
-    m_ALM->setLength(dL);
-    m_ALM->setSolution(U0,L0);
-    m_ALM->setIndicator(0.0); // RESET INDICATOR
     index_t k=1;
-
+    std::vector<solution_t> tmpSolutions;
     while (k<Nsteps && !finished)
     {
       if (m_verbose) gsMPIInfo(m_rank)<<"Load step "<< k<<"\t"<<"dL = "<<m_ALM->getLength()<<"; curve time = "<<s<<"\n";
+      solution_t start = std::make_pair(Uold,Lold);
+      solution_t prev = std::make_pair(Uprev,Lprev);
 
-      // Set a step
-      gsStatus status = m_ALM->step();
-      diverged = (status!=gsStatus::Success);
-      if (status==gsStatus::NotConverged || status==gsStatus::AssemblyError)
-      {
-        if (m_verbose) gsMPIInfo(m_rank)<<"Error: Loop terminated, arc length method did not converge.\n";
-        dL = m_ALM->reduceLength();
-        m_ALM->setSolution(Uold,Lold);
-        // bisected = true;
-        continue;
-      }
+      std::tuple<index_t, T, solution_t, solution_t> dataEntry = std::make_tuple(k,dL,start,prev);
 
-      if (m_singularPoint)
-      {
-        m_ALM->computeStability(m_ALM->solutionU(),m_ALM->options().getSwitch("Quasi"));
-        if (m_ALM->stabilityChange())
-        {
-          gsMPIInfo(m_rank)<<"Bifurcation spotted!"<<"\n";
-          m_ALM->computeSingularPoint(1e-4, 5, Uold, Lold, 1e-10, 0, false);
-          finished = true;
+      this->_initiation(dataEntry,s,dL,tmpSolutions,finished);
 
-          gsVector<T> DeltaU = m_ALM->solutionU()-Uold;
-          T           DeltaL = m_ALM->solutionL()-Lold;
-
-          dL = m_ALM->distance(DeltaU,DeltaL);
-        }
-      }
-
+      // Update curve length
       s += dL;
 
-      T lambda = m_ALM->solutionL();
-      std::pair<gsVector<T>,T> pair = std::make_pair(m_ALM->solutionU(),lambda);
-      solutions.push_back(pair);
+      // Update solutions
+      solutions.push_back(tmpSolutions[0]);
       times.push_back(s);
       levels.push_back(0);
-      this->serialStepOutput(pair,s,k);
 
-      Uold = m_ALM->solutionU();
-      Lold = m_ALM->solutionL();
+      // Update previous and old solution
+      Uprev = Uold;
+      Lprev = Lold;
+      Uold = tmpSolutions[0].first;
+      Lold = tmpSolutions[0].second;
 
+      // Store new branch as start point
       if (finished)
-      {
-        m_ALM->switchBranch();
-        m_starts.push(std::make_tuple(std::make_pair(m_ALM->solutionU(),m_ALM->solutionL()),dL0*m_branchLengthMult,true));
-      }
+        m_starts.push(std::make_tuple(tmpSolutions[1],dL0*m_branchLengthMult,true));
 
-      if (!diverged)
-      {
-        if (k==1)
-        {
-          m_ALM->setLength(dL0);
-          dL = dL0; // set the length to the length that we want after the first iteration
-        }
-        else
-          dL = m_ALM->resetLength();
-      }
+      if (k==1)
+        dL = dL0; // set the length to the length that we want after the first iteration
 
-      diverged = false;
+      // Update step counter
       k++;
     } // end of steps
 
-    gsAPALMData<T,solution_t> data = m_dataEmpty;
-    data.setData(times,solutions);
-    data.init();
-    m_data.add(data);
+    // Store data of the branch
+    gsAPALMData<T,solution_t> data = m_dataEmpty; // create new data set
+    data.setData(times,solutions); // initialize the dataset with the newly computed data
+    data.init(); // initialize the dataset
+    m_data.add(data); // add the dataset to the tree
 
+    // Store the solutions, times and levels
     m_solutions.push_back(solutions);
     m_times.push_back(times);
     m_levels.push_back(levels);
@@ -797,7 +766,6 @@ gsAPALM<T>::_solve_impl(index_t Nsteps)
 
         this->_initiation(dataEntry,
                           tstart,
-                          dataLevel,
                           distance,
                           solutions,
                           bifurcation
@@ -900,7 +868,6 @@ gsAPALM<T>::_solve_impl(index_t Nsteps)
       bool bifurcation;
       this->_initiation(dataEntry,
                         startTime,
-                        dataLevel,
                         distance,
                         solutions,
                         bifurcation
@@ -966,7 +933,6 @@ gsAPALM<T>::_solve_impl(index_t Nsteps)
 template <class T>
 void gsAPALM<T>::_initiation( const std::tuple<index_t, T     , solution_t, solution_t> & dataEntry,
                               const T &               startTime,
-                              const index_t &         dataLevel,
                               T &                     distance,
                               std::vector<solution_t>&solutions,
                               bool &                  bifurcation )
@@ -1027,29 +993,14 @@ void gsAPALM<T>::_initiation( const std::tuple<index_t, T     , solution_t, solu
   distance = m_ALM->distance(DeltaU,DeltaL);
   solutions.push_back(std::make_pair(m_ALM->solutionU(),m_ALM->solutionL()));
 
+  this->serialStepOutput(solutions[0],tstart,ID);
+
   if (bifurcation)
   {
     m_ALM->switchBranch();
     // add the extra point after bifurcation to the export
     solutions.push_back(std::make_pair(m_ALM->solutionU(),m_ALM->solutionL()));
   }
-
-
-  // T tend = tstart + distance;
-
-  // std::vector<solution_t> stepSolutionsExport(2);
-  // std::vector<T> stepTimesExport(2);
-  // // Export parallel interval output
-  // // Solutions
-  // std::pair<gsVector<T>,T> front = std::make_pair(start.first,start.second);
-  // stepSolutionsExport.front() = front;
-  // std::pair<gsVector<T>,T> back  = std::make_pair(solution.first,solution.second);
-  // stepSolutionsExport.back() = back;
-  // // Times
-  // stepTimesExport.front() = tstart;
-  // stepTimesExport.back() = tend;
-
-  // this->parallelIntervalOutput(stepSolutionsExport,stepTimesExport,dataLevel,ID);
 }
 
 // NOTE: This does not make new branches!

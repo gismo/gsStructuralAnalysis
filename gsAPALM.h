@@ -241,7 +241,6 @@ protected:
 
   void _initiation(   const std::tuple<index_t, T     , solution_t, solution_t> & dataEntry,
                       const T &               startTime,
-                      const index_t &         dataLevel,
                       T &                     endTime,
                       std::vector<solution_t>&solutions,
                       bool &                  bifurcation   );
