@@ -242,7 +242,7 @@ void gsALMRiks<T>::initOutput()
 template <class T>
 void gsALMRiks<T>::stepOutput()
 {
-  computeStability(m_U,false);
+  computeStability(false);
 
   gsInfo<<"\t";
   gsInfo<<std::setw(4)<<std::left<<m_numIterations;

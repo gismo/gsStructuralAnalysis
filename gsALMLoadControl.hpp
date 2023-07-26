@@ -133,7 +133,7 @@ void gsALMLoadControl<T>::initOutput()
 template <class T>
 void gsALMLoadControl<T>::stepOutput()
 {
-  computeStability(m_U,false);
+  computeStability(false);
 
   gsInfo<<"\t";
   gsInfo<<std::setw(4)<<std::left<<m_numIterations;

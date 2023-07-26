@@ -181,9 +181,8 @@ public:
     virtual void resetStep() {m_DeltaUold.setZero(); m_DeltaLold = 0;}
 
     // Set initial guess for solution
-    // virtual void setInitialGuess(const gsVector<T> guess) {m_U = guess;}
-    virtual void setInitialGuess(const gsVector<T> Uguess, T Lguess) {m_Uguess = Uguess; m_Lguess = Lguess;}
-    virtual void setPrevious(const gsVector<T> Uprev, T Lprev)
+    virtual void setInitialGuess(const gsVector<T> & Uguess, const T & Lguess) {m_Uguess = Uguess; m_Lguess = Lguess;}
+    virtual void setPrevious(const gsVector<T> & Uprev, const T & Lprev)
     {
         m_Uprev = Uprev;
         m_Lprev = Lprev;
@@ -192,10 +191,10 @@ public:
     }
 
     /// Sets the solution
-    virtual void setSolution(const gsVector<T> U, T L) {m_L = L; m_U = U; }// m_DeltaUold.setZero(); m_DeltaLold = 0;}
+    virtual void setSolution(const gsVector<T> & U, const T & L) {m_L = L; m_U = U; }// m_DeltaUold.setZero(); m_DeltaLold = 0;}
 
     /// Sets the solution step
-    virtual void setSolutionStep(const gsVector<T> DU, T DL) {m_DeltaUold = DU; m_DeltaLold = DL;}// m_DeltaUold.setZero(); m_DeltaLold = 0;}
+    virtual void setSolutionStep(const gsVector<T> & DU, const T & DL) {m_DeltaUold = DU; m_DeltaLold = DL;}// m_DeltaUold.setZero(); m_DeltaLold = 0;}
 
     /// Access the options
     virtual gsOptionList & options() {return m_options;};
@@ -209,7 +208,7 @@ public:
     /// Apply the options
     virtual void applyOptions() {this->getOptions(); }
 
-    virtual T distance(const gsVector<T>& DeltaU, T DeltaL)
+    virtual T distance(const gsVector<T>& DeltaU, const T DeltaL) const
     {
         GISMO_NO_IMPLEMENTATION;
     }
@@ -232,12 +231,13 @@ public:
      * @param[in]  switchBranch  Switches branch if true
      * @param[in]  jacobian      Evaluate the Jacobian?
      */
-    virtual gsStatus computeSingularPoint(T singTol, index_t kmax, gsVector<T> U, T L, T tolE, T tolB=0, bool switchBranch=false, bool jacobian=false);
-    virtual gsStatus computeSingularPoint(T singTol, index_t kmax, T tolE, T tolB=0, bool switchBranch=false, bool jacobian=false);
-    virtual gsStatus computeSingularPoint(gsVector<T> U, T L, T tolE, T tolB=0, bool switchBranch=false, bool jacobian=false);
+    virtual gsStatus computeSingularPoint(bool switchBranch=false, bool jacobian=false, bool testPoint=true);
+
+    /// Returns true if the point is a bifurcation
+    virtual bool isBifurcation(bool jacobian = false);
 
     /// Checks if the stability of the system changed since the previously known solution
-    virtual bool stabilityChange();
+    virtual bool stabilityChange() const;
 
     /**
      * @brief      Calculates the stability of the solution \a x
@@ -248,11 +248,10 @@ public:
      * @param[in]  jacobian  Compute the jacobian?
      * @param[in]  shift     The shift to apply
      */
-    virtual gsStatus computeStability(gsVector<T> x, bool jacobian=true, T shift = -1e2);
+    virtual gsStatus computeStability(bool jacobian=true, T shift = -1e2);
 
     /// Computes the stability: -1 if unstable, +1 if stable
-    virtual index_t stability();
-    virtual index_t stability(gsVector<T> x, bool jacobian=true);
+    virtual index_t stability() const;
 
     /// Switches branches
     virtual void switchBranch();
@@ -266,23 +265,19 @@ public:
 protected:
 
     /// See \a computeStability
-    virtual void _computeStability(gsVector<T> x, bool jacobian=true, T shift = -1e2);
+    virtual void _computeStability(const gsVector<T> & x, bool jacobian=true, T shift = -1e2);
 
     /// See \a computeSingularPoint
-    virtual void _computeSingularPoint(T singTol, index_t kmax, gsVector<T> U, T L, T tolE, T tolB=0, bool switchBranch=false, bool jacobian=false);
+    virtual void _computeSingularPoint(bool switchBranch=false, bool jacobian=false, bool testPoint=true);
 
     /**
-     * @brief      Tests if a point is singular
+     * @brief      Tests if a point is a bifurcation point
      *
-     * @param[in]  tol       The tolerance
-     * @param[in]  kmax      The maximum number of iterations for the initial power method
      * @param[in]  jacobian  Evaluate the Jacobian?
      *
-     * @return     True if it is a singular point
+     * @return     True if it is a bifurcation point
      */
-    virtual bool _testSingularPoint(T tol, index_t kmax, bool jacobian=false);
-    virtual bool _testSingularPoint(gsVector<T> U, T L, T tol, index_t kmax, bool jacobian=false);
-
+    virtual bool _testSingularPoint(bool jacobian=false);
 
     /// Perform an extended system iteration
     virtual void _extendedSystemIteration();
@@ -539,6 +534,14 @@ protected:
 
     // What to do after computeSingularPoint fails?
     index_t m_SPfail;
+
+    // Number of iterations and the tolerance for the singular point test
+    index_t m_SPTestIt;
+    T m_SPTestTol;
+
+    // Singular point computation tolerances
+    T m_SPCompTolE; // extended iterations
+    T m_SPCompTolB; // bisection method
 
     // Branch switch parameter
     T m_tau;

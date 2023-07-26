@@ -867,7 +867,8 @@ int main (int argc, char** argv)
       arcLength->options().setInt("QuasiIterations",quasiNewtonInt);
     }
     arcLength->options().setSwitch("Quasi",quasiNewton);
-
+    arcLength->options().setReal("SingularPointComputeTolB",0);
+    arcLength->options().setReal("SingularPointComputeTolE",1e-7);
 
     gsDebug<<arcLength->options();
     arcLength->applyOptions();
@@ -929,11 +930,11 @@ int main (int argc, char** argv)
 
       if (SingularPoint)
       {
-        arcLength->computeStability(arcLength->solutionU(),quasiNewton);
+        arcLength->computeStability(quasiNewton);
         if (arcLength->stabilityChange())
         {
           gsInfo<<"Bifurcation spotted!"<<"\n";
-          arcLength->computeSingularPoint(1e-4, 5, Uold, Lold, 1e-7, 0, false);
+          arcLength->computeSingularPoint(false);
           arcLength->switchBranch();
           dLb0 = dLb = dL;
           arcLength->setLength(dLb);

@@ -156,11 +156,11 @@ for (index_t k=0; k<step; k++)
 {
   gsInfo<<"Load step "<< k<<"\n";
   arcLength.step();
-  arcLength.computeStability(arcLength.solutionU(),quasiNewton);
+  arcLength.computeStability(quasiNewton);
   if (arcLength.stabilityChange())
   {
     gsInfo<<"Bifurcation spotted!"<<"\n";
-    arcLength.computeSingularPoint(1e-4, 5, Uold, Lold, 1e-10, 1e-1, false);
+    arcLength.computeSingularPoint(false);
     arcLength.switchBranch();
   }
 

@@ -498,7 +498,7 @@ void gsALMCrisfield<T>::stepOutput()
 {
   // if (!m_quasiNewton)
   // {
-    computeStability(m_U,false);
+    computeStability(false);
   // }
   // else
   //   m_indicator = 0;

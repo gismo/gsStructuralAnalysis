@@ -38,7 +38,12 @@ void gsALMBase<T>::defaultOptions()
 
     m_options.addInt ("BifurcationMethod","Bifurcation Identification based on: 0: Determinant;  1: Eigenvalue",bifmethod::Eigenvalue);
 
-    m_options.addInt ("SingularPointFailure","What to do wne a singular point determination fails?: 0 = Apply solution anyways; 1 = Proceed without singular point",SPfail::With);
+    m_options.addInt ("SingularPointFailure","What to do when a singular point determination fails?: 0 = Apply solution anyways; 1 = Proceed without singular point",SPfail::With);
+    m_options.addReal("SingularPointTestTol", "Detection tolerance for singular points. Product of the mode shape and the forcing should be below this tolerance", 1e-6);
+    m_options.addInt ("SingularPointTestIt" , "Number of iterations of the power method for the singular point test",5);
+
+    m_options.addReal("SingularPointComputeTolE", "Tolerance for the extended iterations to compute a bifurcation point", 1e-10);
+    m_options.addReal("SingularPointComputeTolB", "Tolerance for the bisection iterations to compute a bifurcation point. If tol = 0, no bi-section method is used.", 0);
 
     m_options.addString("Solver","Sparse linear solver", "SimplicialLDLT");
 
@@ -78,6 +83,13 @@ void gsALMBase<T>::getOptions()
     m_arcLength = m_arcLength_prev = m_arcLength_ori = m_options.getReal("Length");
 
     m_SPfail = m_options.getInt ("SingularPointFailure");
+    m_SPTestTol = m_options.getReal("SingularPointTestTol");
+    m_SPTestIt  = m_options.getInt ("SingularPointTestIt");
+
+    m_SPCompTolE = m_options.getReal("SingularPointComputeTolE");
+    m_SPCompTolB = m_options.getReal("SingularPointComputeTolB");
+
+
 }
 
 template <class T>
@@ -232,8 +244,17 @@ gsSparseMatrix<T> gsALMBase<T>::computeJacobian()
   return this->computeJacobian(m_U + m_DeltaU, m_deltaU);
 }
 
-template <class T> void gsALMBase<T>::computeUbar() { m_deltaUbar = this->solveSystem(-m_resVec); }
-template <class T> void gsALMBase<T>::computeUt()   { m_deltaUt = this->solveSystem(m_forcing); }
+template <class T>
+void gsALMBase<T>::computeUbar()
+{
+  m_deltaUbar = this->solveSystem(-m_resVec);
+}
+
+template <class T>
+void gsALMBase<T>::computeUt()
+{
+  m_deltaUt = this->solveSystem(m_forcing);
+}
 
 // template <class T>
 // void gsALMBase<T>::initiateStep()
@@ -297,6 +318,11 @@ template <class T> void gsALMBase<T>::computeUt()   { m_deltaUt = this->solveSys
 //   }
 // }
 
+
+// HV:
+// to do: make a stand-alone (static? const?) Unew,Lnew = step(Uold,Lold) function, which can be used in the bisection functions without problems
+// Some ideas: just make a (static) step function inside the classes and get rid of virtual sub-functions
+//
 template <class T>
 gsStatus gsALMBase<T>::step()
 {
@@ -351,6 +377,7 @@ void gsALMBase<T>::_step()
     quasiNewtonPredictor();
   }
 
+  m_stabilityPrev = m_stability;
   for (m_numIterations = 1; m_numIterations < m_maxIterations; ++m_numIterations)
   {
     if ( (!m_quasiNewton) || ( ( m_quasiNewtonInterval>0 ) && ( m_numIterations % m_quasiNewtonInterval) < 1e-10 ) )
@@ -359,10 +386,10 @@ void gsALMBase<T>::_step()
     }
 
     iteration();
+    computeStability(false);
 
     computeResidual();
     computeResidualNorms();
-
     if (m_verbose)
        stepOutput();
 
@@ -374,6 +401,7 @@ void gsALMBase<T>::_step()
         computeLength();
       else
         m_arcLength_prev = m_arcLength;
+
       break;
     }
     else if (m_numIterations == m_maxIterations-1)
@@ -390,29 +418,19 @@ void gsALMBase<T>::_step()
 // ---------------------------------------Singular point methods-----------------------------------------------
 // ------------------------------------------------------------------------------------------------------------
 template <class T>
-void gsALMBase<T>::_computeSingularPoint(T singTol, index_t kmax, gsVector<T> U, T L, T tolE, T tolB, bool switchBranch, bool jacobian)
+void gsALMBase<T>::_computeSingularPoint(bool switchBranch, bool jacobian, bool testPoint)
 {
-  // Controls the singular point test with the first two arguments
-  bool test = this->_testSingularPoint(singTol, kmax,jacobian);
-  // if (m_verbose)
-  // {
-  //  T value = this->_bisectionTerminationFunction(m_U,false);
-  //  gsInfo<<"\t Singular point details:";
-  //  gsInfo<<"\tvalue: "<<value<<"\n";
-  // }
+  // Determines if the point is a bifurcation point. If not, it assumes it is
+  bool test = (testPoint) ? this->_testSingularPoint(jacobian) : true;
+
   if (test)
   {
-    if (m_verbose) {gsInfo<<"\t Bifurcation point\n";}
-
     bool converged = false;
     // First stage: bisection method
-    if (tolB != 0)
-    {
-      this->_bisectionSolve(U,L,tolB);
-      converged = this->_extendedSystemSolve(m_U, m_L, tolE);
-    }
+    if (m_SPCompTolB != 0)
+      this->_bisectionSolve(m_U,m_L,m_SPCompTolB);
     else
-      converged = this->_extendedSystemSolve(U, L, tolE);
+      converged = this->_extendedSystemSolve(m_U, m_L, m_SPCompTolE);
 
     if (switchBranch && (converged || m_SPfail==1))
       this->switchBranch();
@@ -422,17 +440,15 @@ void gsALMBase<T>::_computeSingularPoint(T singTol, index_t kmax, gsVector<T> U,
     // to avoid the algorithm to find a singular point again
     m_stability = m_stabilityPrev;
   }
-  else
-    gsInfo<<"\t Limit point\n";
 }
 
 // tolB and switchBranch will be defaulted
 template <class T>
-gsStatus gsALMBase<T>::computeSingularPoint(T singTol, index_t kmax, gsVector<T> U, T L, T tolE, T tolB, bool switchBranch, bool jacobian)
+gsStatus gsALMBase<T>::computeSingularPoint(bool switchBranch, bool jacobian, bool testPoint)
 { 
   try
   {
-    this->_computeSingularPoint(singTol, kmax, U, L, tolE, tolB, switchBranch,jacobian); 
+    this->_computeSingularPoint(switchBranch,jacobian, testPoint);
   }
   catch (int errorCode)
   {
@@ -453,36 +469,7 @@ gsStatus gsALMBase<T>::computeSingularPoint(T singTol, index_t kmax, gsVector<T>
 }
 
 template <class T>
-gsStatus gsALMBase<T>::computeSingularPoint(gsVector<T> U, T L, T tolE, T tolB, bool switchBranch, bool jacobian)
-{ return this->computeSingularPoint(1e-6, 5, U, L, tolE, tolB, switchBranch,jacobian); }
-
-// template <class T>
-// gsStatus gsALMBase<T>::computeSingularPoint(gsVector<T> U, T L, T tolE, bool switchBranch)
-// { return this->computeSingularPoint(1e-6, 5, U, L, tolE, 0, switchBranch); }
-
-// template <class T>
-// gsStatus gsALMBase<T>::computeSingularPoint(T singTol, index_t kmax, gsVector<T> U, T L, T tolE, bool switchBranch)
-// { return this->computeSingularPoint(singTol, kmax, U, L, tolE, 0, switchBranch); }
-
-template <class T>
-gsStatus gsALMBase<T>::computeSingularPoint(T singTol, index_t kmax, T tolE, T tolB, bool switchBranch, bool jacobian)
-{ return this->computeSingularPoint(singTol, kmax, m_U, m_L, tolE, tolB, switchBranch,jacobian); }
-
-// template <class T>
-// gsStatus gsALMBase<T>::computeSingularPoint(T singTol, index_t kmax, T tolE, bool switchBranch)
-// { return this->computeSingularPoint(singTol, kmax, m_U, m_L, tolE, 0, switchBranch); }
-
-// template <class T>
-// gsStatus gsALMBase<T>::computeSingularPoint(T tolE, bool switchBranch)
-// { return this->computeSingularPoint(1e-6, 5, m_U, m_L, tolE, 0, switchBranch); }
-
-// template <class T>
-// gsStatus gsALMBase<T>::computeSingularPoint(T tolE, T tolB, bool switchBranch)
-// { return this->computeSingularPoint(1e-6, 5, m_U, m_L, tolE, tolB, switchBranch); }
-
-// to do: ADD POINT FROM WHICH TO TEST
-template <class T>
-bool gsALMBase<T>::_testSingularPoint(gsVector<T> U, T L, T tol, index_t kmax, bool jacobian)
+bool gsALMBase<T>::_testSingularPoint(bool jacobian)
 {
   // First, approximate the eigenvector of the Jacobian by a few arc length iterations
   // Initiate m_V and m_DeltaVDET
@@ -497,35 +484,42 @@ bool gsALMBase<T>::_testSingularPoint(gsVector<T> U, T L, T tol, index_t kmax, b
   m_V.normalize();
   factorizeMatrix(m_jacMat);
 
-  for (index_t k = 0; k<kmax; k++)
+  for (index_t k = 0; k<m_SPTestIt; k++)
   {
     m_V = this->solveSystem(m_V);
     m_V.normalize();
   }
 
   T dot = (abs(m_V.dot(m_forcing)));
-  if ( (abs(dot) / tol > 1e-1) && (abs(dot) / tol < 10) )
+  if ( (abs(dot) / m_SPTestTol > 1e-1) && (abs(dot) / m_SPTestTol < 10) )
   {
-    gsInfo<<"Warning: the singular point test is close to its tolerance. dot/tol = "<<abs(dot)/tol<<" dot = "<<dot<<"\t tolerance = "<<tol<<"\n";
+    gsInfo<<"Warning: the singular point test is close to its tolerance. dot/tol = "<<abs(dot)/m_SPTestTol<<" dot = "<<dot<<"\t tolerance = "<<m_SPTestTol<<"\n";
   }
-  if (dot < tol)    // Bifurcation point
+  if (dot < m_SPTestTol)    // Bifurcation point
+  {
+    if (m_verbose) {gsInfo<<"\t Bifurcation point\n";}
     return true;
+  }
   else        // Limit point
+  {
+    if (m_verbose) {gsInfo<<"\t Limit point\n";}
     return false;
+  }
 }
 
 template <class T>
-bool gsALMBase<T>::_testSingularPoint(T tol, index_t kmax, bool jacobian)
+bool gsALMBase<T>::isBifurcation(bool jacobian)
 {
-  return _testSingularPoint(m_U,m_L,tol,kmax,jacobian);
+  // Controls the singular point test with the first two arguments
+  return this->_testSingularPoint(jacobian);
 }
 
 template <class T>
-gsStatus gsALMBase<T>::computeStability(gsVector<T> x, bool jacobian, T shift)
+gsStatus gsALMBase<T>::computeStability(bool jacobian, T shift)
 {
   try
   {
-    _computeStability(x,jacobian,shift);
+    _computeStability(m_U,jacobian,shift);
     m_status = gsStatus::Success;
   }
   catch (int errorCode)
@@ -547,7 +541,7 @@ gsStatus gsALMBase<T>::computeStability(gsVector<T> x, bool jacobian, T shift)
 }
 
 template <class T>
-void gsALMBase<T>::_computeStability(gsVector<T> x, bool jacobian, T shift)
+void gsALMBase<T>::_computeStability(const gsVector<T> & x, bool jacobian, T shift)
 {
   if (jacobian)
   {
@@ -609,34 +603,19 @@ void gsALMBase<T>::_computeStability(gsVector<T> x, bool jacobian, T shift)
 
   m_negatives = countNegatives(m_stabilityVec);
   m_indicator = m_stabilityVec.colwise().minCoeff()[0]; // This is required since D does not necessarily have one column.
+  m_stability = (m_indicator < 0) ? 1 : -1;
 }
 
 template <class T>
-index_t gsALMBase<T>::stability()
+index_t gsALMBase<T>::stability() const
 {
-  index_t tmp = 1;
-  if (m_indicator < 0)
-    tmp =  -1;
-  return tmp;
+  return (m_indicator < 0) ? 1 : -1;
 }
 
 template <class T>
-index_t gsALMBase<T>::stability(gsVector<T> x, bool jacobian)
+bool gsALMBase<T>::stabilityChange() const
 {
-  this->_computeStability(x, jacobian);
-  index_t tmp = this->stability();
-  return tmp;
-}
-
-template <class T>
-bool gsALMBase<T>::stabilityChange()
-{
-  m_stabilityPrev = m_stability;
-  m_stability = this->stability();
-  if (m_stability*m_stabilityPrev < 0) // then singular point passed
-    return true;
-  else
-    return false;
+  return (m_stability*m_stabilityPrev < 0) ? true : false;
 }
 
 
@@ -751,9 +730,8 @@ template <class T>
 index_t gsALMBase<T>::_bisectionObjectiveFunction(const gsVector<T> & x, bool jacobian)
 {
   this->_computeStability(x,jacobian);
-  index_t negs = countNegatives(m_stabilityVec);
-  m_note += "(" + std::to_string(negs) + ")";
-  return negs;
+  m_note += "(" + std::to_string(m_negatives) + ")";
+  return m_negatives;
 }
 
 template <class T>

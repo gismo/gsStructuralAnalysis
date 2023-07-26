@@ -130,14 +130,13 @@ void gsAPALM<T>::serialSolve(index_t Nsteps)
   T Lold, Lprev, L0;
   gsMatrix<T> Uold, Uprev, U0;
   T dL, dL0;
-  bool bisected, finished, diverged;
+  bool bisected, finished;
   std::vector<solution_t>   solutions;
   std::vector<T>            times;
   std::vector<index_t>      levels;
   while (!m_starts.empty())
   {
     finished = false;
-    diverged = false;
     solutions.clear();
     times.clear();
     levels.clear();
@@ -190,8 +189,7 @@ void gsAPALM<T>::serialSolve(index_t Nsteps)
       if (finished)
         m_starts.push(std::make_tuple(tmpSolutions[1],dL0*m_branchLengthMult,true));
 
-      if (k==1)
-        dL = dL0; // set the length to the length that we want after the first iteration
+      dL = dL0; // set the length to the length that we want after the first iteration
 
       // Update step counter
       k++;
@@ -979,11 +977,12 @@ void gsAPALM<T>::_initiation( const std::tuple<index_t, T     , solution_t, solu
   m_ALM->resetLength();
   if (m_singularPoint)
   {
-    m_ALM->computeStability(m_ALM->solutionU(),m_ALM->options().getSwitch("Quasi"));
+    m_ALM->computeStability(m_ALM->options().getSwitch("Quasi"));
     if (m_ALM->stabilityChange())
     {
       gsMPIInfo(m_rank)<<"Bifurcation spotted!"<<"\n";
-      m_ALM->computeSingularPoint(1e-4, 5, Uold, Lold, 1e-10, 0, false);
+      if (m_ALM->isBifurcation(false))
+        m_ALM->computeSingularPoint(false,false,false);
       bifurcation = true;
     }
   }

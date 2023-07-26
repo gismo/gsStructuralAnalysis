@@ -400,19 +400,6 @@ int main (int argc, char** argv)
         continue;
       }
 
-      // if (SingularPoint)
-      // {
-      //   arcLength->computeStability(arcLength->solutionU(),quasiNewton);
-      //   if (arcLength->stabilityChange())
-      //   {
-      //     gsInfo<<"Bifurcation spotted!"<<"\n";
-      //     arcLength->computeSingularPoint(1e-4, 5, Uold, Lold, 1e-10, 0, false);
-      //     arcLength->switchBranch();
-      //     dL0 = dL = dL;
-      //     arcLength->setLength(dL);
-      //   }
-      // }
-
       indicator = arcLength->indicator();
 
       solVector = arcLength->solutionU();

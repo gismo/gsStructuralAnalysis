@@ -221,7 +221,7 @@ void gsALMConsistentCrisfield<T>::initOutput()
 template <class T>
 void gsALMConsistentCrisfield<T>::stepOutput()
 {
-  computeStability(m_U,false);
+  computeStability(false);
 
   gsInfo<<"\t";
   gsInfo<<std::setw(4)<<std::left<<m_numIterations;
