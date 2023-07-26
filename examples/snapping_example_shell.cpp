@@ -465,10 +465,12 @@ int main(int argc, char *argv[])
     index_t  k = 0;
     real_t eps = 0;
     real_t sig = 0;
+    real_t time = 0;
     while (eps<=Emax && k < step)
     {
 
         gsInfo<<"Load step "<< k<<"\n";
+        gsStopwatch timer;
         gsStatus status = arcLength->step();
         if      (status==gsStatus::Success)
             gsDebug<<"Step successful\n";
@@ -480,6 +482,7 @@ int main(int argc, char *argv[])
             gsDebug<<"Solver error\n";
         else if (status==gsStatus::OtherError)
             gsDebug<<"Other error\n";
+        time += timer.stop();
         
         if (status==gsStatus::NotConverged || status==gsStatus::AssemblyError)
         {
@@ -493,6 +496,7 @@ int main(int argc, char *argv[])
 
         if (SingularPoint)
         {
+            timer.restart();
             arcLength->computeStability(quasiNewton);
             if (arcLength->stabilityChange())
             {
@@ -502,6 +506,7 @@ int main(int argc, char *argv[])
                 dLb0 = dLb = dL;
                 arcLength->setLength(dLb);
             }
+            time += timer.stop();
         }
         indicator = arcLength->indicator();
 
@@ -510,8 +515,6 @@ int main(int argc, char *argv[])
         Lold = arcLength->solutionL();
         gsPiecewiseFunction<> stresses;
         assembler.constructDisplacement(solVector,mp_def);
-
-        gsInfo<<"Total ellapsed assembly time: "<<time<<" s\n";
 
         if (plot)
         {
@@ -534,7 +537,6 @@ int main(int argc, char *argv[])
         gsInfo<<"Eps = "<<eps<<"\n";
         if (write)
         {
-
             std::ofstream file;
             file.open(dirname + "/" + wn,std::ofstream::out | std::ofstream::app);
             file    << std::setprecision(6)
@@ -561,6 +563,14 @@ int main(int argc, char *argv[])
     if (plot)
     {
         collection.save();
+    }
+
+    if (write)
+    {
+        std::ofstream file;
+        file.open(dirname + "/times.txt");
+        file<<"solution time: "<<time<<" s\n";
+        file.close();
     }
 
     delete arcLength;

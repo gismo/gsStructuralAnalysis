@@ -389,6 +389,11 @@ int main(int argc, char *argv[])
 
     std::string dirname = "ArcLengthResults/snapping_DC_2D_" + std::to_string(Nx) + "x" + std::to_string(Ny+1) + "_al=" + std::to_string(al) + "_r=" + std::to_string(numHref) + "_e=" + std::to_string(numElevate);
 
+    // Prepare and create directory with dirname
+    dirname = gsFileManager::getCurrentPath() + dirname;
+    GISMO_ENSURE(gsFileManager::mkdir(dirname),"Failed to create directory " + dirname);
+    // Made directory
+
     gsParaviewCollection collection(dirname + "/" + output);
     deformation = mp;
 
@@ -427,9 +432,9 @@ int main(int argc, char *argv[])
     {
         gsInfo<<"Load step "<<k<<"; D = "<<D<<"; dL = "<<dL<<"eps = "<<eps<<"\n";
 
-	gsStopwatch timer;
+	    gsStopwatch timer;
         gsStatus status = control.step(dL);
-	time += timer.stop();
+	    time += timer.stop();
         if (status==gsStatus::NotConverged || status==gsStatus::AssemblyError)
         {
             dL = dL/2;
