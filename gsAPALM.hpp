@@ -982,8 +982,10 @@ void gsAPALM<T>::_initiation( const std::tuple<index_t, T     , solution_t, solu
     {
       gsMPIInfo(m_rank)<<"Bifurcation spotted!"<<"\n";
       if (m_ALM->isBifurcation(false))
+      {
         m_ALM->computeSingularPoint(false,false,false);
-      bifurcation = true;
+        bifurcation = true;
+      }
     }
   }
 
