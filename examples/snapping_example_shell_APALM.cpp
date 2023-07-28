@@ -137,6 +137,7 @@ int main(int argc, char *argv[])
     index_t numHref     = 0;
     bool    plot       = false;
     bool    write = false;
+    bool sequential   = false;
 
     // Arc length method options
     real_t  dL = 0.1; // Arc length
@@ -215,6 +216,7 @@ int main(int argc, char *argv[])
 
     cmd.addSwitch("plot", "Plot result in ParaView format", plot);
     cmd.addSwitch("write", "Write convergence data to file", write);
+    cmd.addSwitch("sequential", "Solve sequential (serial -> parallel) instead of mixed", sequential);
 
 
     try { cmd.getValues(argc,argv); } catch (int rv) { return rv; }
@@ -533,10 +535,29 @@ int main(int argc, char *argv[])
     apalm.options().setInt("MaxIt",10000);
     apalm.initialize();
 
-    real_t time = mpi.wallTime();
-    apalm.solve(step+1);
-    time = mpi.wallTime() - time;
-    if (apalm.isMain()) gsInfo<<"Time = "<<time<<"\n";
+    real_t serialTime = 0, parallelTime = 0;
+    if (!sequential)
+    {
+        parallelTime = mpi.wallTime();
+        apalm.solve(step+1);
+        parallelTime = mpi.wallTime() - parallelTime;
+        if (apalm.isMain()) gsInfo<<"Parallel time = "<<parallelTime<<"\n";
+    }
+    else
+    {
+        serialTime = mpi.wallTime();
+        apalm.serialSolve(step+1);
+        serialTime = mpi.wallTime() - serialTime;
+        if (apalm.isMain()) gsInfo<<"Serial time = "<<serialTime<<"\n";
+
+        if (maxLevel!=0)
+        {
+            parallelTime = mpi.wallTime();
+            apalm.parallelSolve();
+            parallelTime = mpi.wallTime() - parallelTime;
+            if (apalm.isMain()) gsInfo<<"Parallel time = "<<parallelTime<<"\n";
+        }
+    }
 
     if (apalm.isMain())
     {
@@ -600,7 +621,9 @@ int main(int argc, char *argv[])
     {
         std::ofstream file;
         file.open(dirname + "/times.txt");
-        file<<"solution time: "<<time<<" s\n";
+        if (sequential)
+            file<<"serial   time: "<<serialTime<<" s\n";
+        file<<"parallel time: "<<parallelTime<<" s\n";
         file.close();
     }
 
