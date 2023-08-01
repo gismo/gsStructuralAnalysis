@@ -16,13 +16,15 @@
 #include <gsKLShell/gsThinShellAssembler.h>
 #include <gsKLShell/getMaterialMatrix.h>
 #include <gsKLShell/gsMaterialMatrixTFT.h>
-#include <gsKLShell/gsMaterialMatrixEval.h>
+#include <gsKLShell/gsFunctionSum.h>
 
 #include <gsStructuralAnalysis/gsStaticDR.h>
 #include <gsStructuralAnalysis/gsStaticNewton.h>
 #include <gsStructuralAnalysis/gsStaticComposite.h>
 
 #include <gsStructuralAnalysis/gsStructuralAnalysisUtils.h>
+
+#include <gsUnstructuredSplines/src/gsSmoothInterfaces.h>
 
 using namespace gismo;
 
@@ -231,6 +233,22 @@ int main (int argc, char** argv)
 
 
     mp.computeTopology();
+
+    // Make unstructured spline
+    gsMultiPatch<> geom;
+    gsMappedBasis<2,real_t> bb2;
+    gsSparseMatrix<> global2local;
+    gsSmoothInterfaces<2,real_t> smoothInterfaces(mp);
+    smoothInterfaces.options().setSwitch("SharpCorners",false);
+    smoothInterfaces.compute();
+    smoothInterfaces.matrix_into(global2local);
+
+    global2local = global2local.transpose();
+    geom = smoothInterfaces.exportToPatches();
+    dbasis = smoothInterfaces.localBasis();
+    bb2.init(dbasis,global2local);
+
+    // Make assembler
     gsThinShellAssemblerBase<real_t>* assembler;
     if (!membrane && TFT)
       assembler = new gsThinShellAssembler<3, real_t, true >(mp,dbasis,BCs,forceFun,materialMatrixTFT);
@@ -241,12 +259,8 @@ int main (int argc, char** argv)
     else
       assembler = new gsThinShellAssembler<3, real_t, false >(mp,dbasis,BCs,forceFun,materialMatrixTFT);
     assembler->setOptions(assemblerOptions);
-    if (mp.topology().interfaces().size()!=0)
-    {
-      assembler->addWeakC0(mp.topology().interfaces());
-      assembler->addWeakC1(mp.topology().interfaces());
-      assembler->initInterfaces();
-    }
+    assembler->options().setInt("Continuity",-1);
+    assembler->setSpaceBasis(bb2);
     assembler->setPointLoads(pLoads);
     if (pressure)
       assembler->setPressure(pressFun);
@@ -258,24 +272,37 @@ int main (int argc, char** argv)
     assembler->assembleMass(true);
     gsVector<> M = assembler->rhs();
 
+    gsStructuralAnalysisOps<real_t>::Jacobian_t Jacobian;
+    gsStructuralAnalysisOps<real_t>::Residual_t Residual;
     // Function for the Jacobian
-    gsStructuralAnalysisOps<real_t>::Jacobian_t Jacobian = [&assembler,&mp_def](gsVector<real_t> const &x, gsSparseMatrix<real_t> & m)
+    Jacobian = [&assembler,&bb2,&geom](gsVector<real_t> const &x, gsSparseMatrix<real_t> & m)
     {
-      // &diag,
       ThinShellAssemblerStatus status;
-      assembler->constructSolution(x,mp_def);
-      status = assembler->assembleMatrix(mp_def);
+      gsMatrix<real_t> solFull = assembler->fullSolutionVector(x);
+      size_t d = geom.targetDim();
+      GISMO_ASSERT(solFull.rows() % d==0,"Rows of the solution vector does not match the number of control points");
+      solFull.resize(solFull.rows()/d,d);
+      gsMappedSpline<2,real_t> mspline(bb2,solFull);
+      gsFunctionSum<real_t> def(&geom,&mspline);
+      assembler->assembleMatrix(def);
+      status = assembler->assembleMatrix(def);
       m = assembler->matrix();
-      // m += diag;
       return status == ThinShellAssemblerStatus::Success;
     };
     // Function for the Residual
-    gsStructuralAnalysisOps<real_t>::Residual_t Residual = [&assembler,&mp_def](gsVector<real_t> const &x, gsVector<real_t> & result)
+    Residual = [&assembler,&bb2,&geom](gsVector<real_t> const &x, gsVector<real_t> & result)
     {
       ThinShellAssemblerStatus status;
-      assembler->constructSolution(x,mp_def);
-      status = assembler->assembleVector(mp_def);
-      result = assembler->rhs();
+      gsMatrix<real_t> solFull = assembler->fullSolutionVector(x);
+      size_t d = geom.targetDim();
+      GISMO_ASSERT(solFull.rows() % d==0,"Rows of the solution vector does not match the number of control points");
+      solFull.resize(solFull.rows()/d,d);
+
+      gsMappedSpline<2,real_t> mspline(bb2,solFull);
+      gsFunctionSum<real_t> def(&geom,&mspline);
+
+      status = assembler->assembleVector(def);
+      result = assembler->rhs(); // assembler rhs - force = Finternal
       return status == ThinShellAssemblerStatus::Success;
     };
 
@@ -309,101 +336,131 @@ int main (int argc, char** argv)
     solver.solve();
     GISMO_ASSERT(solver.converged(),"Solver failed");
     gsVector<> solVector = solver.solution();
-    mp_def = assembler->constructSolution(solVector);
-    gsMultiPatch<> deformation = mp_def;
-    for (size_t k = 0; k != mp_def.nPatches(); ++k)
-        deformation.patch(k).coefs() -= mp.patch(k).coefs();
 
     // ! [Export visualization in ParaView]
     if (plot)
     {
-        std::string fileName;
-        gsField<> solField(mp_def, deformation);
-        gsInfo<<"Plotting in Paraview...\n";
 
-        fileName = dirname + sep + "solution";
-        gsWriteParaview<>( solField, fileName, 10000, true);
+      /// Make a gsMappedSpline to represent the solution
+      // 1. Get all the coefficients (including the ones from the eliminated BCs.)
+      gsMatrix<real_t> solFull = assembler->fullSolutionVector(solVector);
 
-        assembler->constructSolution(solVector,mp_def);
-        gsPiecewiseFunction<> TFes;
-        assembler->constructStress(mp_def,TFes,stress_type::tension_field);
-        gsField<> TF(mp_def,TFes, true);
+      // 2. Reshape all the coefficients to a Nx3 matrix
+      size_t d = geom.targetDim();
+      GISMO_ASSERT(solFull.rows() % d==0,"Rows of the solution vector does not match the number of control points");
+      solFull.resize(solFull.rows()/d,d);
 
-        fileName = dirname + sep + "tensionfield";
-        gsWriteParaview(TF, fileName,5000);
+      // 3. Make the mapped spline
+      gsMappedSpline<2,real_t> mspline(bb2,solFull);
 
-        gsInfo <<"Maximum deformation coef: "
-               << deformation.patch(0).coefs().colwise().maxCoeff() <<".\n";
-        gsInfo <<"Minimum deformation coef: "
-               << deformation.patch(0).coefs().colwise().minCoeff() <<".\n";
+      // 4. Plot the mapped spline on the original geometry
+      gsField<> solField(geom, mspline,true);
+
+      std::string fileName;
+      gsInfo<<"Plotting in Paraview...\n";
+
+      fileName = dirname + sep + "solution";
+      gsWriteParaview<>( solField, fileName, 10000, true);
+
+      assembler->constructSolution(solVector,mp_def);
+      gsPiecewiseFunction<> TFes;
+      assembler->constructStress(mp_def,TFes,stress_type::tension_field);
+      gsField<> TF(mp_def,TFes, true);
+
+      fileName = dirname + sep + "tensionfield";
+      gsWriteParaview(TF, fileName,5000);
     }
     if (write)
     {
-      gsMatrix<> result(mp.geoDim(),refPoints.cols());
-      for (index_t k=0; k!=refPoints.cols(); k++)
-        result.col(k) = deformation.patch(refPatches.at(k)).eval(refPoints.col(k));
-      writer.add(result);
+      // gsMatrix<> result(mp.geoDim(),refPoints.cols());
+      // for (index_t k=0; k!=refPoints.cols(); k++)
+      //   result.col(k) = deformation.patch(refPatches.at(k)).eval(refPoints.col(k));
+      // writer.add(result);
     }
 
     // ! [Export visualization in ParaView]
     if (stress)
     {
-      gsPiecewiseFunction<> membraneStresses;
-      assembler->constructStress(mp_def,membraneStresses,stress_type::membrane);
-      gsField<> membraneStress(mp_def,membraneStresses, true);
+      gsField<> tensionField;
+      gsPiecewiseFunction<> tensionFields;
+      std::string fileName = dirname + "/" + "tensionfield";
 
-      gsPiecewiseFunction<> flexuralStresses;
-      assembler->constructStress(mp_def,flexuralStresses,stress_type::flexural);
-      gsField<> flexuralStress(mp_def,flexuralStresses, true);
+      /// Make a gsMappedSpline to represent the solution
+      // 1. Get all the coefficients (including the ones from the eliminated BCs.)
+      gsMatrix<real_t> solFull = assembler->fullSolutionVector(solVector);
 
-      gsPiecewiseFunction<> stretches;
-      assembler->constructStress(mp_def,stretches,stress_type::principal_stretch);
-      gsField<> Stretches(mp_def,stretches, true);
+      // 2. Reshape all the coefficients to a Nx3 matrix
+      size_t d = geom.targetDim();
+      GISMO_ASSERT(solFull.rows() % d==0,"Rows of the solution vector does not match the number of control points");
+      solFull.resize(solFull.rows()/d,d);
 
-      gsPiecewiseFunction<> pstrain_m;
-      assembler->constructStress(mp_def,pstrain_m,stress_type::principal_membrane_strain);
-      gsField<> pstrainM(mp_def,pstrain_m, true);
+      // 3. Make the mapped spline
+      gsMappedSpline<2,real_t> mspline(bb2,solFull);
 
-      gsPiecewiseFunction<> pstrain_f;
-      assembler->constructStress(mp_def,pstrain_f,stress_type::principal_flexural_strain);
-      gsField<> pstrainF(mp_def,pstrain_f, true);
+      // 4. Create deformation spline
+      gsFunctionSum<real_t> def(&geom,&mspline);
 
-      gsPiecewiseFunction<> pstress_m;
-      assembler->constructStress(mp_def,pstress_m,stress_type::principal_stress_membrane);
-      gsField<> pstressM(mp_def,pstress_m, true);
-
-      gsPiecewiseFunction<> pstress_f;
-      assembler->constructStress(mp_def,pstress_f,stress_type::principal_stress_flexural);
-      gsField<> pstressF(mp_def,pstress_f, true);
-
-      gsPiecewiseFunction<> stretch1;
-      assembler->constructStress(mp_def,stretch1,stress_type::principal_stretch_dir1);
-      gsField<> stretchDir1(mp_def,stretch1, true);
-
-      gsPiecewiseFunction<> stretch2;
-      assembler->constructStress(mp_def,stretch2,stress_type::principal_stretch_dir2);
-      gsField<> stretchDir2(mp_def,stretch2, true);
-
-      gsPiecewiseFunction<> stretch3;
-      assembler->constructStress(mp_def,stretch3,stress_type::principal_stretch_dir3);
-      gsField<> stretchDir3(mp_def,stretch3, true);
-
-      gsPiecewiseFunction<> VMStresses;
-      assembler->constructStress(mp_def,VMStresses,stress_type::von_mises_membrane);
-      gsField<> VMStress(mp_def,VMStresses, true);
+      // 5. Construct stress
+      assembler->constructStress(def,tensionFields,stress_type::tension_field);
+      gsWriteParaview(def,tensionFields,fileName,20000,"_");
 
 
-      gsWriteParaview(membraneStress,dirname + sep + "MembraneStress",5000);
-      gsWriteParaview(VMStress,dirname + sep + "MembraneStressVM",5000);
-      gsWriteParaview(Stretches,dirname + sep + "PrincipalStretch",5000);
-      gsWriteParaview(pstrainM,dirname + sep + "PrincipalMembraneStrain",5000);
-      gsWriteParaview(pstrainF,dirname + sep + "PrincipalFlexuralStrain",5000);
-      gsWriteParaview(pstressM,dirname + sep + "PrincipalMembraneStress",5000);
-      gsWriteParaview(pstressF,dirname + sep + "PrincipalFlexuralStress",5000);
-      gsWriteParaview(stretchDir1,dirname + sep + "PrincipalDirection1",5000);
-      gsWriteParaview(stretchDir1,dirname + sep + "PrincipalDirection1",5000);
-      gsWriteParaview(stretchDir2,dirname + sep + "PrincipalDirection2",5000);
-      gsWriteParaview(stretchDir3,dirname + sep + "PrincipalDirection3",5000);
+      // gsPiecewiseFunction<> membraneStresses;
+      // assembler->constructStress(mp_def,membraneStresses,stress_type::membrane);
+      // gsField<> membraneStress(mp_def,membraneStresses, true);
+
+      // gsPiecewiseFunction<> flexuralStresses;
+      // assembler->constructStress(mp_def,flexuralStresses,stress_type::flexural);
+      // gsField<> flexuralStress(mp_def,flexuralStresses, true);
+
+      // gsPiecewiseFunction<> stretches;
+      // assembler->constructStress(mp_def,stretches,stress_type::principal_stretch);
+      // gsField<> Stretches(mp_def,stretches, true);
+
+      // gsPiecewiseFunction<> pstrain_m;
+      // assembler->constructStress(mp_def,pstrain_m,stress_type::principal_membrane_strain);
+      // gsField<> pstrainM(mp_def,pstrain_m, true);
+
+      // gsPiecewiseFunction<> pstrain_f;
+      // assembler->constructStress(mp_def,pstrain_f,stress_type::principal_flexural_strain);
+      // gsField<> pstrainF(mp_def,pstrain_f, true);
+
+      // gsPiecewiseFunction<> pstress_m;
+      // assembler->constructStress(mp_def,pstress_m,stress_type::principal_stress_membrane);
+      // gsField<> pstressM(mp_def,pstress_m, true);
+
+      // gsPiecewiseFunction<> pstress_f;
+      // assembler->constructStress(mp_def,pstress_f,stress_type::principal_stress_flexural);
+      // gsField<> pstressF(mp_def,pstress_f, true);
+
+      // gsPiecewiseFunction<> stretch1;
+      // assembler->constructStress(mp_def,stretch1,stress_type::principal_stretch_dir1);
+      // gsField<> stretchDir1(mp_def,stretch1, true);
+
+      // gsPiecewiseFunction<> stretch2;
+      // assembler->constructStress(mp_def,stretch2,stress_type::principal_stretch_dir2);
+      // gsField<> stretchDir2(mp_def,stretch2, true);
+
+      // gsPiecewiseFunction<> stretch3;
+      // assembler->constructStress(mp_def,stretch3,stress_type::principal_stretch_dir3);
+      // gsField<> stretchDir3(mp_def,stretch3, true);
+
+      // gsPiecewiseFunction<> VMStresses;
+      // assembler->constructStress(mp_def,VMStresses,stress_type::von_mises_membrane);
+      // gsField<> VMStress(mp_def,VMStresses, true);
+
+
+      // gsWriteParaview(membraneStress,dirname + sep + "MembraneStress",5000);
+      // gsWriteParaview(VMStress,dirname + sep + "MembraneStressVM",5000);
+      // gsWriteParaview(Stretches,dirname + sep + "PrincipalStretch",5000);
+      // gsWriteParaview(pstrainM,dirname + sep + "PrincipalMembraneStrain",5000);
+      // gsWriteParaview(pstrainF,dirname + sep + "PrincipalFlexuralStrain",5000);
+      // gsWriteParaview(pstressM,dirname + sep + "PrincipalMembraneStress",5000);
+      // gsWriteParaview(pstressF,dirname + sep + "PrincipalFlexuralStress",5000);
+      // gsWriteParaview(stretchDir1,dirname + sep + "PrincipalDirection1",5000);
+      // gsWriteParaview(stretchDir1,dirname + sep + "PrincipalDirection1",5000);
+      // gsWriteParaview(stretchDir2,dirname + sep + "PrincipalDirection2",5000);
+      // gsWriteParaview(stretchDir3,dirname + sep + "PrincipalDirection3",5000);
       
     }
 
