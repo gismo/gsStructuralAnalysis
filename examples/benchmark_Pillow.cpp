@@ -113,7 +113,8 @@ int main (int argc, char** argv)
       //Jarasjarungkiat2009,Diaby2006
       E_modulus = 588e6;
       PoissonRatio = 0.4;
-      thickness = 0.0006;
+//      thickness = 0.0006; //Jarasjarungkiat2009
+      thickness = 1e-4; //Diaby2006
       box.col(0)<<0,0;
       real_t AM = 0.6;
       real_t AB = math::sqrt(math::pow(AM,2)/2.);
@@ -313,8 +314,8 @@ int main (int argc, char** argv)
     DROptions.setReal("damping",damping);
     DROptions.setReal("alpha",alpha);
     DROptions.setInt("maxIt",1e6);
-    DROptions.setReal("tol",1e-5);
-    DROptions.setReal("tolE",1e-5);
+    DROptions.setReal("tol",1e-2);
+    DROptions.setReal("tolE",1e-2);
     DROptions.setInt("verbose",verbose);
     DROptions.setInt("ResetIt",(index_t)(100));
     DRM.setOptions(DROptions);
@@ -334,7 +335,7 @@ int main (int argc, char** argv)
     gsStaticComposite<real_t> solver(solvers);
     solver.options().setInt("verbose",verbose);
 
-    while (load_fac <= 1.)
+    while (load_fac <= 1)
     {
       /*
        * Load stepping:
@@ -372,7 +373,7 @@ int main (int argc, char** argv)
         assembler->setPressure(pressFun);
       }
 
-      gsInfo<<"Load step "<<step<<"; p = "<<pressure*load_fac<<"; load factor = "<<load_fac<<":\n";
+      gsInfo<<"Load step "<<step<<"; p = "<<pressure*load_fac<<"; load factor = "<<load_fac<<"; load factor step = "<<dload_fac<<":\n";
       assembler->assemble();
       K = assembler->matrix();
       // K += diag;
@@ -394,6 +395,11 @@ int main (int argc, char** argv)
         gsWarn<<"Load step "<<step<<" did not converge\n";
         GISMO_ASSERT(load_fac!=0,"load_fac is zero but no convergence on the first step. Try to increase the number of iterations");
         load_fac -= dload_fac;
+        if (math::abs(load_fac-1) < 1e-3)
+        {
+          gsInfo<<"Simulation terminated because the load factor is close to 1\n";
+          break;
+        }
         dload_fac /= 2;
         load_fac += dload_fac;
         bisected++;
@@ -452,6 +458,7 @@ int main (int argc, char** argv)
         writer.add(result,data);
       }
 
+/*
       if (bisected!=0)
       {
         bisected = 0;
@@ -459,11 +466,13 @@ int main (int argc, char** argv)
       }
       else
         dload_fac = dload_fac0;
-      
+*/
+      dload_fac = dload_fac0;
       step++;
       if (1 - load_fac < dload_fac && 1 - load_fac > 1e-10)
         dload_fac = 1 - load_fac;
       load_fac += dload_fac;
+      gsInfo<<"load factor = "<<load_fac<<"; load factor step = "<<dload_fac<<"\n";
     }
 
     solcollection.save();
