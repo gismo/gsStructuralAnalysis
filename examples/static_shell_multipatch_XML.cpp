@@ -41,8 +41,6 @@ int main (int argc, char** argv)
 
     bool membrane = false;
 
-    bool TFT = false;
-
     real_t perturb = 0;
 
     // Arc length method options
@@ -62,8 +60,6 @@ int main (int argc, char** argv)
 
     cmd.addSwitch("membrane", "Membrane element", membrane);
 
-    cmd.addSwitch( "TFT", "Use Tension-Field Theory",  TFT );
-
     cmd.addSwitch("plot", "Plot result in ParaView format", plot);
     cmd.addSwitch("write", "Write data to file", write);
     cmd.addSwitch("stress", "Plot stress in ParaView format", stress);
@@ -78,7 +74,6 @@ int main (int argc, char** argv)
 
     // ![Initialize members]
     gsMultiPatch<> mp,mp_def;
-    gsMaterialMatrixBase<real_t> * materialMatrix;
     // Boundary conditions
     gsBoundaryConditions<> BCs;
 
@@ -120,9 +115,25 @@ int main (int argc, char** argv)
     gsInfo<<"Basis (patch 0): "<< mp.patch(0).basis() << "\n";
     mp_def = mp;
 
-    gsInfo<<"Reading material matrix (ID=10) ...";
-    materialMatrix = fd.getId<gsMaterialMatrixBase<real_t>>(10).release();
+
+    gsInfo<<"Looking for material matrices ...\n";
+    gsMaterialMatrixContainer<real_t> materialMatrixContainer;
+    gsMaterialMatrixBase<real_t> * materialMatrix;
+    if (fd.hasAny<gsMaterialMatrixContainer<real_t>>())
+    {
+      gsInfo<<"Reading material matrix container (ID=11) ...";
+      fd.getId(11,materialMatrixContainer);
+    }
+    else
+    {
+      gsInfo<<"Reading material matrix (ID=10) ...";
+      materialMatrix = fd.getId<gsMaterialMatrixBase<real_t>>(10).release();
+      for (size_t p = 0; p!=mp.nPatches(); p++)
+        materialMatrixContainer.add(materialMatrix);
+    }
     gsInfo<<"Finished\n";
+    gsInfo<<"Finished\n";
+
     gsInfo<<"Reading boundary conditions (ID=20) ...";
     fd.getId(20,BCs);
     gsInfo<<"Finished\n";
@@ -197,27 +208,6 @@ int main (int argc, char** argv)
     gsInfo<<"Finished\n";
 
     // ![Read data]
-
-    gsMaterialMatrixBase<real_t> * materialMatrixTFT;
-    if (TFT)
-    {
-      dirname = dirname + "_TFT";
-      if      (dynamic_cast<gsMaterialMatrixBaseDim<2,real_t> * >(materialMatrix))
-      {
-        materialMatrixTFT = new gsMaterialMatrixTFT<2,real_t,false>(static_cast<gsMaterialMatrixBaseDim<2,real_t> * >(materialMatrix));
-        static_cast<gsMaterialMatrixTFT<2,real_t,false> * >(materialMatrixTFT)->options().setReal("SlackMultiplier",1e-3);
-      }
-      else if (dynamic_cast<gsMaterialMatrixBaseDim<3,real_t> * >(materialMatrix))
-      {
-        materialMatrixTFT = new gsMaterialMatrixTFT<3,real_t,false>(static_cast<gsMaterialMatrixBaseDim<3,real_t> * >(materialMatrix));
-        static_cast<gsMaterialMatrixTFT<3,real_t,false> * >(materialMatrixTFT)->options().setReal("SlackMultiplier",1e-3);
-      }
-      else
-        GISMO_ERROR("Cast failed");
-    }
-    else
-      materialMatrixTFT = materialMatrix;
-
     std::string output =  "solution";
 
     // Fix path
@@ -250,14 +240,10 @@ int main (int argc, char** argv)
 
     // Make assembler
     gsThinShellAssemblerBase<real_t>* assembler;
-    if (!membrane && TFT)
-      assembler = new gsThinShellAssembler<3, real_t, true >(mp,dbasis,BCs,forceFun,materialMatrixTFT);
-    else if (!membrane && !TFT)
-      assembler = new gsThinShellAssembler<3, real_t, true >(mp,dbasis,BCs,forceFun,materialMatrixTFT);
-    else if (membrane && TFT)
-      assembler = new gsThinShellAssembler<3, real_t, false >(mp,dbasis,BCs,forceFun,materialMatrixTFT);
+    if (membrane)
+      assembler = new gsThinShellAssembler<3, real_t, false >(mp,dbasis,BCs,forceFun,materialMatrixContainer);
     else
-      assembler = new gsThinShellAssembler<3, real_t, false >(mp,dbasis,BCs,forceFun,materialMatrixTFT);
+      assembler = new gsThinShellAssembler<3, real_t, true  >(mp,dbasis,BCs,forceFun,materialMatrixContainer);
     assembler->setOptions(assemblerOptions);
     assembler->options().setInt("Continuity",-1);
     assembler->setSpaceBasis(bb2);
@@ -464,7 +450,6 @@ int main (int argc, char** argv)
       
     }
 
-    delete materialMatrixTFT;
     delete assembler;
 
     return EXIT_SUCCESS;
