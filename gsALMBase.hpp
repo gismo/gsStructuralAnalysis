@@ -174,13 +174,13 @@ template <class T>
 void gsALMBase<T>::factorizeMatrix(const gsSparseMatrix<T> & M)
 {
   m_solver->compute(M);
-  if (m_solver->info()!=Eigen::ComputationInfo::Success)
+  if (m_solver->info()!=gsEigen::ComputationInfo::Success)
   {
     gsInfo<<"Solver error with code "<<m_solver->info()<<". See Eigen documentation on ComputationInfo \n"
-                                                                  <<Eigen::ComputationInfo::Success<<": Success"<<"\n"
-                                                                  <<Eigen::ComputationInfo::NumericalIssue<<": NumericalIssue"<<"\n"
-                                                                  <<Eigen::ComputationInfo::NoConvergence<<": NoConvergence"<<"\n"
-                                                                  <<Eigen::ComputationInfo::InvalidInput<<": InvalidInput"<<"\n";
+                                                                  <<gsEigen::ComputationInfo::Success<<": Success"<<"\n"
+                                                                  <<gsEigen::ComputationInfo::NumericalIssue<<": NumericalIssue"<<"\n"
+                                                                  <<gsEigen::ComputationInfo::NoConvergence<<": NoConvergence"<<"\n"
+                                                                  <<gsEigen::ComputationInfo::InvalidInput<<": InvalidInput"<<"\n";
     throw 3;
   }
 }
@@ -597,10 +597,10 @@ void gsALMBase<T>::_computeStability(gsVector<T> x, bool jacobian, T shift)
     // if (es.info()==Spectra::CompInfo::NotComputed)
     // if (es.info()==Spectra::CompInfo::NotConverging)
     // if (es.info()==Spectra::CompInfo::NumericalIssue)
-    // Eigen::SelfAdjointEigenSolver< gsMatrix<T> > es(m_jacMat);
+    // gsEigen::SelfAdjointEigenSolver< gsMatrix<T> > es(m_jacMat);
     m_stabilityVec = es.eigenvalues();
     #else
-    Eigen::SelfAdjointEigenSolver<gsMatrix<T>> es2(m_jacMat);
+    gsEigen::SelfAdjointEigenSolver<gsMatrix<T>> es2(m_jacMat);
     m_stabilityVec = es2.eigenvalues();
     #endif
   }
