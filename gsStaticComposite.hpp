@@ -23,7 +23,6 @@ gsStatus gsStaticComposite<T>::solve()
     this->getOptions();
     m_numIterations = 0;
     m_status = gsStatus::Success;
-    gsDebugVar(m_verbose);
     for (size_t k=0; k!=m_solvers.size() && m_status==gsStatus::Success; k++)
     {
         if (m_verbose > 0)

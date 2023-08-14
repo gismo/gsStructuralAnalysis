@@ -83,15 +83,19 @@ public:
                                         "8: BothEnds",4);
 
         options.addInt("ncvFac","Factor for Spectra's ncv number. Ncv = ncvFac * numEigenvalues",3);
+        options.addReal("shift","Shift for the eigenvalue solver",0.0);
         return options;
     }
 
+    /// Get options
     gsOptionList & options() {return m_options; };
 
-    virtual gsStatus compute();
-    virtual gsStatus compute(const T shift);
+    /// Set the options from \a options
+    virtual void setOptions(gsOptionList & options) {m_options.update(options,gsOptionList::addIfUnknown); }
 
-    virtual gsStatus computeSparse(const T shift = 0.0, const index_t number = 10);
+    virtual gsStatus compute();
+
+    virtual gsStatus computeSparse(const index_t number = 10);
 
     virtual gsStatus computePower();
 
@@ -113,7 +117,7 @@ private:
     typename std::enable_if<_GEigsMode==Spectra::GEigsMode::Cholesky ||
                             _GEigsMode==Spectra::GEigsMode::RegularInverse
                             ,
-                            gsStatus>::type computeSparse_impl(T shift, index_t number);
+                            gsStatus>::type computeSparse_impl(index_t number);
     #endif
 
     #ifdef GISMO_WITH_SPECTRA
@@ -122,7 +126,7 @@ private:
                             _GEigsMode==Spectra::GEigsMode::Buckling ||
                             _GEigsMode==Spectra::GEigsMode::Cayley
                             ,
-                            gsStatus>::type computeSparse_impl(T shift, index_t number);
+                            gsStatus>::type computeSparse_impl(index_t number);
     #endif
 
 protected:

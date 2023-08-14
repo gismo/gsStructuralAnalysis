@@ -25,6 +25,11 @@
 #include <gsStructuralAnalysis/gsStructuralAnalysisUtils.h>
 
 #include <gsUnstructuredSplines/src/gsSmoothInterfaces.h>
+#include <gsUnstructuredSplines/src/gsAlmostC1.h>
+#include <gsUnstructuredSplines/src/gsDPatch.h>
+
+#include <gsUtils/gsL2Projection.h>
+
 
 using namespace gismo;
 
@@ -41,6 +46,8 @@ int main (int argc, char** argv)
 
     bool membrane = false;
 
+    index_t method = 0;
+
     real_t perturb = 0;
 
     // Arc length method options
@@ -55,6 +62,7 @@ int main (int argc, char** argv)
 
     cmd.addInt("r","hRefine", "Number of dyadic h-refinement (bisection) steps to perform before solving", numRefine);
     cmd.addInt("e","degreeElevation", "Number of degree elevation steps to perform on the Geometry's basis before solving", numElevate);
+    cmd.addInt("m","method", "Smoothing method to use: 0: smoothInterfaces, 1: Almost C1, 2: D-Patch", method);
 
     cmd.addReal( "P" , "perturb" , "Perturb the z coordinate of the refined geometry",  perturb );
 
@@ -73,7 +81,7 @@ int main (int argc, char** argv)
     try { cmd.getValues(argc,argv); } catch (int rv) { return rv; }
 
     // ![Initialize members]
-    gsMultiPatch<> mp,mp_def;
+    gsMultiPatch<> mp;
     // Boundary conditions
     gsBoundaryConditions<> BCs;
 
@@ -97,7 +105,15 @@ int main (int argc, char** argv)
     for (size_t p=0; p!=mp.nPatches(); p++)
     {
       for(index_t i = 0; i< numElevate; ++i)
-        mp.patch(p).degreeElevate();    // Elevate the degree
+      {
+        if (dynamic_cast<gsTensorNurbs<2,real_t> * >(&mp.patch(p)))
+        {
+          gsWarn<<"Degree elevation applied"<<"\n";
+          mp.patch(p).degreeElevate();    // Elevate the degree
+        }
+        else
+          mp.patch(p).degreeIncrease();    // Elevate the degree
+      }
 
       // h-refine
       for(index_t i = 0; i< numRefine; ++i)
@@ -113,8 +129,6 @@ int main (int argc, char** argv)
 
     gsMultiBasis<> dbasis(mp,true);
     gsInfo<<"Basis (patch 0): "<< mp.patch(0).basis() << "\n";
-    mp_def = mp;
-
 
     gsInfo<<"Looking for material matrices ...\n";
     gsMaterialMatrixContainer<real_t> materialMatrixContainer;
@@ -137,9 +151,6 @@ int main (int argc, char** argv)
     gsInfo<<"Reading boundary conditions (ID=20) ...";
     fd.getId(20,BCs);
     gsInfo<<"Finished\n";
-
-    // Finalize BCs
-    BCs.setGeoMap(mp);
 
     gsInfo<<"Reading force function (ID=21) ...";
     fd.getId(21,forceFun);
@@ -208,7 +219,6 @@ int main (int argc, char** argv)
     gsInfo<<"Finished\n";
 
     // ![Read data]
-    std::string output =  "solution";
 
     // Fix path
     dirname = gsFileManager::getCanonicRepresentation(dirname,true);
@@ -220,30 +230,58 @@ int main (int argc, char** argv)
       gsWriteParaview(mp,"mp",1000,true);
 
     // materialMatrixTFT->options().setSwitch("Explicit",true);
-
-
     mp.computeTopology();
 
     // Make unstructured spline
     gsMultiPatch<> geom;
     gsMappedBasis<2,real_t> bb2;
     gsSparseMatrix<> global2local;
-    gsSmoothInterfaces<2,real_t> smoothInterfaces(mp);
-    smoothInterfaces.options().setSwitch("SharpCorners",false);
-    smoothInterfaces.compute();
-    smoothInterfaces.matrix_into(global2local);
+    if (method==0)
+    {
+      gsSmoothInterfaces<2,real_t> smoothInterfaces(mp);
+      smoothInterfaces.options().setSwitch("SharpCorners",false);
+      smoothInterfaces.compute();
+      smoothInterfaces.matrix_into(global2local);
 
-    global2local = global2local.transpose();
-    geom = smoothInterfaces.exportToPatches();
-    dbasis = smoothInterfaces.localBasis();
+      global2local = global2local.transpose();
+      geom = smoothInterfaces.exportToPatches();
+      dbasis = smoothInterfaces.localBasis();
+    }
+    else if (method==1)
+    {
+      gsAlmostC1<2,real_t> almostC1(mp);
+      almostC1.options().setSwitch("SharpCorners",true);
+      almostC1.compute();
+      almostC1.matrix_into(global2local);
+
+      global2local = global2local.transpose();
+      geom = almostC1.exportToPatches();
+      dbasis = almostC1.localBasis();
+    }
+    else if (method==2)
+    {
+      gsDPatch<2,real_t> dpatch(mp);
+      dpatch.options().setSwitch("SharpCorners",true);
+      dpatch.compute();
+      dpatch.matrix_into(global2local);
+
+      global2local = global2local.transpose();
+      geom = dpatch.exportToPatches();
+      dbasis = dpatch.localBasis();
+    }
+    else
+      GISMO_ERROR("Method "<<method<<" unknown");
+
     bb2.init(dbasis,global2local);
+    // Finalize BCs
+    BCs.setGeoMap(geom);
 
     // Make assembler
     gsThinShellAssemblerBase<real_t>* assembler;
     if (membrane)
-      assembler = new gsThinShellAssembler<3, real_t, false >(mp,dbasis,BCs,forceFun,materialMatrixContainer);
+      assembler = new gsThinShellAssembler<3, real_t, false >(geom,dbasis,BCs,forceFun,materialMatrixContainer);
     else
-      assembler = new gsThinShellAssembler<3, real_t, true  >(mp,dbasis,BCs,forceFun,materialMatrixContainer);
+      assembler = new gsThinShellAssembler<3, real_t, true  >(geom,dbasis,BCs,forceFun,materialMatrixContainer);
     assembler->setOptions(assemblerOptions);
     assembler->options().setInt("Continuity",-1);
     assembler->setSpaceBasis(bb2);
@@ -252,6 +290,7 @@ int main (int argc, char** argv)
       assembler->setPressure(pressFun);
 
     // Assemble linear system to obtain the force vector
+    gsDebugVar(assembler->numDofs());
     assembler->assemble();
     gsSparseMatrix<> K = assembler->matrix();
     gsVector<> F = assembler->rhs();
@@ -326,7 +365,8 @@ int main (int argc, char** argv)
     // ! [Export visualization in ParaView]
     if (plot)
     {
-
+      gsInfo<<"Plotting in Paraview...\n";
+      std::string fileName;
       /// Make a gsMappedSpline to represent the solution
       // 1. Get all the coefficients (including the ones from the eliminated BCs.)
       gsMatrix<real_t> solFull = assembler->fullSolutionVector(solVector);
@@ -339,25 +379,54 @@ int main (int argc, char** argv)
       // 3. Make the mapped spline
       gsMappedSpline<2,real_t> mspline(bb2,solFull);
 
-      // 4. Plot the mapped spline on the original geometry
-      gsField<> solField(geom, mspline,true);
+      // 4. Create deformation spline
+      gsFunctionSum<real_t> def(&geom,&mspline);
 
-      std::string fileName;
-      gsInfo<<"Plotting in Paraview...\n";
-
+      // 5. Plot the mapped spline on the original geometry
+      gsPiecewiseFunction<> displacements;
+      assembler->constructStress(def,displacements,stress_type::displacement);
       fileName = dirname + sep + "solution";
-      gsWriteParaview<>( solField, fileName, 10000, true);
+      gsWriteParaview(def,displacements,fileName,1000,"_");
 
-      assembler->constructSolution(solVector,mp_def);
-      gsPiecewiseFunction<> TFes;
-      assembler->constructStress(mp_def,TFes,stress_type::tension_field);
-      gsField<> TF(mp_def,TFes, true);
-
+      // 5. Construct stress
+      gsPiecewiseFunction<> tensionFields;
+      assembler->constructStress(def,tensionFields,stress_type::tension_field);
       fileName = dirname + sep + "tensionfield";
-      gsWriteParaview(TF, fileName,5000);
+      gsWriteParaview(def,tensionFields,fileName,1000,"_");
     }
     if (write)
     {
+      // 1. Get all the coefficients (including the ones from the eliminated BCs.)
+      gsMatrix<real_t> solFull = assembler->fullSolutionVector(solVector);
+
+      // 2. Reshape all the coefficients to a Nx3 matrix
+      size_t d = geom.targetDim();
+      GISMO_ASSERT(solFull.rows() % d==0,"Rows of the solution vector does not match the number of control points");
+      solFull.resize(solFull.rows()/d,d);
+
+      // 3. Make the mapped spline
+      gsMappedSpline<2,real_t> mspline(bb2,solFull);
+
+      // 4. Make geom_def by projecting coefficients
+      gsDofMapper mapper(dbasis);
+      mapper.finalize();
+      gsMatrix<> coefs;
+      gsMultiPatch<> geom_def = geom;
+      gsInfo<<"L2-Projection error of mspline on dbasis = "<<gsL2Projection<real_t>::projectFunction(dbasis,mspline,geom,coefs)<<"\n";
+      coefs.resize(coefs.rows()/geom.geoDim(),geom.geoDim());
+
+      index_t offset = 0;
+      for (index_t p = 0; p != geom_def.nPatches(); p++)
+      {
+        gsMatrix<> tmp_coefs = geom.patch(p).coefs();
+        tmp_coefs += coefs.block(offset,0,mapper.patchSize(p),geom.geoDim());
+          geom_def.patch(p) = give(*dbasis.basis(p).makeGeometry((tmp_coefs)));
+          offset += mapper.patchSize(p);
+      }
+
+      // 5. Write the result
+      gsWrite(geom_def,"deformed");
+
       // gsMatrix<> result(mp.geoDim(),refPoints.cols());
       // for (index_t k=0; k!=refPoints.cols(); k++)
       //   result.col(k) = deformation.patch(refPatches.at(k)).eval(refPoints.col(k));
@@ -388,7 +457,7 @@ int main (int argc, char** argv)
 
       // 5. Construct stress
       assembler->constructStress(def,tensionFields,stress_type::tension_field);
-      gsWriteParaview(def,tensionFields,fileName,20000,"_");
+      gsWriteParaview(def,tensionFields,fileName,1000,"_");
 
 
       // gsPiecewiseFunction<> membraneStresses;

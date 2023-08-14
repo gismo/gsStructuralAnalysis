@@ -129,6 +129,10 @@ void gsStaticDR<T>::_solve()
         if (m_residual/m_residualIni < m_tolF && m_Ek/m_Ek0 < m_tolE && m_deltaU.norm()/m_DeltaU.norm() < m_tolU)
         {
             m_U += m_DeltaU;
+            gsDebug <<"Converged: \n";
+            gsDebug <<"\t |R|/|R0| = "<<m_residual/m_residualIni<<" < tolF = "<<m_tolF<<"\n";
+            gsDebug <<"\t |E|/|E0| = "<<m_Ek/m_Ek0              <<" < tolE = "<<m_tolE<<"\n";
+            gsDebug <<"\t |U|/|U0| = "<<m_deltaU.norm()/m_DeltaU.norm()<<" < tolF = "<<m_tolU<<"\n";
             break;
         }
         if (m_numIterations==m_maxIterations-1)

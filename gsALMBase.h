@@ -198,7 +198,7 @@ public:
     virtual gsOptionList & options() {return m_options;};
 
     /// Set the options to \a options
-    virtual void setOptions(gsOptionList options) { m_options = options; this->getOptions(); };
+    virtual void setOptions(gsOptionList options) {m_options.update(options,gsOptionList::addIfUnknown); this->getOptions(); };
 
     /// Return the options into \a options
     virtual const void options_into(gsOptionList options) {options = m_options;};

@@ -27,33 +27,12 @@ gsStatus gsEigenProblemBase<T>::compute()
     if (verbose) { gsInfo<<"Solving eigenvalue problem" ; }
     try
     {
-        m_eigSolver.compute(m_A,m_B);
-        if (verbose) { gsInfo<<"." ; }
-        m_values  = m_eigSolver.eigenvalues();
-        if (verbose) { gsInfo<<"." ; }
-        m_vectors = m_eigSolver.eigenvectors();
-        if (verbose) { gsInfo<<"." ; }
-        if (verbose) { gsInfo<<"Finished\n" ; }
-        m_status = gsStatus::Success;
-    }
-    catch (...)
-    {
-        m_status = gsStatus::SolverError;
-    }
-    return m_status;
-};
+        T shift = m_options.getReal("shift");
+        if (shift!=0.0)
+            m_eigSolver.compute(m_A-shift*m_B,m_B);
+        else
+            m_eigSolver.compute(m_A,m_B);
 
-template <class T>
-gsStatus gsEigenProblemBase<T>::compute(const T shift)
-{
-    if (m_status==gsStatus::AssemblyError)
-        return m_status;
-
-    bool verbose = m_options.getSwitch("verbose");
-    if (verbose) { gsInfo<<"Solving eigenvalue problem" ; }
-    try
-    {
-        m_eigSolver.compute(m_A-shift*m_B,m_B);
         if (verbose) { gsInfo<<"." ; }
         m_values  = m_eigSolver.eigenvalues();
         m_values.array() += shift;
@@ -72,22 +51,22 @@ gsStatus gsEigenProblemBase<T>::compute(const T shift)
 
 
 template <class T>
-gsStatus gsEigenProblemBase<T>::computeSparse(const T shift, const index_t number)
+gsStatus gsEigenProblemBase<T>::computeSparse(const index_t number)
 {
     if (m_status==gsStatus::AssemblyError)
         return m_status;
     
     #ifdef GISMO_WITH_SPECTRA
         if (m_options.getInt("solver")==0)
-            return computeSparse_impl<Spectra::GEigsMode::Cholesky>(shift,number);
+            return computeSparse_impl<Spectra::GEigsMode::Cholesky>(number);
         else if (m_options.getInt("solver")==1)
-            return computeSparse_impl<Spectra::GEigsMode::RegularInverse>(shift,number);
+            return computeSparse_impl<Spectra::GEigsMode::RegularInverse>(number);
         else if (m_options.getInt("solver")==2)
-            return computeSparse_impl<Spectra::GEigsMode::ShiftInvert>(shift,number);
+            return computeSparse_impl<Spectra::GEigsMode::ShiftInvert>(number);
         else if (m_options.getInt("solver")==3)
-            return computeSparse_impl<Spectra::GEigsMode::Buckling>(shift,number);
+            return computeSparse_impl<Spectra::GEigsMode::Buckling>(number);
         else if (m_options.getInt("solver")==4)
-            return computeSparse_impl<Spectra::GEigsMode::Cayley>(shift,number);
+            return computeSparse_impl<Spectra::GEigsMode::Cayley>(number);
         else
         {
             gsWarn<<"Solver type unknown\n";
@@ -108,16 +87,25 @@ typename std::enable_if<_GEigsMode==Spectra::GEigsMode::Cholesky ||
                         _GEigsMode==Spectra::GEigsMode::RegularInverse
                         ,
                         gsStatus>::type
-gsEigenProblemBase<T>::computeSparse_impl(T shift, index_t number)
+gsEigenProblemBase<T>::computeSparse_impl(index_t number)
 {
     bool verbose = m_options.getSwitch("verbose");
+    T shift = m_options.getReal("shift");
 
     Spectra::SortRule selectionRule = static_cast<Spectra::SortRule>(m_options.getInt("selectionRule"));
     Spectra::SortRule sortRule = static_cast<Spectra::SortRule>(m_options.getInt("sortRule"));
 
     index_t ncvFac = m_options.getInt("ncvFac");
     if (verbose) { gsInfo<<"Solving eigenvalue problem" ; }
-    gsSpectraGenSymSolver<gsSparseMatrix<T>,_GEigsMode> solver(m_A-shift*m_B,m_B,number,ncvFac*number);
+
+    gsSparseMatrix<T> Atmp;
+    if (shift!=0.0)
+        Atmp = m_A-shift*m_B;
+    else
+        Atmp = m_A;
+
+    gsSpectraGenSymSolver<gsSparseMatrix<T>,_GEigsMode> solver(Atmp,m_B,number,ncvFac*number);
+
     if (verbose) { gsInfo<<"." ; }
     solver.init();
     if (verbose) { gsInfo<<"." ; }
@@ -167,9 +155,10 @@ typename std::enable_if<_GEigsMode==Spectra::GEigsMode::ShiftInvert ||
                         _GEigsMode==Spectra::GEigsMode::Cayley
                         ,
                         gsStatus>::type
-gsEigenProblemBase<T>::computeSparse_impl(T shift, index_t number)
+gsEigenProblemBase<T>::computeSparse_impl(index_t number)
 {
     bool verbose = m_options.getSwitch("verbose");
+    T shift = m_options.getReal("shift");
 
     Spectra::SortRule selectionRule = static_cast<Spectra::SortRule>(m_options.getInt("selectionRule"));
     Spectra::SortRule sortRule = static_cast<Spectra::SortRule>(m_options.getInt("sortRule"));
