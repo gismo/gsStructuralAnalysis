@@ -48,9 +48,9 @@ int main(int argc, char* argv[]) {
     index_t testCase = 1;
     bool quasiNewton = false;
     int quasiNewtonInt = -1;
-//    bool Compressibility = false;
+    bool Compressibility = false;
     bool verbose = false;
-    int step = 10;
+    int step = 20;
 //    int method = 2；// (0: Load control; 1: Riks' method; 2: Crisfield's method; 3: consistent crisfield method; 4: extended iterations)
 
 
@@ -60,8 +60,8 @@ int main(int argc, char* argv[]) {
     index_t impl = 1; // 1= analytical, 2= generalized, 3= spectral
 
     real_t E_modulus = 1378;
-    real_t PoissonRatio = 0.499;
-    real_t Density = 0.0; //Couldn't find
+    real_t PoissonRatio = 0.5;
+    real_t Density = 0.0;
 
 
     int result = 0;
@@ -125,6 +125,7 @@ int main(int argc, char* argv[]) {
     real_t aDim = 127;
     real_t bDim = pow(8 * I / PI, 1 / 4.0)/2;
     real_t thickness = A / bDim;
+    real_t Ratio = aDim/thickness;
     gsInfo << thickness << bDim;
 
 
@@ -167,7 +168,7 @@ int main(int argc, char* argv[]) {
     BCs.setGeoMap(mp);
 
     gsPiecewiseFunction<> force(mp.nPatches());
-    gsPiecewiseFunction<> t(mp.nPatches());
+//    gsPiecewiseFunction<> t(mp.nPatches());
 
     gsVector<> tmp(3);
     tmp << 0, 0, 0;
@@ -184,26 +185,26 @@ int main(int argc, char* argv[]) {
     }
 //    BCs.addCondition(0, boundary::south, condition_type::clamped, 0, 0, false, 0);
 //    BCs.addCondition(0, boundary::south, condition_type::clamped, 0, 0, false, 2);
-    BCs.addCondition(0, boundary::south, condition_type::clamped, 0, 0, false, 0);
-    BCs.addCondition(0, boundary::south, condition_type::clamped, 0, 0, false, 1);
+    BCs.addCondition(0, boundary::south, condition_type::clamped, 0, 0, false, -1);
+//    BCs.addCondition(0, boundary::south, condition_type::clamped, 0, 0, false, 1);
 
 
 //    BCs.addCondition(0, boundary::north, condition_type::clamped, 0, 0, false, 0);
 //    BCs.addCondition(0, boundary::north, condition_type::clamped, 0, 0, false, 2);
 
 
-    BCs.addCondition(0, boundary::north, condition_type::clamped, 0, 0, false, 0);
+    BCs.addCondition(0, boundary::north, condition_type::clamped, 0, 0, false, -1);
 
-    BCs.addCondition(0, boundary::north, condition_type::clamped, 0, 0, false, 1);
-
-    BCs.addCondition(0, boundary::east, condition_type::clamped, 0, 0, false, -1);
-    BCs.addCondition(0, boundary::west, condition_type::clamped, 0, 0, false, -1);
-
-    BCs.addCondition(0, boundary::east, condition_type::dirichlet, 0, 0, false, 0);
-    BCs.addCondition(0, boundary::west, condition_type::dirichlet, 0, 0, false, 0);
+//    BCs.addCondition(0, boundary::north, condition_type::clamped, 0, 0, false, 1);
+//
+//    BCs.addCondition(0, boundary::east, condition_type::clamped, 0, 0, false, -1);
+//    BCs.addCondition(0, boundary::west, condition_type::clamped, 0, 0, false, -1);
+//
+//    BCs.addCondition(0, boundary::east, condition_type::dirichlet, 0, 0, false, 0);
+//    BCs.addCondition(0, boundary::west, condition_type::dirichlet, 0, 0, false, 0);
 
     gsMatrix<> writePoints(2, 1);
-    writePoints.col(0) << 0.5, 0.5;
+    writePoints.col(0) << 0.5, 0.54;
 
     std::string dirname = "ArcLengthResults";
     dirname = dirname + "/" + "Point_load";
@@ -215,17 +216,15 @@ int main(int argc, char* argv[]) {
     int systemRet = system(command);
     GISMO_ASSERT(systemRet != -1, "Something went wrong with calling the system argument");
 
-    //thickness
-    gsFunctionExpr<> t0(std::to_string(thickness), 3);
-    t.addPiece(t0);
+
     // Point loads
     gsVector<> point(2);
-    point << 0.5, 0.5;
+    point << 0.5, 0.54;
 
     gsVector<> refPoint(2);
     refPoint = point;
     gsVector<> Load(3);
-    Load << 0.0,-10.0,0.0;
+    Load << 0.0,-1.0,0.0;
     pLoads.addLoad(point,Load,0);
 
 
@@ -245,10 +244,13 @@ int main(int argc, char* argv[]) {
     //! [Make material functions]
     // Linear isotropic material model
 
-//    gsConstantFunction<> t(thickness,3);
+    //thickness
+    gsFunctionExpr<> t(std::to_string(thickness), 3);
     gsFunctionExpr<> E(std::to_string(E_modulus), 3);
     gsFunctionExpr<> nu(std::to_string(PoissonRatio), 3);
     gsFunctionExpr<> rho(std::to_string(Density), 3);
+    gsFunctionExpr<> ratio(std::to_string(Ratio), 3);
+
 
     // Linear anisotropic material model (only one layer for example purposes)
     index_t kmax = 1; // number of layers
@@ -283,7 +285,9 @@ int main(int argc, char* argv[]) {
         parameters.resize(2);
         parameters[0] = &E;
         parameters[1] = &nu;
-        options.addInt("Material", "Material model: (0): SvK | (1): NH | (2): NH_ext | (3): MR | (4): Ogden", 0);
+        parameters[2] = &ratio;
+        options.addInt("Material", "Material model: (0): SvK | (1): NH | (2): NH_ext | (3): MR | (4): Ogden", 1);
+        options.addSwitch("Compressibility","Compressibility: (false): Imcompressible | (true): Compressible",Compressibility);
         options.addInt("Implementation",
                        "Implementation: (0): Composites | (1): Analytical | (2): Generalized | (3): Spectral", 1);
         materialMatrix = getMaterialMatrix<3, real_t>(mp, t, parameters, rho, options);
@@ -411,7 +415,7 @@ int main(int argc, char* argv[]) {
         assembler->constructSolution(solVector, mp_def);
 
         gsMatrix<> pts(2, 1);
-        pts << 0.5, 0.5;
+        pts << 0.5, 0.54;
 
         deformation = mp_def;
         deformation.patch(0).coefs() -= mp.patch(0).coefs();// assuming 1 patch here
@@ -427,6 +431,8 @@ int main(int argc, char* argv[]) {
             collection.addTimestep(fileName, k, ".vts");
             collection.addTimestep(fileName, k, "_mesh.vtp");
         }
+        if (write)
+            writeStepOutput(arcLength,deformation, dirname + "/" + wn, writePoints,1, 201);
         if (stress) {
             std::string fileName;
 
@@ -482,8 +488,6 @@ int main(int argc, char* argv[]) {
 //            Smembrane_p.save();
         }
 
-    if (write)
-        writeStepOutput(arcLength,deformation, dirname + "/" + wn, writePoints,1, 201);
         //! [Export visualization in ParaView]
         delete assembler;
         delete materialMatrix;
