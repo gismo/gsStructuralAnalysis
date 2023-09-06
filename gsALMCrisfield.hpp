@@ -116,28 +116,34 @@ void gsALMCrisfield<T>::predictor()
 
   // Choose Solution
   if (m_DeltaUold.dot(m_DeltaUold) == 0 && m_DeltaLold*m_DeltaLold == 0) // no information about previous step.
-  // {
-  //  m_deltaL = m_arcLength / math::pow(2*( m_deltaUt.dot(m_deltaUt) ) , 0.5);
-  //  m_deltaU = m_deltaUbar + m_deltaL*m_deltaUt;
-  //  m_phi = math::pow( m_deltaUt.dot(m_deltaUt) / m_forcing.dot(m_forcing),0.5);
-
-  // }
   {
+    // gsWarn<<"Different predictor!!!!!\n";
     m_note+= "predictor\t";
-    T DL = 1.;
-    // m_deltaL = m_arcLength * DL / math::sqrt( 2*( m_deltaUt.dot(m_deltaUt) + m_DeltaL*DL ) );
-    m_deltaL = m_arcLength * DL / math::sqrt( ( m_deltaUt.dot(m_deltaUt) + m_DeltaL*DL ) );
-
-    // m_deltaU = m_arcLength * m_deltaUt / math::sqrt( m_deltaUt.dot(m_deltaUt) + m_DeltaL*DL );
-    m_deltaU = m_deltaL*m_deltaUt;
-
+    m_deltaL = m_arcLength / math::pow(2*( m_deltaUt.dot(m_deltaUt) ) , 0.5);
+    m_deltaU = m_deltaUbar + m_deltaL*m_deltaUt;
     if (!m_phi_user)
       m_phi = math::pow( m_deltaUt.dot(m_deltaUt) / m_forcing.dot(m_forcing),0.5);
     m_note += " phi=" + std::to_string(m_phi);
 
-    // m_DeltaUold = m_deltaU;
-    // m_DeltaLold = m_deltaL;
   }
+  // {
+  //   m_note+= "predictor\t";
+
+  //   if (!m_phi_user)
+  //     m_phi = math::pow( m_deltaUt.dot(m_deltaUt) / m_forcing.dot(m_forcing),0.5);
+
+  //   // m_deltaL = m_arcLength * DL / math::sqrt( 2*( m_deltaUt.dot(m_deltaUt) + m_DeltaL*DL ) );
+  //   m_deltaL = m_arcLength / math::sqrt( ( m_deltaUt.dot(m_deltaUt) + m_phi*m_phi ) );
+
+  //   // m_deltaU = m_arcLength * m_deltaUt / math::sqrt( m_deltaUt.dot(m_deltaUt) + m_DeltaL*DL );
+  //   m_deltaU = m_deltaL*m_deltaUt;
+
+
+  //   m_note += " phi=" + std::to_string(m_phi);
+
+  //   // m_DeltaUold = m_deltaU;
+  //   // m_DeltaLold = m_deltaL;
+  // }
   else // previous point is not in the origin
   {
     if (!m_phi_user)
@@ -253,46 +259,46 @@ void gsALMCrisfield<T>::computeLambdasModified()
   gsVector<T> etas(2);
   etas.setZero();
   if (m_discriminant >= 0)
-    {
-      etas[0] = (-m_alpha2 + math::pow(m_discriminant,0.5))/(2.0*m_alpha1);
-      etas[1] = (-m_alpha2 - math::pow(m_discriminant,0.5))/(2.0*m_alpha1);
+  {
+    etas[0] = (-m_alpha2 + math::pow(m_discriminant,0.5))/(2.0*m_alpha1);
+    etas[1] = (-m_alpha2 - math::pow(m_discriminant,0.5))/(2.0*m_alpha1);
 
-      T eta1 = std::min(etas[0],etas[1]);
-      T eta2 = std::max(etas[0],etas[1]);
-      if (m_verbose) {gsInfo<<"eta 1 = "<<eta1<<"\t eta2 = "<<eta2<<"\n";}
+    T eta1 = std::min(etas[0],etas[1]);
+    T eta2 = std::max(etas[0],etas[1]);
+    if (m_verbose) {gsInfo<<"eta 1 = "<<eta1<<"\t eta2 = "<<eta2<<"\n";}
 
-      // Approach of Zhou 1995
-      // m_eta = std::min(1.0,eta2);
-      // if (m_eta <= 0)
-      //   gsInfo<<"Warning: both etas are non-positive!\n";
-      // if (m_eta <=0.5)
-      // {
-      //   gsInfo<<"Warning: eta is small; bisecting step length\n";
-      //   m_arcLength=m_arcLength/2.;
-      // }
+    // Approach of Zhou 1995
+    // m_eta = std::min(1.0,eta2);
+    // if (m_eta <= 0)
+    //   gsInfo<<"Warning: both etas are non-positive!\n";
+    // if (m_eta <=0.5)
+    // {
+    //   gsInfo<<"Warning: eta is small; bisecting step length\n";
+    //   m_arcLength=m_arcLength/2.;
+    // }
 
-      // Approach of Lam 1992
-      T xi = 0.05*abs(eta2-eta1);
-      if (eta2<1.0)
-        m_eta = eta2-xi;
-      else if ( (eta2 > 1.0) && (-m_alpha2/m_alpha1 < 1.0) )
-        m_eta = eta2+xi;
-      else if ( (eta1 < 1.0) && (-m_alpha2/m_alpha1 > 1.0) )
-        m_eta = eta1-xi;
-      else if ( eta1 > 1.0 )
-        m_eta = eta1 + xi;
+    // Approach of Lam 1992
+    T xi = 0.05*abs(eta2-eta1);
+    if (eta2<1.0)
+      m_eta = eta2-xi;
+    else if ( (eta2 > 1.0) && (-m_alpha2/m_alpha1 < 1.0) )
+      m_eta = eta2+xi;
+    else if ( (eta1 < 1.0) && (-m_alpha2/m_alpha1 > 1.0) )
+      m_eta = eta1-xi;
+    else if ( eta1 > 1.0 )
+      m_eta = eta1 + xi;
 
-      if (eta2<1.0)
-        m_note = m_note + " option 1";
-      else if ( (eta2 > 1.0) && (-m_alpha2/m_alpha1 < 1.0) )
-        m_note = m_note + " option 2";
-      else if ( (eta1 < 1.0) && (-m_alpha2/m_alpha1 > 1.0) )
-        m_note = m_note + " option 3";
-      else if ( eta1 > 1.0 )
-        m_note = m_note + " option 4";
+    if (eta2<1.0)
+      m_note = m_note + " option 1";
+    else if ( (eta2 > 1.0) && (-m_alpha2/m_alpha1 < 1.0) )
+      m_note = m_note + " option 2";
+    else if ( (eta1 < 1.0) && (-m_alpha2/m_alpha1 > 1.0) )
+      m_note = m_note + " option 3";
+    else if ( eta1 > 1.0 )
+      m_note = m_note + " option 4";
 
-      // m_eta = eta2;
-    }
+    // m_eta = eta2;
+  }
   else
   {
     gsInfo<<"Discriminant was negative in modified method\n";
