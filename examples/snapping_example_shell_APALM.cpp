@@ -572,7 +572,6 @@ int main(int argc, char *argv[])
             std::vector<std::string> pointheaders = {"u_x","u_y"};
             std::vector<std::string> otherheaders = {"U-norm","Eps","Sigma","Lambda","time","level"};
 
-            gsParaviewCollection dataCollection(dirname + "/" + "data");
             gsStructuralAnalysisOutput<real_t> data(dirname + "/data.csv",writePoints);
             if (write)
                 data.init(pointheaders,otherheaders);

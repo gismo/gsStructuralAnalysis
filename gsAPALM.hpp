@@ -938,7 +938,7 @@ void gsAPALM<T>::_initiation( const std::tuple<index_t, T     , solution_t, solu
   solution_t start, prev;
   index_t ID;
   T tstart = startTime;
-  T dL;
+  T dL, dL0;
   gsVector<T> DeltaU;
   T DeltaL;
 
@@ -950,6 +950,7 @@ void gsAPALM<T>::_initiation( const std::tuple<index_t, T     , solution_t, solu
   std::tie(ID,dL,start,prev) = dataEntry;
   std::tie(Uold,Lold) = start;
   std::tie(Uprev,Lprev) = prev;
+  dL0 = dL;
 
   m_ALM->setLength(dL);
   m_ALM->setSolution(Uold,Lold);
@@ -969,12 +970,13 @@ void gsAPALM<T>::_initiation( const std::tuple<index_t, T     , solution_t, solu
     if (status==gsStatus::NotConverged || status==gsStatus::AssemblyError)
     {
       if (m_verbose) gsMPIInfo(m_rank)<<"Error: Loop terminated, arc length method did not converge.\n";
-      dL = m_ALM->reduceLength();
+      dL = dL / 2;
+      m_ALM->setLength(dL);
       m_ALM->setSolution(Uold,Lold);
       continue;
     }
   }
-  m_ALM->resetLength();
+  dL = dL0;
   if (m_singularPoint)
   {
     m_ALM->computeStability(m_ALM->options().getSwitch("Quasi"));

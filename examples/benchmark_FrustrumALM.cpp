@@ -371,17 +371,29 @@ int main (int argc, char** argv)
     real_t indicator = 0.0;
     arcLength->setIndicator(indicator); // RESET INDICATOR
 
+    real_t Lold = 0;
+    gsMatrix<> Uold(assembler->numDofs(),1);
+    Uold.setZero();
+    real_t dL0 = dL;
     for (index_t k=0; k<step; k++)
     {
       gsInfo<<"Load step "<< k<<"\n";
       gsStatus status = arcLength->step();
 
-      if (status!=gsStatus::Success)
-        GISMO_ERROR("Loop terminated, arc length method did not converge.\n");
+      if (status==gsStatus::NotConverged || status==gsStatus::AssemblyError)
+      {
+        gsInfo<<"Error: Loop terminated, arc length method did not converge.\n";
+        dL = dL / 2.;
+        arcLength->setLength(dL);
+        arcLength->setSolution(Uold,Lold);
+        k -= 1;
+        continue;
+      }
 
       indicator = arcLength->indicator();
       solVector = arcLength->solutionU();
-
+      Uold = solVector;
+      Lold = arcLength->solutionL();
       assembler->constructSolution(solVector,mp_def);
 
       deformation = mp_def;
@@ -439,6 +451,8 @@ int main (int argc, char** argv)
       if (write)
         writeStepOutput(arcLength,deformation, dirname + "/" + wn, writePoints,1, 201);
 
+      dL = dL0;
+      arcLength->setLength(dL);
     }
 
     if (plot)
@@ -501,7 +515,7 @@ gsMultiPatch<T> FrustrumDomain(int n, int p, T R1, T R2, T h)
 
     coefs.block(3*k,0,3,3) = tmp;
 
-    weights.block(3*k,0,3,1) << 1,0.70711,1;
+    weights.block(3*k,0,3,1) << 1,0.707106781186548,1;
   }
 
   // Create gsGeometry-derived object for the patch
