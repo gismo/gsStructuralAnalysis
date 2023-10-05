@@ -14,7 +14,7 @@
 #include <typeinfo>
 
 #include <gsCore/gsLinearAlgebra.h>
-#ifdef GISMO_WITH_SPECTRA
+#ifdef gsSpectra_ENABLED
 #include <gsSpectra/gsSpectra.h>
 #endif
 #include <gsIO/gsOptionList.h>
@@ -88,7 +88,7 @@ public:
 
     virtual void computeSparse(T shift = 0.0, index_t number = 10)
     {
-        #ifdef GISMO_WITH_SPECTRA
+        #ifdef gsSpectra_ENABLED
             if (m_options.getInt("solver")==0)
                 computeSparse_impl<Spectra::GEigsMode::Cholesky>(shift,number);
             else if (m_options.getInt("solver")==1)
@@ -121,7 +121,7 @@ protected:
     virtual std::vector<std::pair<T,gsMatrix<T>> > makeMode(int k) const;
 
 private:
-    #ifdef GISMO_WITH_SPECTRA
+    #ifdef gsSpectra_ENABLED
     template<Spectra::GEigsMode _GEigsMode>
     typename std::enable_if<_GEigsMode==Spectra::GEigsMode::Cholesky ||
                             _GEigsMode==Spectra::GEigsMode::RegularInverse
@@ -129,7 +129,7 @@ private:
                             void>::type computeSparse_impl(T shift, index_t number);
     #endif
 
-    #ifdef GISMO_WITH_SPECTRA
+    #ifdef gsSpectra_ENABLED
     template<Spectra::GEigsMode _GEigsMode>
     typename std::enable_if<_GEigsMode==Spectra::GEigsMode::ShiftInvert ||
                             _GEigsMode==Spectra::GEigsMode::Buckling ||
