@@ -46,7 +46,7 @@ void gsEigenProblemBase<T>::compute(T shift)
     if (verbose) { gsInfo<<"Finished\n" ; }
 };
 
-#ifdef GISMO_WITH_SPECTRA
+#ifdef gsSpectra_ENABLED
 template <class T>
 template< Spectra::GEigsMode _GEigsMode>
 typename std::enable_if<_GEigsMode==Spectra::GEigsMode::Cholesky ||
@@ -83,7 +83,7 @@ gsEigenProblemBase<T>::computeSparse_impl(T shift, index_t number)
 }
 #endif
 
-#ifdef GISMO_WITH_SPECTRA
+#ifdef gsSpectra_ENABLED
 template <class T>
 template< Spectra::GEigsMode _GEigsMode>
 typename std::enable_if<_GEigsMode==Spectra::GEigsMode::ShiftInvert ||

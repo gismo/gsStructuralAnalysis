@@ -16,7 +16,7 @@
 
 Module for structural analysis with solids ([`gsElasticity`](https://github.com/gismo/gsElasticity/)) or Kirchhoff-Love shells ([`gsKLShell`](https://github.com/gismo/gsKLShell/)).
 
-|CMake flags|```-DGISMO_STRUCTURALANALYSIS=ON``` (default ```OFF```)|
+|CMake flags|```-DGISMO_OPTIONAL="<other submodules>;gsStructuralAnalysis;gsSpectra"```|
 |--:|---|
 |License|[MPL 2.0](https://www.mozilla.org/en-US/MPL/2.0/)|
 |OS support|Linux, Windows, macOS|
@@ -28,12 +28,12 @@ Module for structural analysis with solids ([`gsElasticity`](https://github.com/
 |Last checked|09-12-2021|
 
 #### Dependencies
-`gsSpectra` via `-cmake . -DGISMO_WITH_SPECTRA=ON`.
+`gsSpectra` via `-cmake . -DGISMO_OPTIONAL="<other submodules>;gsSpectra"`. The use of `gsSpectra` is not required, but strongly adviced. 
 
 #### Installation
 ```
 cd path/to/build/dir
-cmake . -DGISMO_WITH_SPECTRA=ON -DGISMO_STRUCTURALANALYSIS=ON
+cmake . -DGISMO_OPTIONAL="<other submodules>;gsStructuralAnalysis;gsSpectra"
 make
 ```
 
