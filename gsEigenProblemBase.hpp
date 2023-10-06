@@ -61,14 +61,14 @@ gsEigenProblemBase<T>::computeSparse_impl(T shift, index_t number)
     Spectra::SortRule sortRule = static_cast<Spectra::SortRule>(m_options.getInt("sortRule"));
 
     index_t ncvFac = m_options.getInt("ncvFac");
-    if (verbose) { gsInfo<<"Solving eigenvalue problem" ; }
+    if (verbose) { gsInfo<<"Solving eigenvalue problem"<<std::flush ; }
     gsSpectraGenSymSolver<gsSparseMatrix<T>,_GEigsMode> solver(m_A-shift*m_B,m_B,number,ncvFac*number);
     if (verbose) { gsInfo<<"." ; }
     solver.init();
     if (verbose) { gsInfo<<"." ; }
     solver.compute(selectionRule,1000,1e-6,sortRule);
 
-    if (solver.info()==Spectra::CompInfo::Successful)         { gsDebug<<"Spectra converged in "<<solver.num_iterations()<<" iterations and with "<<solver.num_operations()<<"operations. \n"; }
+    if (solver.info()==Spectra::CompInfo::Successful)         { if (verbose) gsInfo<<"Spectra converged in "<<solver.num_iterations()<<" iterations and with "<<solver.num_operations()<<"operations. \n"; }
     else if (solver.info()==Spectra::CompInfo::NumericalIssue){ GISMO_ERROR("Spectra did not converge! Error code: NumericalIssue"); }
     else if (solver.info()==Spectra::CompInfo::NotConverging) { GISMO_ERROR("Spectra did not converge! Error code: NotConverging"); }
     else if (solver.info()==Spectra::CompInfo::NotComputed)   { GISMO_ERROR("Spectra did not converge! Error code: NotComputed");   }

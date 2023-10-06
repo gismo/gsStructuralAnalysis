@@ -1,4 +1,4 @@
-/** @file DRMethoid.cpp
+/** @file example_StaticSolvers.cpp
 
     @brief Static simulations of a shell
 

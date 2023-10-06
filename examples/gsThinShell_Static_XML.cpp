@@ -47,6 +47,7 @@ int main(int argc, char *argv[])
     std::string fn1,fn2,fn3,fn4;
     fn1 = "planar/unitplate.xml";
     fn2 = "pde/kirchhoff_shell1.xml";
+    fn3 = "options/solver_options.xml";
     bool membrane = false;
 
     gsCmdLine cmd("Static analysis for thin shells.");
@@ -60,8 +61,9 @@ int main(int argc, char *argv[])
     cmd.addSwitch("composite", "Composite material", composite);
 
     cmd.addInt( "t", "testCase", "Define test case",  testCase );
-    cmd.addString( "f", "GEOMfile", "Input XML Geometry file", fn1 );
-    cmd.addString( "F", "PDEfile", "Input XML PDE file", fn2 );
+    cmd.addString( "G", "GEOMfile", "Input XML Geometry file", fn1 );
+    cmd.addString( "P", "PDEfile", "Input XML PDE file", fn2 );
+    cmd.addString( "O", "Optionsfile", "Input XML file for assembler options", fn3 );
     cmd.addString( "L", "LayupFile", "Layup file", fn4 );
     cmd.addSwitch("nl", "Solve nonlinear problem", nonlinear);
     cmd.addSwitch("verbose", "Full matrix and vector output", verbose);

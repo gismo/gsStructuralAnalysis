@@ -70,6 +70,9 @@ int main (int argc, char** argv)
     int result = 0;
 
     bool write = false;
+    bool verbose = false;
+
+    index_t solver = 2;
 
     gsCmdLine cmd("Modal analysis for thin shells.");
     cmd.addString( "f", "file", "Input XML file for assembler options", assemberOptionsFile );
@@ -86,11 +89,15 @@ int main (int argc, char** argv)
                "Number of degree elevation steps to perform on the Geometry's basis before solving",
                numElevate);
     cmd.addInt("k","continuityDecrease",
-               "++",
+               " ",
                numKref);
+    cmd.addInt("S","solverType",
+               "0: Cholesky, 1: RegularInverse, 2: ShiftInvert, 3: Buckling, 4: Cayley",
+               solver);
     cmd.addReal("s","shift", "eigenvalue shift", shift);
     cmd.addSwitch("nl", "Nonlinear elasticity (otherwise linear)", nonlinear);
     cmd.addSwitch("plot", "Plot result in ParaView format", plot);
+    cmd.addSwitch("verbose", "Verbose output", verbose);
     cmd.addSwitch("first", "Plot only first", first);
     cmd.addSwitch("write", "Write convergence data to file", write);
     cmd.addSwitch("sparse", "Use sparse solver", sparse);
@@ -467,22 +474,27 @@ int main (int argc, char** argv)
     // Initialise solution object
     gsMultiPatch<> solution = mp;
 
+    gsStopwatch stopwatch;
+    gsInfo<<"Assembling..."<<std::flush;
     assembler->assemble();
     gsSparseMatrix<> K = assembler->matrix();
     assembler->assembleMass();
     gsSparseMatrix<> M = assembler->massMatrix();
+    gsInfo<<"Finished ("<<stopwatch.stop()<<" s)\n";
 
+    stopwatch.restart();
+    gsInfo<<"Solving..."<<std::flush;
     gsModalSolver<real_t> modal(K,M);
-    modal.options().setInt("solver",2);
+    modal.options().setInt("solver",solver);
     modal.options().setInt("selectionRule",0);
     modal.options().setInt("sortRule",4);
-    modal.options().setSwitch("verbose",true);
+    modal.options().setSwitch("verbose",verbose);
     modal.options().setInt("ncvFac",2);
-
     if (!sparse)
       modal.compute();
     else
       modal.computeSparse(shift,10);
+    gsInfo<<"Finished ("<<stopwatch.stop()<<" s)\n";
 
 
     gsMatrix<> values = modal.values();

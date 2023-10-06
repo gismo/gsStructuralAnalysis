@@ -77,7 +77,7 @@ void gsStaticDR<T>::solve()
 
     if (m_verbose) initOutput();
 
-    _start();
+    _start(); // initializes m_Ek, etc
 
     m_Ek0 = m_Ek;
     m_Eks.push_back(m_Ek);
@@ -160,7 +160,7 @@ void gsStaticDR<T>::_iteration()
 template <class T>
 void gsStaticDR<T>::_peak()
 {
-    m_R = m_residualFun(m_U+m_DeltaU)- m_damp.cwiseProduct(m_v);
+    m_R = m_residualFun(m_U+m_DeltaU) - m_damp.cwiseProduct(m_v); // TODO: is this needed? Damping could be zero? (m_c !=0 )
     m_deltaU = - 1.5 * m_dt * m_v + m_dt*m_dt / 2. * m_massInv.cwiseProduct(m_R);
     m_DeltaU += m_deltaU;
 
