@@ -945,14 +945,10 @@ int main (int argc, char** argv)
 
       if (arcLength->stabilityChange() && SingularPoint)
       {
-        arcLength->computeStability(quasiNewton);
-        if (arcLength->stabilityChange())
-        {
-          gsInfo<<"Bifurcation spotted!"<<"\n";
-          arcLength->computeSingularPoint(false);
-          arcLength->switchBranch();
-          dLb0 = dLb = dL;
-          arcLength->setLength(dLb);
+        arcLength->computeSingularPoint(false);
+        arcLength->switchBranch();
+        dLb0 = dLb = dL;
+        arcLength->setLength(dLb);
       }
 
       indicator = arcLength->indicator();
