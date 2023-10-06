@@ -47,17 +47,30 @@ public:
   // virtual ~gsAPALM() { }
 
   /**
-   * @brief      Constructs a new instance.
+   * @brief      Constructs the APALM with MPI communication
    *
-   * @param[in]  ALM   The alms
+   * @param[in]  ALM   An arc-length method
+   * @param[in]  Data  The arc-length data manager
+   * @param[in]  comm  The MPI comminication
    */
+#ifdef GISMO_WITH_MPI
   gsAPALM(  gsALMBase<T> * ALM,
             const gsAPALMData<T,solution_t> & Data,
             const gsMpiComm & comm);
+#endif
 
+  /**
+   * @brief      Constructs the APALM
+   *
+   * @param[in]  ALM   An arc-length method
+   * @param[in]  Data  The arc-length data manager
+   */
   gsAPALM(  gsALMBase<T> * ALM,
             const gsAPALMData<T,solution_t> & Data);
 
+  /**
+   * @brief      Empty constructor
+   */
   gsAPALM()
 #ifdef GISMO_WITH_MPI
   : m_comm(gsSerialComm())
@@ -74,33 +87,109 @@ private:
   void _initStart(const std::vector<gsVector<T>> & Ustart, const std::vector<T> & Lstart, const std::vector<T> & dLs);
 
 public:
+  /**
+   * @brief      Initializes the method
+   */
   virtual void initialize();
 
+  /**
+   * @brief      Solves with the APALM
+   *
+   * @param[in]  Nsteps  The number of steps to perform
+   */
   virtual void solve(index_t Nsteps = 10);
+  /**
+   * @brief      Solves serial
+   *
+   * @param[in]  Nsteps  The number of steps to perform
+   */
   virtual void serialSolve(index_t Nsteps = 10);
+  /**
+   * @brief      Solves parallel
+   */
   virtual void parallelSolve();
 
+  /**
+   * @brief      Output function when performing serial steps
+   *
+   * @param[in]  pair  The solution pair
+   * @param[in]  time  The parametric time
+   * @param[in]  step  The step index
+   */
   virtual void serialStepOutput(const std::pair<gsVector<T>,T> & pair, const T & time, index_t step) {};
+  /**
+   * @brief      Output function when performing parallel steps
+   *
+   * @param[in]  pair  The solution pair
+   * @param[in]  time  The parametric time
+   * @param[in]  step  The step index
+   */
   virtual void parallelStepOutput(const std::pair<gsVector<T>,T> & pair, const T & time, index_t step) {};
+  /**
+   * @brief      Output function within an interval
+   *
+   * @param[in]  stepSolutions  The solutions within the interval
+   * @param[in]  stepTimes      The step times within the interval
+   * @param[in]  level          The level of the interval
+   * @param[in]  ID             THe ID of the job
+   */
   virtual void parallelIntervalOutput(const std::vector<std::pair<gsVector<T>,T>> & stepSolutions, const std::vector<T> & stepTimes, index_t level, index_t ID) {};
 
+  /**
+   * @brief      Returns the options
+   *
+   * @return     the options stored in the class
+   */
   gsOptionList & options() { return m_options; }
 
+  /**
+   * @brief      Get the solution per level, as a @a gsAPALMDataContainer
+   *
+   * @return     The solution hierarchy
+   */
   const gsAPALMDataContainer<T,solution_t> & getHierarchy() const { return m_data; }
   gsAPALMDataContainer<T,solution_t> getHierarchy()  { return m_data; }
 
+  /**
+   * @brief      Gets the solution of \a branch, flattened out (i.e. no levels)
+   *
+   * @param[in]  branch  The branch
+   *
+   * @return     The flattened solutions.
+   */
   const std::vector<solution_t>   & getFlatSolutions(index_t branch = 0) const { return m_solutions[branch]; }
-  const std::vector<T>            & getFlatTimes(index_t branch = 0)     const { return m_times[branch]; }
-  const std::vector<index_t>      & getFlatLevels(index_t branch = 0)    const { return m_levels[branch]; }
-
   std::vector<solution_t>   getFlatSolutions(index_t branch = 0)  { return m_solutions[branch]; }
+
+  /**
+   * @brief      Gets the times of the solutions in a \a branch, flattened out (i.e. no levels)
+   *
+   * @param[in]  branch  The branch
+   *
+   * @return     The flattened times.
+   */
+  const std::vector<T>            & getFlatTimes(index_t branch = 0)     const { return m_times[branch]; }
   std::vector<T>            getFlatTimes(index_t branch = 0)      { return m_times[branch]; }
+
+  /**
+   * @brief      Gets the levels of the solutions in a \a branch, flattened out (i.e. no levels)
+   *
+   * @param[in]  branch  The branch
+   *
+   * @return     The flattened levels.
+   */
+  const std::vector<index_t>      & getFlatLevels(index_t branch = 0)    const { return m_levels[branch]; }
   std::vector<index_t>      getFlatLevels(index_t branch = 0)     { return m_levels[branch]; }
 
+  /**
+   * @brief      Gets the solutions on a level in the hierarchy.
+   *
+   * @param[in]  level   The level
+   * @param[in]  branch  The branch
+   *
+   * @return     The solutions.
+   */
   const std::vector<solution_t *>   & getSolutions(index_t level, index_t branch = 0) const { return m_lvlSolutions[branch][level]; }
-  const std::vector<T *>            & getTimes(index_t level, index_t branch = 0)     const { return m_lvlTimes[branch][level]; }
-
-  std::vector<solution_t>   getSolutions(index_t level, index_t branch = 0)
+    std::vector<solution_t>   getSolutions(index_t level, index_t branch = 0)
   {
     std::vector<solution_t> result;
     for (typename std::vector<solution_t *>::iterator it=m_lvlSolutions[branch][level].begin(); it!=m_lvlSolutions[branch][level].end(); it++)
@@ -108,14 +197,13 @@ public:
     return result;
   }
 
-  std::vector<T>   getTimes(index_t level, index_t branch = 0)
-  {
-    std::vector<T> result;
-    for (typename std::vector<T *>::iterator it=m_lvlTimes[branch][level].begin(); it!=m_lvlTimes[branch][level].end(); it++)
-      result.push_back(**it);
-    return result;
-  }
-
+  /**
+   * @brief      Gets the solutions on a level in the hierarchy, per level.
+   *
+   * @param[in]  branch  The branch
+   *
+   * @return     The solutions per level.
+   */
   std::vector<std::vector<solution_t>> getSolutionsPerLevel(index_t branch = 0)
   {
     std::vector<std::vector<solution_t>> result(m_lvlSolutions[branch].size());
@@ -125,6 +213,31 @@ public:
     return result;
   }
 
+
+  /**
+   * @brief      Gets the times of the solution on a level in the hierarchy.
+   *
+   * @param[in]  level   The level
+   * @param[in]  branch  The branch
+   *
+   * @return     The times.
+   */
+  const std::vector<T *>            & getTimes(index_t level, index_t branch = 0)     const { return m_lvlTimes[branch][level]; }
+  std::vector<T>   getTimes(index_t level, index_t branch = 0)
+  {
+    std::vector<T> result;
+    for (typename std::vector<T *>::iterator it=m_lvlTimes[branch][level].begin(); it!=m_lvlTimes[branch][level].end(); it++)
+      result.push_back(**it);
+    return result;
+  }
+
+  /**
+   * @brief      Gets the times of the solution on a level in the hierarchy, per level.
+   *
+   * @param[in]  branch  The branch
+   *
+   * @return     The times per level.
+   */
   std::vector<std::vector<T>> getTimesPerLevel(index_t branch = 0)
   {
     std::vector<std::vector<T>> result(m_lvlTimes[branch].size());
@@ -135,8 +248,26 @@ public:
   }
 
 #ifdef GISMO_WITH_MPI
+
+  /**
+   * @brief      Returns true if the process is the main process
+   *
+   * @return     True if main, False otherwise.
+   */
   bool isMain() {return (m_rank==0); }
+
+  /**
+   * @brief      Gets the rank of the process
+   *
+   * @return     The rank of the process
+   */
   index_t rank() {return (m_rank); }
+
+  /**
+   * @brief      Gets the number of processes
+   *
+   * @return     The number of processes.
+   */
   index_t size() { return m_proc_count; };
 
 #else

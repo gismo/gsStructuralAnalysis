@@ -46,6 +46,7 @@ void gsStaticNewton<T>::initOutput()
     gsInfo<<std::setw(4)<<std::left<<"It.";
     gsInfo<<std::setw(17)<<std::left<<"|R|";
     gsInfo<<std::setw(17)<<std::left<<"|R|/|R0|";
+    gsInfo<<std::setw(17)<<std::left<<"|DU|";
     gsInfo<<std::setw(17)<<std::left<<"|dU|";
     gsInfo<<std::setw(17)<<std::left<<"|dU|/|DU|";
     gsInfo<<std::setw(17)<<std::left<<"|dU|/|U+DU|";
@@ -61,6 +62,7 @@ void gsStaticNewton<T>::stepOutput(index_t k)
     gsInfo<<std::setw(4)<<std::left<<k;
     gsInfo<<std::setw(17)<<std::left<<m_residual;
     gsInfo<<std::setw(17)<<std::left<<m_residual/m_residualIni;
+    gsInfo<<std::setw(17)<<std::left<<m_DeltaU.norm();
     gsInfo<<std::setw(17)<<std::left<<m_relax * m_deltaU.norm();
     gsInfo<<std::setw(17)<<std::left<<m_relax * m_deltaU.norm()/m_DeltaU.norm();
     gsInfo<<std::setw(17)<<std::left<<m_relax * m_deltaU.norm()/(m_U+m_DeltaU).norm();
@@ -144,13 +146,12 @@ gsVector<T> gsStaticNewton<T>::_solveNonlinear()
     // m_start: true -> m_U given
     // m_headstart: true -> m_DeltaU given
 
-    if (m_DeltaU.norm()==0 || m_DeltaU.rows()==0) ///
+    if (m_DeltaU.norm()==0 && m_DeltaU.rows()==0) ///
     {
         m_deltaU = m_DeltaU = this->_solveLinear();
         m_U.setZero(); // Needed because linear solve modifies m_U.
         m_headstart = true; // due to this, the relative residual is based on the solution of the linear solve
     }
-
     _start();
 
     gsSparseMatrix<T> jacMat;
@@ -240,20 +241,27 @@ gsVector<T> gsStaticNewton<T>::_solveSystem(const gsVector<T> & F)
 }
 
 template <class T>
+void gsStaticNewton<T>::reset()
+{
+    m_dofs = m_force.rows();
+    // resets m_U, m_DeltaU, m_deltaU, m_R, m_L, m_DeltaL, m_deltaL and m_headstart
+    Base::reset();
+}
+
+template <class T>
 void gsStaticNewton<T>::_init()
 {
+    this->reset();
+    if( m_dnonlinear==nullptr || m_residualFun==nullptr)
+        m_NL=false;
+    else
+        m_NL = true;
+
     m_stabilityMethod = 0;
     m_start = false;
-    m_headstart = false;
-    m_dofs = m_force.rows();
 
     if (m_dofs==0)
         gsWarn<<"The number of degrees of freedom is equal to zero. This can lead to bad initialization.\n";
-
-    m_U.setZero(m_dofs);
-    m_DeltaU.setZero(m_dofs);
-    m_deltaU.setZero(m_dofs);
-    m_R.setZero(m_dofs);
 
     m_residual = m_residualIni = m_residualOld = 0;
 

@@ -187,7 +187,7 @@ int main (int argc, char** argv)
     gsConstantFunction<> thicks(thickness/kmax,3);
     Ts[0] = &thicks;
 
-    std::vector<gsFunction<>*> parameters;
+    std::vector<gsFunctionSet<>*> parameters;
     if (material==0) // SvK & Composites
     {
       parameters.resize(2);

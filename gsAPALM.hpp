@@ -16,6 +16,7 @@
 namespace gismo
 {
 
+#ifdef GISMO_WITH_MPI
 template <class T>
 gsAPALM<T>::gsAPALM(  gsALMBase<T> * ALM,
                       const gsAPALMData<T,solution_t> & Data,
@@ -29,15 +30,11 @@ m_comm(comm)
   this->_defaultOptions();
   this->_getOptions();
 
-#ifdef GISMO_WITH_MPI
   //Get size and rank of the processor
   m_proc_count = m_comm.size();
   m_rank = m_comm.rank();
-#else
-  m_proc_count = 1;
-  m_rank = 0;
-#endif
 }
+#endif
 
 template <class T>
 gsAPALM<T>::gsAPALM(  gsALMBase<T> * ALM,

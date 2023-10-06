@@ -218,6 +218,7 @@ gsSparseMatrix<T> gsALMBase<T>::_computeJacobian(const gsVector<T> & U, const gs
   m_note += "J";
   if (!m_djacobian(U,deltaU,m))
     throw 2;
+  this->factorizeMatrix(m);
   return m;
 }
 
