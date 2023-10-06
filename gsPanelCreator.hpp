@@ -137,11 +137,13 @@ gsMultiPatch<T> gsPanelCreator<T>::LBeam(T const & Lb, T const & Hw, T const & W
 
     // Web
     tmp = Strip(Lb,Hw,0,0,0);
-    result.addPatches(tmp);
+    for (size_t p=0; p!=tmp.nPatches(); p++)
+        result.addPatch(tmp.patch(p));
 
     // Flange, left
     tmp = Plate(Lb,Wf,0,0,Hw);
-    result.addPatches(tmp);
+    for (size_t p=0; p!=tmp.nPatches(); p++)
+        result.addPatch(tmp.patch(p));
 
     for (size_t p = 0; p!=result.nPatches(); p++)
     {
@@ -167,11 +169,13 @@ gsMultiPatch<T> gsPanelCreator<T>::PanelT(T const & Lp, T const & Wp, T const & 
     // Base plate, left
     // Flange, left
     tmp = Plate(Lp,Wp/2,0,0,0);
-    result.addPatches(tmp);
+    for (size_t p=0; p!=tmp.nPatches(); p++)
+        result.addPatch(tmp.patch(p));
 
     // Base plate, right
     tmp = Plate(Lp,Wp/2,0,-Wp/2,0);
-    result.addPatches(tmp);
+    for (size_t p=0; p!=tmp.nPatches(); p++)
+        result.addPatch(tmp.patch(p));
 
     // T-Beam
     gsMultiPatch<> beam = TBeam(Lp,Hw,Wf);
@@ -208,7 +212,7 @@ gsMultiPatch<T> gsPanelCreator<T>::PanelStrip(T const & Lp, T const & Wp, T cons
 
     for (typename std::vector<gsMultiPatch<T>>::iterator it = panels.begin(); it!=panels.end(); it++)
         for (size_t p = 0; p!=it->nPatches(); p++)
-           result.addPatches(*it);
+            result.addPatch(it->patch(p));
 
     for (size_t p = 0; p!=result.nPatches(); p++)
     {
@@ -234,7 +238,8 @@ gsMultiPatch<T> gsPanelCreator<T>::PanelL(T const & Lp, T const & Wp, T const & 
     // L-stiffener
     panels.at(3) = LBeam(Lp,Hw,Wf);
     for (typename std::vector<gsMultiPatch<T>>::iterator it = panels.begin(); it!=panels.end(); it++)
-         result.addPatches(*it);
+        for (size_t p = 0; p!=it->nPatches(); p++)
+            result.addPatch(it->patch(p));
 
     for (size_t p = 0; p!=result.nPatches(); p++)
     {
@@ -307,7 +312,9 @@ gsMultiPatch<T> gsPanelCreator<T>::PlateGirderL(T const & Lp, T const & Wp, T co
 
 
     for (typename std::vector<gsMultiPatch<T>>::iterator it = panels.begin(); it!=panels.end(); it++)
-         result.addPatches(*it);
+        for (size_t p = 0; p!=it->nPatches(); p++)
+            result.addPatch(it->patch(p));
+
 
     result.computeTopology();
     result.addAutoBoundaries();

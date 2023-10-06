@@ -47,7 +47,7 @@ public:
     static gsMultiPatch<T> PlateGirderL(T const & Lp, T const & Wp, T const & Hwg, T const & Wfg, T const & Hws, T const & Wfs, T const & x=0, T const & y=0, T const & z=0);
 }; // struct
 
-#ifdef GISMO_BUILD_PYBIND11
+#ifdef GISMO_WITH_PYBIND11
 
     /**
      * @brief Initializes the Python wrapper for the class: gsBoundaryConditions
