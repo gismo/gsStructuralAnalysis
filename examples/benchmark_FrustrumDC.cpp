@@ -224,7 +224,7 @@ int main (int argc, char** argv)
     gsConstantFunction<> thicks(thickness/kmax,3);
     Ts[0] = &thicks;
 
-    std::vector<gsFunction<>*> parameters;
+    std::vector<gsFunctionSet<>*> parameters;
     if (material==0) // SvK & Composites
     {
       parameters.resize(2);
@@ -280,7 +280,6 @@ int main (int argc, char** argv)
         options.addInt("Implementation","Implementation: (0): Composites | (1): Analytical | (2): Generalized | (3): Spectral",impl);
         materialMatrix = getMaterialMatrix<3,real_t>(mp,t,parameters,rho,options);
     }
-    materialMatrix->info();
 
     gsParaviewCollection collection(dirname + "/" + output);
     gsMultiPatch<> deformation = mp;

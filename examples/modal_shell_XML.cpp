@@ -236,9 +236,6 @@ int main (int argc, char** argv)
     gsModalSolver<real_t> solver(K,M);
     solver.setOptions(ModalOptions);
 
-    gsDebugVar(K.toDense());
-    gsDebugVar(M.toDense());
-
     // buckling.options().setInt("solver",2);
     // buckling.options().setInt("selectionRule",0);
     // buckling.options().setInt("sortRule",4);

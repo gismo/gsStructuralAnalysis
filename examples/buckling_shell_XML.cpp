@@ -21,28 +21,6 @@
 
 using namespace gismo;
 
-void writeToCSVfile(std::string name, gsMatrix<> matrix)
-{
-  std::ofstream file(name.c_str());
-  for(int  i = 0; i < matrix.rows(); i++)
-  {
-    for(int j = 0; j < matrix.cols(); j++)
-    {
-       std::string str = std::to_string(matrix(i,j));
-       if(j+1 == matrix.cols())
-       {
-           file<<std::setprecision(10)<<str;
-       }
-       else
-       {
-           file<<std::setprecision(10)<<str<<',';
-       }
-    }
-    file<<'\n';
-  }
-}
-
-
 int main (int argc, char** argv)
 {
     // Input options
@@ -255,23 +233,11 @@ int main (int argc, char** argv)
 
     gsSparseMatrix<> K_NL;
     GISMO_ENSURE(Jacobian(solVector,K_NL),"Jacobian assembly failed.");
-    K_NL -= K_L;
-
-
-    // gsDebugVar(K_L.toDense());
-    // gsDebugVar(K_NL.toDense());
-
-    // gsWrite(K_L,"K_L");
-    // gsWrite(K_NL,"K_NL");
-
-    // writeToCSVfile("K_L.csv",K_L.toDense());
-    // writeToCSVfile("K_NL.csv",K_NL.toDense());
 
     gsBucklingSolver<real_t> solver(K_L,K_NL);
     solver.setOptions(BucklingOptions);
 
     gsStatus status = solver.computeSparse(nmodes);//,2,Spectra::SortRule::LargestMagn,Spectra::SortRule::SmallestMagn);
-    return 0;
 
     GISMO_ENSURE(status == gsStatus::Success,"Buckling solver failed");
 
@@ -290,7 +256,7 @@ int main (int argc, char** argv)
         gsMatrix<> modeShape;
         gsParaviewCollection collection(dirname + sep + output);
 
-        index_t N = 1;
+        index_t N = nmodes;
         for (index_t m=0; m<N; m++)
         {
 

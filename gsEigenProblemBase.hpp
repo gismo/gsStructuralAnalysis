@@ -181,7 +181,7 @@ gsEigenProblemBase<T>::computeSparse_impl(index_t number)
         gsDebug<<"Spectra converged in "<<solver.num_iterations()<<" iterations and with "<<solver.num_operations()<<"operations. \n";
         if (verbose) { gsInfo<<"." ; }
         m_values  = solver.eigenvalues();
-        m_values.array() += shift;
+        // m_values.array() += shift;
         if (verbose) { gsInfo<<"." ; }
         m_vectors = solver.eigenvectors();
         if (verbose) { gsInfo<<"Finished\n" ; }

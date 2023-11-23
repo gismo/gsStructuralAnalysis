@@ -479,9 +479,6 @@ protected:
 
 protected:
 
-    // Arc length method (either "Crisfield" or "Riks")
-    index_t m_method;
-
     // Previous update
     gsVector<T> m_DeltaUold;
     real_t m_DeltaLold;
