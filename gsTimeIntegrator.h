@@ -88,6 +88,7 @@ public:
         m_NL = false;
         this->initializeCoefficients();
         this->initiate();
+        m_solver = gsSparseSolver<T>::get( "LU" ); // todo: make proper options
     }
 
 private:
@@ -116,6 +117,7 @@ private:
         m_NL = true;
         this->initializeCoefficients();
         this->initiate();
+        m_solver = gsSparseSolver<T>::get( "LU" ); // todo: make proper options
     }
 
     /**
@@ -140,6 +142,7 @@ private:
         m_damp = gsSparseMatrix<T>(m_dofs,m_dofs);
         this->initializeCoefficients();
         this->initiate();
+        m_solver = gsSparseSolver<T>::get( "LU" ); // todo: make proper options
     }
 
 
@@ -167,6 +170,7 @@ public:
         {
             return m_jacobian(x);
         };
+        m_solver = gsSparseSolver<T>::get( "LU" ); // todo: make proper options
     }
 
 
@@ -190,6 +194,7 @@ public:
         {
             return m_jacobian(x);
         };
+        m_solver = gsSparseSolver<T>::get( "LU" ); // todo: make proper options
     }
 
 
@@ -211,6 +216,7 @@ public:
     : gsTimeIntegrator(Mass,Damp,Residual,dt)
     {
       m_djacobian = dJacobian;
+        m_solver = gsSparseSolver<T>::get( "LU" ); // todo: make proper options
     }
 
 
@@ -231,6 +237,7 @@ public:
     {
         m_djacobian = dJacobian;
         m_damp = gsSparseMatrix<T>(m_dofs,m_dofs);
+        m_solver = gsSparseSolver<T>::get( "LU" ); // todo: make proper options
     }
 
 
@@ -263,6 +270,9 @@ public:
 
     /// Sets the time
     void setTime(T time) {m_t = time; }
+
+    /// Sets the time
+    void setTimeStep(T dt) {m_dt = dt; }
     /// Gets the time
     T currentTime() const {return m_t; }
 
