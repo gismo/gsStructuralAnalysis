@@ -22,7 +22,8 @@ namespace gismo
 template <class T>
 void gsALMLoadControl<T>::quasiNewtonPredictor()
 {
-  computeJacobian();
+  m_jacMat = computeJacobian();
+  this->factorizeMatrix(m_jacMat);
   computeUbar(); // rhs contains residual and should be computed every time
 
 }
@@ -30,7 +31,8 @@ void gsALMLoadControl<T>::quasiNewtonPredictor()
 template <class T>
 void gsALMLoadControl<T>::quasiNewtonIteration()
 {
-  computeJacobian();
+  m_jacMat = computeJacobian();
+  this->factorizeMatrix(m_jacMat);
 }
 
 template <class T>
@@ -69,9 +71,24 @@ void gsALMLoadControl<T>::initiateStep()
 template <class T>
 void gsALMLoadControl<T>::predictor()
 {
-  computeJacobian();
+  m_jacMat = computeJacobian();
+  this->factorizeMatrix(m_jacMat);
 
   m_DeltaL = m_deltaL = m_arcLength;
+  m_deltaUt = this->solveSystem(m_forcing);
+  m_DeltaU = m_deltaL*m_deltaUt;
+
+  // gsDebugVar(m_DeltaU.norm());
+  m_note+= "predictor\t";
+}
+
+template <class T>
+void gsALMLoadControl<T>::predictorGuess()
+{
+  m_jacMat = computeJacobian();
+  this->factorizeMatrix(m_jacMat);
+
+  m_DeltaL = m_deltaL = m_Lguess - m_L;
   m_deltaUt = this->solveSystem(m_forcing);
   m_DeltaU = m_deltaL*m_deltaUt;
 
@@ -116,7 +133,7 @@ void gsALMLoadControl<T>::initOutput()
 template <class T>
 void gsALMLoadControl<T>::stepOutput()
 {
-  computeStability(m_U,false);
+  computeStability(false);
 
   gsInfo<<"\t";
   gsInfo<<std::setw(4)<<std::left<<m_numIterations;

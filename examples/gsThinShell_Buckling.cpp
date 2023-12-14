@@ -13,9 +13,13 @@
 
 #include <gismo.h>
 
+#ifdef gsKLShell_ENABLED
 #include <gsKLShell/gsThinShellAssembler.h>
 #include <gsKLShell/getMaterialMatrix.h>
+#endif
+
 #include <gsStructuralAnalysis/gsBucklingSolver.h>
+#include <gsStructuralAnalysis/gsStructuralAnalysisTools.h>
 
 using namespace gismo;
 
@@ -44,6 +48,7 @@ gsMultiPatch<T> Rectangle(T L, T B);
 template <class T>
 gsMultiPatch<T> AnnularDomain(int n, int p, T R1, T R2);
 
+#ifdef gsKLShell_ENABLED
 int main (int argc, char** argv)
 {
     // Input options
@@ -618,27 +623,28 @@ int main (int argc, char** argv)
     gsSparseMatrix<> K_L =  assembler->matrix();
     gsVector<> rhs = assembler->rhs();
 
-    typedef std::function<gsSparseMatrix<real_t> (gsVector<real_t> const &)>                            Jacobian_t;
-    typedef std::function<gsSparseMatrix<real_t> (gsVector<real_t> const &, gsVector<real_t> const &)>  dJacobian_t;
-    Jacobian_t K_NL = [&assembler,&mp_def](gsVector<real_t> const &x)
+    // Function for the Jacobian
+    gsStructuralAnalysisOps<real_t>::Jacobian_t K_NL = [&assembler,&mp_def](gsVector<real_t> const &x, gsSparseMatrix<real_t> & m)
     {
+      ThinShellAssemblerStatus status;
       assembler->constructSolution(x,mp_def);
-      assembler->assemble(mp_def);
-      gsSparseMatrix<real_t> m = assembler->matrix();
-      return m;
+      status = assembler->assembleMatrix(mp_def);
+      m = assembler->matrix();
+      return status == ThinShellAssemblerStatus::Success;
     };
-    dJacobian_t dK_NL = [&assembler,&mp_def,&MIP](gsVector<real_t> const &x, gsVector<real_t> const &dx)
+    gsStructuralAnalysisOps<real_t>::dJacobian_t dK_NL = [&assembler,&mp_def,&MIP](gsVector<real_t> const &x, gsVector<real_t> const &dx, gsSparseMatrix<real_t> & m)
     {
+      ThinShellAssemblerStatus status;
       if (MIP)
-        assembler->assembleMatrix(x,x-dx);
+        status = assembler->assembleMatrix(x,x-dx);
       else
       {
         assembler->constructSolution(x,mp_def);
-        assembler->assembleMatrix(mp_def);
+        status = assembler->assembleMatrix(mp_def);
       }
 
-      gsSparseMatrix<real_t> m = assembler->matrix();
-      return m;
+      m = assembler->matrix();
+      return status == ThinShellAssemblerStatus::Success;
     };
 
     gsBucklingSolver<real_t> buckling(K_L,rhs,dK_NL);
@@ -649,10 +655,13 @@ int main (int argc, char** argv)
     buckling.options().setInt("ncvFac",2);
     // buckling.computePower();
 
+    gsStatus status;
     if (!sparse)
-      buckling.compute();
+      status = buckling.compute();
     else
-      buckling.computeSparse(shift,nmodes);//,2,Spectra::SortRule::LargestMagn,Spectra::SortRule::SmallestMagn);
+      status = buckling.computeSparse(shift,nmodes);//,2,Spectra::SortRule::LargestMagn,Spectra::SortRule::SmallestMagn);
+
+    GISMO_ENSURE(status == gsStatus::Success,"Buckling solver failed");
 
     gsMatrix<> values = buckling.values();
     gsMatrix<> vectors = buckling.vectors();
@@ -707,7 +716,7 @@ int main (int argc, char** argv)
           std::string fileName = "BucklingResults/modes" + util::to_string(m);
           gsWriteParaview<>(solField, fileName, 5000);
           fileName = "modes" + util::to_string(m) + "0";
-          collection.addTimestep(fileName,m,".vts");
+          collection.addPart(fileName + ".vts",m);
         }
         collection.save();
     }
@@ -725,6 +734,13 @@ int main (int argc, char** argv)
 
     return result;
 }
+#else//gsKLShell_ENABLED
+int main(int argc, char *argv[])
+{
+    gsWarn<<"G+Smo is not compiled with the gsKLShell module.";
+    return EXIT_FAILURE;
+}
+#endif
 
 template <class T>
 gsMultiPatch<T> RectangularDomain(int n, int p, T L, T B)

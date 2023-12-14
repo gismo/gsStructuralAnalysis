@@ -13,10 +13,13 @@
 
 #include <gismo.h>
 
+#ifdef gsKLShell_ENABLED
 #include <gsKLShell/gsThinShellAssembler.h>
 #include <gsKLShell/getMaterialMatrix.h>
+#endif
 
 #include <gsStructuralAnalysis/gsModalSolver.h>
+#include <gsStructuralAnalysis/gsStructuralAnalysisTools.h>
 
 using namespace gismo;
 
@@ -39,6 +42,7 @@ void writeToCSVfile(std::string name, gsMatrix<> matrix)
 template <class T>
 gsMultiPatch<T> Rectangle(T L, T B);
 
+#ifdef gsKLShell_ENABLED
 int main (int argc, char** argv)
 {
     // Input options
@@ -516,11 +520,13 @@ int main (int argc, char** argv)
     modal.options().setSwitch("verbose",true);
     modal.options().setInt("ncvFac",2);
 
+    gsStatus status;
     if (!sparse)
-      modal.compute();
+        status = modal.compute();
     else
-      modal.computeSparse(shift,10);
+        status = modal.computeSparse(shift,10);//,2,Spectra::SortRule::LargestMagn,Spectra::SortRule::SmallestMagn);
 
+    GISMO_ENSURE(status == gsStatus::Success,"Buckling solver failed");
 
     gsMatrix<> values = modal.values();
     gsMatrix<> vectors = modal.vectors();
@@ -568,7 +574,7 @@ int main (int argc, char** argv)
           std::string fileName = "ModalResults/modes" + util::to_string(m);
           gsWriteParaview<>(solField, fileName, 5000);
           fileName = "modes" + util::to_string(m) + "0";
-          collection.addTimestep(fileName,m,".vts");
+          collection.addPart(fileName + ".vts",m);
 
         }
 
@@ -594,6 +600,13 @@ int main (int argc, char** argv)
 
     return result;
 }
+#else//gsKLShell_ENABLED
+int main(int argc, char *argv[])
+{
+    gsWarn<<"G+Smo is not compiled with the gsKLShell module.";
+    return EXIT_FAILURE;
+}
+#endif
 
 template <class T>
 gsMultiPatch<T> Rectangle(T L, T B)

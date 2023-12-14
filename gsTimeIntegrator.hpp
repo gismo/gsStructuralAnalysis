@@ -2,6 +2,9 @@
 
     @brief Provides temporal solvers for structural analysis problems
 
+    TODO: Split in multiple classes with one base class gsTimeIntegratorBase (as gsALMBase)
+    TODO: Integrate with XBraid
+
     This file is part of the G+Smo library.
 
     This Source Code Form is subject to the terms of the Mozilla Public
@@ -18,6 +21,61 @@
 
 namespace gismo
 {
+    template <class T>
+    gsVector<T> gsTimeIntegrator<T>::_computeForce(const T & time)
+    {
+      gsVector<T> forceVec;
+      if (!m_forceFun(time, forceVec))
+        throw 2;
+      return forceVec;
+    }
+
+    template <class T>
+    gsVector<T> gsTimeIntegrator<T>::_computeResidual(const gsVector<T> & U, const T & time)
+    {
+      gsVector<T> resVec;
+      if (!m_residualFun(U, time, resVec))
+        throw 2;
+      return resVec;
+    }
+
+    template <class T>
+    gsSparseMatrix<T> gsTimeIntegrator<T>::_computeJacobian(const gsVector<T> & U, const gsVector<T> & deltaU)
+    {
+      // Compute Jacobian
+      gsSparseMatrix<T> m;
+      if (!m_djacobian(U,deltaU,m))
+        throw 2;
+      return m;
+    }
+
+    template <class T>
+    void gsTimeIntegrator<T>::_factorizeMatrix(const gsSparseMatrix<T> & M)
+    {
+      m_solver->compute(M);
+      if (m_solver->info()!=gsEigen::ComputationInfo::Success)
+      {
+        gsInfo<<"Solver error with code "<<m_solver->info()<<". See Eigen documentation on ComputationInfo \n"
+                                                                      <<gsEigen::ComputationInfo::Success<<": Success"<<"\n"
+                                                                      <<gsEigen::ComputationInfo::NumericalIssue<<": NumericalIssue"<<"\n"
+                                                                      <<gsEigen::ComputationInfo::NoConvergence<<": NoConvergence"<<"\n"
+                                                                      <<gsEigen::ComputationInfo::InvalidInput<<": InvalidInput"<<"\n";
+        throw 3;
+      }
+    }
+
+    template <class T>
+    gsVector<T> gsTimeIntegrator<T>::_solveSystem(const gsVector<T> & F)
+    {
+      try
+      {
+        return m_solver->solve(F);
+      }
+      catch (...)
+      {
+        throw 3;
+      }
+    }
 
     template <class T>
     void gsTimeIntegrator<T>::initializeCoefficients()
@@ -282,7 +340,7 @@ namespace gismo
         m_solOld = m_sol;
         gsMatrix<T> uOld = m_solOld.topRows(m_dofs);
         gsMatrix<T> vOld = m_solOld.bottomRows(m_dofs);
-        m_forceVec = m_forceFun(m_t);
+        m_forceVec = _computeForce(m_t);
         m_massInv = m_mass.toDense().inverse();
 
         m_sol.topRows(m_dofs) += m_dt * vOld;
@@ -297,7 +355,7 @@ namespace gismo
         m_solOld = m_sol;
         gsMatrix<T> uOld = m_solOld.topRows(m_dofs);
         gsMatrix<T> vOld = m_solOld.bottomRows(m_dofs);
-        m_resVec = m_residualFun(uOld,m_t);
+        m_resVec = _computeResidual(uOld,m_t);
         m_massInv = m_mass.toDense().inverse();
 
         m_sol.topRows(m_dofs) += m_dt * vOld;
@@ -310,11 +368,11 @@ namespace gismo
     void gsTimeIntegrator<T>::stepImplEuler()
     {
         this->constructSystemImplEuler();
-        m_forceVec = m_forceFun(m_t);
+        m_forceVec = _computeForce(m_t);
         m_sysvec.bottomRows(m_dofs) = m_dt*m_massInv*m_forceVec;
 
-        m_solver->compute(m_sysmat);
-        m_sol = m_solver->solve(m_sysvec+m_sol);
+        _factorizeMatrix(m_sysmat);
+        m_sol = _solveSystem(m_sysvec+m_sol);
         m_t += m_dt;
     }
 
@@ -345,10 +403,10 @@ namespace gismo
             if ( (!m_quasiNewton) || (m_numIterations==0) )
             {
                 du      = m_dsol.topRows(m_dofs);
-                m_jacMat = m_djacobian(uNew,du);
+                m_jacMat = _computeJacobian(uNew,du);
             }
 
-            m_resVec = m_residualFun(uNew,m_t);
+            m_resVec = _computeResidual(uNew,m_t);
 
             m_sysvec.topRows(m_dofs) = uNew - uOld - m_dt*vNew;
             m_sysvec.bottomRows(m_dofs) = m_mass*(vNew - vOld) + m_dt * m_damp * vNew + m_dt*((-m_resVec));
@@ -381,8 +439,8 @@ namespace gismo
             }
 
             m_residue = m_sysvec.norm();
-            m_solver->compute(m_sysmat);
-            m_dsol = m_solver->solve(-m_sysvec);
+            _factorizeMatrix(m_sysmat);
+            m_dsol = _solveSystem(-m_sysvec);
 
             m_sol += m_dsol;
             m_updateNorm = m_dsol.norm() / m_sol.norm();
@@ -439,15 +497,15 @@ namespace gismo
             if ( (!m_quasiNewton) || (m_numIterations==0) )
             {
                 du = m_dsol.topRows(m_dofs);
-                m_jacMat = m_djacobian(uNew,du);
+                m_jacMat = _computeJacobian(uNew,du);
             }
 
-            m_resVec = m_residualFun(uNew,m_t);
+            m_resVec = _computeResidual(uNew,m_t);
 
             m_sysvec.topRows(m_dofs) = uNew - uOld - m_dt*vNew;
             m_sysvec.bottomRows(m_dofs) = m_mass*(vNew - vOld) + m_dt * m_damp * vNew + m_dt*(-m_resVec);
 
-            // m_jacMat = m_djacobian(uNew,du);
+            // m_jacMat = _computeJacobian(uNew,du);
 
             Amat->addOperator(0,0,gsIdentityOp<T>::make(m_dofs) );
             Amat->addOperator(0,1,makeMatrixOp(-m_dt*eye) );
@@ -495,13 +553,13 @@ namespace gismo
         vOld = m_vNew;
         aOld = m_aNew;
 
-        m_forceVec = m_forceFun(m_t);
+        m_forceVec = _computeForce(m_t);
 
         gsSparseMatrix<> lhs = m_stif + 4/(math::pow(gamma*m_dt,2))*m_mass + 2/(gamma*m_dt)*m_damp;
         gsMatrix<> rhs = m_forceVec + m_mass*(4/(math::pow(gamma*m_dt,2))*(uOld)+4/(gamma*m_dt)*vOld+aOld) + m_damp*(2/(gamma*m_dt)*(uOld)+vOld);
 
-        m_solver->compute(lhs);
-        m_sol = m_solver->solve(rhs);
+        _factorizeMatrix(lhs);
+        m_sol = _solveSystem(rhs);
 
         m_uNew = m_sol;
 
@@ -526,7 +584,7 @@ namespace gismo
         gsMatrix<> rhs;
         gsSparseMatrix<> lhs;
 
-        m_resVec = m_residualFun(m_uNew,m_t);
+        m_resVec = _computeResidual(m_uNew,m_t);
         rhs = m_resVec - m_mass*(4/(math::pow(gamma*m_dt,2))*(m_uNew-uOld)-4/(gamma*m_dt)*vOld-aOld) - m_damp*(2/(gamma*m_dt)*(m_uNew-uOld)-vOld);
         T res0 = rhs.norm();
 
@@ -535,16 +593,16 @@ namespace gismo
             if ( (!m_quasiNewton) || (m_numIterations==0) )
             {
                 du = m_dsol.topRows(m_dofs);
-                m_jacMat = m_djacobian(m_uNew,du);
+                m_jacMat = _computeJacobian(m_uNew,du);
             }
 
             lhs = m_jacMat + 4/(math::pow(gamma*m_dt,2))*m_mass + 2/(gamma*m_dt)*m_damp;
-            m_solver->compute(lhs);
-            m_dsol = m_solver->solve(rhs);
+            _factorizeMatrix(lhs);
+            m_dsol = _solveSystem(rhs);
             m_updateNorm = m_dsol.norm()/m_uNew.norm();
             m_uNew += m_dsol;
 
-            m_resVec = m_residualFun(m_uNew,m_t);
+            m_resVec = _computeResidual(m_uNew,m_t);
             rhs = m_resVec - m_mass*(4/(math::pow(gamma*m_dt,2))*(m_uNew-uOld)-4/(gamma*m_dt)*vOld-aOld) - m_damp*(2/(gamma*m_dt)*(m_uNew-uOld)-vOld);
             m_residue = rhs.norm();
 
@@ -583,12 +641,12 @@ namespace gismo
         vOld = m_vNew;
         aOld = m_aNew;
 
-        m_forceVec = m_forceFun(m_t);
+        m_forceVec = _computeForce(m_t);
 
         gsSparseMatrix<> lhs = m_stif + 4/(math::pow(gamma*m_dt,2))*m_mass + 2/(gamma*m_dt)*m_damp;
         gsMatrix<> rhs = m_forceVec + m_mass*(4/(math::pow(gamma*m_dt,2))*(uOld)+4/(gamma*m_dt)*vOld+aOld) + m_damp*(2/(gamma*m_dt)*(uOld)+vOld);;
-        m_solver->compute(lhs);
-        m_sol = m_solver->solve(rhs);
+        _factorizeMatrix(lhs);
+        m_sol = _solveSystem(rhs);
         m_uNew = m_sol;
 
         m_vNew = 2/(gamma*m_dt)*(m_uNew-uOld) - vOld;
@@ -606,8 +664,8 @@ namespace gismo
 
         lhs = m_stif + c3*c3*m_mass + c3*m_damp;
         rhs = m_forceVec - m_mass*(c1*vOld+c2*vStep+c1*c3*uOld+c3*c2*uStep) - m_damp*(c2*uStep+c1*uOld);
-        m_solver->compute(lhs);
-        m_sol = m_solver->solve(rhs);
+        _factorizeMatrix(lhs);
+        m_sol = _solveSystem(rhs);
         m_uNew = m_sol;
         m_residue = rhs.norm();
 
@@ -639,15 +697,15 @@ namespace gismo
             if ( (!m_quasiNewton) || (m_numIterations==0) )
             {
                 du = m_dsol.topRows(m_dofs);
-                m_jacMat = m_djacobian(m_uNew,du);
+                m_jacMat = _computeJacobian(m_uNew,du);
             }
 
-            m_resVec = m_residualFun(m_uNew,m_t);
+            m_resVec = _computeResidual(m_uNew,m_t);
 
             gsSparseMatrix<> lhs = m_jacMat + 4/(math::pow(gamma*m_dt,2))*m_mass + 2/(gamma*m_dt)*m_damp;
             gsMatrix<> rhs = m_resVec - m_mass*(4/(math::pow(gamma*m_dt,2))*(m_uNew-uOld)-4/(gamma*m_dt)*vOld-aOld) - m_damp*(2/(gamma*m_dt)*(m_uNew-uOld)-vOld);
-            m_solver->compute(lhs);
-            m_dsol = m_solver->solve(rhs);
+            _factorizeMatrix(lhs);
+            m_dsol = _solveSystem(rhs);
             m_uNew += m_dsol;
             m_updateNorm = m_dsol.norm() / m_uNew.norm();
             m_residue = rhs.norm();
@@ -685,15 +743,15 @@ namespace gismo
             if ( (!m_quasiNewton) || (m_numIterations==0) )
             {
                 du = m_dsol.topRows(m_dofs);
-                m_jacMat = m_djacobian(m_uNew,du);
+                m_jacMat = _computeJacobian(m_uNew,du);
             }
 
-            m_resVec = m_residualFun(m_uNew,m_t);
+            m_resVec = _computeResidual(m_uNew,m_t);
 
             gsSparseMatrix<T> lhs = m_jacMat + c3*c3*m_mass + c3*m_damp;
             gsMatrix<T> rhs = m_resVec - m_mass*(c1*vOld+c2*vStep+c1*c3*uOld+c3*c2*uStep+c3*c3*m_uNew) - m_damp*(c1*uOld+c2*uStep+c3*m_uNew);
-            m_solver->compute(lhs);
-            m_dsol = m_solver->solve(rhs);
+            _factorizeMatrix(lhs);
+            m_dsol = _solveSystem(rhs);
             m_uNew += m_dsol;
             m_updateNorm = m_dsol.norm() / m_uNew.norm();
             m_residue = rhs.norm();
@@ -730,7 +788,7 @@ namespace gismo
         uOld = m_uNew; // u_n
         vOld = m_vNew; // v_n+1/2
         aOld = m_aNew; // a_n
-        m_forceVec = m_forceFun(m_t);
+        m_forceVec = _computeForce(m_t);
 
         if (m_first)
         {
@@ -758,7 +816,7 @@ namespace gismo
 
         if (m_first)
         {
-            m_resVec = m_residualFun(uOld,m_t);
+            m_resVec = _computeResidual(uOld,m_t);
             aOld = m_massInv * (m_resVec - m_damp * vOld);
             vOld = vOld + m_dt / 2 * aOld; // v_1/2 = v_0 + dt/2*a_0
             m_first = false;
@@ -766,7 +824,7 @@ namespace gismo
 
         m_uNew = uOld + m_dt * vOld;
         m_t+=m_dt;
-        m_resVec = m_residualFun(uOld,m_t);
+        m_resVec = _computeResidual(uOld,m_t);
         m_aNew = m_massInv * (m_resVec - m_damp * vOld);
         m_vNew = vOld + m_dt * m_aNew; // v_n+1/2 = v_n-1/2 + dt*a_n
 
@@ -783,25 +841,25 @@ namespace gismo
         gsVector<T> uOld = m_solOld.topRows(m_dofs);
         gsVector<T> vOld = m_solOld.bottomRows(m_dofs);
 
-        m_resVec = m_forceFun(m_t) - m_stif * uOld;
+        m_resVec = _computeForce(m_t) - m_stif * uOld;
         k1.topRows(m_dofs) = vOld;
         k1.bottomRows(m_dofs) = m_massInv * ( m_resVec - m_damp * vOld);
 
         uTmp = uOld + m_dt/2. * k1.topRows(m_dofs);
         vTmp = vOld + m_dt/2. * k1.bottomRows(m_dofs);
-        m_resVec = m_forceFun(m_t + m_dt/2.) - m_stif * uTmp;
+        m_resVec = _computeForce(m_t + m_dt/2.) - m_stif * uTmp;
         k2.topRows(m_dofs) = vTmp;
         k2.bottomRows(m_dofs) = m_massInv * ( m_resVec - m_damp * vTmp);
 
         uTmp = uOld + m_dt/2. * k2.topRows(m_dofs);
         vTmp = vOld + m_dt/2. * k2.bottomRows(m_dofs);
-        m_resVec = m_forceFun(m_t + m_dt/2.) - m_stif * uTmp;
+        m_resVec = _computeForce(m_t + m_dt/2.) - m_stif * uTmp;
         k3.topRows(m_dofs) = vTmp;
         k3.bottomRows(m_dofs) = m_massInv * ( m_resVec - m_damp * vTmp);
 
         uTmp = uOld + m_dt * k3.topRows(m_dofs);
         vTmp = vOld + m_dt * k3.bottomRows(m_dofs);
-        m_resVec = m_forceFun(m_t + m_dt) - m_stif * uTmp;
+        m_resVec = _computeForce(m_t + m_dt) - m_stif * uTmp;
         k4.topRows(m_dofs) = vTmp;
         k4.bottomRows(m_dofs) = m_massInv * ( m_resVec - m_damp * vTmp);
 
@@ -820,25 +878,25 @@ namespace gismo
         gsVector<T> uOld = m_solOld.topRows(m_dofs);
         gsVector<T> vOld = m_solOld.bottomRows(m_dofs);
 
-        m_resVec = m_residualFun(uOld,m_t);
+        m_resVec = _computeResidual(uOld,m_t);
         k1.topRows(m_dofs) = vOld;
         k1.bottomRows(m_dofs) = m_massInv * ( m_resVec - m_damp * vOld);
 
         uTmp = uOld + m_dt/2. * k1.topRows(m_dofs);
         vTmp = vOld + m_dt/2. * k1.bottomRows(m_dofs);
-        m_resVec = m_residualFun(uTmp,m_t + m_dt/2.);
+        m_resVec = _computeResidual(uTmp,m_t + m_dt/2.);
         k2.topRows(m_dofs) = vTmp;
         k2.bottomRows(m_dofs) = m_massInv * ( m_resVec - m_damp * vTmp);
 
         uTmp = uOld + m_dt/2. * k2.topRows(m_dofs);
         vTmp = vOld + m_dt/2. * k2.bottomRows(m_dofs);
-        m_resVec = m_residualFun(uTmp,m_t + m_dt/2.);
+        m_resVec = _computeResidual(uTmp,m_t + m_dt/2.);
         k3.topRows(m_dofs) = vTmp;
         k3.bottomRows(m_dofs) = m_massInv * ( m_resVec - m_damp * vTmp);
 
         uTmp = uOld + m_dt * k3.topRows(m_dofs);
         vTmp = vOld + m_dt * k3.bottomRows(m_dofs);
-        m_resVec = m_residualFun(uTmp,m_t + m_dt);
+        m_resVec = _computeResidual(uTmp,m_t + m_dt);
         k4.topRows(m_dofs) = vTmp;
         k4.bottomRows(m_dofs) = m_massInv * ( m_resVec - m_damp * vTmp);
 
@@ -848,7 +906,33 @@ namespace gismo
     }
 
     template <class T>
-    void gsTimeIntegrator<T>::step()
+    gsStatus gsTimeIntegrator<T>::step()
+    {
+        try
+        {
+            _step();
+            m_status = gsStatus::Success;
+        }
+        catch (int errorCode)
+        {
+            if      (errorCode==1)
+                m_status = gsStatus::NotConverged;
+            else if (errorCode==2)
+                m_status = gsStatus::AssemblyError;
+            else if (errorCode==3)
+                m_status = gsStatus::SolverError;
+            else
+                m_status = gsStatus::OtherError;
+        }
+        catch (...)
+        {
+            m_status = gsStatus::OtherError;
+        }
+        return m_status;
+    }
+
+    template <class T>
+    void gsTimeIntegrator<T>::_step()
     {
         if (m_verbose)
             gsInfo  << "time = "<<m_t<<"\n";

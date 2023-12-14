@@ -13,10 +13,6 @@
 
 #include <gsStructuralAnalysis/gsEigenProblemBase.h>
 
-#ifdef GISMO_WITH_SPECTRA
-#include <gsSpectra/gsSpectra.h>
-#endif
-
 #pragma once
 
 namespace gismo
@@ -36,6 +32,9 @@ protected:
 
     typedef gsEigenProblemBase<T> Base;
 
+    typedef std::function < bool ( gsVector<T> const &,                         gsSparseMatrix<T> & ) > Jacobian_t;
+    typedef std::function < bool ( gsVector<T> const &, gsVector<T> const &,    gsSparseMatrix<T> & ) > dJacobian_t;
+
 public:
 
     /**
@@ -48,22 +47,22 @@ public:
      */
     gsBucklingSolver(   gsSparseMatrix<T> &linear,
                         gsVector<T> &rhs,
-                        std::function < gsSparseMatrix<T> ( gsVector<T> const & ) > &nonlinear,
+                        Jacobian_t  &nonlinear,
                         T scaling = 1.0) :
     m_rhs(rhs),
     m_nonlinear(nonlinear),
     m_scaling(scaling)
-  {
-    m_A = linear;
-    m_dnonlinear = [this](gsVector<T> const & x, gsVector<T> const & dx)
     {
-        return m_nonlinear(x);
-    };
+        m_A = linear;
+        m_dnonlinear = [this](gsVector<T> const & x, gsVector<T> const & dx, gsSparseMatrix<T> & m) -> bool
+        {
+            return m_nonlinear(x,m);
+        };
 
-    m_solver = gsSparseSolver<T>::get( "SimplicialLDLT" );
+        m_solver = gsSparseSolver<T>::get( "SimplicialLDLT" );
 
-    this->initializeMatrix();
-  }
+        m_status = this->initializeMatrix();
+    }
 
   /**
    * @brief      Constructor
@@ -75,18 +74,18 @@ public:
    */
   gsBucklingSolver(     gsSparseMatrix<T> &linear,
                         gsVector<T> &rhs,
-                        std::function < gsSparseMatrix<T> ( gsVector<T> const &, gsVector<T> const & ) > &dnonlinear,
+                        dJacobian_t &dnonlinear,
                         T scaling = 1.0) :
     m_rhs(rhs),
     m_dnonlinear(dnonlinear),
     m_scaling(scaling)
-  {
-    m_A = linear;
+    {
+        m_A = linear;
 
-    m_solver = gsSparseSolver<T>::get( "SimplicialLDLT" );
+        m_solver = gsSparseSolver<T>::get( "SimplicialLDLT" );
 
-    this->initializeMatrix();
-  }
+        m_status = this->initializeMatrix();
+    }
 
 
   /**
@@ -114,7 +113,7 @@ public:
 
 protected:
 
-    void initializeMatrix()
+    gsStatus initializeMatrix()
     {
         bool verbose = m_options.getSwitch("verbose");
         if (verbose) { gsInfo<<"Computing matrices" ; }
@@ -122,17 +121,28 @@ protected:
         if (verbose) { gsInfo<<"." ; }
         m_solVec = m_solver->solve(m_scaling*m_rhs);
         if (verbose) { gsInfo<<"." ; }
-        m_B = m_dnonlinear(m_solVec,gsVector<T>::Zero(m_solVec.rows()))-m_A;
+        try
+        {
+            m_dnonlinear(m_solVec,gsVector<T>::Zero(m_solVec.rows()),m_B);
+        }
+        catch (...)
+        {
+            m_status = gsStatus::AssemblyError;
+            return m_status;
+        }
+        m_B -= m_A;
         if (verbose) { gsInfo<<"." ; }
         if (verbose) { gsInfo<<"Finished\n" ; }
+
+        return m_status;
     }
 
 protected:
 
     using Base::m_A;
     const gsVector<T> m_rhs;
-    const std::function < gsSparseMatrix<T> ( gsVector<T> const & ) > m_nonlinear;
-    std::function < gsSparseMatrix<T> ( gsVector<T> const &, gsVector<T> const & ) > m_dnonlinear;
+    const Jacobian_t m_nonlinear;
+         dJacobian_t m_dnonlinear;
     T m_scaling;
     using Base::m_B;
 
@@ -143,6 +153,7 @@ protected:
 
     using Base::m_options;
 
+    using Base::m_status;
 };
 
 } // namespace gismo

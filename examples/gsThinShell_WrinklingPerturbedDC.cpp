@@ -16,6 +16,8 @@
 #include <gsKLShell/gsThinShellAssembler.h>
 #include <gsKLShell/getMaterialMatrix.h>
 
+#include <gsStructuralAnalysis/gsStructuralAnalysisTools.h>
+
 #include <gsStructuralAnalysis/gsStaticNewton.h>
 
 using namespace gismo;
@@ -633,29 +635,26 @@ int main (int argc, char** argv)
     // Construct assembler object
     assembler->setOptions(opts);
 
-    typedef std::function<gsSparseMatrix<real_t> (gsVector<real_t> const &)>                                Jacobian_t;
-    typedef std::function<gsVector<real_t> (gsVector<real_t> const &) >         Residual_t;
     // Function for the Jacobian
-    Jacobian_t Jacobian = [&assembler,&mp_def](gsVector<real_t> const &x)
+    gsStructuralAnalysisOps<real_t>::Jacobian_t Jacobian = [&assembler,&mp_def](gsVector<real_t> const &x, gsSparseMatrix<real_t> & m)
     {
+      ThinShellAssemblerStatus status;
       assembler->homogenizeDirichlet();
       assembler->constructSolution(x,mp_def);
-      assembler->assembleMatrix(mp_def);
-
-      gsSparseMatrix<real_t> m = assembler->matrix();
-      // gsInfo<<"matrix = \n"<<m.toDense()<<"\n";
-      return m;
+      status = assembler->assembleMatrix(mp_def);
+      m = assembler->matrix();
+      return status == ThinShellAssemblerStatus::Success;
     };
-
     // Function for the Residual
-    Residual_t Residual = [&assembler,&mp_def](gsVector<real_t> const &x)
+    gsStructuralAnalysisOps<real_t>::Residual_t Residual = [&assembler,&mp_def](gsVector<real_t> const &x, gsVector<real_t> & result)
     {
-        assembler->homogenizeDirichlet();
-        assembler->constructSolution(x,mp_def);
-        assembler->assembleVector(mp_def);
-        return assembler->rhs(); // - lam * force;
+      ThinShellAssemblerStatus status;
+      assembler->homogenizeDirichlet();
+      assembler->constructSolution(x,mp_def);
+      status = assembler->assembleVector(mp_def);
+      result = assembler->matrix();
+      return status == ThinShellAssemblerStatus::Success;
     };
-
 
     gsSparseMatrix<> matrix;
     gsVector<> vector;
@@ -692,9 +691,10 @@ int main (int argc, char** argv)
       matrix = assembler->matrix();
       vector = assembler->rhs();
 
-      solVector = staticSolver.solveNonlinear();
+      gsVector<> solVector;
+      gsStatus status = staticSolver.solveNonlinear(solVector);
 
-      if (!staticSolver.converged())
+      if (status==gsStatus::NotConverged || status==gsStatus::AssemblyError)
       {
         dL = dL/2;
         D = Dold+dL;
@@ -726,12 +726,12 @@ int main (int argc, char** argv)
         std::string fileName = dirname + "/" + output + util::to_string(k);
         gsWriteParaview<>(solField, fileName, 5000, mesh);
         fileName = output + util::to_string(k) + "0";
-        collection.addTimestep(fileName,k,".vts");
-        if (mesh) collection.addTimestep(fileName,k,"_mesh.vtp");
+        collection.addPart(fileName + ".vts",k);
+        if (mesh) collection.addPart(fileName + "_mesh.vtp",k);
       }
 
       if (write)
-        writeStepOutput(deformation,solVector,indicator,Load, dirname + "/" + wn, writePoints,1, 201);
+        writeStepOutput<real_t>(deformation,solVector,indicator,Load, dirname + "/" + wn, writePoints,1, 201);
 
       if (reset!=1)
         dL = dL0;

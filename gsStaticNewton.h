@@ -13,10 +13,6 @@
 
 #include <typeinfo>
 
-#ifdef GISMO_WITH_SPECTRA
-#include <gsSpectra/gsSpectra.h>
-#endif
-
 #include <gsStructuralAnalysis/gsStaticBase.h>
 #pragma once
 
@@ -38,10 +34,10 @@ protected:
 
     typedef gsStaticBase<T> Base;
 
-    typedef std::function<gsVector<T>(gsVector<T> const &)   >                                          Residual_t;
-    typedef std::function<gsVector<T>(gsVector<T> const &, T)>                                          ALResidual_t;
-    typedef std::function < gsSparseMatrix<T> ( gsVector<T> const & ) >                                 Jacobian_t;
-    typedef std::function<gsSparseMatrix<real_t> (gsVector<real_t> const &,gsVector<real_t> const &)>   dJacobian_t;
+    typedef typename Base::Residual_t    Residual_t;
+    typedef typename Base::ALResidual_t  ALResidual_t;
+    typedef typename Base::Jacobian_t    Jacobian_t;
+    typedef typename Base::dJacobian_t   dJacobian_t;
 
 public:
 
@@ -60,8 +56,6 @@ public:
         m_residualFun(nullptr)
     {
         this->_init();
-        m_NL = false;
-        m_U.setZero(m_dofs);
     }
 
     /**
@@ -84,13 +78,12 @@ public:
         m_residualFun(residual),
         m_ALresidualFun(nullptr)
     {
-        m_dnonlinear = [this](gsVector<T> const & x, gsVector<T> const & dx)
+        m_dnonlinear = [this](gsVector<T> const & x, gsVector<T> const & dx, gsSparseMatrix<T> & m) -> bool
         {
-            return m_nonlinear(x);
+            return m_nonlinear(x,m);
         };
 
         this->_init();
-        m_NL = true;
     }
 
     /**
@@ -114,18 +107,17 @@ public:
         m_ALresidualFun(ALResidual)
     {
         m_L = 1.0;
-        m_residualFun = [this](gsVector<T> const & x)
+        m_residualFun = [this](gsVector<T> const & x, gsVector<T> & result) -> bool
         {
-            return m_ALresidualFun(x,m_L);
+            return m_ALresidualFun(x,m_L,result);
         };
 
-        m_dnonlinear = [this](gsVector<T> const & x, gsVector<T> const & dx)
+        m_dnonlinear = [this](gsVector<T> const & x, gsVector<T> const & dx, gsSparseMatrix<T> & m) -> bool
         {
-            return m_nonlinear(x);
+            return m_nonlinear(x,m);
         };
 
         this->_init();
-        m_NL = true;
     }
 
     /**
@@ -150,30 +142,49 @@ public:
         m_ALresidualFun(nullptr)
     {
         this->_init();
-        m_NL = true;
     }
 
 public:
 
     /// See \ref gsStaticBase
-    void solve() { m_U = solveNonlinear(); }
+    gsStatus solve() override
+    {
+        if (m_NL)
+            return solveNonlinear();
+        else
+            return solveLinear();
+    }
     /// Perform a linear solve
-    gsVector<T> solveLinear();
-    /// Perform a nonlinear solve
-    gsVector<T> solveNonlinear();
+    gsStatus solveLinear();
+    gsStatus solveLinear(gsVector<T> & solution)
+    {
+        gsStatus status = this->solveLinear();
+        solution = m_U;
+        return status;
+    }
+    /// Perform a nonlinearg solve
+    gsStatus solveNonlinear(gsVector<T> & solution)
+    {
+        gsStatus status = this->solveNonlinear();
+        solution = m_U;
+        return status;
+    }
+    gsStatus solveNonlinear();
 
     /// See \ref gsStaticBase
-    void initialize() {_init(); };
+    void initOutput() override;
 
     /// See \ref gsStaticBase
-    void initOutput();
-    /// See \ref gsStaticBase
-    void stepOutput(index_t k);
+    void stepOutput(index_t k) override;
 
     /// See \ref gsStaticBase
-    void defaultOptions();
+    void defaultOptions() override;
+
     /// See \ref gsStaticBase
-    void getOptions();
+    void reset() override;
+
+    /// See \ref gsStaticBase
+    void getOptions() override;
 
     using Base::indicator;
     using Base::stabilityVec;
@@ -181,16 +192,25 @@ public:
     /// See \ref gsStaticBase
     T indicator()
     {
-        return indicator(m_nonlinear(m_U));
+        gsSparseMatrix<T> m;
+        GISMO_ENSURE(m_nonlinear(m_U, m),"Assembly failed");
+        return indicator(m);
     }
 
     /// See \ref gsStaticBase
     gsVector<T> stabilityVec()
     {
-        return stabilityVec(m_nonlinear(m_U));
+        gsSparseMatrix<T> m;
+        GISMO_ENSURE(m_nonlinear(m_U, m),"Assembly failed");
+        return stabilityVec(m);
     }
 
 protected:
+
+    /// Perform a linear solve
+    gsVector<T> _solveLinear();
+    /// Perform a nonlinear solve
+    gsVector<T> _solveNonlinear();
 
     using Base::_computeStability;
 
@@ -203,14 +223,18 @@ protected:
     /// Solves the system with RHS \a F and LHS the Jacobian
     gsVector<T> _solveSystem(const gsVector<T> & F);
 
+    gsVector<T> _computeResidual(const gsVector<T> & U);
+
+    gsSparseMatrix<T> _computeJacobian(const gsVector<T> & U, const gsVector<T> & deltaU);
+
 protected:
 
     const gsSparseMatrix<T> & m_linear;
     const gsVector<T> & m_force;
-    const Jacobian_t m_nonlinear;
-    dJacobian_t m_dnonlinear;
-    Residual_t m_residualFun;
-    const ALResidual_t m_ALresidualFun;
+    const Jacobian_t      m_nonlinear;
+          dJacobian_t     m_dnonlinear;
+          Residual_t      m_residualFun;
+    const ALResidual_t    m_ALresidualFun;
 
     using Base::m_R;
 
@@ -235,7 +259,6 @@ protected:
 
     using Base::m_maxIterations;
     using Base::m_numIterations;
-    using Base::m_converged;
 
     // Residual norms
     using Base::m_residual;
@@ -254,6 +277,9 @@ protected:
     using Base::m_indicator;
 
     using Base::m_dofs;
+
+    // Solver status
+    using Base::m_status;
 };
 
 

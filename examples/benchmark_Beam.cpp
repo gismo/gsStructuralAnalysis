@@ -16,8 +16,12 @@
 
 #include <gismo.h>
 
+#ifdef gsKLShell_ENABLED
 #include <gsKLShell/gsThinShellAssembler.h>
 #include <gsKLShell/getMaterialMatrix.h>
+#endif
+
+#include <gsStructuralAnalysis/gsStructuralAnalysisTools.h>
 
 #include <gsStructuralAnalysis/gsALMBase.h>
 #include <gsStructuralAnalysis/gsALMLoadControl.h>
@@ -37,6 +41,7 @@ void initStepOutput( const std::string name, const gsMatrix<T> & points);
 template <class T>
 void writeStepOutput(const gsALMBase<T> * arcLength, const gsMultiPatch<T> & deformation, const std::string name, const gsMatrix<T> & points, const index_t extreme=-1, const index_t kmax=100);
 
+#ifdef gsKLShell_ENABLED
 int main (int argc, char** argv)
 {
     // Input options
@@ -254,33 +259,32 @@ int main (int argc, char** argv)
     gsStopwatch stopwatch;
     real_t time = 0.0;
 
-    typedef std::function<gsSparseMatrix<real_t> (gsVector<real_t> const &)>                                Jacobian_t;
-    typedef std::function<gsVector<real_t> (gsVector<real_t> const &, real_t, gsVector<real_t> const &) >   ALResidual_t;
-    // Function for the Jacobian
-    Jacobian_t Jacobian = [&time,&stopwatch,&assembler,&mp_def](gsVector<real_t> const &x)
-    {
-      stopwatch.restart();
-      assembler->constructSolution(x,mp_def);
-      assembler->assembleMatrix(mp_def);
-      time += stopwatch.stop();
-
-      gsSparseMatrix<real_t> m = assembler->matrix();
-      return m;
-    };
-    // Function for the Residual
-    ALResidual_t ALResidual = [&time,&stopwatch,&assembler,&mp_def](gsVector<real_t> const &x, real_t lam, gsVector<real_t> const &force)
-    {
-      stopwatch.restart();
-      assembler->constructSolution(x,mp_def);
-      assembler->assembleVector(mp_def);
-      gsVector<real_t> Fint = -(assembler->rhs() - force);
-      gsVector<real_t> result = Fint - lam * force;
-      time += stopwatch.stop();
-      return result; // - lam * force;
-    };
     // Assemble linear system to obtain the force vector
     assembler->assemble();
     gsVector<> Force = assembler->rhs();
+
+    // Function for the Jacobian
+    gsStructuralAnalysisOps<real_t>::Jacobian_t Jacobian = [&time,&stopwatch,&assembler,&mp_def](gsVector<real_t> const &x, gsSparseMatrix<real_t> & m)
+    {
+      ThinShellAssemblerStatus status;
+      stopwatch.restart();
+      assembler->constructSolution(x,mp_def);
+      status = assembler->assembleMatrix(mp_def);
+      m = assembler->matrix();
+      time += stopwatch.stop();
+      return status == ThinShellAssemblerStatus::Success;
+    };
+    // Function for the Residual
+    gsStructuralAnalysisOps<real_t>::ALResidual_t ALResidual = [&time,&stopwatch,&assembler,&mp_def,&Force](gsVector<real_t> const &x, real_t lam, gsVector<real_t> & result)
+    {
+        ThinShellAssemblerStatus status;
+        stopwatch.restart();
+        assembler->constructSolution(x,mp_def);
+        status = assembler->assembleVector(mp_def);
+        result = Force - lam * Force - assembler->rhs(); // assembler rhs - force = Finternal
+        time += stopwatch.stop();
+        return status == ThinShellAssemblerStatus::Success;
+    };
 
     gsALMBase<real_t> * arcLength;
     if (method==0)
@@ -312,7 +316,8 @@ int main (int argc, char** argv)
       arcLength->options().setInt("QuasiIterations",quasiNewtonInt);
     }
     arcLength->options().setSwitch("Quasi",quasiNewton);
-
+    arcLength->options().setReal("SingularPointComputeTolB",0);
+    arcLength->options().setReal("SingularPointComputeTolE",1e-10);
 
     gsInfo<<arcLength->options();
     arcLength->applyOptions();
@@ -348,11 +353,11 @@ int main (int argc, char** argv)
 
       if (SingularPoint)
       {
-        arcLength->computeStability(arcLength->solutionU(),quasiNewton);
+        arcLength->computeStability(quasiNewton);
         if (arcLength->stabilityChange())
         {
           gsInfo<<"Bifurcation spotted!"<<"\n";
-          arcLength->computeSingularPoint(1e-4, 5, Uold, Lold, 1e-10, 0, false);
+          arcLength->computeSingularPoint(false);
           arcLength->switchBranch();
           dLb = dL;
           arcLength->setLength(dLb);
@@ -378,8 +383,8 @@ int main (int argc, char** argv)
         std::string fileName = dirname + "/" + output + util::to_string(k);
         gsWriteParaview<>(solField, fileName, 1000,true);
         fileName = output + util::to_string(k) + "0";
-        collection.addTimestep(fileName,k,".vts");
-        collection.addTimestep(fileName,k,"_mesh.vtp");
+        collection.addPart(fileName + ".vts",k);
+        collection.addPart(fileName + "_mesh.vtp",k);
       }
 
       if (write)
@@ -395,6 +400,13 @@ int main (int argc, char** argv)
 
   return result;
 }
+#else//gsKLShell_ENABLED
+int main(int argc, char *argv[])
+{
+    gsWarn<<"G+Smo is not compiled with the gsKLShell module.";
+    return EXIT_FAILURE;
+}
+#endif
 
 template <class T>
 gsMultiPatch<T> RectangularDomain(int n, int p, T L, T B, bool clamped, T clampoffset)

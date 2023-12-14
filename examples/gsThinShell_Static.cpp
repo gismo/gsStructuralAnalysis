@@ -13,12 +13,17 @@
 
 #include <gismo.h>
 
+#ifdef gsKLShell_ENABLED
 #include <gsKLShell/gsThinShellAssembler.h>
 #include <gsKLShell/getMaterialMatrix.h>
+#endif
 
+#ifdef gsElasticity_ENABLED
 #include <gsElasticity/gsWriteParaviewMultiPhysics.h>
+#endif
 
 #include <gsStructuralAnalysis/gsStaticNewton.h>
+#include <gsStructuralAnalysis/gsStructuralAnalysisTools.h>
 
 //#include <gsThinShell/gsNewtonIterator.h>
 
@@ -46,6 +51,7 @@ template <class T>
 gsMultiPatch<T> FrustrumDomain(int n, int p, T R1, T R2, T h);
 
 // Choose among various shell examples, default = Thin Plate
+#ifdef gsKLShell_ENABLED
 int main(int argc, char *argv[])
 {
     //! [Parse command line]
@@ -1261,49 +1267,42 @@ int main(int argc, char *argv[])
     real_t totaltime = 0.0;
 
     // Function for the Jacobian
-    typedef std::function<gsSparseMatrix<real_t> (gsVector<real_t> const &)>                            Jacobian_t;
-    typedef std::function<gsSparseMatrix<real_t> (gsVector<real_t> const &,gsVector<real_t> const &)>   dJacobian_t;
-    typedef std::function<gsVector<real_t> (gsVector<real_t> const &) >                                 Residual_t;
-    Jacobian_t Jacobian = [&time,&stopwatch,&assembler,&mp_def](gsVector<real_t> const &x)
+    gsStructuralAnalysisOps<real_t>::Jacobian_t Jacobian = [&time,&stopwatch,&assembler,&mp_def](gsVector<real_t> const &x, gsSparseMatrix<real_t> & m)
     {
-        stopwatch.restart();
-        assembler->constructSolution(x,mp_def);
-        assembler->assembleMatrix(mp_def);
-        assembler->assembleMatrix(mp_def);
-        time += stopwatch.stop();
-        gsSparseMatrix<real_t> m = assembler->matrix();
-        return m;
+      ThinShellAssemblerStatus status;
+      stopwatch.restart();
+      assembler->constructSolution(x,mp_def);
+      status = assembler->assembleMatrix(mp_def);
+      m = assembler->matrix();
+      time += stopwatch.stop();
+      return status == ThinShellAssemblerStatus::Success;
     };
 
-    dJacobian_t dJacobian = [&MIP,&time,&stopwatch,&assembler,&mp_def](gsVector<real_t> const &x, gsVector<real_t> const &dx)
+    gsStructuralAnalysisOps<real_t>::dJacobian_t dJacobian = [&assembler,&mp_def,&MIP](gsVector<real_t> const &x, gsVector<real_t> const &dx, gsSparseMatrix<real_t> & m)
     {
-        stopwatch.restart();
+      ThinShellAssemblerStatus status;
+      if (MIP)
+        status = assembler->assembleMatrix(x,x-dx);
+      else
+      {
+        assembler->constructSolution(x,mp_def);
+        status = assembler->assembleMatrix(mp_def);
+      }
 
-        // this also works
-        // assembler->constructSolution(x-upVec,mp_prev);
-        // if (MIP)
-          // assembler->assembleMatrix(mp_def,mp_prev,upVec);
-        if (MIP)
-            assembler->assembleMatrix(x,x-dx);
-        else
-        {
-            assembler->constructSolution(x,mp_def);
-            assembler->assembleMatrix(mp_def);
-        }
-
-        time += stopwatch.stop();
-        gsSparseMatrix<real_t> m = assembler->matrix();
-        return m;
+      m = assembler->matrix();
+      return status == ThinShellAssemblerStatus::Success;
     };
 
     // Function for the Residual
-    Residual_t Residual = [&time,&stopwatch,&assembler,&mp_def](gsVector<real_t> const &x)
+    gsStructuralAnalysisOps<real_t>::Residual_t Residual = [&time,&stopwatch,&assembler,&mp_def](gsVector<real_t> const &x, gsVector<real_t> & result)
     {
+      ThinShellAssemblerStatus status;
       stopwatch.restart();
       assembler->constructSolution(x,mp_def);
-      assembler->assembleVector(mp_def);
+      status = assembler->assembleVector(mp_def);
+      result = assembler->rhs();
       time += stopwatch.stop();
-      return assembler->rhs();
+      return status == ThinShellAssemblerStatus::Success;
     };
 
     // Define Matrices
@@ -1333,12 +1332,12 @@ int main(int argc, char *argv[])
             solVector = staticSolver.solveNonlinear(); // NOTE: Performs solveLinear inside.
     */
     gsVector<> solVector;
+    gsStatus status;
     if (!nonlinear)
-        solVector = staticSolver.solveLinear();
+        status = staticSolver.solveLinear(solVector);
     else
-        solVector = staticSolver.solveNonlinear();
-
-
+        status = staticSolver.solveNonlinear(solVector);
+    GISMO_ENSURE(status==gsStatus::Success,"Newton solver failed");
 
     totaltime += stopwatch2.stop();
 
@@ -1428,7 +1427,6 @@ int main(int argc, char *argv[])
         fields["Principal Direction 1"] = &stretchDir1;
         fields["Principal Direction 2"] = &stretchDir2;
         fields["Principal Direction 3"] = &stretchDir3;
-
         gsWriteParaviewMultiPhysics(fields,"stress",5000,true);
         #else
         gsWriteParaview(solutionField, "Deformation");
@@ -1450,6 +1448,13 @@ int main(int argc, char *argv[])
     return EXIT_SUCCESS;
 
 }// end main
+#else//gsKLShell_ENABLED
+int main(int argc, char *argv[])
+{
+    gsWarn<<"G+Smo is not compiled with the gsKLShell module.";
+    return EXIT_FAILURE;
+}
+#endif
 
 template <class T>
 gsMultiPatch<T> RectangularDomain(int n, int p, T L, T B)

@@ -13,10 +13,6 @@
 
 #pragma once
 
-#ifdef GISMO_WITH_SPECTRA
-#include <gsSpectra/gsSpectra.h>
-#endif
-
 #include <gsStructuralAnalysis/gsALMBase.h>
 
 namespace gismo
@@ -34,6 +30,10 @@ class gsALMRiks : public gsALMBase<T>
 {
 
     typedef gsALMBase<T> Base;
+
+    typedef typename Base::ALResidual_t  ALResidual_t;
+    typedef typename Base::Jacobian_t    Jacobian_t;
+    typedef typename Base::dJacobian_t   dJacobian_t;
 
 public:
 
@@ -54,10 +54,10 @@ protected:
 public:
 
     /// Constructor
-    gsALMRiks(  std::function < gsSparseMatrix<T> ( gsVector<T> const & ) > &Jacobian,
-                std::function < gsVector<T> ( gsVector<T> const &, T, gsVector<T> const & ) > &Residual,
-                gsVector<T> &Force )
-    : Base(Jacobian,Residual,Force)
+    gsALMRiks(  const Jacobian_t  &Jacobian,
+                const ALResidual_t&ALResidual,
+                const gsVector<T> &Force )
+    : Base(Jacobian,ALResidual,Force)
     {
         defaultOptions();
         getOptions();
@@ -66,15 +66,21 @@ public:
     }
 
     /// Constructor using the jacobian that takes the solution and the solution step
-    gsALMRiks(  std::function < gsSparseMatrix<T> ( gsVector<T> const &, gsVector<T> const & ) > &dJacobian,
-                std::function < gsVector<T> ( gsVector<T> const &, T, gsVector<T> const & ) > &Residual,
-                gsVector<T> &Force )
-    : Base(dJacobian,Residual,Force)
+    gsALMRiks(  const dJacobian_t &dJacobian,
+                const ALResidual_t&ALResidual,
+                const gsVector<T> &Force )
+    : Base(dJacobian,ALResidual,Force)
     {
         defaultOptions();
         getOptions();
 
         initMethods();
+    }
+
+public:
+    T distance(const gsVector<T>& DeltaU, const T DeltaL) const
+    {
+        return math::pow(m_phi * math::pow(m_DeltaU.norm(),2.0) + (1.0-m_phi) * math::pow(m_DeltaL,2.0),0.5);
     }
 
 protected:
@@ -93,6 +99,7 @@ protected:
 
     /// See gsALMBase
     void predictor();
+    void predictorGuess();
     /// See gsALMBase
     void iteration();
 
@@ -155,6 +162,7 @@ protected:
     /// Displacement vector (present, at previously converged point)
     using Base::m_U;
     using Base::m_Uprev;
+    using Base::m_Uguess;
     /// Update of displacement vector
     using Base::m_DeltaU;
     /// u_bar
@@ -167,6 +175,7 @@ protected:
     /// Lambda (present, at previously converged point)
     using Base::m_L;
     using Base::m_Lprev;
+    using Base::m_Lguess;
     /// Update of lambdaGeneralizedSelfAdjointEigenSolver
     using Base::m_DeltaL;
     /// Update of update of lambda

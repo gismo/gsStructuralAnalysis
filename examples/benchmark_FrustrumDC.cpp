@@ -17,8 +17,14 @@
 
 #include <gismo.h>
 
+#ifdef gsKLShell_ENABLED
 #include <gsKLShell/gsThinShellAssembler.h>
 #include <gsKLShell/getMaterialMatrix.h>
+#include <gsKLShell/gsMaterialMatrixIntegrate.h>
+#include <gsKLShell/gsThinShellUtils.h>
+#endif
+
+#include <gsStructuralAnalysis/gsStructuralAnalysisTools.h>
 
 #include <gsStructuralAnalysis/gsStaticNewton.h>
 #include <gsStructuralAnalysis/gsControlDisplacement.h>
@@ -34,6 +40,7 @@ void initStepOutput( const std::string name, const gsMatrix<T> & points);
 template <class T>
 void writeStepOutput(const gsMultiPatch<T> & deformation, const gsMatrix<T> solVector, const T indicator, const T load, const std::string name, const gsMatrix<T> & points, const index_t extreme=-1, const index_t kmax=100); // extreme: the column of point indices to compute the extreme over (default -1);
 
+#ifdef gsKLShell_ENABLED
 int main (int argc, char** argv)
 {
     // Input options
@@ -278,7 +285,7 @@ int main (int argc, char** argv)
     gsParaviewCollection collection(dirname + "/" + output);
     gsMultiPatch<> deformation = mp;
 
-    gsMatrix<> updateVector, solVector;
+    gsMatrix<> solVector;
     gsThinShellAssemblerBase<real_t>* assembler;
 
     gsStopwatch stopwatch,stopwatch2;
@@ -287,40 +294,40 @@ int main (int argc, char** argv)
 
     real_t D = 0;
 
-
     // Function for the Jacobian
-    typedef std::function<gsSparseMatrix<real_t> (gsVector<real_t> const &)>    Jacobian_t;
-    typedef std::function<gsVector<real_t> (gsVector<real_t> const &) >         Residual_t;
-    typedef std::function<gsVector<real_t> (gsVector<real_t> const &, real_t) > ALResidual_t;
-    Jacobian_t Jacobian = [&time,&stopwatch,&assembler,&mp_def](gsVector<real_t> const &x)
+    gsStructuralAnalysisOps<real_t>::Jacobian_t Jacobian = [&time,&stopwatch,&assembler,&mp_def](gsVector<real_t> const &x, gsSparseMatrix<real_t> & m)
     {
+      ThinShellAssemblerStatus status;
       stopwatch.restart();
       assembler->constructSolution(x,mp_def);
-      assembler->assembleMatrix(mp_def);
+      status = assembler->assembleMatrix(mp_def);
+      m = assembler->matrix();
       time += stopwatch.stop();
-      gsSparseMatrix<real_t> m = assembler->matrix();
-      return m;
+      return status == ThinShellAssemblerStatus::Success;
     };
     // Function for the Residual
-    Residual_t Residual = [&time,&stopwatch,&assembler,&mp_def](gsVector<real_t> const &x)
+    gsStructuralAnalysisOps<real_t>::Residual_t Residual = [&time,&stopwatch,&assembler,&mp_def](gsVector<real_t> const &x, gsVector<real_t> & result)
     {
+      ThinShellAssemblerStatus status;
       stopwatch.restart();
       assembler->constructSolution(x,mp_def);
-      assembler->assembleVector(mp_def);
+      status = assembler->assembleVector(mp_def);
+      result = assembler->rhs();
       time += stopwatch.stop();
-      return assembler->rhs();
+      return status == ThinShellAssemblerStatus::Success;
     };
-
     // Function for the Residual
-    ALResidual_t ALResidual = [&displ,&BCs,&time,&stopwatch,&assembler,&mp_def](gsVector<real_t> const &x, real_t lambda)
+    gsStructuralAnalysisOps<real_t>::ALResidual_t ALResidual = [&displ,&BCs,&time,&stopwatch,&assembler,&mp_def](gsVector<real_t> const &x, real_t lambda, gsVector<real_t> & result)
     {
+      ThinShellAssemblerStatus status;
       stopwatch.restart();
       displ.setValue(lambda,3);
       assembler->updateBCs(BCs);
       assembler->constructSolution(x,mp_def);
-      assembler->assembleVector(mp_def);
+      status = assembler->assembleVector(mp_def);
+      result = assembler->rhs();
       time += stopwatch.stop();
-      return assembler->rhs();
+      return status == ThinShellAssemblerStatus::Success;
     };
 
     assembler = new gsThinShellAssembler<3, real_t, true >(mp,dbasis,BCs,force,materialMatrix);
@@ -360,14 +367,9 @@ int main (int argc, char** argv)
       // staticSolver.solve();
       // solVector = staticSolver.solution();
       //
-      control.step(-dL);
-      solVector = control.solutionU();
+      gsStatus status = control.step(-dL);
 
-      time += stopwatch.stop();
-
-      totaltime += stopwatch2.stop();
-
-      if (!staticSolver.converged())
+      if (status==gsStatus::NotConverged || status==gsStatus::AssemblyError)
       {
         dL = dL/2;
         displ.setValue(D -dL,3);
@@ -378,12 +380,20 @@ int main (int argc, char** argv)
         continue;
       }
 
+      solVector = control.solutionU();
+
+      time += stopwatch.stop();
+
+      totaltime += stopwatch2.stop();
+
+
+
       indicator = staticSolver.indicator();
 
       assembler->constructSolution(solVector,mp_def);
       patchSide ps(0,boundary::north);
-      gsVector<real_t> Fint = assembler->boundaryForceVector(mp_def,ps,2);
-      real_t Load = Fint.sum() / (0.5*3.14159265358979);
+      gsVector<real_t> Fint = assembler->boundaryForce(mp_def,ps);
+      real_t Load = Fint[2] / (0.5*3.14159265358979);
 
       deformation = mp_def;
       deformation.patch(0).coefs() -= mp.patch(0).coefs();// assuming 1 patch here
@@ -405,7 +415,7 @@ int main (int argc, char** argv)
         std::string fileName = dirname + "/" + output + util::to_string(k);
         gsWriteParaview<>(solField, fileName, 5000);
         fileName = output + util::to_string(k) + "0";
-        collection.addTimestep(fileName,k,".vts");
+        collection.addPart(fileName + ".vts",k);
       }
 
       if (write)
@@ -495,7 +505,13 @@ gsMultiPatch<T> FrustrumDomain(int n, int p, T R1, T R2, T h)
 
   return mp;
 }
-
+#else//gsKLShell_ENABLED
+int main(int argc, char *argv[])
+{
+    gsWarn<<"G+Smo is not compiled with the gsKLShell module.";
+    return EXIT_FAILURE;
+}
+#endif
 
 
 template <class T>

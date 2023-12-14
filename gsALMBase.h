@@ -9,15 +9,19 @@
     file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
     Author(s): H.M. Verhelst (2019-..., TU Delft)
+
+    TODO (June 2023):
+    *    Change inputs to const references!
 */
 
 #pragma once
 #include <gsCore/gsLinearAlgebra.h>
 
-#ifdef GISMO_WITH_SPECTRA
+#ifdef gsSpectra_ENABLED
 #include <gsSpectra/gsSpectra.h>
 #endif
 #include <gsIO/gsOptionList.h>
+#include <gsStructuralAnalysis/gsStructuralAnalysisTools.h>
 
 namespace gismo
 {
@@ -32,37 +36,46 @@ namespace gismo
 template <class T>
 class gsALMBase
 {
+protected:
+
+    typedef typename gsStructuralAnalysisOps<T>::ALResidual_t    ALResidual_t;
+    typedef typename gsStructuralAnalysisOps<T>::Jacobian_t      Jacobian_t;
+    typedef typename gsStructuralAnalysisOps<T>::dJacobian_t     dJacobian_t;
+
 public:
 
     virtual ~gsALMBase() {};
 
     /// Constructor
-    gsALMBase(  std::function < gsSparseMatrix<T> ( gsVector<T> const & ) > &Jacobian,
-                std::function < gsVector<T> ( gsVector<T> const &, T, gsVector<T> const & ) > &Residual,
-                gsVector<T> &Force )
-    : m_residualFun(Residual),
+    gsALMBase(  const Jacobian_t   & Jacobian,
+                const ALResidual_t & ALResidual,
+                const gsVector<T>  & Force )
+    : m_residualFun(ALResidual),
       m_forcing(Force)
     {
         m_jacobian  = Jacobian;
-        m_djacobian = [this](gsVector<T> const & x, gsVector<T> const & dx)
+        m_djacobian = [this](gsVector<T> const & x, gsVector<T> const & dx, gsSparseMatrix<T> & m) -> bool
         {
-            return m_jacobian(x);
+            return m_jacobian(x,m);
         };
 
         // initialize variables
         m_numIterations = 0;
-        m_arcLength = m_arcLength_prev = 1e-2;
+        this->defaultOptions();
+        this->setLength(1e-2);
         m_converged = false;
 
         // initialize errors
         m_basisResidualF = 0.0;
         m_basisResidualU = 0.0;
+
+        m_status = gsStatus::NotStarted;
     }
 
     /// Constructor using the jacobian that takes the solution and the solution step
-    gsALMBase(  std::function < gsSparseMatrix<T> ( gsVector<T> const &, gsVector<T> const & ) > &dJacobian,
-                std::function < gsVector<T> ( gsVector<T> const &, T, gsVector<T> const & ) > &Residual,
-                gsVector<T> &Force )
+    gsALMBase(  const dJacobian_t &  dJacobian,
+                const ALResidual_t & Residual,
+                const gsVector<T>  & Force )
     : m_residualFun(Residual),
       m_forcing(Force)
     {
@@ -70,7 +83,8 @@ public:
 
         // initialize variables
         m_numIterations = 0;
-        m_arcLength = m_arcLength_prev = 1e-2;
+        this->defaultOptions();
+        this->setLength(1e-2);
         m_converged = false;
 
         // initialize errors
@@ -81,8 +95,16 @@ public:
 // General functions
 public:
 
+    virtual gsStatus status() { return m_status; }
+
+    // Returns the number of DoFs
+    virtual index_t numDofs() {return m_forcing.size();}
+
+    // Returns the current length
+    virtual T getLength() {return m_arcLength; }
+
     /// Perform one arc-length step
-    virtual void step();
+    virtual gsStatus step();
 
     /// Initialize the arc-length method, computes the stability of the initial configuration if \a stability is true
     virtual void initialize(bool stability = true)
@@ -96,14 +118,13 @@ public:
     virtual void setLength(T length)
     {
       m_options.setReal("Length",length);
-      m_arcLength = m_arcLength_prev = m_options.getReal("Length");
+      m_arcLength = m_arcLength_prev = m_arcLength_ori = m_options.getReal("Length");
     }
 
     /// Set arc length to \a length, enables \a adaptive steps
     virtual void setLength(T length, bool adaptive)
     {
-      m_arcLength_prev = m_arcLength;
-      m_arcLength = length;
+      this->setLength(length);
       m_adaptiveLength = adaptive;
       m_desiredIterations = 10; // number of desired iterations defaults to 10
     }
@@ -111,16 +132,14 @@ public:
     /// Set arc length to \a length, enables \a adaptive steps aiming for \a iterations number of iterations per step
     virtual void setLength(T length, bool adaptive, index_t iterations)
     {
-      m_arcLength_prev = m_arcLength;
-      m_arcLength = length;
+      this->setLength(length);
       m_adaptiveLength = adaptive;
       m_desiredIterations = iterations;
     }
     /// Set arc length to \a length, enables adaptive steps aiming for \a iterations number of iterations per step
     virtual void setLength(T length, index_t iterations)
     {
-      m_arcLength_prev = m_arcLength;
-      m_arcLength = length;
+      this->setLength(length);
       m_adaptiveLength = true;
       m_desiredIterations = iterations;
     }
@@ -152,32 +171,47 @@ public:
     /// Returns if solution passed a bifurcation point
     virtual bool isStable() const {return m_stability;}
 
-    /// Returns the value of the deterimant of the jacobian
-    virtual T determinant() const {return m_jacobian(m_U).toDense().determinant();}
+    // /// Returns the value of the deterimant of the jacobian
+    // virtual T determinant() const
+    // {
+    //     return m_jacobian(m_U).toDense().determinant();
+    // }
 
     /// Resets the step
     virtual void resetStep() {m_DeltaUold.setZero(); m_DeltaLold = 0;}
 
-    /// Set initial guess for solution
-    virtual void setInitialGuess(const gsVector<T> guess) {m_U = guess;}
+    // Set initial guess for solution
+    virtual void setInitialGuess(const gsVector<T> & Uguess, const T & Lguess) {m_Uguess = Uguess; m_Lguess = Lguess;}
+    virtual void setPrevious(const gsVector<T> & Uprev, const T & Lprev)
+    {
+        m_Uprev = Uprev;
+        m_Lprev = Lprev;
+        m_DeltaUold = m_U - m_Uprev;
+        m_DeltaLold = m_L - m_Lprev;
+    }
 
     /// Sets the solution
-    virtual void setSolution(const gsVector<T> U, T L) {m_L = L; m_U = U; }// m_DeltaUold.setZero(); m_DeltaLold = 0;}
+    virtual void setSolution(const gsVector<T> & U, const T & L) {m_L = L; m_U = U; }// m_DeltaUold.setZero(); m_DeltaLold = 0;}
 
     /// Sets the solution step
-    virtual void setSolutionStep(const gsVector<T> DU, T DL) {m_DeltaUold = DU; m_DeltaLold = DL;}// m_DeltaUold.setZero(); m_DeltaLold = 0;}
+    virtual void setSolutionStep(const gsVector<T> & DU, const T & DL) {m_DeltaUold = DU; m_DeltaLold = DL;}// m_DeltaUold.setZero(); m_DeltaLold = 0;}
 
     /// Access the options
     virtual gsOptionList & options() {return m_options;};
 
     /// Set the options to \a options
-    virtual void setOptions(gsOptionList options) { m_options = options; this->getOptions(); };
+    virtual void setOptions(gsOptionList options) {m_options.update(options,gsOptionList::addIfUnknown); this->getOptions(); };
 
     /// Return the options into \a options
     virtual const void options_into(gsOptionList options) {options = m_options;};
 
     /// Apply the options
     virtual void applyOptions() {this->getOptions(); }
+
+    virtual T distance(const gsVector<T>& DeltaU, const T DeltaL) const
+    {
+        GISMO_NO_IMPLEMENTATION;
+    }
 
 // ------------------------------------------------------------------------------------------------------------
 // ---------------------------------------Singular point methods-----------------------------------------------
@@ -197,25 +231,13 @@ public:
      * @param[in]  switchBranch  Switches branch if true
      * @param[in]  jacobian      Evaluate the Jacobian?
      */
-    virtual void computeSingularPoint(T singTol, index_t kmax, gsVector<T> U, T L, T tolE, T tolB=0, bool switchBranch=false, bool jacobian=false);
-    virtual void computeSingularPoint(T singTol, index_t kmax, T tolE, T tolB=0, bool switchBranch=false, bool jacobian=false);
-    virtual void computeSingularPoint(gsVector<T> U, T L, T tolE, T tolB=0, bool switchBranch=false, bool jacobian=false);
+    virtual gsStatus computeSingularPoint(bool switchBranch=false, bool jacobian=false, bool testPoint=true);
 
-
-    /**
-     * @brief      Tests if a point is singular
-     *
-     * @param[in]  tol       The tolerance
-     * @param[in]  kmax      The maximum number of iterations for the initial power method
-     * @param[in]  jacobian  Evaluate the Jacobian?
-     *
-     * @return     True if it is a singular point
-     */
-    virtual bool testSingularPoint(T tol, index_t kmax, bool jacobian=false);
-    virtual bool testSingularPoint(gsVector<T> U, T L, T tol, index_t kmax, bool jacobian=false);
+    /// Returns true if the point is a bifurcation
+    virtual bool isBifurcation(bool jacobian = false);
 
     /// Checks if the stability of the system changed since the previously known solution
-    virtual bool stabilityChange();
+    virtual bool stabilityChange() const;
 
     /**
      * @brief      Calculates the stability of the solution \a x
@@ -226,51 +248,63 @@ public:
      * @param[in]  jacobian  Compute the jacobian?
      * @param[in]  shift     The shift to apply
      */
-    virtual void computeStability(const gsVector<T> & x, bool jacobian=true, T shift = -1e2);
-
-    /**
-     * @brief      Computes the buckling modes at a singular point with solution \a x
-     *
-     * @param[in]  x         Solution vector
-     * @param[in]  jacobian  Compute the jacobian?
-     * @param[in]  shift     The shift to apply
-     *
-     * @return     The modes.
-     */
-    virtual gsMatrix<T> computeModes(gsVector<T> x, bool jacobian=true, T shift = -1e2);
+    virtual gsStatus computeStability(bool jacobian=true, T shift = -1e2);
 
     /// Computes the stability: -1 if unstable, +1 if stable
-    virtual index_t stability();
-    virtual index_t stability(gsVector<T> x, bool jacobian=true);
+    virtual index_t stability() const;
 
     /// Switches branches
     virtual void switchBranch();
 
+    /// Reduce the length by multiplication with a factor \a fac
+    virtual T reduceLength(T fac = 0.5);
+
+    /// Reset the length
+    virtual T resetLength();
+
 protected:
+
+    /// See \a computeStability
+    virtual void _computeStability(const gsVector<T> & x, bool jacobian=true, T shift = -1e2);
+
+    /// See \a computeSingularPoint
+    virtual void _computeSingularPoint(bool switchBranch=false, bool jacobian=false, bool testPoint=true);
+
+    /**
+     * @brief      Tests if a point is a bifurcation point
+     *
+     * @param[in]  jacobian  Evaluate the Jacobian?
+     *
+     * @return     True if it is a bifurcation point
+     */
+    virtual bool _testSingularPoint(bool jacobian=false);
+
     /// Perform an extended system iteration
-    virtual void extendedSystemIteration();
+    virtual void _extendedSystemIteration();
 
     /// Returns the objective function for the bisection method given solution \a x
-    virtual index_t bisectionObjectiveFunction(const gsVector<T> & x, bool jacobian=true);
+    virtual index_t _bisectionObjectiveFunction(const gsVector<T> & x, bool jacobian=true);
     /// Returns the termination function for the bisection method given solution \a x
-    virtual T bisectionTerminationFunction(const gsVector<T> & x, bool jacobian=true);
+    virtual T       _bisectionTerminationFunction(const gsVector<T> & x, bool jacobian=true);
 
     /// Perform an extended system solve to find a singular point
-    virtual void extendedSystemSolve(const gsVector<T> U, T L, T tol);
+    virtual bool _extendedSystemSolve(const gsVector<T> U, T L, T tol);
 
     /// Perform a bisection system solve to find a singular point
-    virtual void bisectionSolve(const gsVector<T> U, T L, T tol);
+    virtual bool _bisectionSolve(const gsVector<T> U, T L, T tol);
 
     /// Initialize the output for extended iterations
-    virtual void initOutputExtended();
+    virtual void _initOutputExtended();
 
     /// Step output for extended iterations
-    virtual void stepOutputExtended();
+    virtual void _stepOutputExtended();
 
 // ------------------------------------------------------------------------------------------------------------
 // ---------------------------------------Computations---------------------------------------------------------
 // ------------------------------------------------------------------------------------------------------------
 protected:
+    /// Implementation of step
+    virtual void _step();
 
     /// Set default options
     virtual void defaultOptions();
@@ -288,15 +322,17 @@ protected:
     virtual gsVector<T> solveSystem(const gsVector<T> & F);
 
     /// Compute the residual
+    virtual gsVector<T> computeResidual(const gsVector<T> & U, const T & L);
     virtual void computeResidual();
 
     /// Compute the residual error norms
     virtual void computeResidualNorms();
 
     /// Compute the jacobian matrix
-    virtual gsSparseMatrix<T> _computeJacobian(const gsVector<T> U, const gsVector<T> dU);
-    virtual void computeJacobian(const gsVector<T> U, const gsVector<T> dU);
-    virtual void computeJacobian();
+    virtual gsSparseMatrix<T> _computeJacobian(const gsVector<T> & U, const gsVector<T> & dU);
+    virtual gsSparseMatrix<T> computeJacobian(const gsVector<T> & U, const gsVector<T> & dU);
+    virtual gsSparseMatrix<T> computeJacobian(const gsVector<T> & U);
+    virtual gsSparseMatrix<T> computeJacobian();
 
     /// Compute the adaptive arc-length
     virtual void computeLength();
@@ -322,6 +358,7 @@ protected:
 
     /// Step predictor
     virtual void predictor() = 0;
+    virtual void predictorGuess() = 0;
     /// A single iteration
     virtual void iteration() = 0;
 
@@ -335,10 +372,10 @@ protected:
     // Number of degrees of freedom
     index_t m_numDof;
 
-    std::function < gsSparseMatrix<T> ( gsVector<T> const & ) > m_jacobian;
-    std::function < gsSparseMatrix<T> ( gsVector<T> const &, gsVector<T> const & ) > m_djacobian;
-    std::function < gsMatrix<T> ( gsVector<T> const &, T, gsVector<T> const & ) > m_residualFun;
-    gsVector<T> m_forcing;
+    Jacobian_t      m_jacobian;
+    dJacobian_t     m_djacobian;
+    const ALResidual_t    m_residualFun;
+    const gsVector<T>     m_forcing;
 
     mutable typename gsSparseSolver<T>::uPtr m_solver; // Cholesky by default
 
@@ -389,6 +426,7 @@ public:
     /// Length of the step in the u,f plane
     T m_arcLength;
     T m_arcLength_prev;
+    T m_arcLength_ori;
     bool m_adaptiveLength;
 
     /// Tolerance value to decide convergence
@@ -407,6 +445,8 @@ public:
     index_t m_quasiNewtonInterval;
 
     std::string m_note;
+
+    gsStatus m_status;
 
 protected:
 
@@ -466,6 +506,9 @@ protected:
     /// Vector with lambda updates
     gsVector<T> m_deltaLs;
 
+    gsVector<T> m_Uguess;
+    T m_Lguess;
+
     /// Jacobian matrix
     gsSparseMatrix<T> m_jacMat;
     T m_detKT;
@@ -492,6 +535,14 @@ protected:
 
     // What to do after computeSingularPoint fails?
     index_t m_SPfail;
+
+    // Number of iterations and the tolerance for the singular point test
+    index_t m_SPTestIt;
+    T m_SPTestTol;
+
+    // Singular point computation tolerances
+    T m_SPCompTolE; // extended iterations
+    T m_SPCompTolB; // bisection method
 
     // Branch switch parameter
     T m_tau;

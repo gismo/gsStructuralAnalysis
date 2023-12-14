@@ -37,7 +37,8 @@ void gsALMRiks<T>::initMethods()
 template <class T>
 void gsALMRiks<T>::quasiNewtonPredictor()
 {
-  computeJacobian();
+  m_jacMat = computeJacobian();
+  this->factorizeMatrix(m_jacMat);
   computeUt(); // rhs does not depend on solution
   computeUbar(); // rhs contains residual and should be computed every time
 
@@ -46,7 +47,8 @@ void gsALMRiks<T>::quasiNewtonPredictor()
 template <class T>
 void gsALMRiks<T>::quasiNewtonIteration()
 {
-  computeJacobian();
+  m_jacMat = computeJacobian();
+  this->factorizeMatrix(m_jacMat);
   computeUt(); // rhs does not depend on solution
 }
 
@@ -95,7 +97,8 @@ void gsALMRiks<T>::initiateStep()
 template <class T>
 void gsALMRiks<T>::predictor()
 {
-  computeJacobian();
+  m_jacMat = computeJacobian();
+  this->factorizeMatrix(m_jacMat);
 
   // Define scaling
   if (m_numDof ==1)
@@ -130,6 +133,42 @@ void gsALMRiks<T>::predictor()
   m_DeltaL += m_deltaL;
 }
 
+template <class T>
+void gsALMRiks<T>::predictorGuess()
+{
+  GISMO_ASSERT(m_Uguess.rows()!=0 && m_Uguess.cols()!=0,"Guess is empty");
+
+  m_jacMat = computeJacobian();
+  this->factorizeMatrix(m_jacMat);
+
+  m_deltaUt = this->solveSystem(m_forcing);
+
+  T tol = 1e-10;
+
+  if ( ((m_Uguess-m_U).norm() < tol) && ((m_Lguess - m_L) * (m_Lguess - m_L) < tol ) )
+  {
+    m_note+= "predictor\t";
+    T DL = 1.;
+    m_deltaUt = this->solveSystem(m_forcing);
+    m_deltaU = m_deltaUt / math::sqrt( m_deltaUt.dot(m_deltaUt) + m_DeltaL*DL );
+    m_deltaL = DL / math::sqrt( m_deltaUt.dot(m_deltaUt) + m_DeltaL*DL );
+  }
+  else
+  {
+    m_deltaL = 1./m_arcLength_prev*(m_Lguess - m_L);
+    m_deltaU = 1./m_arcLength_prev*(m_Uguess - m_U);
+  }
+
+  // Update iterative step
+  m_deltaL *= m_arcLength;
+  m_deltaU *= m_arcLength;
+
+  m_DeltaU = m_deltaU;
+  m_DeltaL = m_deltaL;
+
+  m_Uguess.resize(0);
+}
+
 // template <class T>
 // void gsALMRiks<T>::predictor()
 // {
@@ -141,7 +180,8 @@ void gsALMRiks<T>::predictor()
 //   {
 //     m_note+= "predictor\t";
 //     T DL = 1.;
-//     computeJacobian();
+//     m_jacMat = computeJacobian();
+//     this->factorizeMatrix(m_jacMat);
 //     m_deltaUt = this->solveSystem(m_forcing);
 //     m_deltaU = m_deltaUt / math::sqrt( m_deltaUt.dot(m_deltaUt) + m_DeltaL*DL );
 //     m_deltaL = DL / math::sqrt( m_deltaUt.dot(m_deltaUt) + m_DeltaL*DL );
@@ -202,7 +242,7 @@ void gsALMRiks<T>::initOutput()
 template <class T>
 void gsALMRiks<T>::stepOutput()
 {
-  computeStability(m_U,false);
+  computeStability(false);
 
   gsInfo<<"\t";
   gsInfo<<std::setw(4)<<std::left<<m_numIterations;

@@ -18,9 +18,13 @@
 #include <gsStructuralAnalysis/gsALMRiks.h>
 #include <gsStructuralAnalysis/gsALMCrisfield.h>
 
+#include <gsStructuralAnalysis/gsStructuralAnalysisTools.h>
+
+#ifdef gsElasticity_ENABLED
 #include <gsElasticity/gsGeoUtils.h>
 #include <gsElasticity/gsElasticityAssembler.h>
 #include <gsElasticity/gsWriteParaviewMultiPhysics.h>
+#endif
 
 using namespace gismo;
 
@@ -40,6 +44,7 @@ void initSectionOutput( const std::string dirname, bool undeformed=false);
 template <class T>
 void writeSectionOutput(const gsMultiPatch<T> & mp, const std::string dirname, const index_t coordinate=0, const T coordVal=0.0, const index_t N=100, bool undeformed=false);
 
+#ifdef gsElasticity_ENABLED
 int main (int argc, char** argv)
 {
     // Input options
@@ -314,33 +319,31 @@ int main (int argc, char** argv)
     gsStopwatch stopwatch;
     real_t time = 0.0;
 
+    // Assemble linear system to obtain the force vector
+    assembler.assemble();
+    gsVector<> Force = assembler.rhs();
+
     std::vector<gsMatrix<> > fixedDofs = assembler.allFixedDofs();
-    typedef std::function<gsSparseMatrix<real_t> (gsVector<real_t> const &)>                                Jacobian_t;
-    typedef std::function<gsVector<real_t> (gsVector<real_t> const &, real_t, gsVector<real_t> const &) >   ALResidual_t;
     // Function for the Jacobian
-    Jacobian_t Jacobian = [&time,&stopwatch,&assembler,&fixedDofs](gsVector<real_t> const &x)
+    gsStructuralAnalysisOps<real_t>::Jacobian_t Jacobian = [&time,&stopwatch,&assembler,&fixedDofs](gsVector<real_t> const &x, gsSparseMatrix<real_t> &m)
     {
       stopwatch.restart();
       assembler.assemble(x,fixedDofs);
       time += stopwatch.stop();
 
-      gsSparseMatrix<real_t> m = assembler.matrix();
+      m = assembler.matrix();
       // gsInfo<<"matrix = \n"<<m.toDense()<<"\n";
-      return m;
+      return true;
     };
     // Function for the Residual
-    ALResidual_t ALResidual = [&time,&stopwatch,&assembler,&fixedDofs](gsVector<real_t> const &x, real_t lam, gsVector<real_t> const &force)
+    gsStructuralAnalysisOps<real_t>::ALResidual_t ALResidual = [&time,&stopwatch,&assembler,&fixedDofs,&Force](gsVector<real_t> const &x, real_t lam, gsVector<real_t> &result)
     {
       stopwatch.restart();
       assembler.assemble(x,fixedDofs);
-      gsVector<real_t> Fint = -(assembler.rhs() - force);
-      gsVector<real_t> result = Fint - lam * force;
+      result = Force - lam * Force - assembler.rhs(); // assembler rhs - force = Finternal
       time += stopwatch.stop();
-      return result; // - lam * force;
+      return true;
     };
-    // Assemble linear system to obtain the force vector
-    assembler.assemble();
-    gsVector<> Force = assembler.rhs();
 
     if (material==0)
       assembler.options().setInt("MaterialLaw",material_law::saint_venant_kirchhoff);
@@ -379,7 +382,8 @@ int main (int argc, char** argv)
       arcLength->options().setInt("QuasiIterations",quasiNewtonInt);
     }
     arcLength->options().setSwitch("Quasi",quasiNewton);
-
+    arcLength->options().setReal("SingularPointComputeTolB",1e-1);
+    arcLength->options().setReal("SingularPointComputeTolE",1e-10);
 
     gsDebug<<arcLength->options();
     arcLength->applyOptions();
@@ -402,9 +406,8 @@ int main (int argc, char** argv)
     for (index_t k=0; k<step; k++)
     {
       gsInfo<<"Load step "<< k<<"\n";
-      arcLength->step();
-
-      if (!(arcLength->converged()))
+      gsStatus status = arcLength->step();
+      if (status==gsStatus::NotConverged || status==gsStatus::AssemblyError)
       {
         gsInfo<<"Error: Loop terminated, arc length method did not converge.\n";
         dLb = dLb / 2.;
@@ -417,11 +420,11 @@ int main (int argc, char** argv)
 
       if (SingularPoint)
       {
-        arcLength->computeStability(arcLength->solutionU(),quasiNewton);
+        arcLength->computeStability(quasiNewton);
         if (arcLength->stabilityChange())
         {
           gsInfo<<"Bifurcation spotted!"<<"\n";
-          arcLength->computeSingularPoint(1e-4, 5, Uold, Lold, 1e-10, 1e-1, false);
+          arcLength->computeSingularPoint(false);
           arcLength->switchBranch();
           dLb0 = dLb = dL;
           arcLength->setLength(dLb);
@@ -451,8 +454,8 @@ int main (int argc, char** argv)
         fields["Stress"] = &stressField;
         gsWriteParaviewMultiPhysics(fields,fileName,1000,true);
         fileName = output + util::to_string(k) + "0";
-        collection.addTimestep(fileName,k,".vts");
-        collection.addTimestep(fileName,k,"_mesh.vtp");
+        collection.addPart(fileName + ".vts",k);
+        collection.addPart(fileName + "_mesh.vtp",k);
       }
 
       if (write)
@@ -476,6 +479,13 @@ int main (int argc, char** argv)
 
   return result;
 }
+#else//gsElasticity_ENABLED
+int main(int argc, char *argv[])
+{
+    gsWarn<<"G+Smo is not compiled with the gsElasticity module.";
+    return EXIT_FAILURE;
+}
+#endif
 
 template <class T>
 gsMultiPatch<T> BrickDomain(int n, int p, T L, T B, T H)

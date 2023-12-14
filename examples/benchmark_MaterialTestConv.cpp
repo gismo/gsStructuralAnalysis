@@ -16,8 +16,12 @@
 
 #include <gismo.h>
 
+#ifdef gsKLShell_ENABLED
 #include <gsKLShell/gsThinShellAssembler.h>
 #include <gsKLShell/getMaterialMatrix.h>
+#endif
+
+#include <gsStructuralAnalysis/gsStructuralAnalysisTools.h>
 
 #include <gsStructuralAnalysis/gsStaticNewton.h>
 
@@ -26,6 +30,7 @@ using namespace gismo;
 template <class T>
 gsMultiPatch<T> Rectangle(T L, T B);
 
+#ifdef gsKLShell_ENABLED
 int main (int argc, char** argv)
 {
     // Input options
@@ -258,32 +263,32 @@ int main (int argc, char** argv)
     gsStopwatch stopwatch;
     real_t time = 0.0;
 
-    typedef std::function<gsSparseMatrix<real_t> (gsVector<real_t> const &)>    Jacobian_t;
-    typedef std::function<gsVector<real_t> (gsVector<real_t> const &) >         Residual_t;
+    gsVector<> Force;
     // Function for the Jacobian
-    Jacobian_t Jacobian = [&time,&stopwatch,&assembler,&mp_def](gsVector<real_t> const &x)
+    gsStructuralAnalysisOps<real_t>::Jacobian_t Jacobian = [&time,&stopwatch,&assembler,&mp_def](gsVector<real_t> const &x, gsSparseMatrix<real_t> & m)
     {
+      ThinShellAssemblerStatus status;
       stopwatch.restart();
       assembler->constructSolution(x,mp_def);
-      assembler->assembleMatrix(mp_def);
+      status = assembler->assembleMatrix(mp_def);
+      m = assembler->matrix();
       time += stopwatch.stop();
-
-      gsSparseMatrix<real_t> m = assembler->matrix();
-      return m;
+      return status == ThinShellAssemblerStatus::Success;
     };
     // Function for the Residual
-    Residual_t Residual = [&time,&stopwatch,&assembler,&mp_def](gsVector<real_t> const &x)
+    gsStructuralAnalysisOps<real_t>::Residual_t Residual = [&time,&stopwatch,&assembler,&mp_def](gsVector<real_t> const &x, gsVector<real_t> & result)
     {
+      ThinShellAssemblerStatus status;
       stopwatch.restart();
       assembler->constructSolution(x,mp_def);
-      assembler->assembleVector(mp_def);
+      status = assembler->assembleVector(mp_def);
+      result = assembler->rhs();
       time += stopwatch.stop();
-      return assembler->rhs();
+      return status == ThinShellAssemblerStatus::Success;
     };
 
-
     gsSparseMatrix<> matrix;
-    gsVector<> vector, solVector;
+    gsVector<> solVector;
     std::vector<real_t> strains(numHref+1);
     for (index_t k=0; k!=numHref+1; k++)
     {
@@ -293,15 +298,17 @@ int main (int argc, char** argv)
 
       assembler->assemble();
       matrix = assembler->matrix();
-      vector = assembler->rhs();
+      Force = assembler->rhs();
       // Configure Structural Analsysis module
-      gsStaticNewton<real_t> staticSolver(matrix,vector,Jacobian,Residual);
+      gsStaticNewton<real_t> staticSolver(matrix,Force,Jacobian,Residual);
       gsOptionList solverOptions = staticSolver.options();
       solverOptions.setInt("verbose",true);
       solverOptions.setInt("maxIt",maxit);
       solverOptions.setReal("tol",tol);
       staticSolver.setOptions(solverOptions);
-      solVector = staticSolver.solveNonlinear();
+
+      gsStatus status = staticSolver.solveNonlinear(solVector);
+      GISMO_ASSERT(status==gsStatus::Success,"Newton solver failed");
 
       mp_def = assembler->constructSolution(solVector);
       gsMultiPatch<> deformation = mp_def;
@@ -328,6 +335,13 @@ int main (int argc, char** argv)
 
   return result;
 }
+#else//gsKLShell_ENABLED
+int main(int argc, char *argv[])
+{
+    gsWarn<<"G+Smo is not compiled with the gsKLShell module.";
+    return EXIT_FAILURE;
+}
+#endif
 
 template <class T>
 gsMultiPatch<T> Rectangle(T L, T B) //, int n, int m, std::vector<boxSide> sides, T offset)

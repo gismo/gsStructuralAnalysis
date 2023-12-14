@@ -14,10 +14,11 @@
 #include <typeinfo>
 
 #include <gsCore/gsLinearAlgebra.h>
-#ifdef GISMO_WITH_SPECTRA
+#ifdef gsSpectra_ENABLED
 #include <gsSpectra/gsSpectra.h>
 #endif
 #include <gsIO/gsOptionList.h>
+#include <gsStructuralAnalysis/gsStructuralAnalysisTools.h>
 
 #pragma once
 
@@ -38,7 +39,11 @@ class gsEigenProblemBase
 
 public:
 
-    gsEigenProblemBase() { m_options = defaultOptions(); }
+    gsEigenProblemBase()
+    {
+        m_options = defaultOptions();
+        m_status  = gsStatus::NotStarted;
+    }
 
     ~gsEigenProblemBase() {};
 
@@ -78,65 +83,51 @@ public:
                                         "8: BothEnds",4);
 
         options.addInt("ncvFac","Factor for Spectra's ncv number. Ncv = ncvFac * numEigenvalues",3);
-	options.addReal("tolerance","Tolerance for spectra and the power method",1e-10);
+	    options.addReal("tolerance","Tolerance for spectra and the power method",1e-10);
+        options.addReal("shift","Shift for the eigenvalue solver",0.0);
         return options;
     }
 
+    /// Get options
     gsOptionList & options() {return m_options; };
 
-    virtual void compute();
-    virtual void compute(T shift);
+    /// Set the options from \a options
+    virtual void setOptions(gsOptionList & options) {m_options.update(options,gsOptionList::addIfUnknown); }
 
-    virtual void computeSparse(T shift = 0.0, index_t number = 10)
-    {
-        #ifdef GISMO_WITH_SPECTRA
-            if (m_options.getInt("solver")==0)
-                computeSparse_impl<Spectra::GEigsMode::Cholesky>(shift,number);
-            else if (m_options.getInt("solver")==1)
-                computeSparse_impl<Spectra::GEigsMode::RegularInverse>(shift,number);
-            else if (m_options.getInt("solver")==2)
-                computeSparse_impl<Spectra::GEigsMode::ShiftInvert>(shift,number);
-            else if (m_options.getInt("solver")==3)
-                computeSparse_impl<Spectra::GEigsMode::Buckling>(shift,number);
-            else if (m_options.getInt("solver")==4)
-                computeSparse_impl<Spectra::GEigsMode::Cayley>(shift,number);
-        #else
-            GISMO_NO_IMPLEMENTATION
-        #endif
-    };
+    virtual gsStatus compute();
 
-    virtual void computePower();
+    virtual gsStatus computeSparse(const index_t number = 10);
 
-    virtual gsMatrix<T> values() const { return m_values; };
+    virtual gsStatus computePower();
+
+    virtual const gsMatrix<T> & values() const { return m_values; };
     virtual T value(int k) const { return m_values.at(k); };
 
-    virtual gsMatrix<T> vectors() const { return m_vectors; };
+    virtual const gsMatrix<T> & vectors() const { return m_vectors; };
     virtual gsMatrix<T> vector(int k) const { return m_vectors.col(k); };
 
     virtual std::vector<std::pair<T,gsMatrix<T>> > mode(int k) const {return makeMode(k); }
-
-
 
 protected:
 
     virtual std::vector<std::pair<T,gsMatrix<T>> > makeMode(int k) const;
 
 private:
-    #ifdef GISMO_WITH_SPECTRA
+    #ifdef gsSpectra_ENABLED
     template<Spectra::GEigsMode _GEigsMode>
     typename std::enable_if<_GEigsMode==Spectra::GEigsMode::Cholesky ||
                             _GEigsMode==Spectra::GEigsMode::RegularInverse
                             ,
-                            void>::type computeSparse_impl(T shift, index_t number);
+                            gsStatus>::type computeSparse_impl(index_t number);
     #endif
 
-    #ifdef GISMO_WITH_SPECTRA
+    #ifdef gsSpectra_ENABLED
     template<Spectra::GEigsMode _GEigsMode>
     typename std::enable_if<_GEigsMode==Spectra::GEigsMode::ShiftInvert ||
                             _GEigsMode==Spectra::GEigsMode::Buckling ||
                             _GEigsMode==Spectra::GEigsMode::Cayley
                             ,
-                            void>::type computeSparse_impl(T shift, index_t number);
+                            gsStatus>::type computeSparse_impl(index_t number);
     #endif
 
 protected:
@@ -146,12 +137,13 @@ protected:
 
     gsOptionList m_options;
 
-    Eigen::GeneralizedSelfAdjointEigenSolver< typename gsMatrix<T>::Base >  m_eigSolver;
+    gsEigen::GeneralizedSelfAdjointEigenSolver< typename gsMatrix<T>::Base >  m_eigSolver;
 
     gsMatrix<T> m_values,m_vectors;
 
     index_t m_num;
 
+    gsStatus m_status;
 };
 
 

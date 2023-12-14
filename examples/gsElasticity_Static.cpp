@@ -13,9 +13,13 @@
 
 #include <gismo.h>
 
+#ifdef gsElasticity_ENABLED
 #include <gsElasticity/gsGeoUtils.h>
 #include <gsElasticity/gsElasticityAssembler.h>
 #include <gsElasticity/gsWriteParaviewMultiPhysics.h>
+#endif
+
+#include <gsStructuralAnalysis/gsStructuralAnalysisTools.h>
 
 #include <gsStructuralAnalysis/gsStaticNewton.h>
 
@@ -43,6 +47,7 @@ void writeToCSVfile(std::string name, gsMatrix<> matrix)
     }
   }
 
+#ifdef gsElasticity_ENABLED
 int main (int argc, char** argv)
 {
     // Input options
@@ -292,27 +297,25 @@ int main (int argc, char** argv)
     real_t totaltime = 0.0;
 
     std::vector<gsMatrix<> > fixedDofs = assembler.allFixedDofs();
-    typedef std::function<gsSparseMatrix<real_t> (gsVector<real_t> const &)>    Jacobian_t;
-    typedef std::function<gsVector<real_t> (gsVector<real_t> const &) >         Residual_t;
     // Function for the Jacobian
-    Jacobian_t Jacobian = [&time,&stopwatch,&assembler,&fixedDofs](gsVector<real_t> const &x)
+    gsStructuralAnalysisOps<real_t>::Jacobian_t Jacobian = [&time,&stopwatch,&assembler,&fixedDofs](gsVector<real_t> const &x, gsSparseMatrix<real_t> &m)
     {
       stopwatch.restart();
       assembler.assemble(x,fixedDofs);
       time += stopwatch.stop();
 
-      gsSparseMatrix<real_t> m = assembler.matrix();
+      m = assembler.matrix();
       // gsInfo<<"matrix = \n"<<m.toDense()<<"\n";
-      return m;
+      return true;
     };
     // Function for the Residual
-    Residual_t Residual = [&time,&stopwatch,&assembler,&fixedDofs](gsVector<real_t> const &x)
+    gsStructuralAnalysisOps<real_t>::Residual_t Residual = [&time,&stopwatch,&assembler,&fixedDofs](gsVector<real_t> const &x, gsVector<real_t> & result)
     {
       stopwatch.restart();
       assembler.assemble(x,fixedDofs);
-      gsVector<real_t> result = assembler.rhs();
+      result = assembler.rhs();
       time += stopwatch.stop();
-      return result; // - lam * force;
+      return true;
     };
 
     switch (Dirichlet)
@@ -364,10 +367,12 @@ int main (int argc, char** argv)
     gsInfo << "Solving...\n";
     // Solve linear problem
     gsVector<> solVector;
+    gsStatus status;
     if (!nonlinear)
-        solVector = staticSolver.solveLinear();
+        status = staticSolver.solveLinear(solVector);
     else
-        solVector = staticSolver.solveNonlinear();
+        status = staticSolver.solveNonlinear(solVector);
+    GISMO_ENSURE(status==gsStatus::Success,"Newton solver failed");
 
     totaltime += stopwatch2.stop();
 
@@ -391,7 +396,13 @@ int main (int argc, char** argv)
 
     return 1;
 }
-
+#else//gsElasticity_ENABLED
+int main(int argc, char *argv[])
+{
+    gsWarn<<"G+Smo is not compiled with the gsElasticity module.";
+    return EXIT_FAILURE;
+}
+#endif
 
 template <class T>
 gsMultiPatch<T> BrickDomain(int n, int p, T L, T B, T H)

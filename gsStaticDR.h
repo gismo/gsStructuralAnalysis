@@ -30,8 +30,8 @@ protected:
 
     typedef gsStaticBase<T> Base;
 
-    typedef std::function<gsVector<T>(gsVector<T> const &)   >  Residual_t;
-    typedef std::function<gsVector<T>(gsVector<T> const &, T)>  ALResidual_t;
+    typedef typename Base::Residual_t    Residual_t;
+    typedef typename Base::ALResidual_t  ALResidual_t;
 
 public:
 
@@ -73,9 +73,9 @@ public:
     m_ALresidualFun(ALResidual)
     {
         m_L = 1.0;
-        m_residualFun = [this](gsVector<T> const & x)
+        m_residualFun = [this](gsVector<T> const & x, gsVector<T> & result) -> bool
         {
-            return m_ALresidualFun(x,m_L);
+            return m_ALresidualFun(x,m_L,result);
         };
         this->_init();
     }
@@ -83,22 +83,25 @@ public:
 /// gsStaticBase base functions
 public:
     /// See \ref gsStaticBase
-    void solve();
-    /// See \ref gsStaticBase
-    void initialize();
+    gsStatus solve() override;
 
     /// See \ref gsStaticBase
-    void initOutput();
-    /// See \ref gsStaticBase
-    void stepOutput(index_t k);
+    void initialize() override;
 
     /// See \ref gsStaticBase
-    void defaultOptions();
+    void initOutput() override;
+    
     /// See \ref gsStaticBase
-    void getOptions();
+    void stepOutput(index_t k) override;
 
     /// See \ref gsStaticBase
-    void setOptions(gsOptionList & options) {m_options.update(options,gsOptionList::addIfUnknown); }
+    void defaultOptions() override;
+
+    /// See \ref gsStaticBase
+    void reset() override;
+
+    /// See \ref gsStaticBase
+    void getOptions() override;
 
 public:
     /// Returns the kinetic energy
@@ -111,6 +114,8 @@ public:
     gsVector<T> velocities() const {return m_v;}
 
 protected:
+    /// See \ref solve()
+    void _solve();
     /// Performs an iteration
     void _iteration();
     /// Identifies a peak
@@ -119,6 +124,8 @@ protected:
     void _start();
     /// Initializes the method
     void _init();
+
+    gsVector<T> _computeResidual(const gsVector<T> & U);
 
 public:
     //// Perform a step back
@@ -137,8 +144,8 @@ public:
     T residualNorm() const { return m_R.norm(); }
 
 protected:
-    const gsVector<T> m_mass;
-    const gsVector<T> m_forcing;
+    const gsVector<T> & m_mass;
+    const gsVector<T> & m_forcing;
     Residual_t m_residualFun;
     const ALResidual_t m_ALresidualFun;
 
@@ -154,12 +161,12 @@ protected:
     // Iterations
     using Base::m_numIterations;
     using Base::m_maxIterations;
+    index_t m_resetIterations;
 
     // Residuals
     using Base::m_R;
 
     // Tolerances
-    using Base::m_converged;
     using Base::m_tolF;
     using Base::m_tolU;
     T m_tolE;
@@ -178,6 +185,9 @@ protected:
 
     // Headstart
     using Base::m_headstart;
+
+    // Solver status
+    using Base::m_status;
 
     // Velocities
     gsVector<T> m_v;                // (class-specific)

@@ -19,68 +19,52 @@
 
 #include <gismo.h>
 
+#ifdef gsKLShell_ENABLED
 #include <gsKLShell/gsThinShellAssembler.h>
 #include <gsKLShell/getMaterialMatrix.h>
+#include <gsKLShell/gsFunctionSum.h>
+#endif
+
+#include <gsStructuralAnalysis/gsStructuralAnalysisTools.h>
 
 #include <gsStructuralAnalysis/gsALMBase.h>
 #include <gsStructuralAnalysis/gsALMLoadControl.h>
 #include <gsStructuralAnalysis/gsALMRiks.h>
 #include <gsStructuralAnalysis/gsALMCrisfield.h>
 
+#include <gsUnstructuredSplines/src/gsApproxC1Spline.h>
+#include <gsUnstructuredSplines/src/gsAlmostC1.h>
+#include <gsUnstructuredSplines/src/gsSmoothInterfaces.h>
+
 using namespace gismo;
-
-template <class T>
-gsMultiPatch<T> Rectangle(T L, T B);
-
-template <class T>
-void addClamping(gsMultiPatch<T> &mp, index_t patch, std::vector<boxSide> sides, T offset);
-
-void writeToCSVfile(std::string name, gsMatrix<> matrix)
-{
-    std::ofstream file(name.c_str());
-    for(int  i = 0; i < matrix.rows(); i++){
-        for(int j = 0; j < matrix.cols(); j++){
-           std::string str = std::to_string(matrix(i,j));
-           if(j+1 == matrix.cols()){
-               file<<str;
-           }else{
-               file<<str<<',';
-           }
-        }
-        file<<'\n';
-    }
-  }
 
 template <class T>
 void initStepOutput( const std::string name, const gsMatrix<T> & points);
 
 template <class T>
-void writeStepOutput(const gsALMBase<T> * arcLength, const gsMultiPatch<T> & deformation, const std::string name, const gsMatrix<T> & points, const index_t extreme=-1, const index_t kmax=100);
+void writeStepOutput(const gsALMBase<T> * arcLength, const gsMultiPatch<T> & deformation, const std::string name, const gsMatrix<T> & points, const gsMatrix<index_t> & patches);
 
-void initSectionOutput( const std::string dirname, bool undeformed=false);
-
-template <class T>
-void writeSectionOutput(const gsMultiPatch<T> & mp, const std::string dirname, const index_t coordinate=0, const T coordVal=0.0, const index_t N=100, bool undeformed=false);
-
+#ifdef gsKLShell_ENABLED
 int main (int argc, char** argv)
 {
     // Input options
     int numElevate  = 2;
     int numHref     = 5;
     bool plot       = false;
+    bool smooth     = false;
     bool mesh = false;
     bool stress       = false;
-    bool SingularPoint = false;
     bool quasiNewton = false;
     int quasiNewtonInt = -1;
+    bool SingularPoint = false;
     bool adaptive = false;
     int step = 10;
     int method = 2; // (0: Load control; 1: Riks' method; 2: Crisfield's method; 3: consistent crisfield method; 4: extended iterations)
     bool symmetry = false;
     bool deformed = false;
-    real_t perturbation = 0;
 
     real_t tau = 1e4;
+    real_t shift = -1e2;
 
     index_t Compressibility = 0;
     index_t material = 3;
@@ -92,21 +76,25 @@ int main (int argc, char** argv)
 
     bool write = false;
     bool writeG = false;
-    bool writeP = false;
-    bool crosssection = false;
 
-    index_t maxit = 20;
+    index_t maxit = 50;
 
     // Arc length method options
-    real_t dL = 0; // General arc length
-    real_t dLb = 1e-2; // Ard length to find bifurcation
-    real_t tol = 1e-6;
-    real_t tolU = 1e-6;
-    real_t tolF = 1e-3;
+    real_t dL         = 0; // Arc length
+    real_t dLb        = 0.5; // Arc length to find bifurcation
+    real_t tol = 1e-4;
+    real_t tolU = 1e-4;
+    real_t tolF = 1e-4;
+
+    index_t testCase = 0;
 
     std::string wn("data.csv");
 
     std::string assemberOptionsFile("options/solver_options.xml");
+
+    index_t nmodes = 15;
+
+    std::vector<index_t> modevec;
 
     gsCmdLine cmd("Wrinkling analysis with thin shells.");
     cmd.addString( "f", "file", "Input XML file for assembler options", assemberOptionsFile );
@@ -123,24 +111,26 @@ int main (int argc, char** argv)
     cmd.addReal("l","dL", "arc length after bifurcation", dL);
     cmd.addReal("A","relaxation", "Relaxation factor for arc length method", relax);
 
-    cmd.addReal("P","perturbation", "perturbation factor", perturbation);
-
+    cmd.addReal("S","shift", "Shift for stability eigenvalue computation", shift);
     cmd.addReal("F","factor", "factor for bifurcation perturbation", tau);
     cmd.addInt("q","QuasiNewtonInt","Use the Quasi Newton method every INT iterations",quasiNewtonInt);
-    cmd.addInt("N", "maxsteps", "Maximum number of steps", step);
-
-    cmd.addSwitch("adaptive", "Adaptive length ", adaptive);
     cmd.addSwitch("bifurcation", "Compute singular points and bifurcation paths", SingularPoint);
+    cmd.addInt("n", "maxmodes", "Number of modes to be computed", nmodes);
+    cmd.addInt("N", "maxsteps", "solMaximum number of steps", step);
+
+    cmd.addSwitch("smooth", "Use a smooth basis (maximum regularity)", smooth);
+
+    cmd.addInt("t", "testcase", "testcase", testCase);
+    cmd.addSwitch("adaptive", "Adaptive length ", adaptive);
     cmd.addSwitch("quasi", "Use the Quasi Newton method", quasiNewton);
     cmd.addSwitch("plot", "Plot result in ParaView format", plot);
     cmd.addSwitch("mesh", "Plot mesh?", mesh);
     cmd.addSwitch("stress", "Plot stress in ParaView format", stress);
     cmd.addSwitch("write", "Write output to file", write);
-    cmd.addSwitch("writeP", "Write perturbation", writeP);
     cmd.addSwitch("writeG", "Write refined geometry", writeG);
-    cmd.addSwitch("cross", "Write cross-section to file", crosssection);
     cmd.addSwitch("symmetry", "Use symmetry boundary condition (different per problem)", symmetry);
     cmd.addSwitch("deformed", "plot on deformed shape", deformed);
+    cmd.addMultiInt("i", "modes", "Modes to select", modevec);
 
     try { cmd.getValues(argc,argv); } catch (int rv) { return rv; }
 
@@ -154,109 +144,402 @@ int main (int argc, char** argv)
     }
 
     real_t aDim,bDim;
-    real_t thickness = 0.14e-3;
-    real_t E_modulus     = 1;
-    real_t PoissonRatio = 0;
-    real_t Density = 1e0;
-    real_t Ratio = 7.0;
-
-    if ((!Compressibility) && (material!=0))
-      PoissonRatio = 0.5;
-    else
-      PoissonRatio = 0.499;
-
+    real_t thickness, E_modulus, PoissonRatio, Density, Ratio, MU1, ALPHA1;
     real_t mu, C01,C10;
-    if (material==3)
+    if (testCase==0 || testCase==1 || testCase == 2)
     {
-      C10 = 6.21485502e4; // c1/2
-      C01 = 15.8114570e4; // c2/2
-      Ratio = C10/C01;
-      mu = 2*(C01+C10);
+      thickness = 0.14e-3;
+      E_modulus     = 1;
+      PoissonRatio = 0;
+      Density = 1e0;
+      Ratio = 7.0;
+      if ((!Compressibility) && (material!=0))
+        PoissonRatio = 0.5;
+      else
+        PoissonRatio = 0.499;
+
+      if (material==3)
+      {
+        C10 = 6.21485502e4; // c1/2
+        C01 = 15.8114570e4; // c2/2
+        Ratio = C10/C01;
+        mu = 2*(C01+C10);
+      }
+      else
+      {
+        C10 = 19.1010178e4;
+        mu = 2*C10;
+      }
+      E_modulus = 2*mu*(1+PoissonRatio);
+      gsDebug<<"E = "<<E_modulus<<"; nu = "<<PoissonRatio<<"; mu = "<<mu<<"; ratio = "<<Ratio<<"\n";
+    }
+    else if (testCase==3 || testCase==4)
+    {
+      thickness = 1.0e-3;
+      E_modulus     = 1;
+      PoissonRatio = 0.4999;
+      Density = 1e0;
+      Ratio = 0;
+      MU1 = 749.18;
+      ALPHA1 = 17.14;
+      // material = 4;
+      // impl = 3;
     }
     else
-    {
-      C10 = 19.1010178e4;
-      mu = 2*C10;
-    }
-    E_modulus = 2*mu*(1+PoissonRatio);
-    gsDebug<<"E = "<<E_modulus<<"; nu = "<<PoissonRatio<<"; mu = "<<mu<<"; ratio = "<<Ratio<<"\n";
+      GISMO_ERROR("Test case" << testCase<<" unknown.");
 
+    /////////////////////////////////////////////////////////////////////////////////
+    //////////////////////////Geometric data/////////////////////////////////////////
+    /////////////////////////////////////////////////////////////////////////////////
+    // Geometry
     gsMultiPatch<> mp,mp_def;
+    //Probes
+    gsMatrix<> writePoints;
+    gsMatrix<index_t> writePatches;
+    // BCs
+    gsBoundaryConditions<> BCs;
+    gsPointLoads<real_t> pLoads = gsPointLoads<real_t>();
+    // Export
+    std::string output = "solution";
+    std::string dirname = "ArcLengthResults";
 
-    std::vector<boxSide> sides;
-    sides.push_back(boundary::west);
-    sides.push_back(boundary::east);
-    if (symmetry)
-      sides.push_back(boundary::south);
+    if (testCase==0)
+    {
+      // Geometry
+      bDim = 0.14; aDim = 2*bDim;
+      mp.addPatch(gsNurbsCreator<>::BSplineRectangle(0,0,aDim/2., bDim/2.));
+      mp.degreeReduce(1);
+      mp.embed(3);
+      gsInfo<<"alpha = "<<aDim/bDim<<"; beta = "<<bDim/thickness<<"\n";
 
-    bDim = 0.14; aDim = 2*bDim;
-    mp = Rectangle(aDim/2., bDim/2.);
+      // Probes
+      writePoints.resize(2,1);
+      writePoints.col(0)<< 1.0,1.0;
+
+      writePatches.resize(1,1);
+      writePatches.row(0)<<0;
+
+      // BCs
+      BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0 ,false,0);
+
+      BCs.addCondition(boundary::east, condition_type::collapsed, 0, 0 ,false,0);
+      BCs.addCondition(boundary::east, condition_type::dirichlet, 0, 0 ,false,1);
+      BCs.addCondition(boundary::east, condition_type::dirichlet, 0, 0 ,false,2);
+
+      BCs.addCondition(boundary::east, condition_type::weak_clamped  , 0, 0, false,2);
+      BCs.addCondition(boundary::west, condition_type::weak_clamped  , 0, 0, false,2);
+
+      BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 2 - z.
+      BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z.
+
+      real_t Load = 1e0;
+      gsVector<> point(2); point<< 1.0, 0.5 ;
+      gsVector<> load (3); load << Load,0.0,0.0;
+      pLoads.addLoad(point, load, 0 );
+
+      // Export
+      dirname = dirname + "/QuarterSheet_-r" + std::to_string(numHref) + "-e" + std::to_string(numElevate) + "-M" + std::to_string(material) + "-c" + std::to_string(Compressibility) + "-alpha" + std::to_string(aDim/bDim) + "-beta" + std::to_string(bDim/thickness);
+      output =  "solution";
+      wn = output + "data.txt";
+
+    }
+    else if (testCase==1)
+    {
+      // Geometry
+      bDim = 0.14; aDim = 2*bDim;
+      gsInfo<<"alpha = "<<aDim/bDim<<"; beta = "<<bDim/thickness<<"\n";
+      gsMultiPatch<> mp_tmp;
+      mp_tmp.addPatch(gsNurbsCreator<>::BSplineRectangle(0,0,aDim/2., bDim/2.));
+      mp = mp_tmp.uniformSplit();
+      for (size_t p=0; p!=mp.nPatches(); p++)
+      {
+        gsTensorBSplineBasis<2,real_t> * basis;
+          if ((basis = dynamic_cast<gsTensorBSplineBasis<2,real_t> *>(&mp.basis(p))))
+          for (size_t d=0; d!=2; d++)
+            basis->knots(d).transform(0,1);
+      }
+      mp.degreeReduce(1);
+      mp.embed(3);
+      mp.computeTopology();
+
+      gsWrite(mp,"mp");
+
+      // Probes
+      writePoints.resize(2,1);
+      writePoints.col(0)<< 1.0,1.0;
+
+      writePatches.resize(1,1);
+      writePatches.row(0)<<3;
+
+      BCs.addCondition(0,boundary::west, condition_type::dirichlet, 0, 0 ,false,0);
+      BCs.addCondition(1,boundary::west, condition_type::dirichlet, 0, 0 ,false,0);
+
+      BCs.addCondition(2,boundary::east, condition_type::collapsed, 0, 0 ,false,0);
+      BCs.addCondition(3,boundary::east, condition_type::collapsed, 0, 0 ,false,0);
+      BCs.addCondition(2,boundary::east, condition_type::dirichlet, 0, 0 ,false,1);
+      BCs.addCondition(3,boundary::east, condition_type::dirichlet, 0, 0 ,false,1);
+      BCs.addCondition(2,boundary::east, condition_type::dirichlet, 0, 0 ,false,2);
+      BCs.addCondition(3,boundary::east, condition_type::dirichlet, 0, 0 ,false,2);
+
+      BCs.addCondition(2,boundary::east, condition_type::weak_clamped  , 0, 0, false,2);
+      BCs.addCondition(3,boundary::east, condition_type::weak_clamped  , 0, 0, false,2);
+      BCs.addCondition(2,boundary::west, condition_type::weak_clamped  , 0, 0, false,2);
+      BCs.addCondition(3,boundary::west, condition_type::weak_clamped  , 0, 0, false,2);
+
+
+      BCs.addCoupled(2,boundary::east,3,boundary::east,2,0,0);
+      BCs.addCoupled(2,boundary::east,3,boundary::east,2,0,2);
+
+      BCs.addCondition(0,boundary::south, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 2 - z.
+      BCs.addCondition(2,boundary::south, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 2 - z.
+      BCs.addCondition(0,boundary::south, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z.
+      BCs.addCondition(2,boundary::south, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z.
+
+      real_t Load = 2*1e0;
+      gsVector<> point(2); point<< 1.0, 1.0 ;
+      gsVector<> load (3); load << Load,0.0,0.0;
+      pLoads.addLoad(point, load, 3 );
+
+      // Export
+      dirname = dirname + "/QuarterSheet_-r" + std::to_string(numHref) + "-e" + std::to_string(numElevate) + "-M" + std::to_string(material) + "-c" + std::to_string(Compressibility) + "-alpha" + std::to_string(aDim/bDim) + "-beta" + std::to_string(bDim/thickness);
+      output =  "solution";
+      wn = output + "data.txt";
+
+    }
+    else if (testCase==2)
+    {
+      // Geometry
+      /////////////////////////////////////////////////////////////////////////////////////
+      gsMultiPatch<> mp_nurbs;
+      real_t Radius = 0.25;
+      bDim = 0.14; aDim = 2*bDim;
+      GISMO_ASSERT(Radius<1,"Radius cannot be larger than 1");
+      real_t Ri = bDim*Radius;
+      real_t Ro = Ri+(bDim - Ri)/2; // middle between Ri an bDim
+      gsKnotVector<> KVx (0,1,0,2) ;
+      gsKnotVector<> KVy (0,1,0,3) ;
+      gsMatrix<> C(6,2) ;
+      C <<  Ri , 0  ,  Ro, 0
+          , Ri , Ri ,  Ro, Ro
+          , 0 ,  Ri ,  0 , Ro ;
+
+      // Set weights
+      gsMatrix<> ww(6,1) ;
+      ww.setOnes();
+      ww.at(2)= 0.707106781186548 ;
+      ww.at(3)= 0.707106781186548 ;
+      gsTensorNurbs<2,real_t> annulus(KVx,KVy,C,ww);
+      annulus.swapDirections(0,1);
+      std::vector<gsGeometry<> *> pieces = annulus.uniformSplit(0);
+
+      gsTensorNurbs<2,real_t> bottom = static_cast<gsTensorNurbs<2,real_t> &>(*pieces[0]);
+      gsTensorNurbs<2,real_t> top    = static_cast<gsTensorNurbs<2,real_t> &>(*pieces[1]);
+      mp_nurbs.addPatch(bottom);
+      mp_nurbs.addPatch(top);
+
+      bottom.coefs().block(0,0,3,2)   = bottom.coefs().block(3,0,3,2);
+      bottom.weights().block(0,0,3,1) = bottom.weights().block(3,0,3,1);
+      bottom.coefs().block(3,0,3,1).setConstant(aDim);
+      bottom.weights().block(3,0,3,1).setOnes();
+      mp_nurbs.addPatch(bottom);
+
+      top.coefs().block(0,0,3,2)   = top.coefs().block(3,0,3,2);
+      top.weights().block(0,0,3,1) = top.weights().block(3,0,3,1);
+      top.coefs().block(3,1,3,1).setConstant(bDim);
+      top.weights().block(3,0,3,1).setOnes();
+      mp_nurbs.addPatch(top);
+
+      // we use C to store the coefs of the new patch
+      C.resize(4,2);
+      C.row(0) = top.coefs().row(0); // the first coefficient of top is the EV
+      C.row(1)<<aDim,top.coefs()(0,1);
+      C.row(2)<<top.coefs()(0,1),bDim; // the fourth coefficient of top is the second control point we need
+      C.row(3)<<aDim,bDim; // the fourth coefficient of top is the second control point we need
+      gsTensorBSpline<2,real_t> patch(KVx,KVx,C);
+      mp_nurbs.addPatch(patch);
+
+      // Construct mp and project mp_nurbs on it
+      gsTensorBSpline<2,real_t> * tb;
+      gsTensorNurbs<2,real_t> * tn;
+
+      index_t degree = 0;
+      for (size_t p=0; p!=mp_nurbs.nPatches(); p++)
+      {
+          tn = dynamic_cast<gsTensorNurbs<2,real_t> *>(&mp_nurbs.patch(p));
+      }
+      for (size_t p=0; p!=mp_nurbs.nPatches(); p++)
+      {
+          if ((tn = dynamic_cast<gsTensorNurbs<2,real_t> *>(&mp_nurbs.patch(p))))
+              mp.addPatch(gsTensorBSpline<2,real_t>(tn->basis().knots(0),tn->basis().knots(1),tn->coefs()));
+          else if ((tb = dynamic_cast<gsTensorBSpline<2,real_t> *>(&mp_nurbs.patch(p))))
+              mp.addPatch(*tb);
+          else
+              GISMO_ERROR("Cannot construct multipatch");
+
+          tb = dynamic_cast<gsTensorBSpline<2,real_t> *>(&mp.patch(p));
+          if (tb->degree(0) > tb->degree(1))
+              tb->degreeElevate(1,1);
+          else if (tb->degree(0) < tb->degree(1))
+              tb->degreeElevate(1,0);
+
+          degree = math::max(degree,tb->basis().maxDegree());
+      }
+
+      for (size_t p=0; p!=mp_nurbs.nPatches(); p++)
+      {
+        tb = dynamic_cast<gsTensorBSpline<2,real_t> *>(&mp.patch(p));
+        if (tb->basis().maxDegree() < degree)
+            tb->degreeElevate(degree-tb->basis().maxDegree());
+      }
+
+      mp.fixOrientation();
+      mp.embed(3);
+      mp.computeTopology();
+
+      // Probes
+      writePoints.resize(2,1);
+      writePoints.col(0)<< 1.0,1.0;
+
+      writePatches.resize(1,1);
+      writePatches.row(0)<<4;
+
+      // BCs
+      BCs.addCondition(2,boundary::north, condition_type::collapsed, 0, 0 ,false,0);
+      BCs.addCondition(2,boundary::north, condition_type::dirichlet, 0, 0 ,false,1);
+      BCs.addCondition(2,boundary::north, condition_type::weak_clamped  , 0, 0, false,2);
+
+      BCs.addCondition(4,boundary::east, condition_type::collapsed, 0, 0 ,false,0);
+      BCs.addCondition(4,boundary::east, condition_type::dirichlet, 0, 0 ,false,1);
+      BCs.addCondition(4,boundary::east, condition_type::weak_clamped  , 0, 0, false,2);
+
+
+      BCs.addCondition(1,boundary::east, condition_type::dirichlet, 0, 0 ,false,0);
+      BCs.addCondition(3,boundary::east, condition_type::dirichlet, 0, 0 ,false,0);
+      BCs.addCondition(1,boundary::east, condition_type::weak_clamped  , 0, 0, false,2);
+      BCs.addCondition(3,boundary::east, condition_type::weak_clamped  , 0, 0, false,2);
+
+
+      BCs.addCondition(0,boundary::west, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 2 - z.
+      BCs.addCondition(2,boundary::west, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 2 - z.
+
+      real_t Load = 1e0;
+      gsVector<> point(2); point<< 1.0, 1.0 ;
+      gsVector<> load (3); load << Load,0.0,0.0;
+      pLoads.addLoad(point, load, 4 );
+
+      // Export
+      dirname = dirname + "/QuarterSheetHole_-r" + std::to_string(numHref) + "-e" + std::to_string(numElevate) + "-M" + std::to_string(material) + "-c" + std::to_string(Compressibility) + "-alpha" + std::to_string(aDim/bDim) + "-beta" + std::to_string(bDim/thickness);
+      output =  "solution";
+      wn = output + "data.txt";
+    }
+    else if (testCase==3)
+    {
+      // Geometry
+      bDim = 25e-3; aDim = 75e-3;
+      mp.addPatch(gsNurbsCreator<>::BSplineRectangle(0,0,2./5.*aDim,bDim));
+      mp.addPatch(gsNurbsCreator<>::BSplineRectangle(2./5.*aDim,0,3./5.*aDim,bDim));
+      mp.addPatch(gsNurbsCreator<>::BSplineRectangle(3./5.*aDim,0,aDim,bDim));
+
+      mp.degreeReduce(1);
+      mp.embed(3);
+      mp.computeTopology();
+
+      gsWrite(mp,"mp");
+
+      gsInfo<<"alpha = "<<aDim/bDim<<"; beta = "<<bDim/thickness<<"\n";
+
+      // Probes
+      writePoints.resize(2,1);
+      writePoints.col(0)<< 0.5,0.0;
+
+      writePatches.resize(1,1);
+      writePatches.row(0)<<1;
+
+      // BCs
+      BCs.addCondition(0,boundary::west , condition_type::dirichlet, 0, 0 ,false, -1);
+      BCs.addCondition(0,boundary::west , condition_type::weak_clamped, 0, 0 ,false, 2);
+      BCs.addCondition(1,boundary::south, condition_type::collapsed, 0, 0, false, -1);
+      BCs.addCondition(2,boundary::east , condition_type::dirichlet, 0, 0 ,false, -1);
+      BCs.addCondition(2,boundary::east , condition_type::weak_clamped, 0, 0 ,false, 2);
+
+      real_t Load = 1e-8;
+      gsVector<> point(2); point<< 0.5, 0.0 ;
+      gsVector<> load (3); load << 0.0, -Load,0.0;
+      pLoads.addLoad(point, load, 1 );
+
+      // Export
+      dirname = dirname + "/WebbBridge_-r" + std::to_string(numHref) + "-e" + std::to_string(numElevate) + "-M" + std::to_string(material) + "-c" + std::to_string(Compressibility) + "-alpha" + std::to_string(aDim/bDim) + "-beta" + std::to_string(bDim/thickness);
+      output =  "solution";
+      wn = output + "data.txt";
+    }
+    else if (testCase==4)
+    {
+      // Geometry
+      bDim = 25e-3; aDim = 75e-3;
+      mp.addPatch(gsNurbsCreator<>::BSplineRectangle(0,0,2./5.*aDim,bDim));
+      mp.addPatch(gsNurbsCreator<>::BSplineRectangle(2./5.*aDim,0,1./2.*aDim,bDim));
+
+      mp.degreeReduce(1);
+      mp.embed(3);
+      mp.addInterface(0,2,1,1);
+      mp.computeTopology();
+
+      gsWrite(mp,"mp");
+
+      gsInfo<<"alpha = "<<aDim/bDim<<"; beta = "<<bDim/thickness<<"\n";
+
+      // Probes
+      writePoints.resize(2,1);
+      writePoints.col(0)<< 1,0.0;
+
+      writePatches.resize(1,1);
+      writePatches.row(0)<<1;
+
+      // BCs
+      BCs.addCondition(0,boundary::west , condition_type::dirichlet, 0, 0 ,false, -1);
+      BCs.addCondition(0,boundary::west , condition_type::weak_clamped,   0, 0 ,false, 2);
+      BCs.addCondition(1,boundary::south, condition_type::collapsed, 0, 0, false, -1);
+      BCs.addCondition(1,boundary::east,  condition_type::dirichlet, 0, 0, false, 0);
+      BCs.addCondition(1,boundary::east,  condition_type::weak_clamped,   0, 0, false, 0);
+      BCs.addCondition(1,boundary::east,  condition_type::weak_clamped,   0, 0, false, 1);
+      BCs.addCondition(1,boundary::east,  condition_type::weak_clamped,   0, 0, false, 2);
+
+      real_t Load = 1e-8;
+      gsVector<> point(2); point<< 1.0, 0.0 ;
+      gsVector<> load (3); load << 0.0, -Load,0.0;
+      pLoads.addLoad(point, load, 1 );
+
+      // Export
+      dirname = dirname + "/WebbBridge_Symmetric_-r" + std::to_string(numHref) + "-e" + std::to_string(numElevate) + "-M" + std::to_string(material) + "-c" + std::to_string(Compressibility) + "-alpha" + std::to_string(aDim/bDim) + "-beta" + std::to_string(bDim/thickness);
+      output =  "solution";
+      wn = output + "data.txt";
+    }
+    else
+      GISMO_ERROR("Test case" << testCase<<" unknown.");
+
+    mp.addAutoBoundaries();
+    mp.computeTopology();
+
+    gsDebugVar(mp);
 
     for(index_t i = 0; i< numElevate; ++i)
-      mp.patch(0).degreeElevate();    // Elevate the degree
+      mp.degreeElevate();    // Elevate the degree
 
     // h-refine
     for(index_t i = 0; i< numHref; ++i)
-      mp.patch(0).uniformRefine();
+      mp.uniformRefine();
 
-    addClamping(mp,0,sides, 1e-2);
     mp_def = mp;
-
-    gsInfo<<"alpha = "<<aDim/bDim<<"; beta = "<<bDim/thickness<<"\n";
-
+    BCs.setGeoMap(mp);
 
     gsMultiBasis<> dbasis(mp);
     gsInfo<<"Basis (patch 0): "<< mp.patch(0).basis() << "\n";
 
-    // Boundary conditions
-    gsBoundaryConditions<> BCs;
-    BCs.setGeoMap(mp);
-    gsPointLoads<real_t> pLoads = gsPointLoads<real_t>();
-
-    std::string output = "solution";
-    std::string dirname = "ArcLengthResults";
-
-    gsMatrix<> writePoints(2,3);
-    writePoints.col(0)<< 0.0,0.5;
-    writePoints.col(1)<< 0.5,0.5;
-    writePoints.col(2)<< 1.0,0.5;
-
-    BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0 ,false,0);
-
-    BCs.addCondition(boundary::east, condition_type::collapsed, 0, 0 ,false,0);
-    BCs.addCondition(boundary::east, condition_type::dirichlet, 0, 0 ,false,1);
-    BCs.addCondition(boundary::east, condition_type::dirichlet, 0, 0 ,false,2);
-
-    BCs.addCondition(boundary::east, condition_type::clamped  , 0, 0, false,2);
-    BCs.addCondition(boundary::west, condition_type::clamped  , 0, 0, false,2);
-
-    BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 2 - z.
-    BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 2 ); // unknown 2 - z.
-
-    real_t Load = 1e0;
-    gsVector<> point(2); point<< 1.0, 0.5 ;
-    gsVector<> load (3); load << Load,0.0, 0.0;
-    pLoads.addLoad(point, load, 0 );
-
-    dirname = dirname + "/QuarterSheet_-r" + std::to_string(numHref) + "-e" + std::to_string(numElevate) + "-M" + std::to_string(material) + "-c" + std::to_string(Compressibility) + "-alpha" + std::to_string(aDim/bDim) + "-beta" + std::to_string(bDim/thickness);
-
-    output =  "solution";
-    wn = output + "data.txt";
-    SingularPoint = true;
-
-    index_t cross_coordinate = 0;
-    real_t cross_val = 0.0;
-
-
-    std::string commands = "mkdir -p " + dirname;
-    const char *command = commands.c_str();
-    int systemRet = system(command);
-    GISMO_ASSERT(systemRet!=-1,"Something went wrong with calling the system argument");
-
+    gsFileManager::mkdir(dirname);
 
     // plot geometry
     if (plot)
-      gsWriteParaview(mp,dirname + "/" + "mp",1000,true);
+      gsWriteParaview(mp,dirname + "/" + "mp",1000,true,false,"_");
 
     if (writeG)
     {
@@ -266,17 +549,49 @@ int main (int argc, char** argv)
 
     if (write)
       initStepOutput(dirname + "/" + wn, writePoints);
-    if (crosssection && cross_coordinate!=-1)
+    gsWriteParaview(dbasis.basis(0),"basis");
+
+    gsWrite(mp,"mp");
+
+    gsMappedBasis<2,real_t> bb2;
+    gsMultiPatch<> geom = mp;
+    gsSparseMatrix<> global2local;
+    if (smooth)
     {
-      initSectionOutput(dirname,false); // write pointdataX.txt, pointdataY.txt, pointdataZ.txt
-      initSectionOutput(dirname,true); // write pointdataX0.txt, pointdataY0.txt, pointdataZ0.txt
-      writeSectionOutput(mp,dirname,cross_coordinate,cross_val,201,true);
+      // // The approx. C1 space
+      // gsApproxC1Spline<2,real_t> approxC1(mp,dbasis);
+      // // approxC1.options().setSwitch("info",info);
+      // // approxC1.options().setSwitch("plot",plot);
+      // approxC1.options().setSwitch("interpolation",true);
+      // approxC1.options().setInt("gluingDataDegree",-1);
+      // approxC1.options().setInt("gluingDataSmoothness",-1);
+      // approxC1.update(bb2);
+
+      if (testCase==2)
+      {
+        gsAlmostC1<2,real_t> almostC1(geom);
+        almostC1.compute();
+        almostC1.matrix_into(global2local);
+
+        global2local = global2local.transpose();
+        geom = almostC1.exportToPatches();
+        dbasis = almostC1.localBasis();
+        bb2.init(dbasis,global2local);
+      }
+      else
+      {
+        gsSmoothInterfaces<2,real_t> smoothInterfaces(geom);
+        smoothInterfaces.compute();
+        smoothInterfaces.matrix_into(global2local);
+
+        global2local = global2local.transpose();
+        geom = smoothInterfaces.exportToPatches();
+        dbasis = smoothInterfaces.localBasis();
+        bb2.init(dbasis,global2local);
+      }
     }
-    else if (crosssection && cross_coordinate==-1)
-    {
-      gsInfo<<"No cross section can be exported if no coordinate is given...\n";
-      crosssection=false;
-    }
+
+    gsSparseSolver<>::LU solver;
 
     // Linear isotropic material model
     gsFunctionExpr<> force("0","0","0",3);
@@ -287,14 +602,10 @@ int main (int argc, char** argv)
     gsConstantFunction<> ratio(Ratio,3);
 
     mu = E_modulus / (2 * (1 + PoissonRatio));
-    gsConstantFunction<> alpha1(1.3,3);
-    gsConstantFunction<> mu1(6.3e5/4.225e5*mu,3);
-    gsConstantFunction<> alpha2(5.0,3);
-    gsConstantFunction<> mu2(0.012e5/4.225e5*mu,3);
-    gsConstantFunction<> alpha3(-2.0,3);
-    gsConstantFunction<> mu3(-0.1e5/4.225e5*mu,3);
+    gsConstantFunction<> mu1(MU1,3);
+    gsConstantFunction<> alpha1(ALPHA1,3);
 
-    std::vector<gsFunction<>*> parameters;
+    std::vector<gsFunctionSet<>*> parameters;
     if (material==0) // SvK
     {
         parameters.resize(2);
@@ -316,15 +627,11 @@ int main (int argc, char** argv)
     }
     else if (material==4) // OG
     {
-      parameters.resize(8);
+      parameters.resize(4);
       parameters[0] = &E;
       parameters[1] = &nu;
       parameters[2] = &mu1;
       parameters[3] = &alpha1;
-      parameters[4] = &mu2;
-      parameters[5] = &alpha2;
-      parameters[6] = &mu3;
-      parameters[7] = &alpha3;
     }
 
     gsMaterialMatrixBase<real_t>* materialMatrix;
@@ -346,43 +653,225 @@ int main (int argc, char** argv)
     }
 
     gsThinShellAssemblerBase<real_t>* assembler;
-    assembler = new gsThinShellAssembler<3, real_t, true >(mp,dbasis,BCs,force,materialMatrix);
-
-
+    assembler = new gsThinShellAssembler<3, real_t, true >(geom,dbasis,BCs,force,materialMatrix);
     // Construct assembler object
-    assembler->setOptions(opts);
+    if (smooth) assembler->options().setInt("Continuity",-1);
+    else        assembler->options().setInt("Continuity",0);
+    gsDebugVar(pLoads);
     assembler->setPointLoads(pLoads);
+    if (smooth)
+      assembler->setSpaceBasis(bb2);
 
-    gsStopwatch stopwatch;
-    real_t time = 0.0;
 
-    typedef std::function<gsSparseMatrix<real_t> (gsVector<real_t> const &)>                                Jacobian_t;
-    typedef std::function<gsVector<real_t> (gsVector<real_t> const &, real_t, gsVector<real_t> const &) >   ALResidual_t;
-    // Function for the Jacobian
-    Jacobian_t Jacobian = [&time,&stopwatch,&assembler,&mp_def](gsVector<real_t> const &x)
-    {
-      stopwatch.restart();
-      assembler->constructSolution(x,mp_def);
-      assembler->assembleMatrix(mp_def);
-      time += stopwatch.stop();
-
-      gsSparseMatrix<real_t> m = assembler->matrix();
-      return m;
-    };
-    // Function for the Residual
-    ALResidual_t ALResidual = [&time,&stopwatch,&assembler,&mp_def](gsVector<real_t> const &x, real_t lam, gsVector<real_t> const &force)
-    {
-      stopwatch.restart();
-      assembler->constructSolution(x,mp_def);
-      assembler->assembleVector(mp_def);
-      gsVector<real_t> Fint = -(assembler->rhs() - force);
-      gsVector<real_t> result = Fint - lam * force;
-      time += stopwatch.stop();
-      return result; // - lam * force;
-    };
     // Assemble linear system to obtain the force vector
     assembler->assemble();
     gsVector<> Force = assembler->rhs();
+    gsSparseMatrix<> K_L = assembler->matrix();
+    gsMatrix<> solVector;
+
+    // gsDebugVar(Force.transpose());
+    // gsDebugVar(K_L.toDense());
+    // return 0;
+    // Function for the Jacobian
+    gsStructuralAnalysisOps<real_t>::Jacobian_t Jacobian;
+    gsStructuralAnalysisOps<real_t>::ALResidual_t ALResidual;
+    if (smooth)
+    {
+      Jacobian = [&assembler,&bb2,&geom](gsVector<real_t> const &x, gsSparseMatrix<real_t> & m)
+      {
+        ThinShellAssemblerStatus status;
+        gsMatrix<real_t> solFull = assembler->fullSolutionVector(x);
+        GISMO_ASSERT(solFull.rows() % 3==0,"Rows of the solution vector does not match the number of control points");
+        solFull.resize(solFull.rows()/3,3);
+        gsMappedSpline<2,real_t> mspline(bb2,solFull);
+        gsFunctionSum<real_t> def(&geom,&mspline);
+        assembler->assembleMatrix(def);
+        status = assembler->assembleMatrix(def);
+        m = assembler->matrix();
+        return status == ThinShellAssemblerStatus::Success;
+      };
+      // Function for the Residual
+      ALResidual = [&assembler,&bb2,&geom,&Force](gsVector<real_t> const &x, real_t lam, gsVector<real_t> & result)
+      {
+        ThinShellAssemblerStatus status;
+        gsMatrix<real_t> solFull = assembler->fullSolutionVector(x);
+        GISMO_ASSERT(solFull.rows() % 3==0,"Rows of the solution vector does not match the number of control points");
+        solFull.resize(solFull.rows()/3,3);
+
+        gsMappedSpline<2,real_t> mspline(bb2,solFull);
+        gsFunctionSum<real_t> def(&geom,&mspline);
+
+        status = assembler->assembleVector(def);
+        result = Force - lam * Force - assembler->rhs(); // assembler rhs - force = Finternal
+        return status == ThinShellAssemblerStatus::Success;
+      };
+    }
+    else
+    {
+      Jacobian = [&assembler,&mp_def](gsVector<real_t> const &x, gsSparseMatrix<real_t> & m)
+      {
+        ThinShellAssemblerStatus status;
+        assembler->constructSolution(x,mp_def);
+        status = assembler->assembleMatrix(mp_def);
+        m = assembler->matrix();
+        return status == ThinShellAssemblerStatus::Success;
+      };
+      // Function for the Residual
+      ALResidual = [&assembler,&mp_def,&Force](gsVector<real_t> const &x, real_t lam, gsVector<real_t> & result)
+      {
+          ThinShellAssemblerStatus status;
+          assembler->constructSolution(x,mp_def);
+          status = assembler->assembleVector(mp_def);
+          result = Force - lam * Force - assembler->rhs(); // assembler rhs - force = Finternal
+          return status == ThinShellAssemblerStatus::Success;
+      };
+    }
+
+    if (!SingularPoint)
+    {
+        gsInfo<<"Computing linear problem..."<<std::flush;
+        gsSparseSolver<>::CGDiagonal solver;
+        solver.compute(K_L);
+        solVector = solver.solve(Force);
+        gsInfo<<"Finished\n";
+
+        if (plot)
+        {
+            /// Make a gsMappedSpline to represent the solution
+            // 1. Get all the coefficients (including the ones from the eliminated BCs.)
+            gsMatrix<real_t> solFull = assembler->fullSolutionVector(solVector);
+            gsMatrix<real_t> solZero = solFull;
+            solZero.setZero();
+
+            // 2. Reshape all the coefficients to a Nx3 matrix
+            GISMO_ASSERT(solFull.rows() % 3==0,"Rows of the solution vector does not match the number of control points");
+            solZero.resize(solZero.rows()/3,3);
+            solFull.resize(solFull.rows()/3,3);
+
+            // 3. Make the mapped spline
+            gsMappedSpline<2,real_t> mspline(bb2,solFull);
+
+            gsField<> solField(geom, mspline,true);
+
+            gsWriteParaview<>(solField, dirname + "/LinearSolution", 1000,mesh);
+        }
+
+        gsInfo<<"Assembling nonlinear stiffness matrix..."<<std::flush;
+        gsSparseMatrix<> dK;
+        Jacobian(solVector,dK);
+        dK = dK - K_L;
+        gsInfo<<"Finished\n";
+
+        gsVector<> values;
+        gsMatrix<> vectors;
+
+        gsInfo<<"Computing Eigenmodes..."<<std::flush;
+#ifdef gsSpectra_ENABLED
+        Spectra::SortRule selectionRule = Spectra::SortRule::LargestMagn;
+        Spectra::SortRule sortRule = Spectra::SortRule::SmallestMagn;
+
+        index_t ncvFac = 10;
+        index_t number = nmodes;
+        gsSpectraGenSymShiftSolver<gsSparseMatrix<>,Spectra::GEigsMode::Buckling> eigSolver(K_L,dK,number,ncvFac*number, shift);
+        // gsSpectraGenSymSolver<gsSparseMatrix<>,Spectra::GEigsMode::Cholesky> eigSolver(K_L,dK,number,ncvFac*number);
+        eigSolver.init();
+        eigSolver.compute(selectionRule,1000,1e-6,sortRule);
+
+        if (eigSolver.info()==Spectra::CompInfo::Successful)         { gsDebug<<"Spectra converged in "<<eigSolver.num_iterations()<<" iterations and with "<<eigSolver.num_operations()<<"operations. \n"; }
+        else if (eigSolver.info()==Spectra::CompInfo::NumericalIssue){ GISMO_ERROR("Spectra did not converge! Error code: NumericalIssue"); }
+        else if (eigSolver.info()==Spectra::CompInfo::NotConverging) { GISMO_ERROR("Spectra did not converge! Error code: NotConverging"); }
+        else if (eigSolver.info()==Spectra::CompInfo::NotComputed)   { GISMO_ERROR("Spectra did not converge! Error code: NotComputed");   }
+        else                                                      { GISMO_ERROR("No error code known"); }
+
+        values  = eigSolver.eigenvalues();
+        gsInfo<<"Eigenvalues:\n"<<values<<"\n";
+        values.array() += shift;
+        gsInfo<<"Eigenvalues:\n"<<values<<"\n";
+        vectors = eigSolver.eigenvectors();
+#else
+        Eigen::GeneralizedSelfAdjointEigenSolver< typename gsMatrix<>::Base >  eigSolver;
+        eigSolver.compute(K_L,dK);
+        values = eigSolver.eigenvalues();
+        vectors = eigSolver.eigenvectors();
+#endif
+        gsInfo<<"Eigenvalues:\n"<<values<<"\n";
+
+//! [Export visualization in ParaView]
+        if (plot)
+        {
+            gsInfo<<"Plotting in Paraview...\n";
+            gsMatrix<> modeShape;
+            std::string output = "modes";
+            gsParaviewCollection mode_collection(dirname + "/" + output);
+
+            int N = nmodes;
+            //    N = vectors.cols();
+            for (index_t m=0; m<N; m++)
+            {
+                solVector = vectors.col(m).normalized();
+
+                /// Make a gsMappedSpline to represent the solution
+                // 1. Get all the coefficients (including the ones from the eliminated BCs.)
+                gsMatrix<real_t> solFull = assembler->fullSolutionVector(solVector);
+                gsMatrix<real_t> solZero = solFull;
+                solZero.setZero();
+
+                // 2. Reshape all the coefficients to a Nx3 matrix
+                GISMO_ASSERT(solFull.rows() % 3==0,"Rows of the solution vector does not match the number of control points");
+                solZero.resize(solZero.rows()/3,3);
+                solFull.resize(solFull.rows()/3,3);
+
+                // 3. Make the mapped spline
+                gsMappedSpline<2,real_t> mspline(bb2,solFull);
+
+                gsField<> solField(geom, mspline,true);
+
+                std::string fileName = dirname + "/" + output + util::to_string(m) + "_";
+                gsWriteParaview<>(solField, fileName, 1000,mesh);
+                for (index_t p = 0; p!=mp.nPatches(); p++)
+                {
+                  fileName = output + util::to_string(m) + "_" + util::to_string(p);
+                  mode_collection.addPart(fileName + ".vts",m,"",p);
+                  if (mesh) mode_collection.addPart(fileName + "_mesh.vtp",m,"",p);
+                }
+            }
+            mode_collection.save();
+        }
+
+        gsMultiBasis<> geombasis(geom);
+        gsDofMapper mapper(geombasis);
+        mapper.finalize();
+        for (std::vector<index_t>::const_iterator it = modevec.begin(); it!=modevec.end(); it++)
+        {
+            solVector = vectors.col(*it);
+            gsMatrix<real_t> solFull = assembler->fullSolutionVector(solVector);
+            solFull.resize(solFull.rows()/3,3);
+            gsMappedSpline<2,real_t> mspline(bb2,solFull);
+
+            gsMatrix<> allCoefs;
+            gsL2Projection<real_t>::projectFunction(dbasis,mspline,geom,allCoefs);
+            allCoefs.resize(allCoefs.rows()/3,3);
+            for (index_t p = 0; p != geom.nPatches(); p++)
+            {
+              for (index_t k=0; k!=mapper.patchSize(p); k++)
+              {
+                geom.patch(p).coefs().row(k) += allCoefs.row(mapper.index(k,p));
+                geom.patch(p).coefs()(k,2) *= 1/tau;
+              }
+            }
+            // for (index_t p = 0; p != geom.nPatches(); p++)
+            // {
+            //     gsMatrix<> coefs;
+            //     gsQuasiInterpolate<real_t>::localIntpl(dbasis.basis(p),mspline.piece(p),coefs);
+            //     geom.patch(p).coefs() += coefs;
+            // }
+        }
+        gsWriteParaview<>(geom,"geom");
+
+        assembler->setUndeformed(geom);
+    }
+
+
 
     gsALMBase<real_t> * arcLength;
     if (method==0)
@@ -397,11 +886,14 @@ int main (int argc, char** argv)
     arcLength->options().setString("Solver","SimplicialLDLT"); // LDLT solver
     arcLength->options().setInt("BifurcationMethod",0); // 0: determinant, 1: eigenvalue
     arcLength->options().setReal("Length",dLb);
-    arcLength->options().setInt("AngleMethod",0); // 0: step, 1: iteration
+    if (method==2)
+    {
+      arcLength->options().setInt("AngleMethod",0); // 0: step, 1: iteration
+      arcLength->options().setReal("Scaling",0.0);
+    }
     arcLength->options().setSwitch("AdaptiveLength",adaptive);
     arcLength->options().setInt("AdaptiveIterations",5);
     arcLength->options().setReal("Perturbation",tau);
-    arcLength->options().setReal("Scaling",0.0);
     arcLength->options().setReal("Tol",tol);
     arcLength->options().setReal("TolU",tolU);
     arcLength->options().setReal("TolF",tolF);
@@ -414,16 +906,15 @@ int main (int argc, char** argv)
       arcLength->options().setInt("QuasiIterations",quasiNewtonInt);
     }
     arcLength->options().setSwitch("Quasi",quasiNewton);
-
+    arcLength->options().setReal("SingularPointComputeTolB",0);
+    arcLength->options().setReal("SingularPointComputeTolE",1e-7);
 
     gsInfo<<arcLength->options();
     arcLength->applyOptions();
     arcLength->initialize();
 
     gsParaviewCollection collection(dirname + "/" + output);
-    gsParaviewCollection Smembrane(dirname + "/" + "membrane");
-    gsParaviewCollection Sflexural(dirname + "/" + "flexural");
-    gsParaviewCollection Smembrane_p(dirname + "/" + "membrane_p");
+    gsParaviewCollection TensionFields(dirname + "/" + "tensionfield");
     gsMultiPatch<> deformation = mp;
 
     // Make objects for previous solutions
@@ -431,7 +922,6 @@ int main (int argc, char** argv)
     gsMatrix<> Uold = Force;
     Uold.setZero();
 
-    gsMatrix<> solVector;
     real_t indicator = 0.0;
     arcLength->setIndicator(indicator); // RESET INDICATOR
     bool bisected = false;
@@ -447,106 +937,120 @@ int main (int argc, char** argv)
         dLb = dLb / 2.;
         arcLength->setLength(dLb);
         arcLength->setSolution(Uold,Lold);
-        bisected = true;
         k -= 1;
         continue;
       }
 
-      if (SingularPoint)
-      {
-        arcLength->computeStability(arcLength->solutionU(),quasiNewton);
-        if (arcLength->stabilityChange())
-        {
-          gsInfo<<"Bifurcation spotted!"<<"\n";
-          arcLength->computeSingularPoint(1e-4, 5, Uold, Lold, 1e-7, 0, false);
-          arcLength->switchBranch();
-          dLb0 = dLb = dL;
-          arcLength->setLength(dLb);
+      arcLength->computeStability(arcLength->solutionU(),quasiNewton);
 
-          if (writeP)
-          {
-            gsMultiPatch<> mp_perturbation;
-            assembler->constructSolution(arcLength->solutionV(),mp_perturbation);
-            gsWrite(mp_perturbation,dirname + "/" +"perturbation");
-            gsInfo<<"Perturbation written in: " + dirname + "/" + "perturbation.xml\n";
-          }
-        }
+      if (arcLength->stabilityChange() && SingularPoint)
+      {
+        arcLength->computeSingularPoint(false);
+        arcLength->switchBranch();
+        dLb0 = dLb = dL;
+        arcLength->setLength(dLb);
       }
+
       indicator = arcLength->indicator();
 
       solVector = arcLength->solutionU();
       Uold = solVector;
       Lold = arcLength->solutionL();
-      assembler->constructSolution(solVector,mp_def);
 
-      deformation = mp_def;
-      deformation.patch(0).coefs() -= mp.patch(0).coefs();// assuming 1 patch here
-
-      gsInfo<<"Total ellapsed assembly time: "<<time<<" s\n";
-
+      gsMappedSpline<2,real_t> mspline;
       if (plot)
       {
         gsField<> solField;
-        if (deformed)
-          solField= gsField<>(mp_def,deformation);
-        else
-          solField= gsField<>(mp,deformation);
-
         std::string fileName = dirname + "/" + output + util::to_string(k);
-        gsWriteParaview<>(solField, fileName, 1000,mesh);
-        fileName = output + util::to_string(k) + "0";
-        collection.addTimestep(fileName,k,".vts");
-        if (mesh) collection.addTimestep(fileName,k,"_mesh.vtp");
+        if (smooth)
+        {
+          /// Make a gsMappedSpline to represent the solution
+          // 1. Get all the coefficients (including the ones from the eliminated BCs.)
+          gsMatrix<real_t> solFull = assembler->fullSolutionVector(solVector);
+
+          // 2. Reshape all the coefficients to a Nx3 matrix
+          GISMO_ASSERT(solFull.rows() % 3==0,"Rows of the solution vector does not match the number of control points");
+          solFull.resize(solFull.rows()/3,3);
+
+          // 3. Make the mapped spline
+          gsMappedSpline<2,real_t> mspline(bb2,solFull);
+
+          // 4. Plot the mapped spline on the original geometry
+          solField = gsField<>(geom, mspline,true);
+
+          gsWriteParaview<>(solField, fileName, 1000,mesh,"_");
+        }
+        else
+        {
+          assembler->constructSolution(solVector,mp_def);
+
+          deformation = mp_def;
+          for (size_t p=0; p!=mp_def.nPatches(); p++)
+            deformation.patch(p).coefs() -= mp.patch(p).coefs();// assuming 1 patch here
+
+          if (deformed)
+            solField= gsField<>(mp_def,deformation);
+          else
+            solField= gsField<>(mp,deformation);
+
+          gsWriteParaview<>(solField, fileName, 1000,mesh,"_");
+        }
+
+        for (size_t p = 0; p!=mp.nPatches(); p++)
+        {
+          fileName = output + util::to_string(k) + "_" + util::to_string(p);
+          collection.addPart(fileName + ".vts",k);
+          if (mesh) collection.addPart(fileName + "_mesh.vtp",k);
+        }
       }
       if (stress)
       {
-        gsField<> membraneStress, flexuralStress, membraneStress_p;
-
-        gsPiecewiseFunction<> membraneStresses;
-        assembler->constructStress(mp_def,membraneStresses,stress_type::membrane);
-        if (deformed)
-          membraneStress = gsField<>(mp_def,membraneStresses,true);
-        else
-          membraneStress = gsField<>(mp,membraneStresses,true);
-
-        gsPiecewiseFunction<> flexuralStresses;
-        assembler->constructStress(mp_def,flexuralStresses,stress_type::flexural);
-        if (deformed)
-          flexuralStress = gsField<>(mp_def,flexuralStresses, true);
-        else
-          flexuralStress = gsField<>(mp,flexuralStresses, true);
-
-        gsPiecewiseFunction<> membraneStresses_p;
-        assembler->constructStress(mp_def,membraneStresses_p,stress_type::principal_stress);
-        if (deformed)
-          membraneStress_p = gsField<>(mp_def,membraneStresses_p, true);
-        else
-          membraneStress_p = gsField<>(mp,membraneStresses_p, true);
-
+        gsField<> tensionField;
+        gsPiecewiseFunction<> tensionFields;
         std::string fileName;
-        fileName = dirname + "/" + "membrane" + util::to_string(k);
-        gsWriteParaview( membraneStress, fileName, 1000);
-        fileName = "membrane" + util::to_string(k) + "0";
-        Smembrane.addTimestep(fileName,k,".vts");
+        fileName = dirname + "/" + "tensionfield" + util::to_string(k);
 
-        fileName = dirname + "/" + "flexural" + util::to_string(k);
-        gsWriteParaview( flexuralStress, fileName, 1000);
-        fileName = "flexural" + util::to_string(k) + "0";
-        Sflexural.addTimestep(fileName,k,".vts");
+        if (smooth)
+        {
+          /// Make a gsMappedSpline to represent the solution
+          // 1. Get all the coefficients (including the ones from the eliminated BCs.)
+          gsMatrix<real_t> solFull = assembler->fullSolutionVector(solVector);
 
-        fileName = dirname + "/" + "membrane_p" + util::to_string(k);
-        gsWriteParaview( membraneStress_p, fileName, 1000);
-        fileName = "membrane_p" + util::to_string(k) + "0";
-        Smembrane_p.addTimestep(fileName,k,".vts");
+          // 2. Reshape all the coefficients to a Nx3 matrix
+          GISMO_ASSERT(solFull.rows() % 3==0,"Rows of the solution vector does not match the number of control points");
+          solFull.resize(solFull.rows()/3,3);
+
+          // 3. Make the mapped spline
+          gsMappedSpline<2,real_t> mspline(bb2,solFull);
+
+          // 4. Create deformation spline
+          gsFunctionSum<real_t> def(&geom,&mspline);
+
+          // 5. Construct stress
+          assembler->constructStress(def,tensionFields,stress_type::tension_field);
+          gsWriteParaview(def,tensionFields,fileName,1000,"_");
+        }
+        else
+        {
+          assembler->constructStress(mp_def,tensionFields,stress_type::tension_field);
+          if (deformed)
+            tensionField = gsField<>(mp_def,tensionFields, true);
+          else
+            tensionField = gsField<>(mp,tensionFields, true);
+
+          gsWriteParaview( tensionField, fileName, 1000,false,"_");
+        }
+
+        for (size_t p = 0; p!=mp.nPatches(); p++)
+        {
+          fileName = "tensionfield" + util::to_string(k) + "_" + util::to_string(p);
+          TensionFields.addPart(fileName + ".vts",k);
+          if (mesh) TensionFields.addPart(fileName + "_mesh.vtp",k);
+        }
       }
 
-
-
       if (write)
-        writeStepOutput(arcLength,deformation, dirname + "/" + wn, writePoints,1, 201);
-
-      if (crosssection && cross_coordinate!=-1)
-        writeSectionOutput(deformation,dirname,cross_coordinate,cross_val,201,false);
+        writeStepOutput(arcLength,deformation, dirname + "/" + wn, writePoints,writePatches);
 
       if (!bisected)
       {
@@ -563,9 +1067,7 @@ int main (int argc, char** argv)
     }
     if (stress)
     {
-      Smembrane.save();
-      Sflexural.save();
-      Smembrane_p.save();
+      TensionFields.save();
     }
 
   delete materialMatrix;
@@ -574,97 +1076,13 @@ int main (int argc, char** argv)
 
   return result;
 }
-
-template <class T>
-void addClamping(gsMultiPatch<T>& mp, index_t patch, std::vector<boxSide> sides, T offset) //, std::vector<boxSide> sides, T offset)
+#else//gsKLShell_ENABLED
+int main(int argc, char *argv[])
 {
-
-    gsTensorBSpline<2,T> *geo = dynamic_cast< gsTensorBSpline<2,real_t> * > (&mp.patch(patch));
-
-    T dknot0 = geo->basis().component(0).knots().minIntervalLength();
-    T dknot1 = geo->basis().component(1).knots().minIntervalLength();
-
-    gsInfo<<"sides.size() = "<<sides.size()<<"\n";
-
-    index_t k =0;
-
-
-    for (std::vector<boxSide>::iterator it = sides.begin(); it != sides.end(); it++)
-    {
-        gsInfo<<"side = "<<(*it)<<"\n";
-
-      if (*it==boundary::west || *it==boundary::east) // west or east
-      {
-        if (*it==boundary::east) // east, val = 1
-          geo->insertKnot(1 - std::min(offset, dknot0 / 2),0);
-        else if (*it==boundary::west) // west
-          geo->insertKnot(std::min(offset, dknot0 / 2),0);
-      }
-      else if (*it==boundary::south || *it==boundary::north) // west or east
-      {
-       if (*it==boundary::north) // north
-         geo->insertKnot(1 - std::min(offset, dknot1 / 2),1);
-       else if (*it==boundary::south) // south
-         geo->insertKnot(std::min(offset, dknot1 / 2),1);
-      }
-      else if (*it==boundary::none)
-        gsWarn<<*it<<"\n";
-      else
-        GISMO_ERROR("Side unknown, side = " <<*it);
-
-        k++;
-    }
+    gsWarn<<"G+Smo is not compiled with the gsKLShell module.";
+    return EXIT_FAILURE;
 }
-
-template <class T>
-gsMultiPatch<T> Rectangle(T L, T B) //, int n, int m, std::vector<boxSide> sides, T offset)
-{
-  // -------------------------------------------------------------------------
-  // --------------------------Make beam geometry-----------------------------
-  // -------------------------------------------------------------------------
-  int dim = 3; //physical dimension
-  gsKnotVector<> kv0;
-  kv0.initUniform(0,1,0,2,1);
-  gsKnotVector<> kv1;
-  kv1.initUniform(0,1,0,2,1);
-
-  // Make basis
-  gsTensorBSplineBasis<2,T> basis(kv0,kv1);
-
-  // Initiate coefficient matrix
-  gsMatrix<> coefs(basis.size(),dim);
-  // Number of control points needed per component
-  size_t len0 = basis.component(0).size();
-  size_t len1 = basis.component(1).size();
-  gsVector<> coefvec0(len0);
-  // Uniformly distribute control points per component
-  coefvec0.setLinSpaced(len0,0.0,L);
-  gsVector<> coefvec1(basis.component(1).size());
-  coefvec1.setLinSpaced(len1,0.0,B);
-
-  // Z coordinate is zero
-  coefs.col(2).setZero();
-
-  // Define a matrix with ones
-  gsVector<> temp(len0);
-  temp.setOnes();
-  for (size_t k = 0; k < len1; k++)
-  {
-    // First column contains x-coordinates (length)
-    coefs.col(0).segment(k*len0,len0) = coefvec0;
-    // Second column contains y-coordinates (width)
-    coefs.col(1).segment(k*len0,len0) = temp*coefvec1.at(k);
-  }
-  // Create gsGeometry-derived object for the patch
-  gsTensorBSpline<2,real_t> shape(basis,coefs);
-
-  gsMultiPatch<T> mp;
-  mp.addPatch(shape);
-  mp.addAutoBoundaries();
-
-  return mp;
-}
-
+#endif
 
 template <class T>
 void initStepOutput(const std::string name, const gsMatrix<T> & points)
@@ -676,8 +1094,7 @@ void initStepOutput(const std::string name, const gsMatrix<T> & points)
         for (index_t k=0; k!=points.cols(); k++)
         {
           file<< "point "<<k<<" - x" << ","
-              << "point "<<k<<" - y" << ","
-              << "point "<<k<<" - z" << ",";
+              << "point "<<k<<" - y" << ",";
         }
 
   file  << "Lambda" << ","
@@ -689,155 +1106,32 @@ void initStepOutput(const std::string name, const gsMatrix<T> & points)
 }
 
 template <class T>
-void writeStepOutput(const gsALMBase<T> * arcLength, const gsMultiPatch<T> & deformation, const std::string name, const gsMatrix<T> & points, const index_t extreme, const index_t kmax) // extreme: the column of point indices to compute the extreme over (default -1)
+void writeStepOutput(const gsALMBase<T> * arcLength, const gsMultiPatch<T> & deformation, const std::string name, const gsMatrix<T> & points, const gsMatrix<index_t> & patches)
 {
   gsMatrix<T> P(2,1), Q(2,1);
-  gsMatrix<T> out(3,points.cols());
+  gsMatrix<T> out(2,points.cols());
   gsMatrix<T> tmp;
 
   for (index_t p=0; p!=points.cols(); p++)
   {
     P<<points.col(p);
-    deformation.patch(0).eval_into(P,tmp);
+    deformation.patch(patches(0,p)).eval_into(P,tmp);
     out.col(p) = tmp;
   }
 
   std::ofstream file;
   file.open(name,std::ofstream::out | std::ofstream::app);
-  if (extreme==-1)
-  {
-    file  << std::setprecision(6)
-          << arcLength->solutionU().norm() << ",";
-          for (index_t p=0; p!=points.cols(); p++)
-          {
-            file<< out(0,p) << ","
-                << out(1,p) << ","
-                << out(2,p) << ",";
-          }
+  file  << std::setprecision(6)
+        << arcLength->solutionU().norm() << ",";
+        for (index_t p=0; p!=points.cols(); p++)
+        {
+          file<< out(0,p) << ","
+              << out(1,p) << ",";
+        }
 
-    file  << arcLength->solutionL() << ","
-          << arcLength->indicator() << ","
-          << "\n";
-  }
-  else if (extreme==0 || extreme==1)
-  {
-    gsMatrix<T> out2(kmax,points.cols()); // evaluation points in the rows, output (per coordinate) in columns
-    for (int p = 0; p != points.cols(); p ++)
-    {
-      Q.at(1-extreme) = points(1-extreme,p);
-      for (int k = 0; k != kmax; k ++)
-      {
-        Q.at(extreme) = 1.0*k/(kmax-1);
-        deformation.patch(0).eval_into(Q,tmp);
-        out2(k,p) = tmp.at(2); // z coordinate
-      }
-    }
-
-    file  << std::setprecision(6)
-          << arcLength->solutionU().norm() << ",";
-          for (index_t p=0; p!=points.cols(); p++)
-          {
-            file<< out(0,p) << ","
-                << out(1,p) << ","
-                << std::max(abs(out2.col(p).maxCoeff()),abs(out2.col(p).minCoeff())) << ",";
-          }
-
-    file  << arcLength->solutionL() << ","
-          << arcLength->indicator() << ","
-          << "\n";
-  }
-  else
-    GISMO_ERROR("Extremes setting unknown");
-
+  file  << arcLength->solutionL() << ","
+        << arcLength->indicator() << ","
+        << "\n";
   file.close();
 }
 
-void initSectionOutput(const std::string dirname, bool undeformed)
-{
-  std::ofstream file2, file3, file4;
-  std::string wn2,wn3,wn4;
-
-  if (! undeformed)
-  {
-    wn2 = dirname + "/" + "pointdataX.txt";
-    wn3 = dirname + "/" + "pointdataY.txt";
-    wn4 = dirname + "/" + "pointdataZ.txt";
-  }
-  else
-  {
-    wn2 = dirname + "/" + "pointdataX0.txt";
-    wn3 = dirname + "/" + "pointdataY0.txt";
-    wn4 = dirname + "/" + "pointdataZ0.txt";
-  }
-
-  file2.open(wn2,std::ofstream::out);
-  file2.close();
-
-  file3.open(wn3,std::ofstream::out);
-  file3.close();
-
-  file4.open(wn4,std::ofstream::out);
-  file4.close();
-
-  gsInfo<<"Cross-section results will be written in directory: "<<dirname<<"\n";
-}
-
-template <class T>
-void writeSectionOutput(const gsMultiPatch<T> & mp, const std::string dirname, const index_t coordinate, const T coordVal, const index_t N, bool undeformed) // coordinate: the column which remains constant at coordVal
-{
-  gsMatrix<T> P(2,1);
-  gsMatrix<T> tmp;
-  P.setZero();
-  P.at(coordinate) = coordVal;
-
-  std::ofstream file2, file3, file4;
-  std::string wn2,wn3,wn4;
-
-  if (! undeformed)
-  {
-    wn2 = dirname + "/" + "pointdataX.txt";
-    wn3 = dirname + "/" + "pointdataY.txt";
-    wn4 = dirname + "/" + "pointdataZ.txt";
-  }
-  else
-  {
-    wn2 = dirname + "/" + "pointdataX0.txt";
-    wn3 = dirname + "/" + "pointdataY0.txt";
-    wn4 = dirname + "/" + "pointdataZ0.txt";
-  }
-
-  file2.open(wn2,std::ofstream::out | std::ofstream::app);
-  file3.open(wn3,std::ofstream::out | std::ofstream::app);
-  file4.open(wn4,std::ofstream::out | std::ofstream::app);
-
-
-  gsMatrix<T> out(3,N); // evaluation points in the rows, output (per coordinate) in columns
-    for (int k = 0; k != N; k ++)
-    {
-      P.at(1-coordinate) = 1.0*k/(N-1);
-
-      mp.patch(0).eval_into(P,tmp);
-      out.col(k) = tmp; // z coordinate
-
-      std::string str2 = std::to_string(out(0,k));
-      std::string str3 = std::to_string(out(1,k));
-      std::string str4 = std::to_string(out(2,k));
-      if(k+1 == N)
-      {
-          file2<<str2;
-          file3<<str3;
-          file4<<str4;
-      }
-      else{
-          file2<<str2<<',';
-          file3<<str3<<',';
-          file4<<str4<<',';
-      }
-    }
-    file2<<'\n';
-    file2.close();
-    file3<<'\n';
-    file3.close();
-    file4<<'\n';
-    file4.close();
-}

@@ -15,6 +15,7 @@
 #pragma once
 
 #include <gsSolver/gsBlockOp.h>
+#include <gsStructuralAnalysis/gsStructuralAnalysisTools.h>
 
 namespace gismo
 {
@@ -28,6 +29,12 @@ namespace gismo
 template <class T>
 class gsTimeIntegrator
 {
+
+    typedef typename gsStructuralAnalysisOps<T>::TForce_t    TForce_t;
+    typedef typename gsStructuralAnalysisOps<T>::TResidual_t TResidual_t;
+    typedef typename gsStructuralAnalysisOps<T>::Jacobian_t  Jacobian_t;
+    typedef typename gsStructuralAnalysisOps<T>::dJacobian_t dJacobian_t;
+
 public:
 
 
@@ -43,7 +50,7 @@ public:
     gsTimeIntegrator(   const gsSparseMatrix<T> &Mass,
                         const gsSparseMatrix<T> &Damp,
                         const gsSparseMatrix<T> &Stif,
-                        const std::function < gsMatrix<T> ( T) > &Force,
+                        const TForce_t &Force,
                         const T dt
                         )
     : m_mass(Mass),
@@ -72,7 +79,7 @@ public:
      */
     gsTimeIntegrator(   const gsSparseMatrix<T> &Mass,
                         const gsSparseMatrix<T> &Stif,
-                        const std::function < gsMatrix<T> ( T) > &Force,
+                        const TForce_t &Force,
                         const T dt
                         )
     : m_mass(Mass),
@@ -102,7 +109,7 @@ private:
      */
     gsTimeIntegrator(   const gsSparseMatrix<T> &Mass,
                         const gsSparseMatrix<T> &Damp,
-                        const std::function < gsMatrix<T> ( gsMatrix<T> const &, T) > &Residual,
+                        const TResidual_t &Residual,
                         const T dt
                         )
     : m_mass(Mass),
@@ -126,7 +133,7 @@ private:
      * @param[in]  dt        The time step
      */
     gsTimeIntegrator(   const gsSparseMatrix<T> &Mass,
-                        const std::function < gsMatrix<T> ( gsMatrix<T> const &, T) > &Residual,
+                        const TResidual_t &Residual,
                         const T dt
                         )
     : m_mass(Mass),
@@ -156,16 +163,16 @@ public:
      */
     gsTimeIntegrator(   const gsSparseMatrix<T> &Mass,
                         const gsSparseMatrix<T> &Damp,
-                        const std::function < gsSparseMatrix<T> ( gsMatrix<T> const & ) > &Jacobian,
-                        const std::function < gsMatrix<T> ( gsMatrix<T> const &, T) > &Residual,
+                        const Jacobian_t  &Jacobian,
+                        const TResidual_t &Residual,
                         const T dt
                         )
     : gsTimeIntegrator(Mass,Damp,Residual,dt)
     {
         m_jacobian = Jacobian;
-        m_djacobian = [this](gsVector<T> const & x, gsVector<T> const & dx)
+        m_djacobian = [this](gsVector<T> const & x, gsVector<T> const & dx, gsSparseMatrix<T> & m) -> bool
         {
-            return m_jacobian(x);
+            return m_jacobian(x,m);
         };
     }
 
@@ -179,16 +186,16 @@ public:
      * @param[in]  dt        The time step
      */
     gsTimeIntegrator(   const gsSparseMatrix<T> &Mass,
-                        const std::function < gsSparseMatrix<T> ( gsMatrix<T> const & ) > &Jacobian,
-                        const std::function < gsMatrix<T> ( gsMatrix<T> const &, T) > &Residual,
+                        const Jacobian_t &Jacobian,
+                        const TResidual_t &Residual,
                         const T dt
                         )
     : gsTimeIntegrator(Mass,Residual,dt)
     {
         m_jacobian = Jacobian;
-        m_djacobian = [this](gsVector<T> const & x, gsVector<T> const & dx)
+        m_djacobian = [this](gsVector<T> const & x, gsVector<T> const & dx, gsSparseMatrix<T> & m) -> bool
         {
-            return m_jacobian(x);
+            return m_jacobian(x,m);
         };
     }
 
@@ -204,8 +211,8 @@ public:
      */
     gsTimeIntegrator(   const gsSparseMatrix<T> &Mass,
                         const gsSparseMatrix<T> &Damp,
-                        const std::function < gsSparseMatrix<T> ( gsMatrix<T> const &, gsMatrix<T> const & ) > &dJacobian,
-                        const std::function < gsMatrix<T> ( gsMatrix<T> const &, T) > &Residual,
+                        const dJacobian_t &dJacobian,
+                        const TResidual_t &Residual,
                         const T dt
                         )
     : gsTimeIntegrator(Mass,Damp,Residual,dt)
@@ -223,8 +230,8 @@ public:
      * @param[in]  dt        The time step
      */
     gsTimeIntegrator(   const gsSparseMatrix<T> &Mass,
-                        const std::function < gsSparseMatrix<T> ( gsMatrix<T> const &, gsMatrix<T> const & ) > &dJacobian,
-                        const std::function < gsMatrix<T> ( gsMatrix<T> const &, T) > &Residual,
+                        const dJacobian_t &dJacobian,
+                        const TResidual_t &Residual,
                         const T dt
                         )
     : gsTimeIntegrator(Mass,Residual,dt)
@@ -236,7 +243,7 @@ public:
 
 public:
     /// Performs a step
-    void step();
+    gsStatus step();
 
     /// Constructs the system
     void constructSystem();
@@ -290,17 +297,17 @@ public:
         m_dofs = m_mass.cols();
     }
     /// Set Jacobian matrix
-    void setJacobian(std::function < gsSparseMatrix<T> ( gsMatrix<T> const & ) > &Jacobian)
+    void setJacobian(Jacobian_t &Jacobian)
     {
         m_jacobian = Jacobian;
-        m_djacobian = [this](gsVector<T> const & x, gsVector<T> const & dx)
+        m_djacobian = [this](gsVector<T> const & x, gsVector<T> const & dx, gsSparseMatrix<T> & m)
         {
-            return m_jacobian(x);
+            return m_jacobian(x,m);
         };
         m_dofs = m_mass.cols();
     }
     /// Set the Jacobian matrix taking the solution in the first argument and the update as second
-    void setJacobian(std::function < gsSparseMatrix<T> ( gsMatrix<T> const &, gsMatrix<T> const & ) > &dJacobian)
+    void setJacobian(dJacobian_t &dJacobian)
     {
         m_djacobian = dJacobian;
     }
@@ -338,6 +345,22 @@ public:
 
 protected:
 
+    /// Compute the time-dependent force
+    gsVector<T>         _computeForce(const T & t);
+    
+    /// Compute the time-dependent residual
+    gsVector<T>         _computeResidual(const gsVector<T> & U, const T & t);
+    
+    /// Compute the time-indepentent jacobian. TODO: Make time-dependent
+    gsSparseMatrix<T>   _computeJacobian(const gsVector<T> & U, const gsVector<T> & dU);
+
+    /// Factorize the matrix \a M
+    void _factorizeMatrix(const gsSparseMatrix<T> & M);
+
+    /// Solve the system with right-hand side \a F
+    gsVector<T> _solveSystem(const gsVector<T> & F);
+
+
     /// Initializes some parameters for the class
     void initializeCoefficients();
     /// Initializes the solution
@@ -350,6 +373,8 @@ protected:
     void constructSystemBlock();
     /// Initialize the solution
     void initiate();
+
+    void _step();
     /// Perform a step with the explicit euler method
     void stepExplEuler();
     /// Perform a step with the nonlinear explicit euler method
@@ -387,10 +412,10 @@ protected:
     gsSparseMatrix<T> m_mass;
     gsSparseMatrix<T> m_damp;
     gsSparseMatrix<T> m_stif;
-    std::function < gsSparseMatrix<T> ( gsMatrix<T> const & ) > m_jacobian;
-    std::function < gsSparseMatrix<T> ( gsMatrix<T> const &, gsMatrix<T> const & ) > m_djacobian;
-    std::function < gsMatrix<T> ( gsMatrix<T> const &, T ) > m_residualFun;
-    std::function < gsMatrix<T> ( T) > m_forceFun;
+    Jacobian_t  m_jacobian;
+    dJacobian_t m_djacobian;
+    TResidual_t m_residualFun;
+    TForce_t    m_forceFun;
     gsSparseMatrix<T> m_jacMat;
     gsMatrix<T> m_resVec;
 
@@ -443,6 +468,7 @@ protected:
     gsMatrix<T> m_velocities;
     gsMatrix<T> m_accelerations;
 
+    gsStatus m_status;
 };
 
 

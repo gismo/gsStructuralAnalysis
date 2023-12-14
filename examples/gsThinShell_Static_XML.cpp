@@ -13,20 +13,24 @@
 
 #include <gismo.h>
 
+#ifdef gsKLShell_ENABLED
 #include <gsKLShell/gsThinShellAssembler.h>
 #include <gsKLShell/getMaterialMatrix.h>
+#endif
 
-#ifdef GISMO_ELASTICITY
+#ifdef gsElasticity_ENABLED
 #include <gsElasticity/gsWriteParaviewMultiPhysics.h>
 #endif
 
 #include <gsStructuralAnalysis/gsStaticNewton.h>
+#include <gsStructuralAnalysis/gsStructuralAnalysisTools.h>
 
 //#include <gsThinShell/gsNewtonIterator.h>
 
 using namespace gismo;
 
 // Choose among various shell examples, default = Thin Plate
+#ifdef gsKLShell_ENABLED
 int main(int argc, char *argv[])
 {
     //! [Parse command line]
@@ -329,22 +333,25 @@ int main(int argc, char *argv[])
     assembler->assemble();
     const gsSparseMatrix<> & matrix = assembler->matrix();
     const gsVector<> & vector = assembler->rhs();
-    typedef std::function<gsSparseMatrix<real_t> (gsVector<real_t> const &)>    Jacobian_t;
-    typedef std::function<gsVector<real_t> (gsVector<real_t> const &) >         Residual_t;
+
     // Function for the Jacobian
-    Jacobian_t Jacobian = [&assembler,&mp_def](gsVector<real_t> const &x)
+    gsStructuralAnalysisOps<real_t>::Jacobian_t Jacobian = [&assembler,&mp_def](gsVector<real_t> const &x, gsSparseMatrix<real_t> & m)
     {
+      ThinShellAssemblerStatus status;
       assembler->constructSolution(x,mp_def);
-      assembler->assembleMatrix(mp_def);
-      gsSparseMatrix<real_t> m = assembler->matrix();
-      return m;
+      status = assembler->assembleMatrix(mp_def);
+      m = assembler->matrix();
+      return status == ThinShellAssemblerStatus::Success;
     };
+
     // Function for the Residual
-    Residual_t Residual = [&assembler,&mp_def](gsVector<real_t> const &x)
+    gsStructuralAnalysisOps<real_t>::Residual_t Residual = [&assembler,&mp_def](gsVector<real_t> const &x, gsVector<real_t> & result)
     {
+      ThinShellAssemblerStatus status;
       assembler->constructSolution(x,mp_def);
-      assembler->assembleVector(mp_def);
-      return assembler->rhs();
+      status = assembler->assembleVector(mp_def);
+      result = assembler->rhs();
+      return status == ThinShellAssemblerStatus::Success;
     };
 
     gsInfo << "Assemble done ("<<matrix.rows()<<"x"<<matrix.cols()<<")\n";
@@ -355,10 +362,15 @@ int main(int argc, char *argv[])
     // Solve linear problem
     gsInfo << "Solving linear system..\n";
     gsVector<> solVector;
-    solVector = staticSolver.solveLinear();
+    gsStatus status;
+    status = staticSolver.solveLinear(solVector);
+    GISMO_ENSURE(status==gsStatus::Success,"Newton solver failed");
     gsInfo << "Solving done.\n";
     if (nonlinear)
-        solVector = staticSolver.solveNonlinear();
+    {
+        status = staticSolver.solveNonlinear(solVector);
+        GISMO_ENSURE(status==gsStatus::Success,"Newton solver failed");
+    }
 
     mp_def = assembler->constructSolution(solVector);
     gsInfo << "Solution constructed.\n";
@@ -477,3 +489,10 @@ int main(int argc, char *argv[])
     return EXIT_SUCCESS;
 
 }// end main
+#else//gsKLShell_ENABLED
+int main(int argc, char *argv[])
+{
+    gsWarn<<"G+Smo is not compiled with the gsKLShell module.";
+    return EXIT_FAILURE;
+}
+#endif
