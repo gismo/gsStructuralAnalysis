@@ -36,57 +36,6 @@
 
 using namespace gismo;
 
-template<typename T>
-class gsElementErrorPlotter : public gsFunction<T>
-{
-public:
-    gsElementErrorPlotter(const gsBasis<T>& mp, const std::vector<T>& errors ) : m_mp(mp),m_errors(errors)
-    {
-
-    }
-
-    virtual void eval_into(const gsMatrix<T>& u, gsMatrix<T>& res) const
-    {
-        // Initialize domain element iterator -- using unknown 0
-        res.setZero(1,u.cols());
-        for(index_t i=0; i<u.cols();++i)
-        {
-            int iter =0;
-            // Start iteration over elements
-
-            typename gsBasis<T>::domainIter domIt = m_mp.makeDomainIterator();
-            for (; domIt->good(); domIt->next() )
-            {
-                 bool flag = true;
-                const gsVector<T>& low = domIt->lowerCorner();
-                const gsVector<T>& upp = domIt->upperCorner();
-
-
-                for(int d=0; d<domainDim();++d )
-                {
-                    if(low(d)> u(d,i) || u(d,i) > upp(d))
-                    {
-                        flag = false;
-                        break;
-                    }
-                }
-                if(flag)
-                {
-                     res(0,i) = m_errors.at(iter);
-                     break;
-                }
-                iter++;
-            }
-        }
-    }
-
-    short_t domainDim() const { return m_mp.dim();}
-
-private:
-    const gsBasis<T>& m_mp;
-    const std::vector<T>& m_errors;
-};
-
 template <class T>
 void initStepOutput( const std::string name, const gsMatrix<T> & points);
 
@@ -414,7 +363,7 @@ int main (int argc, char** argv)
     gsFunctionExpr<> nu(std::to_string(PoissonRatio),3);
     gsFunctionExpr<> rho(std::to_string(Density),3);
 
-    std::vector<gsFunction<>*> parameters;
+    std::vector<gsFunctionSet<real_t>*> parameters;
     parameters.resize(2);
     parameters[0] = &E;
     parameters[1] = &nu;
@@ -463,40 +412,34 @@ int main (int argc, char** argv)
     gsStopwatch stopwatch;
     real_t time = 0.0;
 
-    typedef std::function<gsSparseMatrix<real_t> (gsVector<real_t> const &)>                                Jacobian_t;
-    typedef std::function<gsVector<real_t> (gsVector<real_t> const &, real_t, gsVector<real_t> const &) >   ALResidual_t;
     // Function for the Jacobian
-    Jacobian_t Jacobian = [&time,&stopwatch,&assembler,&mp_def](gsVector<real_t> const &x)
+    gsStructuralAnalysisOps<real_t>::Jacobian_t Jacobian = [&time,&stopwatch,&assembler,&mp_def](gsVector<real_t> const &x, gsSparseMatrix<real_t> & m)
     {
-      stopwatch.restart();
-      assembler->constructSolutionL(x,mp_def);
-      assembler->assembleMatrixL(mp_def);
-      time += stopwatch.stop();
-
-      gsSparseMatrix<real_t> m = assembler->matrixL();
-      return m;
+        stopwatch.restart();
+        ThinShellAssemblerStatus status;
+        assembler->constructSolutionL(x,mp_def);
+        status = assembler->assembleMatrixL(mp_def);
+        m = assembler->matrixL();
+        time += stopwatch.stop();
+        return status == ThinShellAssemblerStatus::Success;
     };
+
     // Function for the Residual
-    ALResidual_t ALResidual = [&pLoads,&time,&stopwatch,&assembler,&mp_def](gsVector<real_t> const &x, real_t lam, gsVector<real_t> const &force)
+    gsStructuralAnalysisOps<real_t>::ALResidual_t ALResidual = [&pLoads,&time,&stopwatch,&assembler,&mp_def](gsVector<real_t> const &x, real_t lam, gsVector<real_t> & result)
     {
-      stopwatch.restart();
-      // assembler->constructSolutionL(x,mp_def);
-      // assembler->assemblePrimalL(mp_def);
+        gsPointLoads<real_t> pLoads_tmp = pLoads;
+        pLoads_tmp[0].value *= lam;
 
-      // gsVector<real_t> Fint = -(assembler->primalL() - force);
-      // gsVector<real_t> result = Fint - lam * force;
-      // time += stopwatch.stop();
-      // return result;
-
-      gsPointLoads<real_t> pLoads_tmp = pLoads;
-      pLoads_tmp[0].value *= lam;
-      assembler->setPointLoads(pLoads_tmp);
-      assembler->constructSolutionL(x,mp_def);
-      assembler->assemblePrimalL(mp_def);
-
-      time += stopwatch.stop();
-      return -assembler->primalL();
+        stopwatch.restart();
+        ThinShellAssemblerStatus status;
+        assembler->setPointLoads(pLoads_tmp);
+        assembler->constructSolutionL(x,mp_def);
+        status = assembler->assemblePrimalL(mp_def);
+        result = -assembler->primalL(); // assembler rhs - force = Finternal
+        time += stopwatch.stop();
+        return status == ThinShellAssemblerStatus::Success;
     };
+
     // Assemble linear system to obtain the force vector
     assembler->setPointLoads(pLoads);
     assembler->assembleL();
@@ -686,6 +629,7 @@ int main (int argc, char** argv)
                     {
                         gsInfo<<"Load Step "<<k<<": Error is too big! Error = "<<error<<", refTol = "<<refTol<<"\n";
                         mesher.markRef_into(elErrors,markRef);
+                        gsDebugVar(markRef);
                         gsInfo<<"Marked "<<markRef.totalSize()<<" elements for refinement\n";
                         refined = mesher.refine(markRef);
                     }

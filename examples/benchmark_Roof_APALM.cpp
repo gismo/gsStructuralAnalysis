@@ -344,7 +344,7 @@ int main (int argc, char** argv)
   gsFunctionExpr<> nu(std::to_string(PoissonRatio),3);
   gsFunctionExpr<> rho(std::to_string(Density),3);
 
-  std::vector<gsFunction<>*> parameters;
+  std::vector<gsFunctionSet<real_t>*> parameters;
   parameters.resize(2);
   parameters[0] = &E;
   parameters[1] = &nu;

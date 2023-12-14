@@ -387,7 +387,7 @@ int main (int argc, char** argv)
     gsConstantFunction<> alpha3(-2.0,3);
     gsConstantFunction<> mu3(-0.1e5/4.225e5*mu,3);
 
-    std::vector<gsFunction<>*> parameters;
+    std::vector<gsFunctionSet<real_t>*> parameters;
     if (material==0) // SvK
     {
         parameters.resize(2);

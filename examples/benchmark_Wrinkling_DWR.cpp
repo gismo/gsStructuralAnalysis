@@ -27,57 +27,6 @@
 
 using namespace gismo;
 
-template<typename T>
-class gsElementErrorPlotter : public gsFunction<T>
-{
-public:
-    gsElementErrorPlotter(const gsBasis<T>& mp, const std::vector<T>& errors ) : m_mp(mp),m_errors(errors)
-    {
-
-    }
-
-    virtual void eval_into(const gsMatrix<T>& u, gsMatrix<T>& res) const
-    {
-        // Initialize domain element iterator -- using unknown 0
-        res.setZero(1,u.cols());
-        for(index_t i=0; i<u.cols();++i)
-        {
-            int iter =0;
-            // Start iteration over elements
-
-            typename gsBasis<T>::domainIter domIt = m_mp.makeDomainIterator();
-            for (; domIt->good(); domIt->next() )
-            {
-                 bool flag = true;
-                const gsVector<T>& low = domIt->lowerCorner();
-                const gsVector<T>& upp = domIt->upperCorner();
-
-
-                for(int d=0; d<domainDim();++d )
-                {
-                    if(low(d)> u(d,i) || u(d,i) > upp(d))
-                    {
-                        flag = false;
-                        break;
-                    }
-                }
-                if(flag)
-                {
-                     res(0,i) = m_errors.at(iter);
-                     break;
-                }
-                iter++;
-            }
-        }
-    }
-
-    short_t domainDim() const { return m_mp.dim();}
-
-private:
-    const gsBasis<T>& m_mp;
-    const std::vector<T>& m_errors;
-};
-
 template <class T>
 gsMultiPatch<T> Rectangle(T L, T B);
 
@@ -404,7 +353,7 @@ int main (int argc, char** argv)
     gsConstantFunction<> alpha3(-2.0,3);
     gsConstantFunction<> mu3(-0.1e5/4.225e5*mu,3);
 
-    std::vector<gsFunction<>*> parameters;
+    std::vector<gsFunctionSet<real_t>*> parameters;
     if (material==0) // SvK
     {
         parameters.resize(2);
@@ -490,36 +439,33 @@ int main (int argc, char** argv)
     gsStopwatch stopwatch;
     real_t time = 0.0;
 
-    typedef std::function<gsSparseMatrix<real_t> (gsVector<real_t> const &)>                                Jacobian_t;
-    typedef std::function<gsVector<real_t> (gsVector<real_t> const &, real_t, gsVector<real_t> const &) >   ALResidual_t;
-    // Function for the Jacobian
-    Jacobian_t Jacobian = [&time,&stopwatch,&assembler](gsVector<real_t> const &x)
-    {
-        gsMultiPatch<> def;
-        stopwatch.restart();
-        assembler->constructSolutionL(x,def);
-        assembler->assembleMatrixL(def);
-        time += stopwatch.stop();
-
-        gsSparseMatrix<real_t> m = assembler->matrixL();
-        return m;
-    };
-    // Function for the Residual
-    ALResidual_t ALResidual = [&time,&stopwatch,&assembler](gsVector<real_t> const &x, real_t lam, gsVector<real_t> const &force)
-    {
-        gsMultiPatch<> def;
-        stopwatch.restart();
-        assembler->constructSolutionL(x,def);
-        assembler->assemblePrimalL(def);
-        gsVector<real_t> Fint = -(assembler->primalL() - force);
-        gsVector<real_t> result = Fint - lam * force;
-        time += stopwatch.stop();
-        return result; // - lam * force;
-    };
     // Assemble linear system to obtain the force vector
     assembler->assembleL();
     gsVector<> Force = assembler->primalL();
 
+    // Function for the Jacobian
+    gsStructuralAnalysisOps<real_t>::Jacobian_t Jacobian = [&time,&stopwatch,&assembler,&mp_def](gsVector<real_t> const &x, gsSparseMatrix<real_t> & m)
+    {
+        stopwatch.restart();
+        ThinShellAssemblerStatus status;
+        assembler->constructSolutionL(x,mp_def);
+        status = assembler->assembleMatrixL(mp_def);
+        m = assembler->matrixL();
+        time += stopwatch.stop();
+        return status == ThinShellAssemblerStatus::Success;
+    };
+
+    // Function for the Residual
+    gsStructuralAnalysisOps<real_t>::ALResidual_t ALResidual = [&Force,&time,&stopwatch,&assembler,&mp_def](gsVector<real_t> const &x, real_t lam, gsVector<real_t> & result)
+    {
+        stopwatch.restart();
+        ThinShellAssemblerStatus status;
+        assembler->constructSolutionL(x,mp_def);
+        status = assembler->assemblePrimalL(mp_def);
+        result = -(assembler->primalL() - Force) - lam * Force;
+        time += stopwatch.stop();
+        return status == ThinShellAssemblerStatus::Success;
+    };
 
     gsParaviewCollection collection(dirname + "/" + output);
     gsParaviewCollection Smembrane(dirname + "/" + "membrane");
@@ -635,7 +581,7 @@ int main (int argc, char** argv)
         indicator = arcLength.indicator();
         gsInfo<<"indicator: (old = )"<<indicator_prev<<"; (new = )"<<indicator<<"\n";
 
-        arcLength.computeStability(arcLength.solutionU(),quasiNewton);
+        arcLength.computeStability(quasiNewton);
         unstable = arcLength.stabilityChange();
 
         if (unstable)
@@ -714,7 +660,7 @@ int main (int argc, char** argv)
     {
         loadstep_errors.clear();
         gsInfo<<"Bifurcation spotted!"<<"\n";
-        arcLength.computeSingularPoint(1e-4, 5, Uold, Lold, 1e-7, 0, false);
+        arcLength.computeSingularPoint(false);
         arcLength.switchBranch();
         dLb0 = dLb = dL;
         arcLength.setLength(dLb);
