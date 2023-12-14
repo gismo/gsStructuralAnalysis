@@ -38,6 +38,7 @@ class gsALMCrisfield : public gsALMBase<T>
 public:
 
     using Base::setLength;
+    using Base::computeStability;
 
 protected:
 
@@ -46,7 +47,6 @@ protected:
     using Base::computeResidualNorms;
     using Base::computeUt;
     using Base::computeUbar;
-    using Base::computeStability;
     using Base::computeLength;
 
 public:

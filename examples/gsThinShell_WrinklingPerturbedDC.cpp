@@ -552,7 +552,7 @@ int main (int argc, char** argv)
     gsConstantFunction<> thickfun(thick,3);
     gsConstantFunction<> phifun(phi,3);
 
-    std::vector<gsFunction<>*> parameters;
+    std::vector<gsFunctionSet<real_t>*> parameters;
     if (material==0) // SvK & Composites
     {
       if (composite)

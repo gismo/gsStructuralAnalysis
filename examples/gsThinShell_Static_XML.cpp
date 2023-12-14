@@ -186,7 +186,7 @@ int main(int argc, char *argv[])
         fd.getId(18,mu1);
     }
 
-    std::vector<gsFunction<>*> parameters;
+    std::vector<gsFunctionSet<real_t>*> parameters;
     if (material==0 || material==1 || material==2)
     {
         parameters.resize(2);

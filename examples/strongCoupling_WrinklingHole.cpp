@@ -357,7 +357,7 @@ int main(int argc, char *argv[])
 
     mu = E_modulus / (2 * (1 + PoissonRatio));
 
-    std::vector<gsFunction<>*> parameters;
+    std::vector<gsFunctionSet<real_t>*> parameters;
     if (material==0) // SvK
     {
         parameters.resize(2);

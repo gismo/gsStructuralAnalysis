@@ -162,7 +162,7 @@ int main(int argc, char *argv[])
     gsConstantFunction<> alpha1(17.14,3);
 
     // Define parameters vector depending on material law
-    std::vector<gsFunction<>*> parameters;
+    std::vector<gsFunctionSet<real_t>*> parameters;
     if (material==0) // SvK & Composites
     {
       parameters.resize(2);

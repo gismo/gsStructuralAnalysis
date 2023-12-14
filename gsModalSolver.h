@@ -43,8 +43,8 @@ public:
    * @param      stiffness  The stiffness matrix
    * @param      mass       The mass matrix
    */
-  gsModalSolver(        gsSparseMatrix<T> &stiffness,
-                        gsSparseMatrix<T> &mass     )
+  gsModalSolver(    const gsSparseMatrix<T> &stiffness,
+                    const gsSparseMatrix<T> &mass     )
   {
     m_A = stiffness;
     m_B = mass;

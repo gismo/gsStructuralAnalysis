@@ -155,6 +155,32 @@ int main (int argc, char** argv)
         mp.addAutoBoundaries();
         mp.embed(3);
     }
+    else if (testCase==9)
+    {
+        std::string fn = "planar/weirdShape.xml";
+        gsReadFile<>(fn, mp);
+        mp.addAutoBoundaries();
+
+        gsKnotVector<> kv1(0,1,12,3);
+        gsKnotVector<> kv2(0,1,0,3);
+        gsTensorBSplineBasis<2> basis(kv2,kv1);
+        gsMatrix<> coefs;
+        gsQuasiInterpolate<real_t>::localIntpl(basis, mp.patch(0), coefs);
+        gsTensorBSpline<2> bspline(kv2,kv1,coefs);
+
+        gsDebugVar(mp.patch(0).coefs());
+        gsDebugVar(coefs);
+        gsDebugVar(bspline);
+
+        mp.patch(0) = bspline;
+        mp.embed(3);
+        mp.degreeElevate(1);
+
+        thickness = 0.01;
+        PoissonRatio = 0.3;
+        E_modulus     = 1e0;
+        Density = 1e0;
+    }
 
     for(index_t i = 0; i< numElevate; ++i)
         mp.patch(0).degreeElevate();    // Elevate the degree
@@ -439,7 +465,18 @@ int main (int argc, char** argv)
 
         omegas.push_back(0);
     }
+    else if (testCase==9)
+    {
+        for (index_t i = 0; i != 3; ++i)
+        {
+            BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, i);
+        }
+        BCs.addCondition(boundary::south, condition_type::clamped,0,0,false,2);
 
+        omegas.push_back(0);
+    }
+    else
+        GISMO_ERROR("TESTCASE UNKNOWN!");
 
     gsFunctionExpr<> surfForce(tx,ty,tz,3);
     // Initialise solution object

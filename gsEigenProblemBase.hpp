@@ -96,6 +96,7 @@ gsEigenProblemBase<T>::computeSparse_impl(index_t number)
     Spectra::SortRule sortRule = static_cast<Spectra::SortRule>(m_options.getInt("sortRule"));
 
     index_t ncvFac = m_options.getInt("ncvFac");
+    T tol = m_options.getReal("tolerance");
     if (verbose) { gsInfo<<"Solving eigenvalue problem" ; }
 
     gsSparseMatrix<T> Atmp;
@@ -109,7 +110,7 @@ gsEigenProblemBase<T>::computeSparse_impl(index_t number)
     if (verbose) { gsInfo<<"." ; }
     solver.init();
     if (verbose) { gsInfo<<"." ; }
-    solver.compute(selectionRule,1000,1e-6,sortRule);
+    solver.compute(selectionRule,1000,tol,sortRule);
 
     if      (solver.info()==Spectra::CompInfo::Successful)
     {
@@ -169,12 +170,13 @@ gsEigenProblemBase<T>::computeSparse_impl(index_t number)
     gsWarn<<"Selection Rule 'SmallestAlge' is selected, but for ShiftInvert, Buckling and Cayley it is advised to use 'LargestMagn'!\n";
 
     index_t ncvFac = m_options.getInt("ncvFac");
+    T tol = m_options.getReal("tolerance");
     if (verbose) { gsInfo<<"Solving eigenvalue problem" ; }
     gsSpectraGenSymShiftSolver<gsSparseMatrix<T>,_GEigsMode> solver(m_A,m_B,number,ncvFac*number,shift);
     if (verbose) { gsInfo<<"." ; }
     solver.init();
     if (verbose) { gsInfo<<"." ; }
-    solver.compute(selectionRule,1000,1e-6,sortRule);
+    solver.compute(selectionRule,1000,tol,sortRule);
 
     if      (solver.info()==Spectra::CompInfo::Successful)
     {
@@ -228,7 +230,7 @@ gsStatus gsEigenProblemBase<T>::computePower()
     v_old.setZero();
 
     index_t kmax = 100;
-    real_t error,tol = 1e-5;
+    real_t error,tol = m_options.getReal("tolerance");
     for (index_t k=0; k!=kmax; k++)
     {
         v = D*v;

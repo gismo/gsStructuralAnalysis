@@ -39,9 +39,9 @@ class gsEigenProblemBase
 
 public:
 
-    gsEigenProblemBase() 
-    { 
-        m_options = defaultOptions(); 
+    gsEigenProblemBase()
+    {
+        m_options = defaultOptions();
         m_status  = gsStatus::NotStarted;
     }
 
@@ -83,6 +83,7 @@ public:
                                         "8: BothEnds",4);
 
         options.addInt("ncvFac","Factor for Spectra's ncv number. Ncv = ncvFac * numEigenvalues",3);
+	    options.addReal("tolerance","Tolerance for spectra and the power method",1e-10);
         options.addReal("shift","Shift for the eigenvalue solver",0.0);
         return options;
     }
