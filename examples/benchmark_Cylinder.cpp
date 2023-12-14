@@ -18,16 +18,16 @@
 #include <gismo.h>
 
 #ifdef gsKLShell_ENABLED
-#include <gsKLShell/gsThinShellAssembler.h>
-#include <gsKLShell/getMaterialMatrix.h>
+#include <gsKLShell/src/gsThinShellAssembler.h>
+#include <gsKLShell/src/getMaterialMatrix.h>
 #endif
 
-#include <gsStructuralAnalysis/gsStructuralAnalysisTools.h>
+#include <gsStructuralAnalysis/src/gsStructuralAnalysisTools/gsStructuralAnalysisTypes.h>
 
-#include <gsStructuralAnalysis/gsALMBase.h>
-#include <gsStructuralAnalysis/gsALMLoadControl.h>
-#include <gsStructuralAnalysis/gsALMRiks.h>
-#include <gsStructuralAnalysis/gsALMCrisfield.h>
+#include <gsStructuralAnalysis/src/gsALMSolvers/gsALMBase.h>
+#include <gsStructuralAnalysis/src/gsALMSolvers/gsALMLoadControl.h>
+#include <gsStructuralAnalysis/src/gsALMSolvers/gsALMRiks.h>
+#include <gsStructuralAnalysis/src/gsALMSolvers/gsALMCrisfield.h>
 
 using namespace gismo;
 
@@ -196,7 +196,7 @@ int main (int argc, char** argv)
     gsConstantFunction<> thicks(thickness/kmax,3);
     Ts[0] = &thicks;
 
-    std::vector<gsFunctionSet<real_t>*> parameters;
+    std::vector<gsFunctionSet<>*> parameters;
     if (material==0) // SvK & Composites
     {
       parameters.resize(2);

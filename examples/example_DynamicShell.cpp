@@ -19,12 +19,15 @@
 #include <gismo.h>
 
 #ifdef gsKLShell_ENABLED
-#include <gsKLShell/gsThinShellAssembler.h>
-#include <gsKLShell/getMaterialMatrix.h>
+#include <gsKLShell/src/gsThinShellAssembler.h>
+#include <gsKLShell/src/getMaterialMatrix.h>
 #endif
 
-#include <gsStructuralAnalysis/gsTimeIntegrator.h>
-#include <gsStructuralAnalysis/gsStructuralAnalysisTools.h>
+#include <gsStructuralAnalysis/src/gsDynamicSolvers/gsTimeIntegrator.h>
+#include <gsStructuralAnalysis/src/gsDynamicSolvers/gsDynamicImplicitEuler.h>
+#include <gsStructuralAnalysis/src/gsStructuralAnalysisTools/gsStructuralAnalysisTypes.h>
+
+#include <gsUtils/gsStopwatch.h>
 
 using namespace gismo;
 
@@ -191,7 +194,7 @@ int main (int argc, char** argv)
     gsFunctionExpr<> nu(std::to_string(PoissonRatio),3);
     gsFunctionExpr<> rho(std::to_string(Density),3);
 
-    std::vector<gsFunction<>*> parameters(2);
+    std::vector<gsFunctionSet<>*> parameters(2);
     parameters[0] = &E;
     parameters[1] = &nu;
 
@@ -227,20 +230,12 @@ int main (int argc, char** argv)
     gsSparseMatrix<> M;
     gsSparseMatrix<> K;
     gsSparseMatrix<> K_T;
+    gsVector<>       F;
 
 //------------------------------------------------------------------------------
 // Nonlinear time integration
 //------------------------------------------------------------------------------
 gsParaviewCollection collection(dirname + "/solution");
-
-// Function for the Residual
-gsStructuralAnalysisOps<real_t>::TForce_t Forcing = [&assembler](real_t time, gsVector<real_t> & result)
-{
-  ThinShellAssemblerStatus status;
-  status = assembler->assemble();
-  result = assembler->rhs();
-  return status == ThinShellAssemblerStatus::Success;
-};
 
 // Compute mass matrix (since it is constant over time)
 assembler->assembleMass();
@@ -248,11 +243,23 @@ M = assembler->matrix();
 // pre-assemble system
 assembler->assemble();
 K = assembler->matrix();
+F = assembler->rhs();
+// Function for the Residual
+gsStructuralAnalysisOps<real_t>::Mass_t         Mass;
+gsStructuralAnalysisOps<real_t>::Damping_t      Damping;
+gsStructuralAnalysisOps<real_t>::Stiffness_t    Stiffness;
+gsStructuralAnalysisOps<real_t>::TForce_t       TForce;
+
+Mass      = [&M](                            gsSparseMatrix<real_t> & result){result = M; return true;};
+Damping   = [&M](  const gsVector<real_t> & x, gsSparseMatrix<real_t> & result){result = gsSparseMatrix<real_t>(M.rows(),M.cols()); return true;};
+Stiffness = [&K](                            gsSparseMatrix<real_t> & result){result = K; return true;};
+TForce    = [&F](real_t time,                gsVector<real_t>       & result){result = F; return true;};
 
 // // set damping Matrix (same dimensions as M)
 // C.setZero(M.rows(),M.cols());
+//
 
-gsTimeIntegrator<real_t> timeIntegrator(M,K,Forcing,dt);
+gsTimeIntegrator<real_t> timeIntegrator(M,K,TForce,dt);
 
 timeIntegrator.verbose();
 timeIntegrator.setTolerance(1e-6);
@@ -269,6 +276,23 @@ timeIntegrator.setDisplacement(uNew);
 timeIntegrator.setVelocity(vNew);
 timeIntegrator.setAcceleration(aNew);
 
+gsVector<> Ftmp;
+TForce(0.,Ftmp);
+
+gsDebugVar(uNew);
+gsDebugVar(Ftmp);
+
+gsDynamicImplicitEuler<real_t> implEuler(Mass,Damping,Stiffness,TForce);
+implEuler.options().setReal("DT",dt);
+implEuler.applyOptions();
+implEuler.setDisplacements(uNew);
+implEuler.setVelocities(vNew);
+implEuler.setAccelerations(aNew);
+
+implEuler.step();
+gsDebugVar(implEuler.displacements().norm());
+
+
 //------------------------------------------------------------------------------
 // Nonlinear time integration
 //------------------------------------------------------------------------------
@@ -276,11 +300,16 @@ real_t time;
 for (index_t i=0; i<steps; i++)
 {
   gsStatus status = timeIntegrator.step();
+  implEuler.step();
+
   if (status!=gsStatus::Success)
     GISMO_ERROR("Time integrator did not succeed");
 
   timeIntegrator.constructSolution();
   gsMatrix<> displacements = timeIntegrator.displacements();
+
+  gsDebugVar(displacements.norm());
+  gsDebugVar(implEuler.displacements().norm());
 
   assembler->constructSolution(displacements,solution);
 

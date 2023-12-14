@@ -13,16 +13,16 @@
 
 #include <gismo.h>
 
-#include <gsKLShell/gsThinShellAssembler.h>
-#include <gsKLShell/getMaterialMatrix.h>
-#include <gsKLShell/gsMaterialMatrixTFT.h>
-#include <gsKLShell/gsMaterialMatrixEval.h>
+#include <gsKLShell/src/gsThinShellAssembler.h>
+#include <gsKLShell/src/getMaterialMatrix.h>
+#include <gsKLShell/src/gsMaterialMatrixTFT.h>
+#include <gsKLShell/src/gsMaterialMatrixEval.h>
 
-#include <gsStructuralAnalysis/gsStaticDR.h>
-#include <gsStructuralAnalysis/gsStaticNewton.h>
-#include <gsStructuralAnalysis/gsStaticComposite.h>
+#include <gsStructuralAnalysis/src/gsStaticSolvers/gsStaticDR.h>
+#include <gsStructuralAnalysis/src/gsStaticSolvers/gsStaticNewton.h>
+#include <gsStructuralAnalysis/src/gsStaticSolvers/gsStaticComposite.h>
 
-#include <gsStructuralAnalysis/gsStructuralAnalysisUtils.h>
+#include <gsStructuralAnalysis/src/gsStructuralAnalysisTools/gsStructuralAnalysisUtils.h>
 
 using namespace gismo;
 

@@ -16,7 +16,7 @@
 
 # gsStructuralAnalysis
 
-Module for structural analysis with solids ([`gsElasticity`](https://github.com/gismo/gsElasticity/)) or Kirchhoff-Love shells ([`gsKLShell`](https://github.com/gismo/gsKLShell/)).
+Module for structural analysis with solids ([`gsElasticity`](https://github.com/gismo/gsElasticity/)) or Kirchhoff-Love shells ([`gsKLShell`](https://github.com/gismo/gsKLShell/src/)).
 
 |CMake flags|```-DGISMO_OPTIONAL="<other submodules>;gsStructuralAnalysis;gsSpectra"```|
 |--:|---|

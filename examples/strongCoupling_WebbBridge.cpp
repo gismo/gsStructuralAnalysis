@@ -15,21 +15,21 @@
 
 #include <gsUnstructuredSplines/src/gsDPatch.h>
 
-#include <gsKLShell/gsThinShellAssembler.h>
-#include <gsKLShell/gsMaterialMatrixLinear.h>
-#include <gsKLShell/gsMaterialMatrixIntegrate.h>
-#include <gsKLShell/gsFunctionSum.h>
+#include <gsKLShell/src/gsThinShellAssembler.h>
+#include <gsKLShell/src/gsMaterialMatrixLinear.h>
+#include <gsKLShell/src/gsMaterialMatrixIntegrate.h>
+#include <gsKLShell/src/gsFunctionSum.h>
 
 #include <gsAssembler/gsExprAssembler.h>
 
-#include <gsStructuralAnalysis/gsStructuralAnalysisUtils.h>
+#include <gsStructuralAnalysis/src/gsStructuralAnalysisTools/gsStructuralAnalysisUtils.h>
 
-#include <gsKLShell/gsThinShellUtils.h>
-#include <gsKLShell/getMaterialMatrix.h>
+#include <gsKLShell/src/gsThinShellUtils.h>
+#include <gsKLShell/src/getMaterialMatrix.h>
 
-#include <gsStructuralAnalysis/gsStaticDR.h>
-#include <gsStructuralAnalysis/gsStaticNewton.h>
-#include <gsStructuralAnalysis/gsControlDisplacement.h>
+#include <gsStructuralAnalysis/src/gsStaticSolvers/gsStaticDR.h>
+#include <gsStructuralAnalysis/src/gsStaticSolvers/gsStaticNewton.h>
+#include <gsStructuralAnalysis/src/gsStaticSolvers/gsControlDisplacement.h>
 #include <gsUtils/gsL2Projection.h>
 
 
@@ -162,7 +162,7 @@ int main(int argc, char *argv[])
     gsConstantFunction<> alpha1(17.14,3);
 
     // Define parameters vector depending on material law
-    std::vector<gsFunctionSet<real_t>*> parameters;
+    std::vector<gsFunctionSet<>*> parameters;
     if (material==0) // SvK & Composites
     {
       parameters.resize(2);

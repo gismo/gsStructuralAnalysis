@@ -13,12 +13,12 @@
 
 #include <gismo.h>
 
-#include <gsKLShell/gsThinShellAssembler.h>
-#include <gsKLShell/getMaterialMatrix.h>
+#include <gsKLShell/src/gsThinShellAssembler.h>
+#include <gsKLShell/src/getMaterialMatrix.h>
 
-#include <gsStructuralAnalysis/gsStaticDR.h>
-#include <gsStructuralAnalysis/gsControlDisplacement.h>
-#include <gsStructuralAnalysis/gsStructuralAnalysisTools.h>
+#include <gsStructuralAnalysis/src/gsStaticSolvers/gsStaticDR.h>
+#include <gsStructuralAnalysis/src/gsStaticSolvers/gsControlDisplacement.h>
+#include <gsStructuralAnalysis/src/gsStructuralAnalysisTools/gsStructuralAnalysisTypes.h>
 
 using namespace gismo;
 
@@ -537,7 +537,7 @@ int main (int argc, char** argv)
     gsConstantFunction<> thickfun(thick,3);
     gsConstantFunction<> phifun(phi,3);
 
-    std::vector<gsFunctionSet<real_t>*> parameters;
+    std::vector<gsFunctionSet<>*> parameters;
     if (material==0) // SvK & Composites
     {
       if (composite)

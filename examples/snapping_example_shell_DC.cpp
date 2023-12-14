@@ -13,18 +13,18 @@
 
 #include <iostream>
 
-#include <gsKLShell/gsThinShellAssembler.h>
-#include <gsKLShell/gsMaterialMatrixBase.h>
-#include <gsKLShell/gsMaterialMatrixLinear.h>
-#include <gsKLShell/getMaterialMatrix.h>
-#include <gsKLShell/gsMaterialMatrixIntegrate.h>
-#include <gsKLShell/gsThinShellUtils.h>
+#include <gsKLShell/src/gsThinShellAssembler.h>
+#include <gsKLShell/src/gsMaterialMatrixBase.h>
+#include <gsKLShell/src/gsMaterialMatrixLinear.h>
+#include <gsKLShell/src/getMaterialMatrix.h>
+#include <gsKLShell/src/gsMaterialMatrixIntegrate.h>
+#include <gsKLShell/src/gsThinShellUtils.h>
 
-#include <gsStructuralAnalysis/gsStructuralAnalysisTools.h>
+#include <gsStructuralAnalysis/src/gsStructuralAnalysisTools/gsStructuralAnalysisTypes.h>
 
-#include <gsStructuralAnalysis/gsStaticNewton.h>
-#include <gsStructuralAnalysis/gsStaticComposite.h>
-#include <gsStructuralAnalysis/gsControlDisplacement.h>
+#include <gsStructuralAnalysis/src/gsStaticSolvers/gsStaticNewton.h>
+#include <gsStructuralAnalysis/src/gsStaticSolvers/gsStaticComposite.h>
+#include <gsStructuralAnalysis/src/gsStaticSolvers/gsControlDisplacement.h>
 
 #include <gismo.h>
 
@@ -323,7 +323,7 @@ int main(int argc, char *argv[])
 
     gsMaterialMatrixBase<real_t>* materialMatrix;
     gsOptionList options;
-    std::vector<gsFunction<>*> parameters(2);
+    std::vector<gsFunctionSet<>*> parameters(2);
     gsFunctionExpr<> t(std::to_string(b),2);
     gsFunctionExpr<> E(std::to_string(78e6),2);
     gsConstantFunction<> nu(0.4,2);

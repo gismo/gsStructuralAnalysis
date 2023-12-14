@@ -14,12 +14,12 @@
 #include <gismo.h>
 
 #ifdef gsKLShell_ENABLED
-#include <gsKLShell/gsThinShellAssembler.h>
-#include <gsKLShell/getMaterialMatrix.h>
+#include <gsKLShell/src/gsThinShellAssembler.h>
+#include <gsKLShell/src/getMaterialMatrix.h>
 #endif
 
-#include <gsStructuralAnalysis/gsModalSolver.h>
-#include <gsStructuralAnalysis/gsStructuralAnalysisTools.h>
+#include <gsStructuralAnalysis/src/gsEigenSolvers/gsModalSolver.h>
+#include <gsStructuralAnalysis/src/gsStructuralAnalysisTools/gsStructuralAnalysisTypes.h>
 
 using namespace gismo;
 
@@ -489,7 +489,7 @@ int main (int argc, char** argv)
     gsFunctionExpr<> nu(std::to_string(PoissonRatio),3);
     gsFunctionExpr<> rho(std::to_string(Density),3);
 
-    std::vector<gsFunction<>*> parameters(2);
+    std::vector<gsFunctionSet<>*> parameters(2);
     parameters[0] = &E;
     parameters[1] = &nu;
 

@@ -168,12 +168,12 @@
 </OptionList>
 
 <OptionList id="94">
- <int label="ncvFac" desc="Factor for Spectra's ncv number. Ncv = ncvFac * numEigenvalues" value="3"/>
+ <int label="ncvFac" desc="Factor for Spectra's ncv number. Ncv = ncvFac * numEigenvalues" value="10"/>
  <int label="selectionRule" desc="Selection rule to be used (see Spectra documentation):0: LargestMagn1: LargestReal2: LargestImag3: LargestAlge4: SmallestMagn5: SmallestReal6: SmallestImag7: SmallestAlge8: BothEnds" value="0"/>
- <int label="solver" desc="Spectra solver to be used (see Spectra documentation):0: Cholesky (default)1: RegularInverse2: ShiftInvert3: Buckling4: Cayley" value="2"/>
- <int label="sortRule" desc="Sort rule to be used (see Spectra documentation):0: LargestMagn1: LargestReal2: LargestImag3: LargestAlge4: SmallestMagn5: SmallestReal6: SmallestImag7: SmallestAlge8: BothEnds" value="4"/>
- <real label="shift" desc="Shift for the eigenvalue solver" value="-1e6"/>
- <bool label="verbose" desc="Verbose output" value="1"/>
+ <int label="solver" desc="Spectra solver to be used (see Spectra documentation):0: Cholesky (default)1: RegularInverse2: ShiftInvert3: Buckling4: Cayley" value="3"/>
+ <int label="sortRule" desc="Sort rule to be used (see Spectra documentation):0: LargestMagn1: LargestReal2: LargestImag3: LargestAlge4: SmallestMagn5: SmallestReal6: SmallestImag7: SmallestAlge8: BothEnds" value="0"/>
+ <real label="shift" desc="Shift for the eigenvalue solver" value="1"/>
+ <bool label="verbose" desc="Verbose output" value="true"/>
 </OptionList>
 
 <OptionList id="95">

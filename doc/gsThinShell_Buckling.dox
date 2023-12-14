@@ -32,9 +32,9 @@ or class name will lead you to its reference documentation.
 
 #include <gismo.h>
 
-#include <gsKLShell/gsThinShellAssembler.h>
-#include <gsKLShell/getMaterialMatrix.h>
-#include <gsStructuralAnalysis/gsBucklingSolver.h>
+#include <gsKLShell/src/gsThinShellAssembler.h>
+#include <gsKLShell/src/getMaterialMatrix.h>
+#include <gsStructuralAnalysis/src/gsEigenSolvers/gsBucklingSolver.h>
 
 using namespace gismo;
 

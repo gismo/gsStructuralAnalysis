@@ -17,16 +17,16 @@
 #include <gismo.h>
 
 #ifdef gsKLShell_ENABLED
-#include <gsKLShell/gsThinShellAssembler.h>
-#include <gsKLShell/getMaterialMatrix.h>
+#include <gsKLShell/src/gsThinShellAssembler.h>
+#include <gsKLShell/src/getMaterialMatrix.h>
 #endif
 
-#include <gsStructuralAnalysis/gsStructuralAnalysisTools.h>
+#include <gsStructuralAnalysis/src/gsStructuralAnalysisTools/gsStructuralAnalysisTypes.h>
 
-#include <gsStructuralAnalysis/gsALMBase.h>
-#include <gsStructuralAnalysis/gsALMLoadControl.h>
-#include <gsStructuralAnalysis/gsALMRiks.h>
-#include <gsStructuralAnalysis/gsALMCrisfield.h>
+#include <gsStructuralAnalysis/src/gsALMSolvers/gsALMBase.h>
+#include <gsStructuralAnalysis/src/gsALMSolvers/gsALMLoadControl.h>
+#include <gsStructuralAnalysis/src/gsALMSolvers/gsALMRiks.h>
+#include <gsStructuralAnalysis/src/gsALMSolvers/gsALMCrisfield.h>
 
 using namespace gismo;
 
@@ -237,7 +237,7 @@ int main (int argc, char** argv)
     gsConstantFunction<> nu(PoissonRatio,3);
     gsConstantFunction<> rho(Density,3);
 
-    std::vector<gsFunction<>*> parameters(2);
+    std::vector<gsFunctionSet<>*> parameters(2);
     parameters.resize(2);
     parameters[0] = &E;
     parameters[1] = &nu;

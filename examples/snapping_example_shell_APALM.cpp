@@ -14,21 +14,21 @@
 #include <gismo.h>
 
 #ifdef gsKLShell_ENABLED
-#include <gsKLShell/gsThinShellAssembler.h>
-#include <gsKLShell/gsMaterialMatrixBase.h>
-#include <gsKLShell/gsMaterialMatrixLinear.h>
-#include <gsKLShell/getMaterialMatrix.h>
+#include <gsKLShell/src/gsThinShellAssembler.h>
+#include <gsKLShell/src/gsMaterialMatrixBase.h>
+#include <gsKLShell/src/gsMaterialMatrixLinear.h>
+#include <gsKLShell/src/getMaterialMatrix.h>
 #endif
 
-#include <gsStructuralAnalysis/gsStructuralAnalysisTools.h>
-#include <gsStructuralAnalysis/gsStructuralAnalysisUtils.h>
+#include <gsStructuralAnalysis/src/gsStructuralAnalysisTools/gsStructuralAnalysisTypes.h>
+#include <gsStructuralAnalysis/src/gsStructuralAnalysisTools/gsStructuralAnalysisUtils.h>
 
-#include <gsStructuralAnalysis/gsALMBase.h>
-#include <gsStructuralAnalysis/gsALMLoadControl.h>
-#include <gsStructuralAnalysis/gsALMRiks.h>
-#include <gsStructuralAnalysis/gsALMCrisfield.h>
-#include <gsStructuralAnalysis/gsAPALMData.h>
-#include <gsStructuralAnalysis/gsAPALM.h>
+#include <gsStructuralAnalysis/src/gsALMSolvers/gsALMBase.h>
+#include <gsStructuralAnalysis/src/gsALMSolvers/gsALMLoadControl.h>
+#include <gsStructuralAnalysis/src/gsALMSolvers/gsALMRiks.h>
+#include <gsStructuralAnalysis/src/gsALMSolvers/gsALMCrisfield.h>
+#include <gsStructuralAnalysis/src/gsALMSolvers/gsAPALMData.h>
+#include <gsStructuralAnalysis/src/gsALMSolvers/gsAPALM.h>
 
 
 using namespace gismo;
@@ -398,7 +398,7 @@ int main(int argc, char *argv[])
 
     gsMaterialMatrixBase<real_t>* materialMatrix;
     gsOptionList options;
-    std::vector<gsFunction<>*> parameters(2);
+    std::vector<gsFunctionSet<>*> parameters(2);
     gsFunctionExpr<> t(std::to_string(b),2);
     gsFunctionExpr<> E(std::to_string(78e6),2);
     gsConstantFunction<> nu(0.4,2);

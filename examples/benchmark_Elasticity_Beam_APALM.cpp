@@ -19,17 +19,17 @@
 #include <gsElasticity/gsWriteParaviewMultiPhysics.h>
 #endif
 
-#include <gsStructuralAnalysis/gsALMBase.h>
-#include <gsStructuralAnalysis/gsALMLoadControl.h>
-#include <gsStructuralAnalysis/gsALMRiks.h>
-#include <gsStructuralAnalysis/gsALMCrisfield.h>
+#include <gsStructuralAnalysis/src/gsALMSolvers/gsALMBase.h>
+#include <gsStructuralAnalysis/src/gsALMSolvers/gsALMLoadControl.h>
+#include <gsStructuralAnalysis/src/gsALMSolvers/gsALMRiks.h>
+#include <gsStructuralAnalysis/src/gsALMSolvers/gsALMCrisfield.h>
 
-#include <gsStructuralAnalysis/gsAPALMData.h>
-#include <gsStructuralAnalysis/gsAPALM.h>
+#include <gsStructuralAnalysis/src/gsALMSolvers/gsAPALMData.h>
+#include <gsStructuralAnalysis/src/gsALMSolvers/gsAPALM.h>
 #include <gsStructuralAnalysis/gsSolutionFitter.h>
 #include <gsStructuralAnalysis/gsSpaceTimeFitter.h>
-#include <gsStructuralAnalysis/gsStructuralAnalysisUtils.h>
-#include <gsStructuralAnalysis/gsStructuralAnalysisTools.h>
+#include <gsStructuralAnalysis/src/gsStructuralAnalysisTools/gsStructuralAnalysisUtils.h>
+#include <gsStructuralAnalysis/src/gsStructuralAnalysisTools/gsStructuralAnalysisTypes.h>
 
 using namespace gismo;
 

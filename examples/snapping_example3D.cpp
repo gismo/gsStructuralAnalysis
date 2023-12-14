@@ -17,12 +17,12 @@
 #include <gsElasticity/gsElasticityAssembler.h>
 #include <gsElasticity/gsWriteParaviewMultiPhysics.h>
 
-#include <gsStructuralAnalysis/gsStructuralAnalysisTools.h>
+#include <gsStructuralAnalysis/src/gsStructuralAnalysisTools/gsStructuralAnalysisTypes.h>
 
-#include <gsStructuralAnalysis/gsALMBase.h>
-#include <gsStructuralAnalysis/gsALMLoadControl.h>
-#include <gsStructuralAnalysis/gsALMRiks.h>
-#include <gsStructuralAnalysis/gsALMCrisfield.h>
+#include <gsStructuralAnalysis/src/gsALMSolvers/gsALMBase.h>
+#include <gsStructuralAnalysis/src/gsALMSolvers/gsALMLoadControl.h>
+#include <gsStructuralAnalysis/src/gsALMSolvers/gsALMRiks.h>
+#include <gsStructuralAnalysis/src/gsALMSolvers/gsALMCrisfield.h>
 
 #include <gsElasticity/gsNeoHookLogMaterial.h>
 #include <gsElasticity/gsLinearMaterial.h>

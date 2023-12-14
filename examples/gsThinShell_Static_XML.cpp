@@ -14,16 +14,16 @@
 #include <gismo.h>
 
 #ifdef gsKLShell_ENABLED
-#include <gsKLShell/gsThinShellAssembler.h>
-#include <gsKLShell/getMaterialMatrix.h>
+#include <gsKLShell/src/gsThinShellAssembler.h>
+#include <gsKLShell/src/getMaterialMatrix.h>
 #endif
 
 #ifdef gsElasticity_ENABLED
 #include <gsElasticity/gsWriteParaviewMultiPhysics.h>
 #endif
 
-#include <gsStructuralAnalysis/gsStaticNewton.h>
-#include <gsStructuralAnalysis/gsStructuralAnalysisTools.h>
+#include <gsStructuralAnalysis/src/gsStaticSolvers/gsStaticNewton.h>
+#include <gsStructuralAnalysis/src/gsStructuralAnalysisTools/gsStructuralAnalysisTypes.h>
 
 //#include <gsThinShell/gsNewtonIterator.h>
 
@@ -186,7 +186,7 @@ int main(int argc, char *argv[])
         fd.getId(18,mu1);
     }
 
-    std::vector<gsFunctionSet<real_t>*> parameters;
+    std::vector<gsFunctionSet<>*> parameters;
     if (material==0 || material==1 || material==2)
     {
         parameters.resize(2);

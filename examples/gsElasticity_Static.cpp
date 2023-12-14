@@ -19,9 +19,9 @@
 #include <gsElasticity/gsWriteParaviewMultiPhysics.h>
 #endif
 
-#include <gsStructuralAnalysis/gsStructuralAnalysisTools.h>
+#include <gsStructuralAnalysis/src/gsStructuralAnalysisTools/gsStructuralAnalysisTypes.h>
 
-#include <gsStructuralAnalysis/gsStaticNewton.h>
+#include <gsStructuralAnalysis/src/gsStaticSolvers/gsStaticNewton.h>
 
 
 using namespace gismo;

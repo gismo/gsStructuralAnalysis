@@ -19,15 +19,15 @@
 
 #include <gismo.h>
 
-#include <gsKLShell/gsThinShellAssembler.h>
-#include <gsKLShell/getMaterialMatrix.h>
-#include <gsKLShell/gsMaterialMatrixTFT.h>
-#include <gsKLShell/gsFunctionSum.h>
+#include <gsKLShell/src/gsThinShellAssembler.h>
+#include <gsKLShell/src/getMaterialMatrix.h>
+#include <gsKLShell/src/gsMaterialMatrixTFT.h>
+#include <gsKLShell/src/gsFunctionSum.h>
 
-#include <gsStructuralAnalysis/gsALMBase.h>
-#include <gsStructuralAnalysis/gsALMLoadControl.h>
-#include <gsStructuralAnalysis/gsALMRiks.h>
-#include <gsStructuralAnalysis/gsALMCrisfield.h>
+#include <gsStructuralAnalysis/src/gsALMSolvers/gsALMBase.h>
+#include <gsStructuralAnalysis/src/gsALMSolvers/gsALMLoadControl.h>
+#include <gsStructuralAnalysis/src/gsALMSolvers/gsALMRiks.h>
+#include <gsStructuralAnalysis/src/gsALMSolvers/gsALMCrisfield.h>
 
 #include <gsUnstructuredSplines/src/gsApproxC1Spline.h>
 #include <gsUnstructuredSplines/src/gsAlmostC1.h>
