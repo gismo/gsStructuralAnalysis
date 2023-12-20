@@ -19,8 +19,6 @@
 #endif
 
 #include <gsStructuralAnalysis/src/gsDynamicSolvers/gsTimeIntegrator.h>
-#include <gsStructuralAnalysis/src/gsStructuralAnalysisTools/gsStructuralAnalysisTypes.h>
-
 using namespace gismo;
 
 template <class T>

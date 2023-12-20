@@ -24,8 +24,6 @@
 #endif
 
 #include <gsStructuralAnalysis/src/gsDynamicSolvers/gsTimeIntegrator.h>
-#include <gsStructuralAnalysis/src/gsStructuralAnalysisTools/gsStructuralAnalysisTypes.h>
-
 using namespace gismo;
 
 // Choose among various shell examples, default = Thin Plate

@@ -21,8 +21,6 @@
 #include <gsKLShell/src/getMaterialMatrix.h>
 #endif
 
-#include <gsStructuralAnalysis/src/gsStructuralAnalysisTools/gsStructuralAnalysisTypes.h>
-
 #include <gsStructuralAnalysis/src/gsStaticSolvers/gsStaticNewton.h>
 
 using namespace gismo;

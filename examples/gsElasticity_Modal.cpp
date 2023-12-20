@@ -333,7 +333,7 @@ gsMultiPatch<T> BrickDomain(int n, int m, int o, int p, int q ,int r, T L, T B, 
   return mp;
 }
 
-#else//gsElasticity_ENABLED
+#else
 
 int main (int argc, char** argv)
 {

@@ -24,8 +24,6 @@
 #include <gsKLShell/src/gsThinShellUtils.h>
 #endif
 
-#include <gsStructuralAnalysis/src/gsStructuralAnalysisTools/gsStructuralAnalysisTypes.h>
-
 #include <gsStructuralAnalysis/src/gsStaticSolvers/gsStaticNewton.h>
 #include <gsStructuralAnalysis/src/gsStaticSolvers/gsControlDisplacement.h>
 

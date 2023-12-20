@@ -24,8 +24,6 @@
 #endif
 
 #include <gsStructuralAnalysis/src/gsDynamicSolvers/gsTimeIntegrator.h>
-#include <gsStructuralAnalysis/src/gsStructuralAnalysisTools/gsStructuralAnalysisTypes.h>
-
 #include <gsUtils/gsStopwatch.h>
 
 using namespace gismo;

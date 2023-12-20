@@ -13,7 +13,7 @@
 
 #include <typeinfo>
 #include <gsStructuralAnalysis/src/gsStaticSolvers/gsContinuationBase.h>
-#include <gsStructuralAnalysis/src/gsStructuralAnalysisTools/gsStructuralAnalysisTypes.h>
+
 #pragma once
 
 

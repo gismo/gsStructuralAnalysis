@@ -25,8 +25,6 @@
 #include <gsKLShell/src/gsFunctionSum.h>
 #endif
 
-#include <gsStructuralAnalysis/src/gsStructuralAnalysisTools/gsStructuralAnalysisTypes.h>
-
 #include <gsStructuralAnalysis/src/gsALMSolvers/gsALMBase.h>
 #include <gsStructuralAnalysis/src/gsALMSolvers/gsALMLoadControl.h>
 #include <gsStructuralAnalysis/src/gsALMSolvers/gsALMRiks.h>
@@ -789,7 +787,7 @@ int main (int argc, char** argv)
         gsInfo<<"Eigenvalues:\n"<<values<<"\n";
         vectors = eigSolver.eigenvectors();
 #else
-        Eigen::GeneralizedSelfAdjointEigenSolver< typename gsMatrix<>::Base >  eigSolver;
+        gsEigen::GeneralizedSelfAdjointEigenSolver< typename gsMatrix<>::Base >  eigSolver;
         eigSolver.compute(K_L,dK);
         values = eigSolver.eigenvalues();
         vectors = eigSolver.eigenvectors();

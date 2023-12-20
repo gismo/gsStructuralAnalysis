@@ -29,8 +29,6 @@
 #include <gsStructuralAnalysis/src/gsALMSolvers/gsAPALMData.h>
 #include <gsStructuralAnalysis/src/gsALMSolvers/gsAPALM.h>
 #include <gsStructuralAnalysis/src/gsStructuralAnalysisTools/gsStructuralAnalysisUtils.h>
-#include <gsStructuralAnalysis/src/gsStructuralAnalysisTools/gsStructuralAnalysisTypes.h>
-
 using namespace gismo;
 
 template <class T>

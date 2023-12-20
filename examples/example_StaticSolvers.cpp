@@ -21,8 +21,6 @@
 #include <gsStructuralAnalysis/src/gsStaticSolvers/gsStaticDR.h>
 #include <gsStructuralAnalysis/src/gsStaticSolvers/gsStaticNewton.h>
 #include <gsStructuralAnalysis/src/gsStaticSolvers/gsControlDisplacement.h>
-#include <gsStructuralAnalysis/src/gsStructuralAnalysisTools/gsStructuralAnalysisTypes.h>
-
 using namespace gismo;
 
 void writeToCSVfile(std::string name, gsMatrix<> matrix)

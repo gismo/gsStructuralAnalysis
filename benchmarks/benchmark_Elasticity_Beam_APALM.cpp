@@ -27,7 +27,6 @@
 #include <gsStructuralAnalysis/src/gsALMSolvers/gsAPALMData.h>
 #include <gsStructuralAnalysis/src/gsALMSolvers/gsAPALM.h>
 #include <gsStructuralAnalysis/src/gsStructuralAnalysisTools/gsStructuralAnalysisUtils.h>
-#include <gsStructuralAnalysis/src/gsStructuralAnalysisTools/gsStructuralAnalysisTypes.h>
 
 using namespace gismo;
 
@@ -551,13 +550,11 @@ int main (int argc, char** argv)
   return result;
 }
 #else//gsElasticity_ENABLED
-
-int main (int argc, char** argv)
+int main(int argc, char *argv[])
 {
-  gsInfo<<"To run this example, compile G+Smo with gsElasticity\n";
-  return EXIT_SUCCESS;
+    gsWarn<<"G+Smo is not compiled with the gsElasticity module.";
+    return EXIT_FAILURE;
 }
-
 #endif
 
 template <class T>

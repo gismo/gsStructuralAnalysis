@@ -19,8 +19,6 @@
 #include <gsKLShell/src/gsMaterialMatrixLinear.h>
 #include <gsKLShell/src/getMaterialMatrix.h>
 #endif
-
-#include <gsStructuralAnalysis/src/gsStructuralAnalysisTools/gsStructuralAnalysisTypes.h>
 #include <gsStructuralAnalysis/src/gsStructuralAnalysisTools/gsStructuralAnalysisUtils.h>
 
 #include <gsStructuralAnalysis/src/gsALMSolvers/gsALMBase.h>
