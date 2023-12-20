@@ -23,8 +23,6 @@
 #include <gsStructuralAnalysis/src/gsALMSolvers/gsALMRiks.h>
 #include <gsStructuralAnalysis/src/gsALMSolvers/gsAPALMData.h>
 #include <gsStructuralAnalysis/src/gsALMSolvers/gsAPALM.h>
-#include <gsStructuralAnalysis/gsSolutionFitter.h>
-#include <gsStructuralAnalysis/gsSpaceTimeFitter.h>
 #include <gsStructuralAnalysis/src/gsStructuralAnalysisTools/gsStructuralAnalysisUtils.h>
 #include <gsStructuralAnalysis/src/gsStructuralAnalysisTools/gsStructuralAnalysisTypes.h>
 
@@ -106,8 +104,8 @@ int main (int argc, char** argv)
 {
 
   // Input options
-  int numElevate    = 1;
-  int numHref       = 1;
+  int numElevate    = 2;
+  int numHref       = 5;
   bool plot         = false;
   bool mesh         = false;
   bool stress       = false;
@@ -125,7 +123,7 @@ int main (int argc, char** argv)
 
   real_t relax      = 1.0;
 
-  int testCase      = 2;
+  int testCase      = 1;
 
   int result        = 0;
 
@@ -154,7 +152,7 @@ int main (int argc, char** argv)
   gsCmdLine cmd("Arc-length analysis for thin shells.");
   cmd.addString( "f", "file", "Input XML file for assembler options", assemberOptionsFile );
 
-  cmd.addInt("t", "testcase", "Test case: 0: clamped-clamped, 1: pinned-pinned, 2: clamped-free", testCase);
+  cmd.addInt("t", "testcase", "Test case: 0: clamped-free with vertical load, 1: clamped-free with horizontal load", testCase);
 
   cmd.addInt("r","hRefine", "Number of dyadic h-refinement (bisection) steps to perform before solving", numHref);
   cmd.addInt("e","degreeElevation", "Number of degree elevation steps to perform on the Geometry's basis before solving", numElevate);
@@ -251,7 +249,7 @@ int main (int argc, char** argv)
   cores = "_ncores="+std::to_string(comm.size());
 
 
-  if (testCase == 2)
+  if (testCase == 0)
   {
       GISMO_ASSERT(mp.targetDim()==3,"Geometry must be surface (targetDim=3)!");
     BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 0 ); // unknown 0 - x
@@ -274,7 +272,7 @@ int main (int argc, char** argv)
     output =  "solution";
     wn = output + "data.txt";
   }
-  else if (testCase == 3)
+  else if (testCase == 1)
   {
     GISMO_ASSERT(mp.targetDim()==3,"Geometry must be surface (targetDim=3)!");
     BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 0 ); // unknown 0 - x

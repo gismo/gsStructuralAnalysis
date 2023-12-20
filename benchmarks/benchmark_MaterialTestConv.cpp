@@ -35,7 +35,7 @@ int main (int argc, char** argv)
 {
     // Input options
     int numElevate  = -1;
-    int numHref     = -1;
+    int numHref     = 2;
     bool plot       = false;
     bool last       = false;
 

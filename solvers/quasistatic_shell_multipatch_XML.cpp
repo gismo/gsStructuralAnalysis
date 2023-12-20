@@ -426,12 +426,11 @@ int main (int argc, char** argv)
         continue;
       }
 
-      arcLength->computeStability(arcLength->solutionU());
-
+      arcLength->computeStability(false);
       if (arcLength->stabilityChange() && SingularPoint)
       {
           gsInfo<<"Bifurcation spotted!"<<"\n";
-          arcLength->computeSingularPoint(1e-4, 5, Uold, Lold, 1e-10, 0, false);
+          arcLength->computeSingularPoint(Uold,Lold,false);
           arcLength->switchBranch();
           dLb0 = dLb = ALMOptions.askReal("Length2",dLb0);
           arcLength->setLength(dLb);

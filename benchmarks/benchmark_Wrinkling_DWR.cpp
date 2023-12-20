@@ -13,70 +13,17 @@
 
 #include <gismo.h>
 
-#include <gsKLShell/gsThinShellAssembler.h>
-#include <gsKLShell/gsThinShellAssemblerDWR.h>
-#include <gsKLShell/gsThinShellDWRHelper.h>
-#include <gsKLShell/getMaterialMatrix.h>
+#include <gsKLShell/src/gsThinShellAssembler.h>
+#include <gsKLShell/src/gsThinShellAssemblerDWR.h>
+#include <gsKLShell/src/gsThinShellDWRHelper.h>
+#include <gsKLShell/src/getMaterialMatrix.h>
 
-// #include <gsThinShell/gsArcLengthIterator.h>
-// #include <gsStructuralAnalysis/gsArcLengthIterator.h>
 #include <gsAssembler/gsAdaptiveRefUtils.h>
 #include <gsAssembler/gsAdaptiveMeshing.h>
 
-#include <gsStructuralAnalysis/gsALMCrisfield.h>
+#include <gsStructuralAnalysis/src/gsALMSolvers/gsALMCrisfield.h>
 
 using namespace gismo;
-
-template<typename T>
-class gsElementErrorPlotter : public gsFunction<T>
-{
-public:
-    gsElementErrorPlotter(const gsBasis<T>& mp, const std::vector<T>& errors ) : m_mp(mp),m_errors(errors)
-    {
-
-    }
-
-    virtual void eval_into(const gsMatrix<T>& u, gsMatrix<T>& res) const
-    {
-        // Initialize domain element iterator -- using unknown 0
-        res.setZero(1,u.cols());
-        for(index_t i=0; i<u.cols();++i)
-        {
-            int iter =0;
-            // Start iteration over elements
-
-            typename gsBasis<T>::domainIter domIt = m_mp.makeDomainIterator();
-            for (; domIt->good(); domIt->next() )
-            {
-                 bool flag = true;
-                const gsVector<T>& low = domIt->lowerCorner();
-                const gsVector<T>& upp = domIt->upperCorner();
-
-
-                for(int d=0; d<domainDim();++d )
-                {
-                    if(low(d)> u(d,i) || u(d,i) > upp(d))
-                    {
-                        flag = false;
-                        break;
-                    }
-                }
-                if(flag)
-                {
-                     res(0,i) = m_errors.at(iter);
-                     break;
-                }
-                iter++;
-            }
-        }
-    }
-
-    short_t domainDim() const { return m_mp.dim();}
-
-private:
-    const gsBasis<T>& m_mp;
-    const std::vector<T>& m_errors;
-};
 
 template <class T>
 gsMultiPatch<T> Rectangle(T L, T B);
@@ -112,13 +59,15 @@ int main (int argc, char** argv)
     bool plotError  = false;
     bool mesh = false;
     bool stress       = false;
-    bool adaptiveMesh = false;
-    bool admissible = false;
+    bool SingularPoint = false;
     bool quasiNewton = false;
     int quasiNewtonInt = -1;
     bool adaptive = false;
+    bool adaptiveMesh = false;
+    bool admissible = true;
     int maxSteps = 250;
     int method = 2; // (0: Load control; 1: Riks' method; 2: Crisfield's method; 3: consistent crisfield method; 4: extended iterations)
+    bool symmetry = false;
     bool deformed = false;
 
     bool interior = true;
@@ -141,13 +90,18 @@ int main (int argc, char** argv)
     bool crosssection = false;
 
     index_t maxit = 20;
+    index_t maxRefIt = 5;
 
     // Arc length method options
-    real_t dL = 0; // General arc length
-    real_t dLb = 1e-2; // Arc length to find bifurcation
+    real_t dL = 5e-2; // General arc length
+    real_t dLb = 1e-2; // Ard length to find bifurcation
     real_t tol = 1e-6;
     real_t tolU = 1e-6;
     real_t tolF = 1e-3;
+
+    real_t target   =1e-3;
+    real_t nocrs    =1e-12;
+    real_t bandwidth=1;
 
     index_t goal = 6;
     index_t component = 0;
@@ -180,15 +134,21 @@ int main (int argc, char** argv)
     cmd.addReal("F","factor", "factor for bifurcation perturbation", tau);
     cmd.addInt("q","QuasiNewtonInt","Use the Quasi Newton method every INT iterations",quasiNewtonInt);
     cmd.addInt("N", "maxsteps", "Maximum number of steps", maxSteps);
+    cmd.addInt("i", "maxRefIt", "Maximum number of refinement iterations steps", maxRefIt);
 
     cmd.addString("U","output", "outputDirectory", dirname);
+
+    cmd.addReal("T","target", "Refinement target error", target);
+    cmd.addReal("B","band", "Refinement target error bandwidth", bandwidth);
+    cmd.addReal("D","nocrs", "Below this tolerance, there is no coarsening", nocrs);
 
     cmd.addInt( "g", "goal", "Goal function to use", goal );
     cmd.addInt( "C", "comp", "Component", component );
 
     cmd.addSwitch("adaptive", "Adaptive length ", adaptive);
-    cmd.addSwitch("adaptiveMesh", "Adaptive mesh ", adaptiveMesh);
-    cmd.addSwitch("admissible", "Admissible refinement", admissible);
+    cmd.addSwitch("adaptMesh", "Adaptive mesh ", adaptiveMesh);
+    // cmd.addSwitch("admissible", "Admissible refinement", admissible);
+    cmd.addSwitch("bifurcation", "Compute singular points and bifurcation paths", SingularPoint);
     cmd.addSwitch("quasi", "Use the Quasi Newton method", quasiNewton);
     cmd.addSwitch("plot", "Plot result in ParaView format", plot);
     cmd.addSwitch("noInterior", "Error computation not on the interior", interior);
@@ -199,13 +159,14 @@ int main (int argc, char** argv)
     cmd.addSwitch("writeP", "Write perturbation", writeP);
     cmd.addSwitch("writeG", "Write refined geometry", writeG);
     cmd.addSwitch("cross", "Write cross-section to file", crosssection);
+    cmd.addSwitch("symmetry", "Use symmetry boundary condition (different per problem)", symmetry);
     cmd.addSwitch("deformed", "plot on deformed shape", deformed);
 
     try { cmd.getValues(argc,argv); } catch (int rv) { return rv; }
 
-    gsFileData<> metadata;
-    gsFileData<> solutionFile;
-    gsFileData<> geometryFile;
+    gsFileData<> fd_mesher(mesherOptionsFile);
+    gsOptionList mesherOpts;
+    fd_mesher.getFirst<gsOptionList>(mesherOpts);
 
     if (dL==0)
     {
@@ -240,7 +201,13 @@ int main (int argc, char** argv)
     E_modulus = 2*mu*(1+PoissonRatio);
     gsDebug<<"E = "<<E_modulus<<"; nu = "<<PoissonRatio<<"; mu = "<<mu<<"; ratio = "<<Ratio<<"\n";
 
-    gsMultiPatch<> mp,mp_def;
+    gsMultiPatch<> mp,mp_def, mp0;
+
+    std::vector<boxSide> sides;
+    sides.push_back(boundary::west);
+    sides.push_back(boundary::east);
+    if (symmetry)
+      sides.push_back(boundary::south);
 
     bDim = 0.14; aDim = 2*bDim;
     mp.addPatch(gsNurbsCreator<>::BSplineSquare(1));
@@ -248,9 +215,7 @@ int main (int argc, char** argv)
     mp.patch(0).coefs().col(1) *= bDim/2.;
     mp.embed(3);
 
-    gsMatrix<> dimensions(1,2);
-    dimensions<<aDim,bDim;
-    metadata.add(dimensions,400);
+    mp0 = mp;
 
     for (index_t i = 0; i< numElevate; ++i)
         mp.patch(0).degreeElevate();    // Elevate the degree
@@ -282,6 +247,7 @@ int main (int argc, char** argv)
     }
 
     mp_def = mp;
+    mp0 = mp;
 
     gsInfo<<"alpha = "<<aDim/bDim<<"; beta = "<<bDim/thickness<<"\n";
 
@@ -293,8 +259,8 @@ int main (int argc, char** argv)
 
     // Boundary conditions
     gsBoundaryConditions<> BCs;
-    BCs.setGeoMap(mp);
-    // gsPointLoads<real_t> pLoads = gsPointLoads<real_t>();
+    BCs.setGeoMap(mp0);
+    gsPointLoads<real_t> pLoads = gsPointLoads<real_t>();
 
     std::string output = "solution";
 
@@ -329,13 +295,11 @@ int main (int argc, char** argv)
 
     dirname = dirname + "/QuarterSheet_-r" + std::to_string(numHref) + "-e" + std::to_string(numElevate) + "-M" + std::to_string(material) + "-c" + std::to_string(Compressibility) + "-alpha" + std::to_string(aDim/bDim) + "-beta" + std::to_string(bDim/thickness) + "-g" + std::to_string(goal) + "-C" + std::to_string(component);
     if (adaptiveMesh)
-        dirname = dirname + "_adaptive";
+        dirname = dirname + "_adaptive" + "R=" + std::to_string(mesherOpts.getReal("RefineParam")) + "_C=" + std::to_string(mesherOpts.getReal("CoarsenParam"));
 
     output =  "solution";
     wn = output + "data.txt";
-
-    metadata.addString(dirname,"dirname");
-    metadata.addString(wn,"wn");
+    SingularPoint = true;
 
     index_t cross_coordinate = 0;
     real_t cross_val = 0.0;
@@ -438,8 +402,6 @@ int main (int argc, char** argv)
         materialMatrix = getMaterialMatrix<3,real_t>(mp,t,parameters,rho,options);
     }
 
-    metadata.add(options,100);
-
     gsThinShellAssemblerDWRBase<real_t>* assembler;
     assembler = new gsThinShellAssemblerDWR<3, real_t, true >(mp,basisL,basisH,BCs,force,materialMatrix);
     if (goal==1)
@@ -465,59 +427,50 @@ int main (int argc, char** argv)
     else
         GISMO_ERROR("Goal function unknown");
 
-    gsMatrix<index_t> goalComponent(1,2);
-    goalComponent<<goal,component;
-    metadata.add(goalComponent,102);
-
     // Construct assembler object
     gsFileData<> fd_assembler(assemberOptionsFile);
     gsOptionList assemblerOpts;
     fd_assembler.getFirst<gsOptionList>(assemblerOpts);
     assembler->setOptions(assemblerOpts);
-    // assembler->setPointLoads(pLoads);
-
-    // metadata.add(pLoads,103);
-    metadata.add(assemblerOpts,104);
-
+    assembler->setPointLoads(pLoads);
 
     gsStopwatch stopwatch;
     real_t time = 0.0;
 
-    typedef std::function<gsSparseMatrix<real_t> (gsVector<real_t> const &)>                                Jacobian_t;
-    typedef std::function<gsVector<real_t> (gsVector<real_t> const &, real_t, gsVector<real_t> const &) >   ALResidual_t;
-    // Function for the Jacobian
-    Jacobian_t Jacobian = [&time,&stopwatch,&assembler](gsVector<real_t> const &x)
-    {
-        gsMultiPatch<> def;
-        stopwatch.restart();
-        assembler->constructSolutionL(x,def);
-        assembler->assembleMatrixL(def);
-        time += stopwatch.stop();
-
-        gsSparseMatrix<real_t> m = assembler->matrixL();
-        return m;
-    };
-    // Function for the Residual
-    ALResidual_t ALResidual = [&time,&stopwatch,&assembler](gsVector<real_t> const &x, real_t lam, gsVector<real_t> const &force)
-    {
-        gsMultiPatch<> def;
-        stopwatch.restart();
-        assembler->constructSolutionL(x,def);
-        assembler->assemblePrimalL(def);
-        gsVector<real_t> Fint = -(assembler->primalL() - force);
-        gsVector<real_t> result = Fint - lam * force;
-        time += stopwatch.stop();
-        return result; // - lam * force;
-    };
     // Assemble linear system to obtain the force vector
     assembler->assembleL();
     gsVector<> Force = assembler->primalL();
 
+    // Function for the Jacobian
+    gsStructuralAnalysisOps<real_t>::Jacobian_t Jacobian = [&time,&stopwatch,&assembler,&mp_def](gsVector<real_t> const &x, gsSparseMatrix<real_t> & m)
+    {
+        stopwatch.restart();
+        ThinShellAssemblerStatus status;
+        assembler->constructSolutionL(x,mp_def);
+        status = assembler->assembleMatrixL(mp_def);
+        m = assembler->matrixL();
+        time += stopwatch.stop();
+        return status == ThinShellAssemblerStatus::Success;
+    };
+
+    // Function for the Residual
+    gsStructuralAnalysisOps<real_t>::ALResidual_t ALResidual = [&Force,&time,&stopwatch,&assembler,&mp_def](gsVector<real_t> const &x, real_t lam, gsVector<real_t> & result)
+    {
+        stopwatch.restart();
+        ThinShellAssemblerStatus status;
+        assembler->constructSolutionL(x,mp_def);
+        status = assembler->assemblePrimalL(mp_def);
+        result = -(assembler->primalL() - Force) - lam * Force;
+        time += stopwatch.stop();
+        return status == ThinShellAssemblerStatus::Success;
+    };
 
     gsParaviewCollection collection(dirname + "/" + output);
     gsParaviewCollection Smembrane(dirname + "/" + "membrane");
     gsParaviewCollection Sflexural(dirname + "/" + "flexural");
     gsParaviewCollection Smembrane_p(dirname + "/" + "membrane_p");
+    gsParaviewCollection errors(dirname + "/" + "errors");
+    std::vector<real_t> elErrors;
 
     // Make objects for previous solutions
     real_t Lold = 0, deltaLold = 0;
@@ -536,9 +489,6 @@ int main (int argc, char** argv)
     bool unstable_prev = false;
     real_t dLb0 = dLb;
 
-    gsFileData<> fd_mesher(mesherOptionsFile);
-    gsOptionList mesherOpts;
-    fd_mesher.getFirst<gsOptionList>(mesherOpts);
     gsAdaptiveMeshing<real_t> mesher;
     if (adaptiveMesh)
     {
@@ -546,8 +496,6 @@ int main (int argc, char** argv)
         mesher.options() = mesherOpts;
         mesher.getOptions();
     }
-
-    metadata.add(mesher.options(),200);
 
     gsHBoxContainer<2,real_t> markRef, markCrs;
 
@@ -594,9 +542,6 @@ int main (int argc, char** argv)
     arcLength.applyOptions();
     arcLength.initialize();
 
-    metadata.add(arcLength.options(),300);
-
-
     gsThinShellDWRHelper<real_t> helper(assembler);
     typename gsBoxTopology::bContainer goalSides;
     if (!interior)
@@ -616,8 +561,6 @@ int main (int argc, char** argv)
     {
         loadstep_errors.clear();
         gsInfo<<"Load step "<< k<<"; \t(starting from "<<eps<<" strain)\tSystem size = "<<Uold.size()<<" x "<<Uold.size()<<"\n";
-        gsParaviewCollection errors(dirname + "/" + "error" + util::to_string(k));
-        gsParaviewCollection error_fields(dirname + "/" + "error_field" + util::to_string(k));
 
         arcLength.setLength(dLb);
 
@@ -631,13 +574,12 @@ int main (int argc, char** argv)
           arcLength.setLength(dLb);
           arcLength.setSolution(Uold,Lold);
           bisected = true;
-          k -= 1;
           continue;
         }
         indicator = arcLength.indicator();
         gsInfo<<"indicator: (old = )"<<indicator_prev<<"; (new = )"<<indicator<<"\n";
 
-        arcLength.computeStability(arcLength.solutionU(),quasiNewton);
+        arcLength.computeStability(quasiNewton);
         unstable = arcLength.stabilityChange();
 
         if (unstable)
@@ -662,27 +604,31 @@ int main (int argc, char** argv)
         indicator_prev = indicator;
 
         ///////////////////////////////////////////////////
-        index_t it = 0;
-        if (plot)
-        {
-            std::string fileName = dirname + "/" + "error_field" + util::to_string(k) + "_" + util::to_string(it);
-            helper.computeError(mp_def,U_patch,goalSides,points,interior,false,fileName,1000,false,mesh);
-            fileName = "error_field" + util::to_string(k) + "_" + util::to_string(it) ;
-            for (size_t p=0; p!=mp.nPatches(); p++)
-            {
-                error_fields.addTimestep(fileName+std::to_string(p),it,".vts");
-                if (mesh)
-                    error_fields.addTimestep(fileName + "_mesh"+std::to_string(p),it,".vtp");
-            }
-        }
-        else
-            helper.computeError(mp_def,U_patch,goalSides,points,interior);
+        helper.computeError(mp_def,U_patch,goalSides,points,interior);
 
         error = std::abs(helper.error());
         numDofs = assembler->numDofsL();
 
         gsInfo<<"Error = "<<error<<"\n";
         loadstep_errors.push_back(std::make_pair(assembler->numDofsL(),error));
+
+        elErrors = helper.sqErrors(true);
+        if (plotError)
+        {
+            for (size_t p=0; p!=mp.nPatches(); p++)
+            {
+                gsElementErrorPlotter<real_t> err_eh(mp.basis(p),elErrors);
+                const gsField<> elemError_eh( mp.patch(p), err_eh, true );
+                std::string fileName = dirname + "/" + "error" + util::to_string(k);
+                writeSinglePatchField<>(mp.patch(p), err_eh, true, fileName + "_" + util::to_string(p), 1000);
+                if (mesh)
+                    writeSingleCompMesh<>(mp.basis(p), mp.patch(p),fileName + "_mesh" + "_" + util::to_string(p));
+                fileName = "error" + util::to_string(k);
+                errors.addTimestep(fileName,p,k,".vts");
+                if (mesh)
+                    errors.addTimestep(fileName + "_mesh",p,k,".vtp");
+            }
+        }
         ///////////////////////////////////////////////////
 
         deltaU_patch = U_patch;
@@ -704,8 +650,6 @@ int main (int argc, char** argv)
             writeSectionOutput(U_patch,dirname,cross_coordinate,cross_val,201,false);
 
         write_errors.push_back(loadstep_errors);
-
-        k++;
     }
 
     // BUCKLING
@@ -714,7 +658,7 @@ int main (int argc, char** argv)
     {
         loadstep_errors.clear();
         gsInfo<<"Bifurcation spotted!"<<"\n";
-        arcLength.computeSingularPoint(1e-4, 5, Uold, Lold, 1e-7, 0, false);
+        arcLength.computeSingularPoint(Uold,false);
         arcLength.switchBranch();
         dLb0 = dLb = dL;
         arcLength.setLength(dLb);
@@ -790,24 +734,221 @@ int main (int argc, char** argv)
     eps = U_patch.patch(0).eval(epsPoint)(0,0) / aDim;
     k++;
 
-    /////////////////////////
-    // Write solution file //
-    /////////////////////////
-    solutionFile.add(Uold_patch,10);
-    solutionFile.add(deltaUold_patch,100);
+    gsInfo<<"----------Post-Buckling-----------\n";
+    // POST BUCKLING
+    real_t refTol = target / bandwidth; // refine if error is above
+    real_t crsTol = target * bandwidth; // coarsen if error is below
+    GISMO_ENSURE(refTol >= crsTol,"Refinement tolerance should be bigger than the coarsen tolerance");
+    while (eps < epsmax && eps > epsmin && k < maxSteps)
+    {
+        loadstep_errors.clear();
+        gsInfo<<"Load step "<< k<<"; \t(starting from "<<eps<<" strain)\tSystem size = "<<Uold.size()<<" x "<<Uold.size()<<"\n";
 
-    gsMatrix<> Ldata(1,2);
-    Ldata<<Lold,deltaLold;
-    solutionFile.add(Ldata,1000);
+        gsInfo<<"Basis (L): \n"<<mp.basis(0)<<"\n";
+        index_t it = 0;
+        bool refined = true;
+        bool coarsened = true;
+        error = 1;
+        bool bandtest = (bandwidth==1) ? error > refTol : ((error < crsTol && error > nocrs)|| (error >= refTol)); // is true if error is outside the band
+        gsMultiPatch<> mp_prev;
+        while ((bandtest) && it < maxRefIt && (refined || coarsened))
+        {
+            gsInfo<<"Iteration "<<it<<"/"<<maxRefIt<<", refTol < prev error < crsTol : "<<refTol<<" < "<<error<<" < "<<crsTol<<"\n";
+            gsInfo<<"New basis (L): \n"<<mp.basis(0)<<"\n";
+            mp_prev = mp;
 
-    gsMatrix<> loadStepData(1,2);
-    loadStepData<<eps,k;
-    solutionFile.add(loadStepData,1001);
+            assembler->assembleL();
+            Force = assembler->primalL();
+            Uold = assembler->constructSolutionVectorL(Uold_patch);
+            deltaUold = assembler->constructSolutionVectorL(deltaUold_patch);
 
-    gsMatrix<index_t> stabilityData(1,1);
-    stabilityData<<unstable_prev;
-    solutionFile.add(stabilityData,1002);
+            gsALMCrisfield<real_t> arcLength(Jacobian, ALResidual, Force);
+            arcLength.options() = ALMoptions;
+            arcLength.applyOptions();
+            arcLength.initialize();
+            arcLength.setIndicator(indicator); // RESET INDICATOR
+            arcLength.setSolution(Uold,Lold);
+            arcLength.setSolutionStep(deltaUold,deltaLold);
+            arcLength.setLength(dLb);
 
+            gsInfo<<"Starting from U.norm()="<<Uold.norm()<<", L="<<Lold<<"\n";
+            arcLength.step();
+
+            if (!(arcLength.converged()))
+            {
+              gsInfo<<"Error: Loop terminated, arc length method did not converge.\n";
+              dLb = dLb / 2.;
+              arcLength.setLength(dLb);
+              arcLength.setSolution(Uold,Lold);
+              bisected = true;
+              continue;
+            }
+            indicator = arcLength.indicator();
+            gsInfo<<"indicator: (old = )"<<indicator_prev<<"; (new = )"<<indicator<<"\n";
+
+            L = arcLength.solutionL();
+            deltaL = arcLength.solutionDL();
+            U = arcLength.solutionU();
+            deltaU = arcLength.solutionDU();
+
+            // Deformed geometry
+            assembler->constructSolutionL(U,mp_def);
+            // Deformation (primal)
+            assembler->constructMultiPatchL(U,U_patch);
+            // delta Deformation
+            assembler->constructMultiPatchL(U,deltaU_patch);
+
+            /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+            // ERROR ESTIMATION PART
+            /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+            helper.computeError(mp_def,U_patch,goalSides,points,interior);
+
+            error = std::abs(helper.error());
+            numDofs = assembler->numDofsL();
+            gsInfo<<"Error = "<<error<<", numDofs = "<<numDofs<<"\n";
+            loadstep_errors.push_back(std::make_pair(assembler->numDofsL(),error));
+
+            elErrors = helper.sqErrors(true);
+
+            /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+            // ADAPTIVE MESHING PART
+            /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+            if (adaptiveMesh)
+            {
+                if (unstable_prev)
+                {
+                    unstable_prev = false;
+                    break;
+                }
+                else
+                {
+                    if (error > refTol)
+                    {
+                        gsInfo<<"Load Step "<<k<<": Error is too big! Error = "<<error<<", refTol = "<<refTol<<"\n";
+                        mesher.markRef_into(elErrors,markRef);
+                        gsInfo<<"Marked "<<markRef.totalSize()<<" elements for refinement\n";
+                        refined = mesher.refine(markRef);
+                    }
+                    else if (error < refTol && error > crsTol)
+                    {
+                        gsInfo<<"Load Step "<<k<<": Error is within bounds. Error = "<<error<<", refTol = "<<refTol<<", crsTol = "<<crsTol<<"\n";
+                        mesher.markRef_into(elErrors,markRef);
+                        gsInfo<<"Marked "<<markRef.totalSize()<<" elements for refinement\n";
+                        mesher.markCrs_into(elErrors,markRef,markCrs);
+			gsInfo<<"Marked "<<markCrs.totalSize()<<" elements for coarsening\n";
+                        refined = mesher.refine(markRef);
+                        coarsened = mesher.unrefine(markCrs);
+                    }
+                    else if (error < crsTol && error > nocrs)
+                    {
+                        //gsInfo<<"Error is too small!\n";
+                        gsInfo<<"Load Step "<<k<<": Error is too small! Error = "<<error<<", crsTol = "<<crsTol<<"\n";
+                        mesher.markCrs_into(elErrors,markCrs);
+                        gsInfo<<"Marked "<<markCrs.totalSize()<<" elements for coarsening\n";
+                        coarsened = mesher.unrefine(markCrs);
+                    }
+                    else if (error < nocrs)
+                    {
+                        gsInfo<<"Load Step "<<k<<": Error is too small to coarsen! Error = "<<error<<", no-coarsening-tol = "<<nocrs<<"\n";
+                        mp = mp0;
+                    }
+
+                    bandtest = (bandwidth==1) ? error > refTol : ((error < crsTol && error > nocrs )|| (error >= refTol));
+
+                    basisL = gsMultiBasis<>(mp);
+                    basisH = basisL;
+                    basisH.degreeElevate(1);
+
+                    // Project the solution from old mesh to new mesh
+                    gsMatrix<> coefs;
+
+                    // Which of those are needed?
+
+                    gsQuasiInterpolate<real_t>::localIntpl(basisL.basis(0), mp.patch(0), coefs);
+                    mp.patch(0) = *basisL.basis(0).makeGeometry(give(coefs));
+
+                    gsQuasiInterpolate<real_t>::localIntpl(basisL.basis(0), mp_def.patch(0), coefs);
+                    mp_def.patch(0) = *basisL.basis(0).makeGeometry(give(coefs));
+
+                    gsQuasiInterpolate<real_t>::localIntpl(basisL.basis(0), U_patch.patch(0), coefs);
+                    U_patch.patch(0) = *basisL.basis(0).makeGeometry(give(coefs));
+
+                    gsQuasiInterpolate<real_t>::localIntpl(basisL.basis(0), deltaU_patch.patch(0), coefs);
+                    deltaU_patch.patch(0) = *basisL.basis(0).makeGeometry(give(coefs));
+
+                    gsQuasiInterpolate<real_t>::localIntpl(basisL.basis(0), Uold_patch.patch(0), coefs);
+                    Uold_patch.patch(0) = *basisL.basis(0).makeGeometry(give(coefs));
+
+                    gsQuasiInterpolate<real_t>::localIntpl(basisL.basis(0), deltaUold_patch.patch(0), coefs);
+                    deltaUold_patch.patch(0) = *basisL.basis(0).makeGeometry(give(coefs));
+
+                    assembler->setBasisL(basisL);
+                    assembler->setBasisH(basisH);
+                    assembler->setUndeformed(mp);
+
+                    mesher.rebuild();
+
+                    // assembler->constructSolutionL(U,mp_def);
+                    unstable_prev = false;
+
+                }
+                it++;
+            }
+            else
+                break;
+        }
+
+        if (plotError)
+        {
+            for (size_t p=0; p!=mp_prev.nPatches(); p++)
+            {
+                gsElementErrorPlotter<real_t> err_eh(mp_prev.basis(p),elErrors);
+                const gsField<> elemError_eh( mp_prev.patch(p), err_eh, true );
+                std::string fileName = dirname + "/" + "error" + util::to_string(k);
+                writeSinglePatchField<>(mp_prev.patch(p), err_eh, true, fileName + "_" + util::to_string(p), 1000);
+                if (mesh)
+                    writeSingleCompMesh<>(mp_prev.basis(p), mp_prev.patch(p),fileName + "_mesh" + "_" + util::to_string(p));
+                fileName = "error" + util::to_string(k);
+                errors.addTimestep(fileName,p,k,".vts");
+                if (mesh)
+                    errors.addTimestep(fileName + "_mesh",p,k,".vtp");
+            }
+        }
+
+        deltaU_patch = U_patch;
+        for (index_t p=0; p!=deltaU_patch.nPatches(); p++)
+            deltaU_patch.patch(p).coefs() -= Uold_patch.patch(p).coefs();
+
+        eps = U_patch.patch(0).eval(epsPoint)(0,0) / aDim;
+
+        real_t deformationNorm = assembler->deformationNorm(U_patch,mp);
+
+        PlotResults(k,assembler,mp,mp_def,plot,stress,write,mesh,deformed,dirname,output,
+                    collection,Smembrane,Sflexural,Smembrane_p);
+
+        if (write)
+            writeStepOutput(deformationNorm,L,indicator,U_patch, error, numDofs, dirname + "/" + wn, writePoints,1, 201);
+
+        if (crosssection && cross_coordinate!=-1)
+            writeSectionOutput(U_patch,dirname,cross_coordinate,cross_val,201,false);
+
+        write_errors.push_back(loadstep_errors);
+
+        // Update Uold
+        Uold_patch = U_patch;
+        deltaUold_patch = deltaU_patch;
+        Lold = L;
+        deltaLold = deltaL;
+
+        indicator_prev = indicator;
+
+        k++;
+    }
+
+    if (plotError)
+    {
+        errors.save();
+    }
     if (plot)
     {
       collection.save();
@@ -831,14 +972,6 @@ int main (int argc, char** argv)
 
     }
     file.close();
-
-    metadata.addString(dirname + "/" + "errors.csv","errors");
-
-    geometryFile.add(mp);
-
-    metadata.save("metadata");
-    solutionFile.save("solutionFile");
-    geometryFile.save("geometryFile");
 
   return result;
 }

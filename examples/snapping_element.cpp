@@ -13,24 +13,25 @@
 
 #include <iostream>
 
-#include <gsElasticity/gsGeoUtils.h>
-#include <gsElasticity/gsElasticityAssembler.h>
-#include <gsElasticity/gsWriteParaviewMultiPhysics.h>
-
-#include <gsStructuralAnalysis/src/gsStructuralAnalysisTools/gsStructuralAnalysisTypes.h>
-
 #include <gsStructuralAnalysis/src/gsALMSolvers/gsALMBase.h>
 #include <gsStructuralAnalysis/src/gsALMSolvers/gsALMLoadControl.h>
 #include <gsStructuralAnalysis/src/gsALMSolvers/gsALMRiks.h>
 #include <gsStructuralAnalysis/src/gsALMSolvers/gsALMCrisfield.h>
 
+#ifdef gsElasticity_ENABLED
+#include <gsElasticity/gsGeoUtils.h>
+#include <gsElasticity/gsElasticityAssembler.h>
+#include <gsElasticity/gsWriteParaviewMultiPhysics.h>
+
 #include <gsElasticity/gsNeoHookLogMaterial.h>
 #include <gsElasticity/gsLinearMaterial.h>
+#endif
 
 #include <gismo.h>
 
 using namespace gismo;
 
+#ifdef gsElasticity_ENABLED
 template <class T>
 std::vector<gsBSpline<T>> makeCurve(const T tw, const T tg, const T tb, const T ts, const T l, const T a, const std::string expr, const gsKnotVector<T> & kv1);
 
@@ -736,4 +737,13 @@ gsMultiPatch<T> makeElement(const T tw, const T tg, const T tb, const T ts, cons
     return element;
 }
 
+#else//gsElasticity_ENABLED
+
+int main (int argc, char** argv)
+{
+  gsInfo<<"To run this example, compile G+Smo with gsElasticity\n";
+  return EXIT_SUCCESS;
+}
+
+#endif
 

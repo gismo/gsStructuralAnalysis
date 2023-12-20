@@ -40,22 +40,17 @@ int main (int argc, char** argv)
     bool NR  = false;
     int verbose = 0;
 
-    bool membrane = false;
-    bool nonfollow     = false;
-
-    index_t Compressibility = 0;
-    index_t material = 0;
+    index_t Compressibility = 1;
+    index_t material = 1;
     index_t impl = 1; // 1= analytical, 2= generalized, 3= spectral
     bool TFT = false;
 
-    index_t maxIt     = 1e3;
+    index_t loadSteps     = 1e0;
     // Arc length method options
     real_t tol        = 1e-4;
 
     real_t alpha = 1.0;
-    real_t damping = 0.1;
-
-    real_t dt = 0.1;
+    real_t damping = 0;
 
     index_t testCase = 0;
     real_t maxLoad = 5e3;
@@ -66,13 +61,10 @@ int main (int argc, char** argv)
 
     cmd.addInt("r","hRefine", "Number of dyadic h-refinement (bisection) steps to perform before solving", numRefine);
     cmd.addInt("e","degreeElevation", "Number of degree elevation steps to perform on the Geometry's basis before solving", numElevate);
-    cmd.addSwitch("membrane", "Membrane element", membrane);
-    cmd.addSwitch("nonfollow", "No follower load", nonfollow);
 
-    cmd.addInt( "N", "maxit", "maxit",  maxIt );
+    cmd.addInt( "N", "maxit", "maxit",  loadSteps );
     cmd.addInt( "t", "testCase", "testCase",  testCase );
 
-    cmd.addReal( "d", "dt", "dt",  dt );
     cmd.addReal( "a", "alpha", "alpha",  alpha );
     cmd.addReal( "c", "damping", "damping",  damping );
 
@@ -241,11 +233,7 @@ int main (int argc, char** argv)
     // materialMatrixTFT->options().setSwitch("Explicit",true);    
 
     gsThinShellAssemblerBase<real_t>* assembler;
-    if (!membrane && TFT)
-      assembler = new gsThinShellAssembler<3, real_t, true >(mp,dbasis,BCs,force,materialMatrixTFT);
-    else if (!membrane && !TFT)
-      assembler = new gsThinShellAssembler<3, real_t, true >(mp,dbasis,BCs,force,materialMatrix);
-    else if (membrane && TFT)
+    if (TFT)
       assembler = new gsThinShellAssembler<3, real_t, false >(mp,dbasis,BCs,force,materialMatrixTFT);
     else
       assembler = new gsThinShellAssembler<3, real_t, false >(mp,dbasis,BCs,force,materialMatrix);
@@ -290,7 +278,7 @@ int main (int argc, char** argv)
      * - First 20 steps: follower pressure increasing from 0 Pa to 5000 Pa
      */
     real_t load_fac = 0;
-    real_t dload_fac= 1./maxIt;
+    real_t dload_fac= 1./loadSteps;
     real_t dload_fac0 = dload_fac;
     index_t step=0;
     index_t bisected = 0;
@@ -360,18 +348,8 @@ int main (int argc, char** argv)
 
 
       assembler->updateBCs(BCs);
-
-      gsDebugVar(neuDataX);
-      if (nonfollow)
-      {
-        forceVec<<0,0,pressure*load_fac;
-        force.setValue(forceVec,3);
-      }
-      else
-      {
-        pressFun.setValue(pressure*load_fac,3);
-        assembler->setPressure(pressFun);
-      }
+      pressFun.setValue(pressure*load_fac,3);
+      assembler->setPressure(pressFun);
 
       gsInfo<<"Load step "<<step<<"; p = "<<pressure*load_fac<<"; load factor = "<<load_fac<<"; load factor step = "<<dload_fac<<":\n";
       assembler->assemble();

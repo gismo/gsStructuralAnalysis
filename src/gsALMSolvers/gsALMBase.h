@@ -231,7 +231,7 @@ public:
      * @param[in]  switchBranch  Switches branch if true
      * @param[in]  jacobian      Evaluate the Jacobian?
      */
-    virtual gsStatus computeSingularPoint(bool switchBranch=false, bool jacobian=false, bool testPoint=true);
+    virtual gsStatus computeSingularPoint(const gsVector<T> & U, const T & L, bool switchBranch=false, bool jacobian=false, bool testPoint=true);
 
     /// Returns true if the point is a bifurcation
     virtual bool isBifurcation(bool jacobian = false);
@@ -268,7 +268,7 @@ protected:
     virtual void _computeStability(const gsVector<T> & x, bool jacobian=true, T shift = -1e2);
 
     /// See \a computeSingularPoint
-    virtual void _computeSingularPoint(bool switchBranch=false, bool jacobian=false, bool testPoint=true);
+    virtual void _computeSingularPoint(const gsVector<T> & U, const T & L, bool switchBranch=false, bool jacobian=false, bool testPoint=true);
 
     /**
      * @brief      Tests if a point is a bifurcation point
@@ -288,10 +288,10 @@ protected:
     virtual T       _bisectionTerminationFunction(const gsVector<T> & x, bool jacobian=true);
 
     /// Perform an extended system solve to find a singular point
-    virtual bool _extendedSystemSolve(const gsVector<T> U, T L, T tol);
+    virtual bool _extendedSystemSolve(const gsVector<T> & U, const T L, const T tol);
 
     /// Perform a bisection system solve to find a singular point
-    virtual bool _bisectionSolve(const gsVector<T> U, T L, T tol);
+    virtual bool _bisectionSolve(const gsVector<T> & U, const T L, const T tol);
 
     /// Initialize the output for extended iterations
     virtual void _initOutputExtended();

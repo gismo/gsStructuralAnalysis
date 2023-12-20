@@ -11,7 +11,8 @@
     Author(s): H.M. Verhelst (2019-..., TU Delft)
 */
 
-#pragma once
+#include <functional>
+#include <gsCore/gsLinearAlgebra.h>
 
 namespace gismo
 {

@@ -450,13 +450,10 @@ int main (int argc, char** argv)
 
             std::string fileName = dirname + sep + "modes" + util::to_string(m) + "_";
             gsWriteParaview<>(solField, fileName, 1000,false);
-            // gsWriteParaview<>(solField, fileName, 1000,mesh);
-            for (index_t p = 0; p!=geom.nPatches(); p++)
+            for (size_t p = 0; p!=geom.nPatches(); p++)
             {
                 fileName = output + util::to_string(m);
                 collection.addTimestep(fileName,p,m,".vts");
-                // if (mesh)
-                //     collection.addTimestep(fileName,p,m,"_mesh.vtp");
             }
         }
         collection.save();

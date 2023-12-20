@@ -1,6 +1,8 @@
-/** @file benchmark_Roof.cpp
+/** @file benchmark_Roof_DWR.cpp
 
-    @brief Collapse of a cylindrical roof, from
+    @brief Collapse of a cylindrical roof using DWR adaptivity
+
+    Inspired from
 
     Guo, Y., Do, H., & Ruess, M. (2019). Isogeometric stability analysis of thin shells:
     From simple geometries to engineering models.
@@ -18,21 +20,19 @@
 
 #include <gismo.h>
 
-#include <gsKLShell/gsThinShellAssembler.h>
-#include <gsKLShell/gsThinShellAssemblerDWR.h>
-#include <gsKLShell/gsThinShellDWRHelper.h>
-#include <gsKLShell/getMaterialMatrix.h>
+#include <gsKLShell/src/gsThinShellAssembler.h>
+#include <gsKLShell/src/gsThinShellAssemblerDWR.h>
+#include <gsKLShell/src/gsThinShellDWRHelper.h>
+#include <gsKLShell/src/getMaterialMatrix.h>
 
-// #include <gsThinShell/gsArcLengthIterator.h>
-// #include <gsStructuralAnalysis/gsArcLengthIterator.h>
 #include <gsAssembler/gsAdaptiveRefUtils.h>
 #include <gsAssembler/gsAdaptiveMeshing.h>
 
-#include <gsStructuralAnalysis/gsALMBase.h>
-#include <gsStructuralAnalysis/gsALMRiks.h>
-#include <gsStructuralAnalysis/gsALMLoadControl.h>
-#include <gsStructuralAnalysis/gsALMCrisfield.h>
-#include <gsStructuralAnalysis/gsALMConsistentCrisfield.h>
+#include <gsStructuralAnalysis/src/gsALMSolvers/gsALMBase.h>
+#include <gsStructuralAnalysis/src/gsALMSolvers/gsALMRiks.h>
+#include <gsStructuralAnalysis/src/gsALMSolvers/gsALMLoadControl.h>
+#include <gsStructuralAnalysis/src/gsALMSolvers/gsALMCrisfield.h>
+#include <gsStructuralAnalysis/src/gsALMSolvers/gsALMConsistentCrisfield.h>
 
 using namespace gismo;
 
@@ -57,7 +57,7 @@ int main (int argc, char** argv)
 {
     // Input options
     int numElevate    = 1;
-    int numHref       = 1;
+    int numHref       = 2;
     bool plot         = false;
     bool plotError  = false;
     bool mesh         = false;
@@ -67,11 +67,11 @@ int main (int argc, char** argv)
     int quasiNewtonInt= -1;
     bool adaptive     = false;
     bool adaptiveMesh = false;
-    bool admissible = false;
-    int maxSteps          = 100;
+    bool admissible = true;
+    int maxSteps          = 500;
     int method        = 2; // (0: Load control; 1: Riks' method; 2: Crisfield's method; 3: consistent crisfield method)
     bool deformed     = false;
-    bool symmetry     = false;
+    bool symmetry     = true;
 
     bool interior = true;
 
@@ -86,7 +86,7 @@ int main (int argc, char** argv)
     bool write        = false;
 
     index_t maxit     = 20;
-    index_t maxRefIt = 10;
+    index_t maxRefIt = 5;
 
     // Arc length method options
     real_t dL        = 0.5; // Ard length to find bifurcation
@@ -122,8 +122,8 @@ int main (int argc, char** argv)
     cmd.addReal("A","relaxation", "Relaxation factor for arc length method", relax);
 
     cmd.addInt("q","QuasiNewtonInt","Use the Quasi Newton method every INT iterations",quasiNewtonInt);
-    cmd.addInt("N", "maxsteps", "Maximum number of steps", maxSteps);
-    cmd.addInt("i", "maxRefIt", "Maximum number of refinement iterations steps", maxRefIt);
+    cmd.addInt("N", "maxsteps", "Maximum number of load steps", maxSteps);
+    cmd.addInt("i", "maxRefIt", "Maximum number of refinement iterations per load step", maxRefIt);
 
     cmd.addString("U","output", "outputDirectory", dirname);
 
@@ -134,8 +134,8 @@ int main (int argc, char** argv)
     cmd.addInt( "C", "comp", "Component", component );
 
     cmd.addSwitch("adaptive", "Adaptive length ", adaptive);
-    cmd.addSwitch("adaptiveMesh", "Adaptive mesh ", adaptiveMesh);
-    cmd.addSwitch("admissible", "Admissible refinement", admissible);
+    cmd.addSwitch("adaptMesh", "Adaptive mesh ", adaptiveMesh);
+    // cmd.addSwitch("admissible", "Admissible refinement", admissible);
     cmd.addSwitch("quasi", "Use the Quasi Newton method", quasiNewton);
     cmd.addSwitch("plot", "Plot result in ParaView format", plot);
     cmd.addSwitch("noInterior", "Error computation not on the interior", interior);
@@ -144,7 +144,7 @@ int main (int argc, char** argv)
     cmd.addSwitch("stress", "Plot stress in ParaView format", stress);
     cmd.addSwitch("write", "Write output to file", write);
     cmd.addSwitch("deformed", "plot on deformed shape", deformed);
-    cmd.addSwitch("symmetry", "Apply symmetry?", symmetry);
+    cmd.addSwitch("nosymmetry", "Turn off symmetry", symmetry);
 
     try { cmd.getValues(argc,argv); } catch (int rv) { return rv; }
 

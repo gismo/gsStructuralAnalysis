@@ -427,7 +427,7 @@ int main (int argc, char** argv)
       coefs.resize(coefs.rows()/geom.geoDim(),geom.geoDim());
 
       index_t offset = 0;
-      for (index_t p = 0; p != geom_def.nPatches(); p++)
+      for (size_t p = 0; p != geom_def.nPatches(); p++)
       {
         gsMatrix<> tmp_coefs = geom.patch(p).coefs();
         tmp_coefs += coefs.block(offset,0,mapper.patchSize(p),geom.geoDim());

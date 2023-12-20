@@ -945,7 +945,7 @@ int main (int argc, char** argv)
 
       if (arcLength->stabilityChange() && SingularPoint)
       {
-        arcLength->computeSingularPoint(false);
+        arcLength->computeSingularPoint(Uold,Lold,false);
         arcLength->switchBranch();
         dLb0 = dLb = dL;
         arcLength->setLength(dLb);

@@ -357,7 +357,7 @@ int main (int argc, char** argv)
         if (arcLength->stabilityChange())
         {
           gsInfo<<"Bifurcation spotted!"<<"\n";
-          arcLength->computeSingularPoint(false);
+          arcLength->computeSingularPoint(Uold,Lold,false);
           arcLength->switchBranch();
           dLb = dL;
           arcLength->setLength(dLb);

@@ -13,14 +13,18 @@
 
 #include <gismo.h>
 
+#ifdef gsElasticity_ENABLED
 #include <gsElasticity/gsGeoUtils.h>
 #include <gsElasticity/gsElasticityAssembler.h>
 #include <gsElasticity/gsMassAssembler.h>
+#endif
 
-#include <gsStructuralAnalysis/gsModalSolver.h>
+#include <gsStructuralAnalysis/src/gsEigenSolvers/gsModalSolver.h>
 
 
 using namespace gismo;
+
+#ifdef gsElasticity_ENABLED
 
 template <class T>
 gsMultiPatch<T> BrickDomain(int n, int m, int o, int p, int q ,int r, T L, T B, T H);
@@ -328,3 +332,14 @@ gsMultiPatch<T> BrickDomain(int n, int m, int o, int p, int q ,int r, T L, T B, 
 
   return mp;
 }
+
+#else//gsElasticity_ENABLED
+
+int main (int argc, char** argv)
+{
+  gsInfo<<"To run this example, compile G+Smo with gsElasticity\n";
+  return EXIT_SUCCESS;
+}
+
+#endif
+

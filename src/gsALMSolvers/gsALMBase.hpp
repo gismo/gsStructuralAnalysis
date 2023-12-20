@@ -419,19 +419,21 @@ void gsALMBase<T>::_step()
 // ---------------------------------------Singular point methods-----------------------------------------------
 // ------------------------------------------------------------------------------------------------------------
 template <class T>
-void gsALMBase<T>::_computeSingularPoint(bool switchBranch, bool jacobian, bool testPoint)
+void gsALMBase<T>::_computeSingularPoint(const gsVector<T> & U, const T & L, bool switchBranch, bool jacobian, bool testPoint)
 {
   // Determines if the point is a bifurcation point. If not, it assumes it is
   bool test = (testPoint) ? this->_testSingularPoint(jacobian) : true;
 
+  m_U = U;
+  m_L = L;
   if (test)
   {
     bool converged = false;
     // First stage: bisection method
     if (m_SPCompTolB != 0)
       this->_bisectionSolve(m_U,m_L,m_SPCompTolB);
-    else
-      converged = this->_extendedSystemSolve(m_U, m_L, m_SPCompTolE);
+
+    converged = this->_extendedSystemSolve(m_U, m_L, m_SPCompTolE);
 
     if (switchBranch && (converged || m_SPfail==1))
       this->switchBranch();
@@ -445,11 +447,11 @@ void gsALMBase<T>::_computeSingularPoint(bool switchBranch, bool jacobian, bool 
 
 // tolB and switchBranch will be defaulted
 template <class T>
-gsStatus gsALMBase<T>::computeSingularPoint(bool switchBranch, bool jacobian, bool testPoint)
+gsStatus gsALMBase<T>::computeSingularPoint(const gsVector<T> & U, const T & L, bool switchBranch, bool jacobian, bool testPoint)
 {
   try
   {
-    this->_computeSingularPoint(switchBranch,jacobian, testPoint);
+    this->_computeSingularPoint(U,L,switchBranch,jacobian, testPoint);
   }
   catch (int errorCode)
   {
@@ -625,7 +627,7 @@ bool gsALMBase<T>::stabilityChange() const
 
 
 template <class T>
-bool gsALMBase<T>::_extendedSystemSolve(gsVector<T> U, T L, T tol)
+bool gsALMBase<T>::_extendedSystemSolve(const gsVector<T> & U, const T L, const T tol)
 {
   m_U = U;
   m_L = L;
@@ -748,12 +750,12 @@ T gsALMBase<T>::_bisectionTerminationFunction(const gsVector<T> & x, bool jacobi
 }
 
 template <class T>
-bool gsALMBase<T>::_bisectionSolve(gsVector<T> U, T L, T tol)
+bool gsALMBase<T>::_bisectionSolve(const gsVector<T> & U, const T L, const T tol)
 {
   m_U = U;
   m_L = L;
 
-  gsVector<T> U_old  = U;
+  gsVector<T> U_old  = m_U;
   T L_old = L;
   // Store original arc length
   real_t dL = m_arcLength;
@@ -761,7 +763,7 @@ bool gsALMBase<T>::_bisectionSolve(gsVector<T> U, T L, T tol)
   m_adaptiveLength = false;
   bool converged = false;
 
-  T referenceError = _bisectionTerminationFunction(U, true);
+  T referenceError = _bisectionTerminationFunction(m_U, true);
 
   gsInfo<<"Bisection iterations --- Starting with U.norm = "<<m_U.norm()<<" and L = "<<m_L<<"; Reference error = "<<referenceError<<"\n";
 

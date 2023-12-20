@@ -282,8 +282,8 @@ int main (int argc, char** argv)
     real_t indicator = 0.0;
     arcLength->setIndicator(indicator); // RESET INDICATOR
     bool bisected = false;
-    real_t dL, dLb, dLb0;
-    dL = dLb = dLb0 = arcLength->getLength();
+    real_t dLb, dLb0;
+    dLb = dLb0 = arcLength->getLength();
     for (index_t k=0; k<step; k++)
     {
       gsInfo<<"Load step "<< k<<"\n";
@@ -299,12 +299,11 @@ int main (int argc, char** argv)
         continue;
       }
 
-      arcLength->computeStability(arcLength->solutionU());
-
+      arcLength->computeStability(false);
       if (arcLength->stabilityChange() && SingularPoint)
       {
           gsInfo<<"Bifurcation spotted!"<<"\n";
-          arcLength->computeSingularPoint(1e-4, 5, Uold, Lold, 1e-10, 0, true);
+          arcLength->computeSingularPoint(Uold,Lold,false);
           dLb0 = dLb = ALMOptions.askReal("Length2",dLb0);
           arcLength->setLength(dLb);
       }

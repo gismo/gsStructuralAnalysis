@@ -134,7 +134,7 @@ int main(int argc, char *argv[])
 {
     // Input options
     index_t numElevate  = 0;
-    index_t numHref     = 0;
+    index_t numHref     = 2;
     bool    plot       = false;
     bool    write = false;
     bool sequential   = false;
@@ -152,7 +152,7 @@ int main(int argc, char *argv[])
     index_t quasiNewtonInt = -1;
     bool    adaptive = false;
     real_t  perturbation = 0;
-    index_t step = 10;
+    index_t step = 1000;
     index_t maxit = 10;
 
     index_t verbose = 0;
@@ -167,15 +167,15 @@ int main(int argc, char *argv[])
     index_t interior = 4; // number of interior knots
     index_t multEnd = 3; // multiplicity at the two end knots
 
-    index_t Nx = 1;
-    index_t Ny = 0;
+    index_t Nx = 3;
+    index_t Ny = 2;
 
     real_t tw = 1.5e-3;
     real_t tg = 1.0e-3;
     real_t tb = 1.5e-3;
     real_t ts = 1.0e-3;
     real_t l  = 10.0e-3;
-    real_t al = 0.1;
+    real_t al = 0.3;
     real_t b  = 3e-3;
     real_t h  = 2*tg+tb+ts;
 
@@ -198,7 +198,7 @@ int main(int argc, char *argv[])
     cmd.addReal("a","a/l", "Value of a/l", al);
     // cmd.addReal("E","Emax", "Maximum strain", Emax);
 
-    cmd.addInt("m","Method", "Arc length method; 1: Crisfield's method; 2: RIks' method.", method);
+    cmd.addInt("m","Method", "Arc length method; 0: Load control; 1: Riks' method; 2: Crisfield's method", method);
     cmd.addReal("L","dL", "arc length", dL);
     cmd.addInt("l","level", "Max level", maxLevel);
     cmd.addReal("A","relaxation", "Relaxation factor for arc length method", relax);

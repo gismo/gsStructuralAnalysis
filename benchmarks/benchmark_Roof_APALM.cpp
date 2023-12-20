@@ -28,8 +28,6 @@
 #include <gsStructuralAnalysis/src/gsALMSolvers/gsALMRiks.h>
 #include <gsStructuralAnalysis/src/gsALMSolvers/gsAPALMData.h>
 #include <gsStructuralAnalysis/src/gsALMSolvers/gsAPALM.h>
-#include <gsStructuralAnalysis/gsSolutionFitter.h>
-#include <gsStructuralAnalysis/gsSpaceTimeFitter.h>
 #include <gsStructuralAnalysis/src/gsStructuralAnalysisTools/gsStructuralAnalysisUtils.h>
 #include <gsStructuralAnalysis/src/gsStructuralAnalysisTools/gsStructuralAnalysisTypes.h>
 
@@ -106,7 +104,7 @@ int main (int argc, char** argv)
 {
   // Input options
   int numElevate    = 1;
-  int numHref       = 1;
+  int numHref       = 2;
   bool plot         = false;
   bool mesh         = false;
   bool stress       = false;
@@ -120,13 +118,11 @@ int main (int argc, char** argv)
   bool deformed     = false;
   bool sequential   = false;
 
-  bool composite = false;
+  bool composite = true;
 
   real_t relax      = 1.0;
 
   int testCase      = 0;
-
-  int result        = 0;
 
   bool write        = false;
 
@@ -156,7 +152,7 @@ int main (int argc, char** argv)
 
   cmd.addInt("r","hRefine", "Number of dyadic h-refinement (bisection) steps to perform before solving", numHref);
   cmd.addInt("e","degreeElevation", "Number of degree elevation steps to perform on the Geometry's basis before solving", numElevate);
-  cmd.addSwitch("composite", "Composite material", composite);
+  cmd.addSwitch("nocomposite", "Do not use a composite material", composite);
 
   cmd.addInt("m","Method", "Arc length method; 1: Crisfield's method; 2: RIks' method.", method);
   cmd.addReal("L","dL", "arc length", dL);
@@ -223,6 +219,8 @@ int main (int argc, char** argv)
   {
     thickness = 16.75;
   }
+  else
+    GISMO_ERROR("Testcase undefined");
 
   gsReadFile<>("surface/scordelis_lo_roof_shallow.xml", mp);
 
@@ -264,11 +262,9 @@ int main (int argc, char** argv)
   writePoints.col(1)<< 0.5,0.5;
   writePoints.col(2)<< 1.0,0.5;
 
-#ifdef GISMO_WITH_MPI
-    const gsMpi & mpi = gsMpi::init();
-    gsMpiComm comm = mpi.worldComm();
-    cores = "_ncores="+std::to_string(comm.size());
-#endif
+  const gsMpi & mpi = gsMpi::init();
+  gsMpiComm comm = mpi.worldComm();
+  cores = "_ncores="+std::to_string(comm.size());
 
   GISMO_ASSERT(mp.targetDim()==3,"Geometry must be surface (targetDim=3)!");
   // Diaphragm conditions

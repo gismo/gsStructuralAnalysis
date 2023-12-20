@@ -52,7 +52,7 @@ int main(int argc, char *argv[])
 {
     // Input options
     int numElevate  = 0;
-    int numHref     = 0;
+    int numHref     = 2;
     bool plot       = false;
     bool write = false;
 
@@ -69,7 +69,7 @@ int main(int argc, char *argv[])
     int quasiNewtonInt = -1;
     bool adaptive = false;
     real_t perturbation = 0;
-    int step = 10;
+    int step = 1000;
     index_t maxit = 50;
 
     std::string wn("data.csv");
@@ -82,15 +82,15 @@ int main(int argc, char *argv[])
     index_t interior = 4; // number of interior knots
     index_t multEnd = 3; // multiplicity at the two end knots
 
-    index_t Nx = 1;
-    index_t Ny = 0;
+    index_t Nx = 3;
+    index_t Ny = 2;
 
     real_t tw = 1.5e-3;
     real_t tg = 1.0e-3;
     real_t tb = 1.5e-3;
     real_t ts = 1.0e-3;
     real_t l  = 10.0e-3;
-    real_t al = 0.1;
+    real_t al = 0.3;
     real_t b  = 3e-3;
     real_t h  = 2*tg+tb+ts;
 

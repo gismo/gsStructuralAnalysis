@@ -111,7 +111,7 @@ int main (int argc, char** argv)
 {
     // Input options
     int numElevate    = 1;
-    int numHref       = 1;
+    int numHref       = 5;
     bool plot         = false;
     bool sequential   = false;
     bool mesh         = false;
@@ -131,7 +131,7 @@ int main (int argc, char** argv)
 
     real_t relax      = 1.0;
 
-    int testCase      = 0;
+    int testCase      = 1;
 
     int result        = 0;
 
@@ -160,7 +160,7 @@ int main (int argc, char** argv)
     gsCmdLine cmd("APALM analysis of a collapsing frustrum.");
     cmd.addString( "f", "file", "Input XML file for assembler options", assemberOptionsFile );
 
-    cmd.addInt("t", "testcase", "Test case: 0: clamped-clamped, 1: pinned-pinned, 2: clamped-free", testCase);
+    cmd.addInt("t", "testcase", "Test case: 0: Constant top radius, 1: variable top radius", testCase);
 
     cmd.addInt("r","hRefine", "Number of dyadic h-refinement (bisection) steps to perform before solving", numHref);
     cmd.addInt("e","degreeElevation", "Number of degree elevation steps to perform on the Geometry's basis before solving", numElevate);

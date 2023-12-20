@@ -24,7 +24,6 @@
 #endif
 
 #include <gsStructuralAnalysis/src/gsDynamicSolvers/gsTimeIntegrator.h>
-#include <gsStructuralAnalysis/src/gsDynamicSolvers/gsDynamicImplicitEuler.h>
 #include <gsStructuralAnalysis/src/gsStructuralAnalysisTools/gsStructuralAnalysisTypes.h>
 
 #include <gsUtils/gsStopwatch.h>
@@ -276,23 +275,6 @@ timeIntegrator.setDisplacement(uNew);
 timeIntegrator.setVelocity(vNew);
 timeIntegrator.setAcceleration(aNew);
 
-gsVector<> Ftmp;
-TForce(0.,Ftmp);
-
-gsDebugVar(uNew);
-gsDebugVar(Ftmp);
-
-gsDynamicImplicitEuler<real_t> implEuler(Mass,Damping,Stiffness,TForce);
-implEuler.options().setReal("DT",dt);
-implEuler.applyOptions();
-implEuler.setDisplacements(uNew);
-implEuler.setVelocities(vNew);
-implEuler.setAccelerations(aNew);
-
-implEuler.step();
-gsDebugVar(implEuler.displacements().norm());
-
-
 //------------------------------------------------------------------------------
 // Nonlinear time integration
 //------------------------------------------------------------------------------
@@ -300,16 +282,12 @@ real_t time;
 for (index_t i=0; i<steps; i++)
 {
   gsStatus status = timeIntegrator.step();
-  implEuler.step();
 
   if (status!=gsStatus::Success)
     GISMO_ERROR("Time integrator did not succeed");
 
   timeIntegrator.constructSolution();
   gsMatrix<> displacements = timeIntegrator.displacements();
-
-  gsDebugVar(displacements.norm());
-  gsDebugVar(implEuler.displacements().norm());
 
   assembler->constructSolution(displacements,solution);
 
