@@ -103,7 +103,7 @@ void gsStaticDR<T>::_solve()
 
     if (m_verbose) initOutput();
 
-    _start();
+    _start(); // initializes m_Ek, etc
 
     m_Ek0 = m_Ek;
     m_Eks.push_back(m_Ek);
