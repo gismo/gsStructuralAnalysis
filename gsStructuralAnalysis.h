@@ -2,7 +2,6 @@
 
 #include <gsStructuralAnalysis/gsPanelCreator.h>
 
-
 namespace gismo
 {
 
@@ -13,6 +12,7 @@ namespace gismo
   void pybind11_init_gsStructuralAnalysis(py::module &m)
   {
     gismo::pybind11_init_gsPanelCreator( m );
+    /*Bindings for gsStructuralAnalysis go here*/
   }
 
 #endif

@@ -13,15 +13,14 @@
 
 #include <gismo.h>
 
-#include <gsKLShell/gsThinShellAssembler.h>
-#include <gsKLShell/getMaterialMatrix.h>
+#ifdef gsKLShell_ENABLED
+#include <gsKLShell/src/gsThinShellAssembler.h>
+#include <gsKLShell/src/getMaterialMatrix.h>
+#endif
 
-#include <gsStructuralAnalysis/gsStaticDR.h>
-#include <gsStructuralAnalysis/gsStaticNewton.h>
-#include <gsStructuralAnalysis/gsControlDisplacement.h>
-
-//#include <gsThinShell/gsNewtonIterator.h>
-
+#include <gsStructuralAnalysis/src/gsStaticSolvers/gsStaticDR.h>
+#include <gsStructuralAnalysis/src/gsStaticSolvers/gsStaticNewton.h>
+#include <gsStructuralAnalysis/src/gsStaticSolvers/gsControlDisplacement.h>
 using namespace gismo;
 
 void writeToCSVfile(std::string name, gsMatrix<> matrix)
@@ -41,6 +40,7 @@ void writeToCSVfile(std::string name, gsMatrix<> matrix)
 }
 
 // Choose among various shell examples, default = Thin Plate
+#ifdef gsKLShell_ENABLED
 int main(int argc, char *argv[])
 {
     //! [Parse command line]
@@ -171,7 +171,7 @@ int main(int argc, char *argv[])
     gsConstantFunction<> alpha3(-2.0,3);
     gsConstantFunction<> mu3(-0.1e5/4.225e5*mu,3);
 
-    std::vector<gsFunction<>*> parameters;
+    std::vector<gsFunctionSet<>*> parameters;
     if (material==0) // SvK & Composites
     {
         parameters.resize(2);
@@ -231,29 +231,28 @@ int main(int argc, char *argv[])
     assembler->setPointLoads(pLoads);
 
     // Function for the Jacobian
-    typedef std::function<gsSparseMatrix<real_t> (gsVector<real_t> const &)>    Jacobian_t;
-    typedef std::function<gsVector<real_t> (gsVector<real_t> const &, real_t) >   ALResidual_t;
-    Jacobian_t Jacobian = [&assembler,&mp_def](gsVector<real_t> const &x)
+    gsStructuralAnalysisOps<real_t>::Jacobian_t Jacobian = [&assembler,&mp_def](gsVector<real_t> const &x, gsSparseMatrix<real_t> & m)
     {
+      ThinShellAssemblerStatus status;
       assembler->constructSolution(x,mp_def);
-      assembler->assembleMatrix(mp_def);
-      gsSparseMatrix<real_t> m = assembler->matrix();
-      return m;
+      status = assembler->assembleMatrix(mp_def);
+      m = assembler->matrix();
+      return status == ThinShellAssemblerStatus::Success;
     };
-    // Function for the Residual
-    ALResidual_t ALResidual = [&displ,&bc,&assembler,&mp_def](gsVector<real_t> const &x, real_t lam)
+
+    gsStructuralAnalysisOps<real_t>::ALResidual_t ALResidual = [&displ,&bc,&assembler,&mp_def](gsVector<real_t> const &x, real_t lam, gsVector<real_t> & result)
     {
+        ThinShellAssemblerStatus status;
         displ.setValue(lam,3);
         assembler->updateBCs(bc);
         assembler->constructSolution(x,mp_def);
-        assembler->assembleVector(mp_def);
-        return assembler->rhs(); // - lam * force;
+        status = assembler->assembleVector(mp_def);
+        result = assembler->rhs();
+        return status == ThinShellAssemblerStatus::Success;
     };
-
 
     displ.setValue(1.0,3);
     assembler->updateBCs(bc);
-
 
     assembler->assemble();
     gsSparseMatrix<> K = assembler->matrix();
@@ -322,3 +321,10 @@ int main(int argc, char *argv[])
     return EXIT_SUCCESS;
 
 }// end main
+#else//gsKLShell_ENABLED
+int main(int argc, char *argv[])
+{
+    gsWarn<<"G+Smo is not compiled with the gsKLShell module.";
+    return EXIT_FAILURE;
+}
+#endif

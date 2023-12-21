@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--This file was created by G+Smo 21.12.0-->
+<xml>
+ <Geometry type="TensorBSpline2" id="0">
+  <Basis type="TensorBSplineBasis2">
+   <Basis type="BSplineBasis" index="0">
+    <KnotVector degree="2">0 0 0 1 1 1 </KnotVector>
+   </Basis>
+   <Basis type="BSplineBasis" index="1">
+    <KnotVector degree="2">0 0 0 1 1 1 </KnotVector>
+   </Basis>
+  </Basis>
+  <coefs geoDim="3">0 0 0 
+127 0 0 
+254 0 0 
+0 -126.7885 12.7215 
+127 -126.7885 12.7215 
+254 -126.7885 12.7215 
+0 -253.577 12.7215 
+127 -253.577 12.7215 
+254 -253.577 12.7215 
+</coefs>
+ </Geometry>
+</xml>
+
