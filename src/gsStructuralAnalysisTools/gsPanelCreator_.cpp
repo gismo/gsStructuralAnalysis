@@ -1,7 +1,7 @@
 #include <gsCore/gsTemplateTools.h>
 
-#include <gsStructuralAnalysis/gsPanelCreator.h>
-#include <gsStructuralAnalysis/gsPanelCreator.hpp>
+#include <gsStructuralAnalysis/src/gsStructuralAnalysisTools/gsPanelCreator.h>
+#include <gsStructuralAnalysis/src/gsStructuralAnalysisTools/gsPanelCreator.hpp>
 
 namespace gismo
 {

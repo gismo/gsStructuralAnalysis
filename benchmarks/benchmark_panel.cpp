@@ -13,13 +13,13 @@
 
 #include <gismo.h>
 
-#include <gsKLShell/gsThinShellAssembler.h>
-#include <gsKLShell/gsMaterialMatrixContainer.h>
-#include <gsKLShell/gsMaterialMatrixEval.h>
-#include <gsKLShell/gsMaterialMatrixIntegrate.h>
-#include <gsKLShell/getMaterialMatrix.h>
+#include <gsKLShell/src/gsThinShellAssembler.h>
+#include <gsKLShell/src/gsMaterialMatrixContainer.h>
+#include <gsKLShell/src/gsMaterialMatrixEval.h>
+#include <gsKLShell/src/gsMaterialMatrixIntegrate.h>
+#include <gsKLShell/src/getMaterialMatrix.h>
 #include <gsCore/gsPiecewiseFunction.h>
-#include <gsStructuralAnalysis/gsPanelCreator.h>
+#include <gsStructuralAnalysis/src/gsStructuralAnalysisTools/gsPanelCreator.h>
 
 using namespace gismo;
 
@@ -569,7 +569,7 @@ int main(int argc, char *argv[])
     Ts[0] = &thicks;
 
     //! [Make assembler]
-    std::vector<gsFunction<>*> parameters;
+    std::vector<gsFunctionSet<>*> parameters;
     gsMaterialMatrixBase<real_t>* materialMatrix;
     gsOptionList options;
     // Make gsMaterialMatrix depending on the user-defined choices
