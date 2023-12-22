@@ -116,6 +116,7 @@ int main (int argc, char** argv)
 
   real_t Load;
 
+  // Panaitescu
   if (testCase==0)
   {
     if (dL == -1) { dL = 1e-1; }
@@ -203,7 +204,7 @@ int main (int argc, char** argv)
     if (dL == -1) { dL = 11.8421052632; }
     if (numHref == -1) { numHref = 0; }
     if (numElevate == -1) { numElevate = 2; }
-    if (method == -1) { method = 0; }
+    if (method == -1) { method = 2; }
 
     thickness = 0.15;
     bDim = thickness / 1.9e-3;

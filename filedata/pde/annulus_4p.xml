@@ -109,7 +109,7 @@
 <string label="Solver" desc="Specifies the sparse solver, see gsSparseSolver::get for more details [string]" value="CGDiagonal"/>
 
 <real label="damping" desc="damping factor" value="0"/>
-<real label="alpha" desc="mass coefficient" value="1e14"/>
+<real label="alpha" desc="mass coefficient" value="1e15"/>
 <real label="tolE" desc="Kinetic energy tolerance" value="1e-1"/>
 <int label="ResetIt" desc="Reset rate of velocities if damping is zero" value="1000"/>
 </OptionList>

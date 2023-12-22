@@ -23,7 +23,6 @@
 #endif
 
 #include <gsStructuralAnalysis/src/gsStaticSolvers/gsStaticNewton.h>
-#include <gsStructuralAnalysis/src/gsStructuralAnalysisTools/gsStructuralAnalysisTypes.h>
 
 //#include <gsThinShell/gsNewtonIterator.h>
 

@@ -19,7 +19,6 @@
 #endif
 
 #include <gsStructuralAnalysis/src/gsEigenSolvers/gsModalSolver.h>
-#include <gsStructuralAnalysis/src/gsStructuralAnalysisTools/gsStructuralAnalysisTypes.h>
 
 using namespace gismo;
 
@@ -519,12 +518,13 @@ int main (int argc, char** argv)
     modal.options().setInt("sortRule",4);
     modal.options().setSwitch("verbose",true);
     modal.options().setInt("ncvFac",2);
+    modal.options().setReal("shift",shift);
 
     gsStatus status;
     if (!sparse)
         status = modal.compute();
     else
-        status = modal.computeSparse(shift,10);//,2,Spectra::SortRule::LargestMagn,Spectra::SortRule::SmallestMagn);
+        status = modal.computeSparse(10);//,2,Spectra::SortRule::LargestMagn,Spectra::SortRule::SmallestMagn);
 
     GISMO_ENSURE(status == gsStatus::Success,"Buckling solver failed");
 

@@ -19,7 +19,7 @@
 </boundary>
  </MultiPatch>
 
-<MaterialMatrix type="IncompressibleNH3" id="10" TFT="true">
+<MaterialMatrix type="IncompressibleNH3" id="10" TFT="false">
   <Thickness>
     <Function type="FunctionExpr" dim="3" index="0">0.05e-3</Function>
   </Thickness>

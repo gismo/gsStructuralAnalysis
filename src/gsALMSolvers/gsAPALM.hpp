@@ -17,9 +17,15 @@ namespace gismo
 {
 
 template <class T>
+#ifdef GISMO_WITH_MPI
 gsAPALM<T>::gsAPALM(  gsALMBase<T> * ALM,
                       const gsAPALMData<T,solution_t> & Data,
-                      const typename gsMpi::Communicator & comm)
+                      const gsMpiComm & comm                 )
+#else
+gsAPALM<T>::gsAPALM(  gsALMBase<T> * ALM,
+                      const gsAPALMData<T,solution_t> & Data,
+                      const gsSerialComm & comm              )
+#endif
 :
 m_ALM(ALM),
 m_dataEmpty(Data),

@@ -1,0 +1,279 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xml>
+
+<MultiPatch parDim="2" id="0">
+<patches type="id_range">9991 9994</patches>
+  <interfaces>
+    9991 2 9993 1 0 1 0 1
+    9991 4 9992 3 0 1 1 0
+    9992 2 9994 1 0 1 0 1
+    9993 4 9994 3 0 1 1 0
+</interfaces>
+  <boundary name="left">
+    9991 1
+    9992 1
+</boundary>
+  <boundary name="right">
+    9993 2
+    9994 2
+</boundary>
+  <boundary name="top">
+    9992 4
+    9994 4
+</boundary>
+  <boundary name="bottom">
+    9991 3
+    9993 3
+</boundary>
+</MultiPatch>
+
+<MaterialMatrix type="IncompressibleNH3" id="10" TFT="false">
+  <Thickness>
+    <Function type="FunctionExpr" dim="3" index="0">0.05e-3</Function>
+  </Thickness>
+  <Density>
+    <Function type="FunctionExpr" dim="3" index="0">1e0</Function>
+  </Density>
+  <Parameters>
+    <Function type="FunctionExpr" dim="3" index="0">1e9</Function> <!-- Youngs Modulus -->
+    <Function type="FunctionExpr" dim="3" index="1">0.5</Function> <!-- Poisson Ratio  -->
+  </Parameters>
+</MaterialMatrix>
+
+<MaterialMatrixContainer size="4" id="11">
+<MaterialMatrix type="IncompressibleNH3" index="0" TFT="false">
+  <Thickness>
+    <Function type="FunctionExpr" dim="3" index="0">0.01e-3</Function>
+  </Thickness>
+  <Density>
+    <Function type="FunctionExpr" dim="3" index="0">1e0</Function>
+  </Density>
+  <Parameters>
+    <Function type="FunctionExpr" dim="3" index="0">1e9</Function>
+    <Function type="FunctionExpr" dim="3" index="1">0.5</Function>
+  </Parameters>
+</MaterialMatrix>
+
+<MaterialMatrix type="Linear3" index="1" TFT="false">
+  <Thickness>
+    <Function type="FunctionExpr" dim="3" index="0">0.1e-3</Function>
+  </Thickness>
+  <Density>
+    <Function type="FunctionExpr" dim="3" index="0">1e0</Function>
+  </Density>
+  <Parameters>
+    <Function type="FunctionExpr" dim="3" index="0">100e9</Function>
+    <Function type="FunctionExpr" dim="3" index="1">0.3</Function>
+  </Parameters>
+</MaterialMatrix>
+
+<group material="0">
+1
+2
+3
+</group>
+<group material="1">
+0
+</group>
+</MaterialMatrixContainer>
+
+
+<!-- Boundary conditions and loads -->
+<boundaryConditions id="20" multipatch="0">
+  <Function type="FunctionExpr" dim="3" index="0">0</Function>
+  <Function type="FunctionExpr" dim="3" index="1">
+    <c>5e-2</c>
+    <c>0</c>
+    <c>0</c>
+  </Function>
+  <Function type="FunctionExpr" dim="3" index="2">
+    <c>1</c>
+    <c>0</c>
+    <c>0</c>
+  </Function>
+  <bc type="Dirichlet" function="0" unknown="0" component="0" name="left">
+  </bc>
+  <bc type="Dirichlet" function="0" unknown="0" component="1" name="right">
+  </bc>
+  <bc type="Dirichlet" function="0" unknown="0" component="1" name="bottom">
+  </bc>
+  <bc type="Dirichlet" function="0" unknown="0" component="2" name="bottom">
+  </bc>
+  <bc type="Dirichlet" function="0" unknown="0" component="2" name="right">
+  </bc>
+  <bc type="Clamped" function="0" unknown="0" component="2" name="left">
+  </bc>
+  <bc type="Clamped" function="0" unknown="0" component="2" name="right">
+  </bc>
+
+  <bc type="Collapsed" function="0" unknown="0" component="0" name="right">
+  </bc>
+<!--   <bc type="Neumann" function="1" unknown="0" name="right">
+    0 2
+  </bc> -->
+</boundaryConditions>
+
+<!-- Distributed load function -->
+<Function type="FunctionExpr" id="21" tag="Loads" dim="3">
+  <c> 0 </c>
+  <c> 0 </c>
+  <c> 0 </c>
+</Function>
+<!-- Distributed pressure function -->
+<Function type="FunctionExpr" id="22" tag="Loads" dim="3">0</Function>
+
+<!-- Point load coordinates -->
+<Matrix rows="2" cols="1" id="30" tag="Loads" >
+  1.0
+  0.0
+</Matrix>
+<!-- Point load forces -->
+<Matrix rows="3" cols="1" id="31" tag="Loads" >
+  1
+  0
+  0
+</Matrix>
+<!-- Point load patchIds -->
+<Matrix rows="1" cols="1" id="32" tag="Loads" >
+  3
+</Matrix>
+
+<!-- Reference point coordinates -->
+<Matrix rows="2" cols="1" id="50" >
+  1
+  0
+</Matrix>
+<!-- Reference point patch indices -->
+<Matrix rows="1" cols="1" id="51" >
+  1
+</Matrix>
+<!-- Reference values -->
+<Matrix rows="0" cols="0" id="52" >
+</Matrix>
+
+
+<!-- Dynamic Relaxation Solver options -->
+<OptionList id="90">
+<real label="tol" desc="Relative tolerance" value="1e-1"/>
+<real label="tolF" desc="Residual relative tolerance" value="-1"/>
+<real label="tolU" desc="Solution step relative tolerance" value="-1"/>
+<int label="maxIt" desc="Maximum number of iterations" value="1000000"/>
+<int label="verbose" desc="Verbose output" value="1"/>
+<int label="BifurcationMethod" desc="Bifurcation Identification based on: 0: Determinant;  1: Eigenvalue" value="1"/>
+<string label="Solver" desc="Specifies the sparse solver, see gsSparseSolver::get for more details [string]" value="CGDiagonal"/>
+
+<real label="damping" desc="damping factor" value="0"/>
+<real label="alpha" desc="mass coefficient" value="1e18"/>
+<real label="tolE" desc="Kinetic energy tolerance" value="1e-1"/>
+<int label="ResetIt" desc="Reset rate of velocities if damping is zero" value="1000"/>
+</OptionList>
+<!-- Newton Raphson Solver Options -->
+<OptionList id="91">
+<real label="tol" desc="Relative tolerance" value="1e-6"/>
+<real label="tolF" desc="Residual relative tolerance" value="-1"/>
+<real label="tolU" desc="Solution step relative tolerance" value="-1"/>
+<int label="maxIt" desc="Maximum number of iterations" value="100"/>
+<int label="verbose" desc="Verbose output" value="1"/>
+<int label="BifurcationMethod" desc="Bifurcation Identification based on: 0: Determinant;  1: Eigenvalue" value="1"/>
+<string label="Solver" desc="Specifies the sparse solver, see gsSparseSolver::get for more details [string]" value="CGDiagonal"/>
+
+<real label="Relaxation" desc="Relaxation parameters" value="1"/>
+</OptionList>
+
+<!-- Thin Shell Assembler options -->
+<OptionList id="92">
+<int label="Continuity" desc="Set the continuity of the interface assembly [int]" value="0"/>
+</OptionList>
+
+<OptionList id="93">
+ <string label="Solver" desc="Sparse linear solver" value="CGDiagonal"/>
+ <int label="AdaptiveIterations" desc="Desired iterations for adaptive length" value="10"/>
+ <int label="AngleMethod" desc="Angle determination method: 0 = Previous step; 1 = Previous iteration" value="0"/>
+ <int label="BifurcationMethod" desc="Bifurcation Identification based on: 0: Determinant;  1: Eigenvalue" value="1"/>
+ <int label="MaxIter" desc="Maximum iterations" value="25"/>
+ <int label="QuasiIterations" desc="Number of iterations for quasi newton method" value="-1"/>
+ <int label="SingularPointFailure" desc="What to do wne a singular point determination fails?: 0 = Apply solution anyways; 1 = Proceed without singular point" value="1"/>
+ <real label="Length" desc="Arclength" value="1e-4"/>
+ <real label="Perturbation" desc="Set Perturbation factor Tau" value="1e4"/>
+ <real label="Relaxation" desc="Set Relaxation factor alpha" value="1"/>
+ <real label="Scaling" desc="Set Scaling factor Phi" value="0"/>
+ <real label="Tol" desc="Tolerance" value="1e-03"/>
+ <real label="TolF" desc="Tolerance" value="0.001"/>
+ <real label="TolU" desc="Tolerance" value="1e-03"/>
+ <bool label="AdaptiveLength" desc="Adaptive length" value="0"/>
+ <bool label="Quasi" desc="Use Quasi Newton method" value="0"/>
+ <bool label="Verbose" desc="Verbose output" value="1"/>
+ <string label="Method" desc="Solver to use" value="Crisfield"/>
+ <real label="Length2" desc="Arclength" value="1e-2"/>
+</OptionList>
+
+
+<Geometry type="TensorBSpline2" id="9991">
+<Basis type="TensorBSplineBasis2">
+<Basis type="BSplineBasis" index="0">
+<KnotVector degree="1">0 0 1 1 </KnotVector>
+</Basis>
+<Basis type="BSplineBasis" index="1">
+<KnotVector degree="1">0 0 1 1 </KnotVector>
+</Basis>
+</Basis>
+<coefs geoDim="3">
+0      0     0
+0.035  0     0
+0      0.0175 0
+0.035  0.0175 0
+</coefs>
+</Geometry>
+
+<Geometry type="TensorBSpline2" id="9992">
+<Basis type="TensorBSplineBasis2">
+<Basis type="BSplineBasis" index="0">
+<KnotVector degree="1">0 0 1 1 </KnotVector>
+</Basis>
+<Basis type="BSplineBasis" index="1">
+<KnotVector degree="1">0 0 1 1 </KnotVector>
+</Basis>
+</Basis>
+<coefs geoDim="3">
+0      0.0175 0
+0.035  0.0175 0
+0      0.07  0
+0.035  0.07  0
+</coefs>
+</Geometry>
+
+<Geometry type="TensorBSpline2" id="9993">
+<Basis type="TensorBSplineBasis2">
+<Basis type="BSplineBasis" index="0">
+<KnotVector degree="1">0 0 1 1 </KnotVector>
+</Basis>
+<Basis type="BSplineBasis" index="1">
+<KnotVector degree="1">0 0 1 1 </KnotVector>
+</Basis>
+</Basis>
+<coefs geoDim="3">
+0.035  0     0
+0.14   0     0
+0.035  0.0175 0
+0.14   0.0175 0
+</coefs>
+</Geometry>
+
+<Geometry type="TensorBSpline2" id="9994">
+<Basis type="TensorBSplineBasis2">
+<Basis type="BSplineBasis" index="0">
+<KnotVector degree="1">0 0 1 1 </KnotVector>
+</Basis>
+<Basis type="BSplineBasis" index="1">
+<KnotVector degree="1">0 0 1 1 </KnotVector>
+</Basis>
+</Basis>
+<coefs geoDim="3">
+0.035  0.0175 0
+0.14   0.0175 0
+0.035  0.07  0
+0.14   0.07  0
+</coefs>
+</Geometry>
+
+</xml>

@@ -65,21 +65,21 @@ int main (int argc, char** argv)
 {
     // Input options
     int numElevate  = 1;
-    int numHref     = 1;
+    int numHref     = 5;
     bool plot       = false;
     bool plotfiles  = false;
     bool stress       = false;
     bool mesh = false;
     bool verbose = false;
-    int step = 10;
+    int step = 50;
     bool deformed = false;
 
     bool DR = false;
-    bool NR = false;
+    bool NR = true;
 
-    real_t perturbation = 0;
+    real_t perturbation = 1e-3;
 
-    real_t thickness = 1e-2;
+    real_t thickness = 1e-3;
     real_t E_modulus     = 1;
     real_t PoissonRatio = 0;
     real_t Density = 1e0;
@@ -101,13 +101,13 @@ int main (int argc, char** argv)
     index_t maxitDR = 20000;
     index_t maxitDC = 100;
 
-    real_t alpha = 2.0;
-    real_t damping = 1.0;
+    real_t alpha = 1e-5;
+    real_t damping = 0;
 
     // Arc length method options
-    real_t dL = 1e-2; // General arc length
-    real_t tolF = 1e-6;
-    real_t tolU = 1e-6;
+    real_t dL = 1e-1; // General arc length
+    real_t tolF = 1e-3;
+    real_t tolU = 1e-3;
 
     std::string wn("data.csv");
 
@@ -360,9 +360,9 @@ int main (int argc, char** argv)
     DROptions.setReal("damping",damping);
     DROptions.setReal("alpha",alpha);
     DROptions.setInt("maxIt",maxitDR);
-    DROptions.setReal("tolF",1e-2);
-    DROptions.setReal("tolU",1e-2);
-    DROptions.setReal("tolE",1e-2);
+    DROptions.setReal("tolF",1e-3);
+    DROptions.setReal("tolU",1e-3);
+    DROptions.setReal("tolE",1e-3);
     DROptions.setInt("verbose",verbose);
     DRM.setOptions(DROptions);
     DRM.initialize();

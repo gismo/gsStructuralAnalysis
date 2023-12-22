@@ -51,10 +51,15 @@ public:
    * @param[in]  Data  The arc-length data manager
    * @param[in]  comm  The MPI comminication
    */
+#ifdef GISMO_WITH_MPI
   gsAPALM(  gsALMBase<T> * ALM,
             const gsAPALMData<T,solution_t> & Data,
-            const typename gsMpi::Communicator & comm);
-
+            const gsMpiComm & comm                 );
+#else
+  gsAPALM(  gsALMBase<T> * ALM,
+          const gsAPALMData<T,solution_t> & Data,
+          const gsSerialComm & comm                );
+#endif
   /**
    * @brief      Constructs the APALM
    *
@@ -347,7 +352,11 @@ protected:
 
 #endif
 
+#ifdef GISMO_WITH_MPI
   const gsMpiComm & comm() { return m_comm; }
+#else
+  const gsSerialComm & comm() { return m_comm; }
+#endif
 
   template <bool _hasWorkers>
   typename std::enable_if< _hasWorkers, void>::type
@@ -409,10 +418,13 @@ protected:
   index_t m_maxIterations;
 
   // Conditional compilation
-  const gsMpiComm & m_comm ;
 #ifdef GISMO_WITH_MPI
+  const gsMpiComm & m_comm ;
   std::queue<index_t> m_workers;
+#else
+  const gsSerialComm & m_comm ;
 #endif
+
 
   index_t m_proc_count, m_rank;
 };

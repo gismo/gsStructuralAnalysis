@@ -119,41 +119,45 @@ int main (int argc, char** argv)
 
     // ![Read data]
     gsFileData<real_t> fd(bvp);
-    gsInfo<<"Reading geometry (ID=0) ...";
-    fd.getId(0,mp);
+    if (fd.hasAny<gsMultiPatch<real_t>>())
+    {
+      gsInfo<<"Reading geometry from "<<bvp<<" (ID=0) ...";
+      fd.getId(0,mp);
+    }
+    else
+    {
+      std::string geomFileName = fd.getString(0);
+      std::string path = gsFileManager::getPath(bvp) + gsFileManager::getNativePathSeparator();
+      gsInfo<<"Reading geometry from "<<path + geomFileName<<" ...";
+      gsReadFile<>(path + geomFileName,mp);
+    }
     gsInfo<<"Finished\n";
 
-    // // p-refine
-    // for (size_t p=0; p!=mp.nPatches(); p++)
-    // {
-    //   for(index_t i = 0; i< numElevate; ++i)
-    //     mp.patch(p).degreeIncrease();    // Elevate the degree
-
-    //   // h-refine
-    //   for(index_t i = 0; i< numRefine; ++i)
-    //     mp.patch(p).uniformRefine();
-    // }
-
-    GISMO_ENSURE(degree>=mp.patch(0).degree(0),"Degree must be larger than or equal to the degree of the initial geometry, but degree = "<<degree<<" and the original degree = "<<mp.patch(0).degree(0));
-    // mp.degreeElevate(degree-mp.patch(0).degree(0));
+    // p-refine
     for (size_t p=0; p!=mp.nPatches(); p++)
     {
-        index_t diff = degree-mp.patch(p).degree(0);
-        for(index_t i = 0; i< diff; ++i)
-            mp.patch(p).degreeIncrease();    // Elevate the degree
-    }
+      for(index_t i = 0; i< numElevate; ++i)
+      {
+        if (dynamic_cast<gsTensorNurbs<2,real_t> * >(&mp.patch(p)))
+        {
+          gsWarn<<"Degree elevation applied"<<"\n";
+          mp.patch(p).degreeElevate();    // Elevate the degree
+        }
+        else
+          mp.patch(p).degreeIncrease();    // Elevate the degree
+      }
 
-    // h-refine
-    for (int r =0; r < numRefine; ++r)
-    {
-        mp.uniformRefine(1,degree-smoothness);
+      // h-refine
+      for(index_t i = 0; i< numRefine; ++i)
+        mp.patch(p).uniformRefine();
     }
-
-    for (size_t p=0; p!=mp.nPatches(); p++)
-        gsDebug<<"basis "<<p<<":\n"<<mp.basis(p)<<"\n";
 
     gsMultiBasis<> dbasis(mp,true);
     gsInfo<<"Basis (patch 0): "<< mp.patch(0).basis() << "\n";
+    if (gsTensorNurbsBasis<2,real_t> * basis = dynamic_cast<gsTensorNurbsBasis<2,real_t> * >(&mp.basis(0)))
+      for (index_t dim = 0; dim!=2; dim++)
+        gsDebug<<"dir "<<dim<<": "<<basis->knots(dim).asMatrix()<<"\n";
+    
     mp_def = mp;
 
     gsInfo<<"Looking for material matrices ...\n";
