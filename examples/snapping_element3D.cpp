@@ -85,7 +85,7 @@ int main(int argc, char *argv[])
 
     real_t Emax = 1.5;
 
-    gsCmdLine cmd("");
+    gsCmdLine cmd("Snapping analysis of a single element in 3D");
     cmd.addInt("n","interior","Number of interior knots",interior);
 
     cmd.addInt("r","hRefine",

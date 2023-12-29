@@ -18,17 +18,16 @@
 #include <gsKLShell/src/gsFunctionSum.h>
 #endif
 
+#ifdef gsStructuralAnalysis_ENABLED
 #include <gsStructuralAnalysis/src/gsEigenSolvers/gsBucklingSolver.h>
-
 #include <gsStructuralAnalysis/src/gsStructuralAnalysisTools/gsStructuralAnalysisUtils.h>
+#endif
 
-#ifdef gsUnstructuredSplines_ENABLED
 #include <gsUnstructuredSplines/src/gsSmoothInterfaces.h>
 #include <gsUnstructuredSplines/src/gsAlmostC1.h>
 #include <gsUnstructuredSplines/src/gsDPatch.h>
 #include <gsUnstructuredSplines/src/gsApproxC1Spline.h>
 #include <gsUnstructuredSplines/src/gsC1SurfSpline.h>
-#endif
 
 using namespace gismo;
 
