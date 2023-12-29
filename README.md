@@ -1,19 +1,3 @@
-# To Do
-- ALResidual(x,lambda,force) --> ALResidual(x,lambda)
-
-# Changelog
-## v23.3:
-  - add APALM (see PR https://github.com/gismo/gsStructuralAnalysis/pull/13)
-
-## v22.1:
-  - Static solves can be done by `gsStaticNewton` and `gsStaticDR` (Dynamic Relaxation method), both inheriting from `gsStaticBase`
-  - Provided base class for ALMs. All ALMs have a separate class now, and the singular point approach method is implemented in the base class.
-  - Eigenvalue problems (Buckling, Modal) have a base class as well, and `gsBucklingSolver` and `gsModalSolver` only provide a top-layer assigning the right matrices.
-  - Output splines instead of paraview!! (--plotfiles & postprocess.cpp)
-  - Dynamic relaxation method added!
-## v21.6:
-  - Initial version!
-
 # gsStructuralAnalysis
 
 Module for structural analysis with solids ([`gsElasticity`](https://github.com/gismo/gsElasticity/)) or Kirchhoff-Love shells ([`gsKLShell`](https://github.com/gismo/gsKLShell/src/)).
@@ -53,39 +37,43 @@ The `gsStructuralAnalysis` 	module provides the following analysis tools:
 All the tools in the `gsStructuralAnalysis` structural mass matrices, (linear/nonlinear) siffness matrices and forcing vectors/jacobians. The nonlinear modules typically work with jacobians and residuals of the following form (example using `gsThinShellAssembler`):
 * Jacobian with solution **u**; K(**u**):
 ```
-typedef std::function<gsSparseMatrix<T> (gsVector<T> const &)>    Jacobian_t;
-Jacobian_t Jacobian = [&assembler,&mp_def](gsVector<T> const &x)
+gsStructuralAnalysisOps<real_t>::Jacobian_t Jacobian = [&assembler,&mp_def](gsVector<real_t> const &x, gsSparseMatrix<real_t> & m)
 {
-  assembler.constructSolution(x,mp_def);
-  assembler.assembleMatrix(mp_def);
-  return assembler.matrix();
+    ThinShellAssemblerStatus status;
+    assembler->constructSolution(x,mp_def);
+    status = assembler->assembleMatrix(mp_def);
+    m = assembler->matrix();
+    return status == ThinShellAssemblerStatus::Success;
 };
 ```
 * Residual with solution **u**; R(**u**):
 ```
-typedef std::function<gsVector<T> (gsVector<T> const &) >         Residual_t;
-Residual_t Residual = [&assembler,&mp_def](gsVector<T> const &x)
+// Function for the Residual
+gsStructuralAnalysisOps<real_t>::Residual_t Residual = [&assembler,&mp_def](gsVector<real_t> const &x, gsVector<real_t> & result)
 {
-  assembler.constructSolution(x,mp_def);
-  assembler.assembleVector(mp_def);
-  return assembler.rhs();
+    ThinShellAssemblerStatus status;
+    assembler->constructSolution(x,mp_def);
+    status = assembler->assembleVector(mp_def);
+    result = assembler->rhs();
+    return status == ThinShellAssemblerStatus::Success;
 };
+
 ```
 * Arc-Length method residual with solution **u**, load factor lambda and linear forcing vector **F**; R(u,\lambda,**F**):
 ```
-typedef std::function<gsVector<T> (gsVector<T> const &, T, gsVector<T> const &) >         ALResidual_t;
-ALResidual = [&time,&stopwatch,&assembler,&mp_def](gsVector<T> const &x, T lam, gsVector<T> const &force)
+gsStructuralAnalysisOps<real_t>::Residual_t Residual = [&assembler,&mp_def](gsVector<real_t> const &x, real_t lambda, gsVector<real_t> & result)
 {
+  ThinShellAssemblerStatus status;
   assembler.constructSolution(x,mp_def);
   assembler.assembleVector(mp_def);
   gsVector<T> Fint = -(assembler.rhs() - force);
   gsVector<T> result = Fint - lam * force;
-  return result;
+  return status == ThinShellAssemblerStatus::Success;
 };
 
 ```
 
-Where the `std::function` types are the ones accepted by the gsStructuralAnalysis module
+Where the `std::function` types are the ones accepted by the gsStructuralAnalysis module. See the `struct` `gsStructuralAnalysisOps` in the file `gsStructuralAnalysisTools/gsStructuralAnalysisTypes`
 
 
 #### Linear and nonlinear static analysis with gsStaticAnalysis
