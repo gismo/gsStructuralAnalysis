@@ -1,9 +1,9 @@
 /** @file benchmark_Beam.cpp
 
-    @brief Two benchmark cases using arc-length methods for a beam, according to
+  @brief Two benchmark cases using arc-length methods for a beam, according to
 
-    Pagani, A., & Carrera, E. (2018). Unified formulation of geometrically nonlinear refined beam theories.
-    Mechanics of Advanced Materials and Structures, 25(1), 15–31. https://doi.org/10.1080/15376494.2016.1232458
+  Pagani, A., & Carrera, E. (2018). Unified formulation of geometrically nonlinear refined beam theories.
+  Mechanics of Advanced Materials and Structures, 25(1), 15–31. https://doi.org/10.1080/15376494.2016.1232458
 
     This file is part of the G+Smo library.
 
@@ -74,7 +74,7 @@ int main (int argc, char** argv)
     std::string wn("data.csv");
     std::string assemberOptionsFile("options/solver_options.xml");
 
-    gsCmdLine cmd("Arc-length analysis with a beam.");
+    gsCmdLine cmd("Arc-length analysis of a buckled beam.");
     cmd.addString( "f", "file", "Input XML file for assembler options", assemberOptionsFile );
 
     cmd.addInt("t", "testcase", "Test case: 0: clamped-clamped, 1: pinned-pinned, 2: clamped-free", testCase);

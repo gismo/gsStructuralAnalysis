@@ -1,6 +1,6 @@
-/** @file benchmark_Balloon.cpp
+/** @file quasistatic_shell_multipatch_XML.cpp
 
-    @brief Benchmark for the inflated pillow using the Arc-Length Method
+    @brief Blackbox solver for quasi-static shell analysis using unstructured splines
 
     This file is part of the G+Smo library.
 
@@ -13,9 +13,11 @@
 
 #include <gismo.h>
 
+#ifdef gsKLShell_ENABLED
 #include <gsKLShell/src/gsThinShellAssembler.h>
 #include <gsKLShell/src/gsMaterialMatrixTFT.h>
 #include <gsKLShell/src/gsFunctionSum.h>
+#endif
 
 #include <gsStructuralAnalysis/src/gsALMSolvers/gsALMBase.h>
 #include <gsStructuralAnalysis/src/gsALMSolvers/gsALMLoadControl.h>
@@ -24,16 +26,20 @@
 
 #include <gsStructuralAnalysis/src/gsStructuralAnalysisTools/gsStructuralAnalysisUtils.h>
 
+#ifdef gsUnstructuredSplines_ENABLED
 #include <gsUnstructuredSplines/src/gsSmoothInterfaces.h>
 #include <gsUnstructuredSplines/src/gsAlmostC1.h>
 #include <gsUnstructuredSplines/src/gsDPatch.h>
 #include <gsUnstructuredSplines/src/gsC1SurfSpline.h>
+#endif
 
 using namespace gismo;
 
 template <class T>
 void writeStepOutput(const gsALMBase<T> * arcLength, const gsMultiPatch<T> & deformation, const std::string name, const gsMatrix<T> & points, const gsMatrix<index_t> & patches);
 
+#ifdef gsKLShell_ENABLED
+#ifdef gsUnstructuredSplines_ENABLED
 int main (int argc, char** argv)
 {
     // Input options
@@ -61,7 +67,7 @@ int main (int argc, char** argv)
 
     std::string wn("data.csv");
 
-    gsCmdLine cmd("Example for an inflating balloon.");
+    gsCmdLine cmd("Shell quasistatic solver for multi-patches.");
 
     cmd.addInt("r","hRefine", "Number of dyadic h-refinement (bisection) steps to perform before solving", numRefine);
     cmd.addInt("e","degreeElevation", "Number of degree elevation steps to perform on the Geometry's basis before solving", numElevate);
@@ -409,8 +415,8 @@ int main (int argc, char** argv)
     real_t indicator = 0.0;
     arcLength->setIndicator(indicator); // RESET INDICATOR
     bool bisected = false;
-    real_t dL, dLb, dLb0;
-    dL = dLb = dLb0 = arcLength->getLength();
+    real_t dLb, dLb0;
+    dLb = dLb0 = arcLength->getLength();
     for (index_t k=0; k<step; k++)
     {
       gsInfo<<"Load step "<< k<<"\n";
@@ -517,6 +523,21 @@ int main (int argc, char** argv)
 
     return EXIT_SUCCESS;
 }
+#else//gsUnstructuredSplines_ENABLED
+int main(int argc, char *argv[])
+{
+    gsWarn<<"G+Smo is not compiled with the gsUnstructuredSplines module.";
+    return EXIT_FAILURE;
+}
+#endif
+#else//gsKLShell_ENABLED
+int main(int argc, char *argv[])
+{
+    gsWarn<<"G+Smo is not compiled with the gsKLShell module.";
+    return EXIT_FAILURE;
+}
+#endif
+
 
 template <class T>
 void writeStepOutput(const gsALMBase<T> * arcLength, const gsMultiPatch<T> & deformation, const std::string name, const gsMatrix<T> & points, const gsMatrix<index_t> & patches)

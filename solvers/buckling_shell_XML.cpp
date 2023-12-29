@@ -1,6 +1,6 @@
-/** @file benchmark_Balloon.cpp
+/** @file buckling_shell_XML.cpp
 
-    @brief Benchmark for the inflated pillow using the Arc-Length Method
+    @brief Blackbox solver for shell buckling analysis
 
     This file is part of the G+Smo library.
 
@@ -13,7 +13,9 @@
 
 #include <gismo.h>
 
+#ifdef gsKLShell_ENABLED
 #include <gsKLShell/src/gsThinShellAssembler.h>
+#endif
 
 #include <gsStructuralAnalysis/src/gsEigenSolvers/gsBucklingSolver.h>
 
@@ -21,6 +23,7 @@
 
 using namespace gismo;
 
+#ifdef gsKLShell_ENABLED
 int main (int argc, char** argv)
 {
     // Input options
@@ -39,7 +42,7 @@ int main (int argc, char** argv)
 
     std::string wn("data.csv");
 
-    gsCmdLine cmd("Example for an inflating balloon.");
+    gsCmdLine cmd("Shell buckling solver.");
 
     cmd.addInt("r","hRefine", "Number of dyadic h-refinement (bisection) steps to perform before solving", numRefine);
     cmd.addInt("e","degreeElevation", "Number of degree elevation steps to perform on the Geometry's basis before solving", numElevate);
@@ -292,3 +295,10 @@ int main (int argc, char** argv)
     }
     return EXIT_SUCCESS;
 }
+#else//gsKLShell_ENABLED
+int main(int argc, char *argv[])
+{
+    gsWarn<<"G+Smo is not compiled with the gsKLShell module.";
+    return EXIT_FAILURE;
+}
+#endif

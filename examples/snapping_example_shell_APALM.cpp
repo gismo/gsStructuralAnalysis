@@ -1,6 +1,9 @@
-/** @file bSplineCurve_example.cpp
+/** @file snapping_example_shell_APALM.cpp
 
-    @brief Tutorial on gsBSpline class.
+    @brief APALM analysis of a snapping meta material. Inspired by
+    
+    Rafsanjani, A., Akbarzadeh, A., & Pasini, D. (2015). Snapping Mechanical Metamaterials under Tension. 
+    Advanced Materials, 27(39), 5931–5935. https://doi.org/10.1002/adma.201502809
 
     This file is part of the G+Smo library.
 
@@ -8,7 +11,7 @@
     License, v. 2.0. If a copy of the MPL was not distributed with this
     file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-    Author(s): A. Mantzaflaris
+    Author(s): H. M. Verhelst
 */
 
 #include <gismo.h>
@@ -19,6 +22,7 @@
 #include <gsKLShell/src/gsMaterialMatrixLinear.h>
 #include <gsKLShell/src/getMaterialMatrix.h>
 #endif
+
 #include <gsStructuralAnalysis/src/gsStructuralAnalysisTools/gsStructuralAnalysisUtils.h>
 
 #include <gsStructuralAnalysis/src/gsALMSolvers/gsALMBase.h>
@@ -28,8 +32,9 @@
 #include <gsStructuralAnalysis/src/gsALMSolvers/gsAPALMData.h>
 #include <gsStructuralAnalysis/src/gsALMSolvers/gsAPALM.h>
 
-
 using namespace gismo;
+
+#ifdef gsKLShell_ENABLED
 
 template <class T>
 std::vector<gsBSpline<T>> makeCurve(const T tw, const T tg, const T tb, const T ts, const T l, const T a, const std::string expr, const gsKnotVector<T> & kv1);
@@ -149,7 +154,6 @@ int main(int argc, char *argv[])
     bool    quasiNewton = false;
     index_t quasiNewtonInt = -1;
     bool    adaptive = false;
-    real_t  perturbation = 0;
     index_t step = 1000;
     index_t maxit = 10;
 
@@ -181,7 +185,7 @@ int main(int argc, char *argv[])
 
     // real_t Emax = 1.5;
 
-    gsCmdLine cmd("");
+    gsCmdLine cmd("Snapping analysis using shells with the APALM");
     cmd.addInt("i","interior","Number of interior knots",interior);
     cmd.addInt("X","Nx","Number of element in x-direction",Nx);
     cmd.addInt("Y","Ny","Number of element in y-direction",Ny);
@@ -261,21 +265,20 @@ int main(int argc, char *argv[])
     real_t dx = l;
     real_t dy = 2*tg+ts+tb;
     index_t topmid_ID;
-    index_t pIndex;
     gsMultiPatch<> tmp;
     for (index_t kx = 0; kx!=Nx; kx++)
     {
         tmp = bottom;
         gsNurbsCreator<>::shift2D(tmp,kx*dx,0);
         for (auto patch = tmp.begin(); patch != tmp.end(); patch++)
-            pIndex = mp.addPatch(**patch);
+            mp.addPatch(**patch);
 
         for (index_t ky = 0; ky!=Ny; ky++)
         {
             tmp = element;
             gsNurbsCreator<>::shift2D(tmp,kx*dx,ky*dy);
             for (auto patch = tmp.begin(); patch != tmp.end(); patch++)
-                pIndex = mp.addPatch(**patch);
+                mp.addPatch(**patch);
         }
         tmp = top;
         gsNurbsCreator<>::shift2D(tmp,kx*dx,Ny*dy);
@@ -289,7 +292,7 @@ int main(int argc, char *argv[])
             gsDebugVar(topmid_ID);
         }
         for (auto patch = tmp.begin(); patch != tmp.end(); patch++)
-            pIndex = mp.addPatch(**patch);
+            mp.addPatch(**patch);
     }
     mp.computeTopology();
 
@@ -1293,5 +1296,10 @@ gsMultiPatch<T> makeBottom(const T tw, const T tg, const T tb, const T ts, const
 
     return bottom;
 }
-
-
+#else//gsKLShell_ENABLED
+int main(int argc, char *argv[])
+{
+    gsWarn<<"G+Smo is not compiled with the gsKLShell module.";
+    return EXIT_FAILURE;
+}
+#endif

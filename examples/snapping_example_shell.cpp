@@ -1,6 +1,9 @@
-/** @file bSplineCurve_example.cpp
+/** @file snapping_example_shell.cpp
 
-    @brief Tutorial on gsBSpline class.
+    @brief Arc-length analysis of a snapping meta material. Inspired by
+    
+    Rafsanjani, A., Akbarzadeh, A., & Pasini, D. (2015). Snapping Mechanical Metamaterials under Tension. 
+    Advanced Materials, 27(39), 5931–5935. https://doi.org/10.1002/adma.201502809
 
     This file is part of the G+Smo library.
 
@@ -8,24 +11,26 @@
     License, v. 2.0. If a copy of the MPL was not distributed with this
     file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-    Author(s): A. Mantzaflaris
+    Author(s): H. M. Verhelst
 */
 
-#include <iostream>
+#include <gismo.h>
 
+#ifdef gsKLShell_ENABLED
 #include <gsKLShell/src/gsThinShellAssembler.h>
 #include <gsKLShell/src/gsMaterialMatrixBase.h>
 #include <gsKLShell/src/gsMaterialMatrixLinear.h>
 #include <gsKLShell/src/getMaterialMatrix.h>
+#endif
 
 #include <gsStructuralAnalysis/src/gsALMSolvers/gsALMBase.h>
 #include <gsStructuralAnalysis/src/gsALMSolvers/gsALMLoadControl.h>
 #include <gsStructuralAnalysis/src/gsALMSolvers/gsALMRiks.h>
 #include <gsStructuralAnalysis/src/gsALMSolvers/gsALMCrisfield.h>
 
-#include <gismo.h>
-
 using namespace gismo;
+
+#ifdef gsKLShell_ENABLED
 
 template <class T>
 std::vector<gsBSpline<T>> makeCurve(const T tw, const T tg, const T tb, const T ts, const T l, const T a, const std::string expr, const gsKnotVector<T> & kv1);
@@ -67,7 +72,6 @@ int main(int argc, char *argv[])
     bool quasiNewton = false;
     int quasiNewtonInt = -1;
     bool adaptive = false;
-    real_t perturbation = 0;
     int step = 10;
     index_t maxit = 10;
 
@@ -95,7 +99,7 @@ int main(int argc, char *argv[])
 
     real_t Emax = 1.5;
 
-    gsCmdLine cmd("");
+    gsCmdLine cmd("Snapping analysis using shells");
     cmd.addInt("n","interior","Number of interior knots",interior);
     cmd.addInt("X","Nx","Number of element in x-direction",Nx);
     cmd.addInt("Y","Ny","Number of element in y-direction",Ny);
@@ -437,7 +441,6 @@ int main(int argc, char *argv[])
     gsMatrix<> solVector;
     real_t indicator = 0.0;
     arcLength->setIndicator(indicator); // RESET INDICATOR
-    bool bisected = false;
     real_t dLb0 = dLb;
 
     if (write)
@@ -1234,5 +1237,11 @@ gsMultiPatch<T> makeBottom(const T tw, const T tg, const T tb, const T ts, const
 
     return bottom;
 }
-
+#else//gsKLShell_ENABLED
+int main(int argc, char *argv[])
+{
+    gsWarn<<"G+Smo is not compiled with the gsKLShell module.";
+    return EXIT_FAILURE;
+}
+#endif
 

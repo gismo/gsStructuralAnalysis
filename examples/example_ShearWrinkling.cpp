@@ -1,6 +1,7 @@
-/** @file gsThinShell_WrinklingPerturbed.cpp
+/** @file example_ShearWrinkling.cpp
 
-    @brief Performs wrinkling simulations of different cases USING A PERTURBATION from a multipatch
+    @brief Performs wrinkling simulations of the shear wrinkling case 
+    USING A PERTURBATION from a multipatch
 
     This file is part of the G+Smo library.
 
@@ -13,8 +14,10 @@
 
 #include <gismo.h>
 
+#ifdef gsKLShell_ENABLED
 #include <gsKLShell/src/gsThinShellAssembler.h>
 #include <gsKLShell/src/getMaterialMatrix.h>
+#endif
 
 #include <gsStructuralAnalysis/src/gsStaticSolvers/gsStaticDR.h>
 #include <gsStructuralAnalysis/src/gsStaticSolvers/gsStaticNewton.h>
@@ -24,17 +27,7 @@
 using namespace gismo;
 
 template <class T>
-gsMultiPatch<T> RectangularDomain(int n, int m, int p, int q, T L, T B, bool clamped = false, T offset = 0.1);
-template <class T>
-gsMultiPatch<T> RectangularDomain(int n, int p, T L, T B, bool clamped = false, T offset = 0.1);
-
-template <class T>
 gsMultiPatch<T> Rectangle(T L, T B);
-
-template <class T>
-gsMultiPatch<T> AnnularDomain(int n, int p, T R1, T R2);
-template <class T>
-gsMultiPatch<T> FrustrumDomain(int n, int p, T R1, T R2, T h);
 
 template <class T>
 void addClamping(gsMultiPatch<T> &mp, index_t patch, std::vector<boxSide> sides, T offset);
@@ -61,6 +54,7 @@ void initStepOutput( const std::string name, const gsMatrix<T> & points);
 template <class T>
 void writeStepOutput(const gsMultiPatch<T> & deformation, const gsMatrix<T> solVector, const T indicator, const T load, const std::string name, const gsMatrix<T> & points, const index_t extreme=-1, const index_t kmax=100); // extreme: the column of point indices to compute the extreme over (default -1);
 
+#ifdef gsKLShell_ENABLED
 int main (int argc, char** argv)
 {
     // Input options
@@ -94,7 +88,6 @@ int main (int argc, char** argv)
 
     bool write = false;
     bool writeG = false;
-    bool crosssection = false;
 
     bool THB = false;
 
@@ -115,7 +108,7 @@ int main (int argc, char** argv)
 
     std::string fn;
 
-    gsCmdLine cmd("Wrinkling analysis with thin shells using XML perturbation.");
+    gsCmdLine cmd("Wrinkling of a membrane subject to shear.");
     cmd.addString( "f", "file", "Input XML file for assembler options", assemberOptionsFile );
 
     cmd.addInt("t", "testcase", "Test case: 0: clamped-clamped, 1: pinned-pinned, 2: clamped-free", testCase);
@@ -218,8 +211,6 @@ int main (int argc, char** argv)
 
     gsMatrix<> writePoints(2,1);
     writePoints.col(0)<< 1.0,1.0;
-    index_t cross_coordinate = 1;
-    real_t cross_val = 0.5;
 
     std::vector<real_t> Dtarget{ 10. };
     if (testCase == 1)
@@ -403,16 +394,11 @@ int main (int argc, char** argv)
     patchSide ps(0,boundary::north);
     real_t dL0 = dL;
     gsMultiPatch<> mp_def0 = mp_def;
-    real_t indicator;
+    real_t indicator = 0;
     real_t D = dL;
     real_t Dold = 0;
     // int reset = 0;
     index_t k = 0;
-    index_t tIdx = 0;
-    real_t e = 1, eold = 1, eold2 = 1;
-    real_t kp = 1;
-    real_t ki = 0.1;
-    real_t kd = 0.1;
     std::sort(Dtarget.begin(), Dtarget.end());
 
     displ.setValue(D,3);
@@ -436,9 +422,6 @@ int main (int argc, char** argv)
         // reset = 1;
         continue;
       }
-
-      // indicator = solver.indicator();
-      // gsInfo<<"\t\tIndicator =  "<<indicator<<"\n";
 
       solVector = controlDC.solutionU();
       solVector = solvers.back()->solution();
@@ -465,17 +448,8 @@ int main (int argc, char** argv)
       if (write)
         writeStepOutput(deformation,solVector,indicator,Load, dirname + "/" + wn, writePoints,1, 201);
 
-      // if (reset!=1)
-        dL = dL0;
+      dL = dL0;
 
-      real_t tol = 1;
-      // if (solVectorOld.rows()!=0)
-      // {
-      //   e   = ( (solVector - solVectorOld).norm() / solVector.norm() ) / tol;
-      //   dL *= math::pow( eold / e, kp ) * math::pow( 1 / e, ki ) * math::pow( eold*eold / ( e*eold2 ), kd );
-      // }
-
-      // reset = 0;
       mp_def0 = mp_def;
       Dold = D;
       // last step
@@ -507,77 +481,13 @@ int main (int argc, char** argv)
 
   return result;
 }
-
-template <class T>
-gsMultiPatch<T> RectangularDomain(int n, int p, T L, T B, bool clamped, T clampoffset)
+#else//gsKLShell_ENABLED
+int main(int argc, char *argv[])
 {
-  gsMultiPatch<T> mp = RectangularDomain(n, n, p, p, L, B, clamped, clampoffset);
-  return mp;
+    gsWarn<<"G+Smo is not compiled with the gsKLShell module.";
+    return EXIT_FAILURE;
 }
-
-template <class T>
-gsMultiPatch<T> RectangularDomain(int n, int m, int p, int q, T L, T B, bool clamped, T clampoffset)
-{
-  // -------------------------------------------------------------------------
-  // --------------------------Make beam geometry-----------------------------
-  // -------------------------------------------------------------------------
-  int dim = 3; //physical dimension
-  gsKnotVector<> kv0;
-  kv0.initUniform(0,1,0,p+1,1);
-  gsKnotVector<> kv1;
-  kv1.initUniform(0,1,0,q+1,1);
-
-  for(index_t i = 0; i< n; ++i)
-      kv0.uniformRefine();
-  for(index_t i = 0; i< m; ++i)
-      kv1.uniformRefine();
-
-  if (clamped)
-  {
-    T knotval;
-    knotval = kv0.uValue(1);
-    kv0.insert(std::min(clampoffset,knotval/2.));
-
-    knotval = kv0.uValue(kv0.uSize()-2);
-    kv0.insert(std::max(1-clampoffset,knotval/2.));
-  }
-
-  // Make basis
-  gsTensorBSplineBasis<2,T> basis(kv0,kv1);
-
-  // Initiate coefficient matrix
-  gsMatrix<> coefs(basis.size(),dim);
-  // Number of control points needed per component
-  size_t len0 = basis.component(0).size();
-  size_t len1 = basis.component(1).size();
-  gsVector<> coefvec0(len0);
-  // Uniformly distribute control points per component
-  coefvec0.setLinSpaced(len0,0.0,L);
-  gsVector<> coefvec1(basis.component(1).size());
-  coefvec1.setLinSpaced(len1,0.0,B);
-
-  // Z coordinate is zero
-  coefs.col(2).setZero();
-
-  // Define a matrix with ones
-  gsVector<> temp(len0);
-  temp.setOnes();
-  for (index_t k = 0; k < len1; k++)
-  {
-    // First column contains x-coordinates (length)
-    coefs.col(0).segment(k*len0,len0) = coefvec0;
-    // Second column contains y-coordinates (width)
-    coefs.col(1).segment(k*len0,len0) = temp*coefvec1.at(k);
-  }
-  // Create gsGeometry-derived object for the patch
-  gsTensorBSpline<2,real_t> shape(basis,coefs);
-
-  gsMultiPatch<T> mp;
-  mp.addPatch(shape);
-  mp.addAutoBoundaries();
-
-  return mp;
-}
+#endif
 
 template <class T>
 void addClamping(gsMultiPatch<T>& mp, index_t patch, std::vector<boxSide> sides, T offset) //, std::vector<boxSide> sides, T offset)
@@ -666,124 +576,6 @@ gsMultiPatch<T> Rectangle(T L, T B) //, int n, int m, std::vector<boxSide> sides
   gsMultiPatch<T> mp;
   mp.addPatch(shape);
   mp.addAutoBoundaries();
-
-  return mp;
-}
-
-
-template <class T>
-gsMultiPatch<T> AnnularDomain(int n, int p, T R1, T R2)
-{
-  // -------------------------------------------------------------------------
-  // --------------------------Make beam geometry-----------------------------
-  // -------------------------------------------------------------------------
-  int dim = 3; //physical dimension
-  gsKnotVector<> kv0;
-  kv0.initUniform(0,1,0,3,1);
-  gsKnotVector<> kv1;
-  kv1.initUniform(0,1,0,3,1);
-
-  // Make basis
-  // gsTensorNurbsBasis<2,T> basis(kv0,kv1);
-
-  // Initiate coefficient matrix
-  gsMatrix<> coefs(9,dim);
-
-  coefs<<R1,0,0,
-  (R1+R2)/2,0,0,
-  R2,0,0,
-  R1,R1,0,
-  (R1+R2)/2,(R1+R2)/2,0,
-  R2,R2,0,
-  0,R1,0,
-  0,(R1+R2)/2,0,
-  0,R2,0;
-
-  gsMatrix<> weights(9,1);
-  weights<<1,1,1,
-  0.707106781186548,0.707106781186548,0.707106781186548,
-  1,1,1;
-
-  // Create gsGeometry-derived object for the patch
-  gsTensorNurbs<2,real_t> shape(kv0,kv1,coefs,weights);
-
-
-  gsMultiPatch<T> mp;
-  mp.addPatch(shape);
-  mp.addAutoBoundaries();
-
-  // Elevate up to order p
-  if (p>2)
-  {
-    for(index_t i = 2; i< p; ++i)
-        mp.patch(0).degreeElevate();    // Elevate the degree
-  }
-
-  // Refine n times
-  for(index_t i = 0; i< n; ++i)
-      mp.patch(0).uniformRefine();
-
-  return mp;
-}
-
-template <class T>
-gsMultiPatch<T> FrustrumDomain(int n, int p, T R1, T R2, T h)
-{
-  // -------------------------------------------------------------------------
-  // --------------------------Make beam geometry-----------------------------
-  // -------------------------------------------------------------------------
-  // n = number of uniform refinements over the height; n = 0, only top and bottom part
-
-  int dim = 3; //physical dimension
-  gsKnotVector<> kv0;
-  kv0.initUniform(0,1,0,3,1);
-  gsKnotVector<> kv1;
-  kv1.initUniform(0,1,0,3,1);
-
-  // Refine n times
-  for(index_t i = 0; i< n; ++i)
-      kv1.uniformRefine();
-
-  // Make basis
-  // gsTensorNurbsBasis<2,T> basis(kv0,kv1);
-
-  // Initiate coefficient matrix
-  index_t N = math::pow(2,n)+2;
-  gsMatrix<> coefs(3*N,dim);
-  gsMatrix<> tmp(3,3);
-  T R,H;
-
-  gsMatrix<> weights(3*N,1);
-  for (index_t k=0; k!= N; k++)
-  {
-    R = k*(R2-R1)/(N-1) + R1;
-    H = k*h/(N-1);
-    tmp<< R,0,H,
-          R,R,H,
-          0,R,H;
-
-    coefs.block(3*k,0,3,3) = tmp;
-
-    weights.block(3*k,0,3,1) << 1,0.70711,1;
-  }
-
-  // Create gsGeometry-derived object for the patch
-  gsTensorNurbs<2,real_t> shape(kv0,kv1,coefs,weights);
-
-  gsMultiPatch<T> mp;
-  mp.addPatch(shape);
-  mp.addAutoBoundaries();
-
-  // Elevate up to order p
-  if (p>2)
-  {
-    for(index_t i = 2; i< p; ++i)
-        mp.patch(0).degreeElevate();    // Elevate the degree
-  }
-
-  // // Refine n times
-  // for(index_t i = 0; i< n; ++i)
-  //     mp.patch(0).uniformRefine();
 
   return mp;
 }

@@ -1,6 +1,7 @@
-/** @file benchmark_Wrinkling.cpp
+/** @file benchmark_Wrinkling_DWR.cpp
 
-    @brief Computes the wrinkling behaviour of a thin sheet
+    @brief Computes the wrinkling behaviour of a thin sheet, using mesh 
+    adaptivity with the DWR method
 
     This file is part of the G+Smo library.
 
@@ -13,10 +14,12 @@
 
 #include <gismo.h>
 
+#ifdef gsKLShell_ENABLED
 #include <gsKLShell/src/gsThinShellAssembler.h>
 #include <gsKLShell/src/gsThinShellAssemblerDWR.h>
 #include <gsKLShell/src/gsThinShellDWRHelper.h>
 #include <gsKLShell/src/getMaterialMatrix.h>
+#endif
 
 #include <gsAssembler/gsAdaptiveRefUtils.h>
 #include <gsAssembler/gsAdaptiveMeshing.h>
@@ -25,6 +28,7 @@
 
 using namespace gismo;
 
+#ifdef gsKLShell_ENABLED
 template <class T>
 gsMultiPatch<T> Rectangle(T L, T B);
 
@@ -64,7 +68,6 @@ int main (int argc, char** argv)
     int quasiNewtonInt = -1;
     bool adaptive = false;
     bool adaptiveMesh = false;
-    bool admissible = true;
     int maxSteps = 250;
     int method = 2; // (0: Load control; 1: Riks' method; 2: Crisfield's method; 3: consistent crisfield method; 4: extended iterations)
     bool symmetry = false;
@@ -113,7 +116,7 @@ int main (int argc, char** argv)
     std::string assemberOptionsFile("options/solver_options.xml");
     std::string mesherOptionsFile("options/mesher_options.xml");
 
-    gsCmdLine cmd("Wrinkling analysis with thin shells.");
+    gsCmdLine cmd("Adaptive wrinkling analysis with thin shells.");
     cmd.addString( "o", "assemblerOpt", "Input XML file for assembler options", assemberOptionsFile );
     cmd.addString( "O", "mesherOpt", "Input XML file for mesher options", mesherOptionsFile );
 
@@ -225,7 +228,7 @@ int main (int argc, char** argv)
     {
         gsMultiPatch<> mp_thb;
         gsTHBSpline<2,real_t> thb;
-        for (index_t k=0; k!=mp.nPatches(); ++k)
+        for (size_t k=0; k!=mp.nPatches(); ++k)
         {
             if(gsTensorBSpline<2,real_t> *geo = dynamic_cast< gsTensorBSpline<2,real_t> * > (&mp.patch(k)))
             {
@@ -434,34 +437,27 @@ int main (int argc, char** argv)
     assembler->setOptions(assemblerOpts);
     assembler->setPointLoads(pLoads);
 
-    gsStopwatch stopwatch;
-    real_t time = 0.0;
-
     // Assemble linear system to obtain the force vector
     assembler->assembleL();
     gsVector<> Force = assembler->primalL();
 
     // Function for the Jacobian
-    gsStructuralAnalysisOps<real_t>::Jacobian_t Jacobian = [&time,&stopwatch,&assembler,&mp_def](gsVector<real_t> const &x, gsSparseMatrix<real_t> & m)
+    gsStructuralAnalysisOps<real_t>::Jacobian_t Jacobian = [&assembler,&mp_def](gsVector<real_t> const &x, gsSparseMatrix<real_t> & m)
     {
-        stopwatch.restart();
         ThinShellAssemblerStatus status;
         assembler->constructSolutionL(x,mp_def);
         status = assembler->assembleMatrixL(mp_def);
         m = assembler->matrixL();
-        time += stopwatch.stop();
         return status == ThinShellAssemblerStatus::Success;
     };
 
     // Function for the Residual
-    gsStructuralAnalysisOps<real_t>::ALResidual_t ALResidual = [&Force,&time,&stopwatch,&assembler,&mp_def](gsVector<real_t> const &x, real_t lam, gsVector<real_t> & result)
+    gsStructuralAnalysisOps<real_t>::ALResidual_t ALResidual = [&Force,&assembler,&mp_def](gsVector<real_t> const &x, real_t lam, gsVector<real_t> & result)
     {
-        stopwatch.restart();
         ThinShellAssemblerStatus status;
         assembler->constructSolutionL(x,mp_def);
         status = assembler->assemblePrimalL(mp_def);
         result = -(assembler->primalL() - Force) - lam * Force;
-        time += stopwatch.stop();
         return status == ThinShellAssemblerStatus::Success;
     };
 
@@ -485,9 +481,7 @@ int main (int argc, char** argv)
     gsMatrix<> solVector;
     real_t indicator_prev = 0.0;
     real_t indicator = 0.0;
-    bool bisected = false;
     bool unstable_prev = false;
-    real_t dLb0 = dLb;
 
     gsAdaptiveMeshing<real_t> mesher;
     if (adaptiveMesh)
@@ -573,7 +567,6 @@ int main (int argc, char** argv)
           dLb = dLb / 2.;
           arcLength.setLength(dLb);
           arcLength.setSolution(Uold,Lold);
-          bisected = true;
           continue;
         }
         indicator = arcLength.indicator();
@@ -632,7 +625,7 @@ int main (int argc, char** argv)
         ///////////////////////////////////////////////////
 
         deltaU_patch = U_patch;
-        for (index_t p=0; p!=deltaU_patch.nPatches(); p++)
+        for (size_t p=0; p!=deltaU_patch.nPatches(); p++)
             deltaU_patch.patch(p).coefs() -= Uold_patch.patch(p).coefs();
 
 
@@ -660,7 +653,7 @@ int main (int argc, char** argv)
         gsInfo<<"Bifurcation spotted!"<<"\n";
         arcLength.computeSingularPoint(Uold,false);
         arcLength.switchBranch();
-        dLb0 = dLb = dL;
+        dLb = dL;
         arcLength.setLength(dLb);
 
         if (writeP)
@@ -689,7 +682,7 @@ int main (int argc, char** argv)
         deltaUold_patch = deltaU_patch;
 
         deltaU_patch = U_patch;
-        for (index_t p=0; p!=deltaU_patch.nPatches(); p++)
+        for (size_t p=0; p!=deltaU_patch.nPatches(); p++)
             deltaU_patch.patch(p).coefs() -= Uold_patch.patch(p).coefs();
 
 
@@ -780,7 +773,6 @@ int main (int argc, char** argv)
               dLb = dLb / 2.;
               arcLength.setLength(dLb);
               arcLength.setSolution(Uold,Lold);
-              bisected = true;
               continue;
             }
             indicator = arcLength.indicator();
@@ -916,7 +908,7 @@ int main (int argc, char** argv)
         }
 
         deltaU_patch = U_patch;
-        for (index_t p=0; p!=deltaU_patch.nPatches(); p++)
+        for (size_t p=0; p!=deltaU_patch.nPatches(); p++)
             deltaU_patch.patch(p).coefs() -= Uold_patch.patch(p).coefs();
 
         eps = U_patch.patch(0).eval(epsPoint)(0,0) / aDim;
@@ -1227,8 +1219,6 @@ void PlotResults(   index_t k,
 
     deformation.patch(0).coefs() -= mp.patch(0).coefs();// assuming 1 patch here
 
-    gsInfo<<"Total ellapsed assembly time: "<<time<<" s\n";
-
     if (plot)
     {
         gsField<T> solField;
@@ -1285,3 +1275,10 @@ void PlotResults(   index_t k,
         Smembrane_p.addTimestep(fileName,k,".vts");
     }
 }
+#else//gsKLShell_ENABLED
+int main(int argc, char *argv[])
+{
+    gsWarn<<"G+Smo is not compiled with the gsKLShell module.";
+    return EXIT_FAILURE;
+}
+#endif

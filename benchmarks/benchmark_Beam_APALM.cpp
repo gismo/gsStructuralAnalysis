@@ -1,6 +1,9 @@
-/** @file gsThinShell_ArcLength.cpp
+/** @file benchmark_Beam.cpp
 
-    @brief Code for the arc-length method of a shell based on loads
+    @brief Two benchmark cases using the APALM for a beam, according to
+
+    Pagani, A., & Carrera, E. (2018). Unified formulation of geometrically nonlinear refined beam theories.
+    Mechanics of Advanced Materials and Structures, 25(1), 15–31. https://doi.org/10.1080/15376494.2016.1232458
 
     This file is part of the G+Smo library.
 
@@ -123,8 +126,6 @@ int main (int argc, char** argv)
 
   int testCase      = 1;
 
-  int result        = 0;
-
   bool write        = false;
 
   index_t maxit     = 20;
@@ -147,7 +148,7 @@ int main (int argc, char** argv)
 
   std::string assemberOptionsFile("options/solver_options.xml");
 
-  gsCmdLine cmd("Arc-length analysis for thin shells.");
+  gsCmdLine cmd("APALM analysis of a buckled beam.");
   cmd.addString( "f", "file", "Input XML file for assembler options", assemberOptionsFile );
 
   cmd.addInt("t", "testcase", "Test case: 0: clamped-free with vertical load, 1: clamped-free with horizontal load", testCase);
@@ -760,8 +761,8 @@ void addClamping(gsMultiPatch<T>& mp, index_t patch, std::vector<boxSide> sides,
       else
         GISMO_ERROR("Side unknown, side = " <<*it);
 
-        k++;
-gsInfo<<"k = "<<k<<"\n";
+      k++;
+      gsInfo<<"k = "<<k<<"\n";
     }
 }
 

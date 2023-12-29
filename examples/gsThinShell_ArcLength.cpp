@@ -18,8 +18,6 @@
 #include <gsKLShell/src/getMaterialMatrix.h>
 #endif
 
-
-
 #include <gsStructuralAnalysis/src/gsALMSolvers/gsALMBase.h>
 #include <gsStructuralAnalysis/src/gsALMSolvers/gsALMLoadControl.h>
 #include <gsStructuralAnalysis/src/gsALMSolvers/gsALMRiks.h>
@@ -984,7 +982,7 @@ int main (int argc, char** argv)
     gsStructuralAnalysisOps<real_t>::dJacobian_t dJacobian = [&time,&stopwatch,&assembler,&mp_def,&MIP](gsVector<real_t> const &x, gsVector<real_t> const &dx, gsSparseMatrix<real_t> & m)
     {
       stopwatch.restart();
-      ThinShellAssemblerStatus status;
+      ThinShellAssemblerStatus status = ThinShellAssemblerStatus::AssemblyError;
       assembler->constructSolution(x,mp_def);
       if (MIP)
         assembler->assembleMatrix(x,x-dx);
@@ -1375,8 +1373,8 @@ void addClamping(gsMultiPatch<T>& mp, index_t patch, std::vector<boxSide> sides,
       else
         GISMO_ERROR("Side unknown, side = " <<*it);
 
-        k++;
-gsInfo<<"k = "<<k<<"\n";
+      k++;
+      gsInfo<<"k = "<<k<<"\n";
     }
 }
 

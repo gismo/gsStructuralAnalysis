@@ -1,6 +1,6 @@
 /** @file PlotIsolines.cpp
 
-    @brief Testing file reading and writing
+    @brief Plot isolines of a geometry, write them to CSV
 
     This file is part of the G+Smo library.
 
@@ -46,7 +46,7 @@ int main(int argc, char *argv[])
   std::vector<real_t> u;
   std::vector<index_t> dirs;
 
-  gsCmdLine cmd("Hi, give me the path of your output");
+  gsCmdLine cmd("Plot isolines");
   cmd.addString("i","in", "Input", input);
   cmd.addString("o","outDir", "Output directory", output);
   cmd.addInt("p","patch", "Patch", patch);
@@ -72,7 +72,7 @@ int main(int argc, char *argv[])
 
   gsFileManager::mkdir(output);
   char sep = gsFileManager::getNativePathSeparator();
-  for (index_t k = 0; k!=u.size(); k++)
+  for (size_t k = 0; k!=u.size(); k++)
   {
     dir = dirs[k];
     GISMO_ASSERT(u[k] <=1 && u[k] >= 0,"u coordinate must be in [0,1]");

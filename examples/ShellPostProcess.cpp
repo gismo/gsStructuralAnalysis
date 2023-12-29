@@ -1,6 +1,6 @@
-/** @file matplotlib_example.cpp
+/** @file ShellPostProcess.cpp
 
-    @brief Testing file reading and writing
+    @brief Some post-processing for shells
 
     This file is part of the G+Smo library.
 

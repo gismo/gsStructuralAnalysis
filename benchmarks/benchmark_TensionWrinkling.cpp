@@ -1,4 +1,4 @@
-/** @file benchmark_Wrinkling.cpp
+/** @file benchmark_TensionWrinkling.cpp
 
     @brief Computes the wrinkling behaviour of a thin sheet
 
@@ -19,8 +19,10 @@
 
 #include <gismo.h>
 
+#ifdef gsKLShell_ENABLED
 #include <gsKLShell/src/gsThinShellAssembler.h>
 #include <gsKLShell/src/getMaterialMatrix.h>
+#endif
 
 #include <gsStructuralAnalysis/src/gsALMSolvers/gsALMBase.h>
 #include <gsStructuralAnalysis/src/gsALMSolvers/gsALMLoadControl.h>
@@ -29,6 +31,7 @@
 
 using namespace gismo;
 
+#ifdef gsKLShell_ENABLED
 template <class T>
 gsMultiPatch<T> Rectangle(T L, T B);
 
@@ -614,7 +617,7 @@ void addClamping(gsMultiPatch<T>& mp, index_t patch, std::vector<boxSide> sides,
       else
         GISMO_ERROR("Side unknown, side = " <<*it);
 
-        k++;
+      k++;
     }
 }
 
@@ -843,3 +846,10 @@ void writeSectionOutput(const gsMultiPatch<T> & mp, const std::string dirname, c
     file4<<'\n';
     file4.close();
 }
+#else//gsKLShell_ENABLED
+int main(int argc, char *argv[])
+{
+    gsWarn<<"G+Smo is not compiled with the gsKLShell module.";
+    return EXIT_FAILURE;
+}
+#endif

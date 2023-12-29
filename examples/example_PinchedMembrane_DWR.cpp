@@ -1,4 +1,4 @@
-/** @file example_shell3D.cpp
+/** @file example_PinchedMembrane_DWR.cpp
 
     @brief Example of a pinched membrane with the DWR method
 
@@ -15,10 +15,13 @@
 #include <fstream>
 #include <gismo.h>
 
+#ifdef gsKLShell_ENABLED
 #include <gsKLShell/src/gsThinShellAssembler.h>
 #include <gsKLShell/src/gsThinShellAssemblerDWR.h>
 #include <gsKLShell/src/gsThinShellUtils.h>
 #include <gsKLShell/src/getMaterialMatrix.h>
+#endif
+
 #include <gsAssembler/gsAdaptiveMeshing.h>
 #include <gsAssembler/gsAdaptiveMeshingUtils.h>
 #include <gsStructuralAnalysis/src/gsALMSolvers/gsALMLoadControl.h>
@@ -26,6 +29,7 @@
 
 using namespace gismo;
 
+#ifdef gsKLShell_ENABLED
 int main(int argc, char *argv[])
 {
     //! [Parse command line]
@@ -54,7 +58,7 @@ int main(int argc, char *argv[])
 
     std::string mesherOptionsFile("options/shell_mesher_options.xml");
 
-    gsCmdLine cmd("Tutorial on solving a Poisson problem.");
+    gsCmdLine cmd("Example of a pinched membrane with adaptive meshing");
     cmd.addInt( "e", "degreeElevation",
                 "Number of degree elevation steps to perform before solving (0: equalize degree in all directions)", numElevate );
     cmd.addInt("R", "uniformRefine", "Number of Uniform h-refinement steps to perform before solving", numRefineIni);
@@ -109,7 +113,7 @@ int main(int argc, char *argv[])
     if (adaptivity!=0)
     {
         gsTHBSpline<2,real_t> thb;
-        for (index_t k=0; k!=mp.nPatches(); ++k)
+        for (size_t k=0; k!=mp.nPatches(); ++k)
         {
             gsTensorBSpline<2,real_t> *geo = dynamic_cast< gsTensorBSpline<2,real_t> * > (&mp.patch(k));
             thb = gsTHBSpline<2,real_t>(*geo);
@@ -694,3 +698,10 @@ int main(int argc, char *argv[])
     return EXIT_SUCCESS;
 
 }// end main
+#else//gsKLShell_ENABLED
+int main(int argc, char *argv[])
+{
+    gsWarn<<"G+Smo is not compiled with the gsKLShell module.";
+    return EXIT_FAILURE;
+}
+#endif

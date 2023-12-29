@@ -1,6 +1,9 @@
-/** @file bSplineCurve_example.cpp
+/** @file snapping_example3D.cpp
 
-    @brief Tutorial on gsBSpline class.
+    @brief Arc-length analysis of a snapping meta material. Inspired by
+    
+    Rafsanjani, A., Akbarzadeh, A., & Pasini, D. (2015). Snapping Mechanical Metamaterials under Tension. 
+    Advanced Materials, 27(39), 5931–5935. https://doi.org/10.1002/adma.201502809
 
     This file is part of the G+Smo library.
 
@@ -8,10 +11,10 @@
     License, v. 2.0. If a copy of the MPL was not distributed with this
     file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-    Author(s): A. Mantzaflaris
+    Author(s): H. M. Verhelst
 */
 
-#include <iostream>
+#include <gismo.h>
 
 #include <gsStructuralAnalysis/src/gsALMSolvers/gsALMBase.h>
 #include <gsStructuralAnalysis/src/gsALMSolvers/gsALMLoadControl.h>
@@ -26,8 +29,6 @@
 #include <gsElasticity/gsNeoHookLogMaterial.h>
 #include <gsElasticity/gsLinearMaterial.h>
 #endif
-
-#include <gismo.h>
 
 using namespace gismo;
 
@@ -97,7 +98,7 @@ int main(int argc, char *argv[])
 
     real_t Emax = 1.5;
 
-    gsCmdLine cmd("");
+    gsCmdLine cmd("Snapping analysis using solids in 3D");
     cmd.addInt("n","interior","Number of interior knots",interior);
     cmd.addInt("X","Nx","Number of element in x-direction",Nx);
     cmd.addInt("Y","Ny","Number of element in y-direction",Ny);

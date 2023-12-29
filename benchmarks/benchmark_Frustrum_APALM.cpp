@@ -131,8 +131,6 @@ int main (int argc, char** argv)
 
     int testCase      = 1;
 
-    int result        = 0;
-
     bool write        = false;
 
     index_t maxit     = 20;

@@ -1,6 +1,9 @@
-/** @file bSplineCurve_example.cpp
+/** @file snapping_example_shell_DC.cpp
 
-    @brief Tutorial on gsBSpline class.
+    @brief Displacement-control analysis of a snapping meta material. Inspired by
+    
+    Rafsanjani, A., Akbarzadeh, A., & Pasini, D. (2015). Snapping Mechanical Metamaterials under Tension. 
+    Advanced Materials, 27(39), 5931–5935. https://doi.org/10.1002/adma.201502809
 
     This file is part of the G+Smo library.
 
@@ -8,25 +11,28 @@
     License, v. 2.0. If a copy of the MPL was not distributed with this
     file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-    Author(s): A. Mantzaflaris
+    Author(s): H. M. Verhelst
 */
 
-#include <iostream>
+#include <gismo.h>
 
+#ifdef gsKLShell_ENABLED
 #include <gsKLShell/src/gsThinShellAssembler.h>
 #include <gsKLShell/src/gsMaterialMatrixBase.h>
 #include <gsKLShell/src/gsMaterialMatrixLinear.h>
 #include <gsKLShell/src/getMaterialMatrix.h>
 #include <gsKLShell/src/gsMaterialMatrixIntegrate.h>
 #include <gsKLShell/src/gsThinShellUtils.h>
+#endif
 
 #include <gsStructuralAnalysis/src/gsStaticSolvers/gsStaticNewton.h>
 #include <gsStructuralAnalysis/src/gsStaticSolvers/gsStaticComposite.h>
 #include <gsStructuralAnalysis/src/gsStaticSolvers/gsControlDisplacement.h>
 
-#include <gismo.h>
 
 using namespace gismo;
+
+#ifdef gsKLShell_ENABLED
 
 template <class T>
 std::vector<gsBSpline<T>> makeCurve(const T tw, const T tg, const T tb, const T ts, const T l, const T a, const std::string expr, const gsKnotVector<T> & kv1);
@@ -56,7 +62,6 @@ int main(int argc, char *argv[])
 
     // Arc length method options
     real_t dL = 0; // General arc length
-    real_t tol = 1e-6;
     real_t tolU = 1e-6;
     real_t tolF = 1e-3;
     real_t relax = 1.0;
@@ -66,7 +71,6 @@ int main(int argc, char *argv[])
     bool quasiNewton = false;
     int quasiNewtonInt = -1;
     bool adaptive = false;
-    real_t perturbation = 0;
     int step = 1000;
     index_t maxit = 50;
 
@@ -94,7 +98,7 @@ int main(int argc, char *argv[])
 
     real_t Emax = 1.5;
 
-    gsCmdLine cmd("");
+    gsCmdLine cmd("Snapping analysis using shells with DC");
     cmd.addInt("n","interior","Number of interior knots",interior);
     cmd.addInt("X","Nx","Number of element in x-direction",Nx);
     cmd.addInt("Y","Ny","Number of element in y-direction",Ny);
@@ -416,7 +420,6 @@ int main(int argc, char *argv[])
     }
 
     real_t dL0 = dL;
-    int reset = 0;
     gsMultiPatch<> mp_def0 = mp_def;
     real_t indicator;
 
@@ -437,7 +440,6 @@ int main(int argc, char *argv[])
         {
             dL = dL/2;
             displ.setValue(D+dL,2);
-            reset = 1;
             mp_def = mp_def0;
             gsInfo<<"Iterations did not converge\n";
             continue;
@@ -487,11 +489,7 @@ int main(int argc, char *argv[])
         }
 
 
-        // if (reset!=1)
-        // {
-          dL = dL0;
-        // }
-        reset = 0;
+        dL = dL0;
 
         mp_def0 = mp_def;
         D += dL;
@@ -1175,5 +1173,11 @@ gsMultiPatch<T> makeBottom(const T tw, const T tg, const T tb, const T ts, const
 
     return bottom;
 }
-
+#else//gsKLShell_ENABLED
+int main(int argc, char *argv[])
+{
+    gsWarn<<"G+Smo is not compiled with the gsKLShell module.";
+    return EXIT_FAILURE;
+}
+#endif
 

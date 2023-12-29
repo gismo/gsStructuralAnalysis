@@ -1,6 +1,7 @@
-/** @file example_shell3D.cpp
+/** @file benchmark_panel
 
-    @brief Simple 3D examples for the shell class
+    @brief Showcase the use of the shell assembler on stiffened panels. 
+    Uses gsPanelCreator
 
     This file is part of the G+Smo library.
 
@@ -13,30 +14,21 @@
 
 #include <gismo.h>
 
+#ifdef gsKLShell_ENABLED
 #include <gsKLShell/src/gsThinShellAssembler.h>
 #include <gsKLShell/src/gsMaterialMatrixContainer.h>
 #include <gsKLShell/src/gsMaterialMatrixEval.h>
 #include <gsKLShell/src/gsMaterialMatrixIntegrate.h>
 #include <gsKLShell/src/getMaterialMatrix.h>
 #include <gsCore/gsPiecewiseFunction.h>
+#endif
+
 #include <gsStructuralAnalysis/src/gsStructuralAnalysisTools/gsPanelCreator.h>
 
 using namespace gismo;
 
-template <class T>
-gsMultiPatch<T> Strip(T Lp, T Wp, T x = 0, T y = 0, T z = 0);
-
-template <class T>
-gsMultiPatch<T> Plate(T Lp, T Wp, T alpha=0.5, T x = 0, T y = 0, T z = 0);
-
-template <class T>
-gsMultiPatch<T> Panel3(T Lp, T Wp, T Hw, T alpha=0.5, T x = 0, T y = 0, T z = 0);
-
-template <class T>
-gsMultiPatch<T> Panel4(T Lp, T Wp, T Hw, T alpha=0.5, T x = 0, T y = 0, T z = 0);
-
-
 // Choose among various shell examples, default = Thin Plate
+#ifdef gsKLShell_ENABLED
 int main(int argc, char *argv[])
 {
     //! [Parse command line]
@@ -61,7 +53,7 @@ int main(int argc, char *argv[])
     real_t alpha = 0.5;
     real_t beta = 0.5;
 
-    gsCmdLine cmd("2D shell example.");
+    gsCmdLine cmd("Stiffened panel example.");
     cmd.addReal( "D", "Dir", "Dirichlet penalty scalar",  ifcDirichlet );
     cmd.addReal( "C", "Cla", "Clamped penalty scalar",  ifcClamped );
     cmd.addReal( "a", "alpha", "Alpha parameter",  alpha );
@@ -796,6 +788,13 @@ int main(int argc, char *argv[])
     return EXIT_SUCCESS;
 
 }// end main
+#else//gsKLShell_ENABLED
+int main(int argc, char *argv[])
+{
+    gsWarn<<"G+Smo is not compiled with the gsKLShell module.";
+    return EXIT_FAILURE;
+}
+#endif
 
 template <class T>
 gsMultiPatch<T> Plate(T Lp, T Wp, T alpha, T x, T y, T z)

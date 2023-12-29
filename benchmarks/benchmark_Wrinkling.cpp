@@ -826,7 +826,7 @@ int main (int argc, char** argv)
 
                 std::string fileName = dirname + "/" + output + util::to_string(m) + "_";
                 gsWriteParaview<>(solField, fileName, 1000,mesh);
-                for (index_t p = 0; p!=mp.nPatches(); p++)
+                for (size_t p = 0; p!=mp.nPatches(); p++)
                 {
                   fileName = output + util::to_string(m) + "_" + util::to_string(p);
                   mode_collection.addPart(fileName + ".vts",m,"",p);
@@ -849,9 +849,9 @@ int main (int argc, char** argv)
             gsMatrix<> allCoefs;
             gsL2Projection<real_t>::projectFunction(dbasis,mspline,geom,allCoefs);
             allCoefs.resize(allCoefs.rows()/3,3);
-            for (index_t p = 0; p != geom.nPatches(); p++)
+            for (size_t p = 0; p != geom.nPatches(); p++)
             {
-              for (index_t k=0; k!=mapper.patchSize(p); k++)
+              for (size_t k=0; k!=mapper.patchSize(p); k++)
               {
                 geom.patch(p).coefs().row(k) += allCoefs.row(mapper.index(k,p));
                 geom.patch(p).coefs()(k,2) *= 1/tau;

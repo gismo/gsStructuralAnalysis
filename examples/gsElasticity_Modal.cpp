@@ -1,6 +1,6 @@
-/** @file gsElasticity_Static.cpp
+/** @file gsElasticity_Modal.cpp
 
-    @brief Static simulations of a solid
+    @brief Modal simulations of a solid
 
     This file is part of the G+Smo library.
 
@@ -74,7 +74,7 @@ int main (int argc, char** argv)
 
     std::string wn("data.csv");
 
-    gsCmdLine cmd("Elasticity shell plate example.");
+    gsCmdLine cmd("Elasticity shell modal example.");
     cmd.addInt("r","hRefine",
        "Number of dyadic h-refinement (bisection) steps to perform before solving",
        numHref);

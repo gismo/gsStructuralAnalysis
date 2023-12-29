@@ -1,6 +1,9 @@
-/** @file bSplineCurve_example.cpp
+/** @file snapping_element_shell.cpp
 
-    @brief Tutorial on gsBSpline class.
+    @brief Arc-length analysis of a snapping meta material element. Inspired by
+    
+    Rafsanjani, A., Akbarzadeh, A., & Pasini, D. (2015). Snapping Mechanical Metamaterials under Tension. 
+    Advanced Materials, 27(39), 5931–5935. https://doi.org/10.1002/adma.201502809
 
     This file is part of the G+Smo library.
 
@@ -8,23 +11,25 @@
     License, v. 2.0. If a copy of the MPL was not distributed with this
     file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-    Author(s): A. Mantzaflaris
+    Author(s): H. M. Verhelst
 */
 
-#include <iostream>
+#include <gismo.h>
 
+#ifdef gsKLShell_ENABLED
 #include <gsKLShell/src/gsThinShellAssembler.h>
 #include <gsKLShell/src/gsMaterialMatrixBase.h>
 #include <gsKLShell/src/getMaterialMatrix.h>
+#endif
 
 #include <gsStructuralAnalysis/src/gsALMSolvers/gsALMBase.h>
 #include <gsStructuralAnalysis/src/gsALMSolvers/gsALMLoadControl.h>
 #include <gsStructuralAnalysis/src/gsALMSolvers/gsALMRiks.h>
 #include <gsStructuralAnalysis/src/gsALMSolvers/gsALMCrisfield.h>
 
-#include <gismo.h>
-
 using namespace gismo;
+
+#ifdef gsKLShell_ENABLED
 
 template <class T>
 std::vector<gsBSpline<T>> makeCurve(const T tw, const T tg, const T tb, const T ts, const T l, const T a, const std::string expr, const gsKnotVector<T> & kv1);
@@ -80,7 +85,7 @@ int main(int argc, char *argv[])
 
     real_t Emax = 1.5;
 
-    gsCmdLine cmd("");
+    gsCmdLine cmd("Snapping analysis of a single element with shells");
     cmd.addInt("n","interior","Number of interior knots",interior);
 
     cmd.addInt("r","hRefine",
@@ -734,5 +739,11 @@ gsMultiPatch<T> makeElement(const T tw, const T tg, const T tb, const T ts, cons
     element.addPatch(gsTensorBSpline<2,real_t>(right_tbasis,coefs_tmp));
     return element;
 }
-
+#else//gsKLShell_ENABLED
+int main(int argc, char *argv[])
+{
+    gsWarn<<"G+Smo is not compiled with the gsKLShell module.";
+    return EXIT_FAILURE;
+}
+#endif
 

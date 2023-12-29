@@ -1,6 +1,6 @@
 /** @file example_StaticSolvers.cpp
 
-    @brief Static simulations of a shell
+    @brief Demonstrations of static solvers on a shell
 
     This file is part of the G+Smo library.
 

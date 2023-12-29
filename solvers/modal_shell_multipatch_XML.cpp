@@ -1,7 +1,7 @@
-/** @file benchmark_Balloon.cpp
+/** @file modal_shell_multipatch_XML.cpp
 
-    @brief Benchmark for the inflated pillow using the Arc-Length Method
-
+    @brief Blackbox solver for shell modal analysis using unstructured splines
+    
     This file is part of the G+Smo library.
 
     This Source Code Form is subject to the terms of the Mozilla Public
@@ -13,15 +13,19 @@
 
 #include <gismo.h>
 
+#ifdef gsKLShell_ENABLED
 #include <gsKLShell/src/gsThinShellAssembler.h>
+#endif
 
 #include <gsStructuralAnalysis/src/gsEigenSolvers/gsModalSolver.h>
 
 #include <gsStructuralAnalysis/src/gsStructuralAnalysisTools/gsStructuralAnalysisUtils.h>
 
+#ifdef gsUnstructuredSplines_ENABLED
 #include <gsUnstructuredSplines/src/gsSmoothInterfaces.h>
 #include <gsUnstructuredSplines/src/gsAlmostC1.h>
 #include <gsUnstructuredSplines/src/gsDPatch.h>
+#endif
 
 using namespace gismo;
 
@@ -46,7 +50,8 @@ void writeToCSVfile(std::string name, gsMatrix<> matrix)
   }
 }
 
-
+#ifdef gsKLShell_ENABLED
+#ifdef gsUnstructuredSplines_ENABLED
 int main (int argc, char** argv)
 {
     // Input options
@@ -67,7 +72,7 @@ int main (int argc, char** argv)
 
     std::string wn("data.csv");
 
-    gsCmdLine cmd("Example for an inflating balloon.");
+    gsCmdLine cmd("Shell modal solver for multi-patches.");
 
     cmd.addInt("r","hRefine", "Number of dyadic h-refinement (bisection) steps to perform before solving", numRefine);
     cmd.addInt("e","degreeElevation", "Number of degree elevation steps to perform on the Geometry's basis before solving", numElevate);
@@ -148,14 +153,7 @@ int main (int argc, char** argv)
     gsInfo<<"Reading force function (ID=21) ...";
     fd.getId(21,forceFun);
     gsInfo<<"Finished\n";
-    bool pressure = false;
-    if ( fd.hasId(22) )
-    {
-      gsInfo<<"Reading pressure function (ID=22) ...";
-      pressure = true;
-      fd.getId(22,pressFun);
-      gsInfo<<"Finished\n";
-    }
+
     // Point loads
     gsInfo<<"Reading point load locations (ID=30) ...";
     if ( fd.hasId(30) ) fd.getId(30,points);
@@ -333,7 +331,7 @@ int main (int argc, char** argv)
             std::string fileName = dirname + sep + "modes" + util::to_string(m) + "_";
             gsWriteParaview<>(solField, fileName, 1000,false);
             // gsWriteParaview<>(solField, fileName, 1000,mesh);
-            for (index_t p = 0; p!=geom.nPatches(); p++)
+            for (size_t p = 0; p!=geom.nPatches(); p++)
             {
                 fileName = output + util::to_string(m);
                 collection.addTimestep(fileName,p,m,".vts");
@@ -354,3 +352,17 @@ int main (int argc, char** argv)
     }
     return EXIT_SUCCESS;
 }
+#else//gsUnstructuredSplines_ENABLED
+int main(int argc, char *argv[])
+{
+    gsWarn<<"G+Smo is not compiled with the gsUnstructuredSplines module.";
+    return EXIT_FAILURE;
+}
+#endif
+#else//gsKLShell_ENABLED
+int main(int argc, char *argv[])
+{
+    gsWarn<<"G+Smo is not compiled with the gsKLShell module.";
+    return EXIT_FAILURE;
+}
+#endif

@@ -1,6 +1,6 @@
-/** @file benchmark_Balloon.cpp
+/** @file modal_shell_XML.cpp
 
-    @brief Benchmark for the inflated pillow using the Arc-Length Method
+    @brief Blackbox solver for shell modal analysis
 
     This file is part of the G+Smo library.
 
@@ -13,7 +13,9 @@
 
 #include <gismo.h>
 
+#ifdef gsKLShell_ENABLED
 #include <gsKLShell/src/gsThinShellAssembler.h>
+#endif
 
 #include <gsStructuralAnalysis/src/gsEigenSolvers/gsModalSolver.h>
 
@@ -42,7 +44,7 @@ void writeToCSVfile(std::string name, gsMatrix<> matrix)
   }
 }
 
-
+#ifdef gsKLShell_ENABLED
 int main (int argc, char** argv)
 {
     // Input options
@@ -61,7 +63,7 @@ int main (int argc, char** argv)
 
     std::string wn("data.csv");
 
-    gsCmdLine cmd("Example for an inflating balloon.");
+    gsCmdLine cmd("Shell modal solver.");
 
     cmd.addInt("r","hRefine", "Number of dyadic h-refinement (bisection) steps to perform before solving", numRefine);
     cmd.addInt("e","degreeElevation", "Number of degree elevation steps to perform on the Geometry's basis before solving", numElevate);
@@ -293,3 +295,10 @@ int main (int argc, char** argv)
     }
     return EXIT_SUCCESS;
 }
+#else//gsKLShell_ENABLED
+int main(int argc, char *argv[])
+{
+    gsWarn<<"G+Smo is not compiled with the gsKLShell module.";
+    return EXIT_FAILURE;
+}
+#endif
