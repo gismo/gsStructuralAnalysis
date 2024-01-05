@@ -1,4 +1,4 @@
-/** @file gsDynamicNewmark.hpp
+/** @file gsDynamicBathe.hpp
 
     @brief Performs the arc length method to solve a nonlinear equation system.
 
@@ -17,54 +17,59 @@ namespace gismo
 {
 
 template <class T, bool _NL>
-void gsDynamicNewmark<T,_NL>::defaultOptions()
+void gsDynamicBathe<T,_NL>::defaultOptions()
 {
   Base::defaultOptions();
-  m_options.addReal("alpha","Beta parameter for Newmark's method, such that 0 =< 2 beta =< 1",0.25);
-  m_options.addReal("delta","Beta parameter for Newmark's method, such that 0 =< gamma =< 1",0.50);
+  m_options.addReal("alpha","Beta parameter for Bathe's method, such that 0 =< 2 beta =< 1",0.25);
+  m_options.addReal("delta","Beta parameter for Bathe's method, such that 0 =< delta =< 1",0.50);
+  m_options.addReal("gamma","Beta parameter for Bathe's method, such that 0 =< gamma =< 1",0.50);
 }
 
 
 template <class T, bool _NL>
 template <bool _nonlinear>
 typename std::enable_if<(_nonlinear==false), gsStatus>::type
-gsDynamicNewmark<T,_NL>::_step_impl(const T t, const T dt, gsVector<T> & U, gsVector<T> & V, gsVector<T> & A) const
+gsDynamicBathe<T,_NL>::_step_impl(const T t, const T dt, gsVector<T> & U, gsVector<T> & V, gsVector<T> & A) const
 {
+  T gamma = m_options.getReal("gamma");
+
   gsVector<T> Uold = U;
   gsVector<T> Vold = V;
   gsVector<T> Aold = A;
 
+  gsVector<T> Ustep = U;
+  gsVector<T> Vstep = V;
+  gsVector<T> Astep = A;
+
+  /// Stage 1: A Newmark step with DT=gamma*dt
+  this->_stageOutput(1);
+  Base::_step(t,gamma*dt,Ustep,Vstep,Astep);
+
+  /// Stage 2: A Newmark step with DT=gamma*dt
   gsVector<T> F;
   gsSparseMatrix<T> M, C, K;
-
-  T alpha = m_options.getReal("alpha");
-  T delta = m_options.getReal("delta");
 
   // Computed at t=t0+dt
   this->_computeMass(t+dt,M);
   this->_computeForce(t+dt,F);
-
-  gsSparseMatrix<T> lhs;
-  gsMatrix<T> rhs;
-  // predictors
-  U = Uold + dt*Vold + Aold*(0.5 - alpha)*dt*dt;
-  V = Vold + Aold*(1 - delta)*dt;
-
   this->_computeDamping(U,t+dt,C);
   this->_computeJacobian(U,t+dt,K);
 
-  // lhs and rhs
-  lhs = M + delta*dt*C + dt*dt*alpha*K;
-  rhs = F - K*U - C * V;
+  T c1 = (1-gamma)/(gamma*dt);
+  T c2 = (-1)/((1-gamma)*gamma*dt);
+  T c3 = (2-gamma)/((1-gamma)*dt);
 
+  gsSparseMatrix<T> lhs = K + c3*c3*M + c3*C;
+  gsMatrix<T> rhs = F - M*(c1*Vold+c2*Vstep+c1*c3*Uold+c3*c2*Ustep) - C*(c2*Ustep+c1*Uold);
+
+  this->_stageOutput(2);
   this->_initOutput();
   typename gsSparseSolver<T>::uPtr solver;
   solver = gsSparseSolver<T>::get( m_options.getString("Solver") ); 
   solver->compute(lhs);
-
-  A = solver->solve(rhs);
-  V += A*delta*dt;
-  U += A*alpha*dt*dt;
+  U = solver->solve(rhs);
+  V = c1*Uold + c2*Ustep + c3*U;
+  A = c1*Vold + c2*Vstep + c3*V;
   
   this->_stepOutput(0,(F - K*U - M * A - C * V).norm(),U.norm());
   if (math::isinf(U.norm()) || math::isnan(U.norm()))
@@ -77,76 +82,105 @@ gsDynamicNewmark<T,_NL>::_step_impl(const T t, const T dt, gsVector<T> & U, gsVe
 template <class T, bool _NL>
 template <bool _nonlinear>
 typename std::enable_if<(_nonlinear==true), gsStatus>::type
-gsDynamicNewmark<T,_NL>::_step_impl(const T t, const T dt, gsVector<T> & U, gsVector<T> & V, gsVector<T> & A) const
+gsDynamicBathe<T,_NL>::_step_impl(const T t, const T dt, gsVector<T> & U, gsVector<T> & V, gsVector<T> & A) const
 {
-  //https://ethz.ch/content/dam/ethz/special-interest/baug/ibk/structural-mechanics-dam/education/femII/presentation_05_dynamics_v3.pdf
+  T gamma = m_options.getReal("gamma");
+
+  T c1 = (1-gamma)/(gamma*dt);
+  T c2 = (-1)/((1-gamma)*gamma*dt);
+  T c3 = (2-gamma)/((1-gamma)*dt);
+
+
   gsVector<T> Uold = U;
   gsVector<T> Vold = V;
   gsVector<T> Aold = A;
 
+  gsVector<T> Ustep = U;
+  gsVector<T> Vstep = V;
+  gsVector<T> Astep = A;
+
+  /// Stage 1: A Newmark step with DT=gamma*dt
+  this->_stageOutput(1);
+  Base::_step(t,gamma*dt,Ustep,Vstep,Astep);
+
+  /// Stage 2: A Newmark step with DT=gamma*dt
   gsVector<T> R;
   gsSparseMatrix<T> M, C, K;
-
-  T alpha = m_options.getReal("alpha");
-  T delta = m_options.getReal("delta");
-
   gsSparseMatrix<T> lhs;
-  A.setZero();
-  U = Uold + dt*Vold + Aold*(0.5 - alpha)*dt*dt + alpha*dt*dt*A;
-  V = Vold + Aold*(1 - delta)*dt + delta*dt*A;
+  gsMatrix<T> rhs;
+  gsMatrix<T> dU;
+
   // Computed at t=t0+dt
   this->_computeMass(t+dt,M);
   this->_computeDamping(U,t+dt,C);
   this->_computeResidual(U,t+dt,R);
 
-  gsMatrix<T> rhs = R - C * V - M*(A);
+  U = Ustep;
+  V = Vstep;
+  A = Astep;
+
+  rhs = R - M*(c1*Vold+c2*Vstep+c1*c3*Uold+c3*c2*Ustep+c3*c3*U) - C*(c1*Uold+c2*Ustep+c3*U);
 
   T tolU = m_options.getReal("TolU");
   T tolF = m_options.getReal("TolF");
   T updateNorm   = 10.0*tolU;
   T residualNorm  = rhs.norm();
   T residualNorm0 = residualNorm;
-  gsVector<T> dA;
   this->_initOutput();
-  typename gsSparseSolver<T>::uPtr solver;  
   for (index_t numIterations = 0; numIterations < m_options.getInt("MaxIter"); ++numIterations)
   {
     if ((!m_options.getSwitch("Quasi")) || ((numIterations==0) || (numIterations % m_options.getInt("QuasiIterations") == 0)))
     {
-      // Computed at t=t0+dt
+      // Computed at t=t0+dt      
       this->_computeDamping(U,t+dt,C);
       this->_computeJacobian(U,t+dt,K);
     }
 
-    lhs = M + delta*dt*C + dt*dt*alpha*K;
+    lhs = K + c3*c3*M + c3*C;
 
+    typename gsSparseSolver<T>::uPtr solver;
     solver = gsSparseSolver<T>::get( m_options.getString("Solver") ); 
     solver->compute(lhs);
+    // U = solver->solve(rhs);
+    // V = delta/( dt*alpha ) * (U-Uold) - Vold;
+    // A = 1/( dt*dt*alpha ) * (U-Uold-Vold*dt) - Aold;
 
-    dA = solver->solve(rhs);
-    A += dA;
-    V += dA*delta*dt;
-    U += dA*alpha*dt*dt;
+    dU = solver->solve(rhs);
+    U += dU;
 
     this->_computeResidual(U,t+dt,R);
-    rhs = R - C*V - M*A;
+    rhs = R - M*(c1*Vold+c2*Vstep+c1*c3*Uold+c3*c2*Ustep+c3*c3*U) - C*(c1*Uold+c2*Ustep+c3*U);
     residualNorm = rhs.norm() / residualNorm0;
-    updateNorm = dA.norm() / A.norm();
+    updateNorm = dU.norm() / U.norm();
 
     this->_stepOutput(numIterations,residualNorm,updateNorm);
 
     if ( (updateNorm<tolU && residualNorm<tolF) )
     {
+        V = c1*Uold + c2*Ustep + c3*U;
+        A = c1*Vold + c2*Vstep + c3*V;
         return gsStatus::Success;
     }
   }
 
+  V = c1*Uold + c2*Ustep + c3*U;
+  A = c1*Vold + c2*Vstep + c3*V;
   gsInfo<<"maximum iterations reached. Solution did not converge\n";
   return gsStatus::NotConverged;
 }
 
 template <class T, bool _NL>
-void gsDynamicNewmark<T,_NL>::_initOutput() const
+void gsDynamicBathe<T,_NL>::_stageOutput(index_t stage) const
+{
+  if (m_options.getSwitch("Verbose"))
+  {
+    gsInfo<<"Stage "<<stage<<":";
+    gsInfo<<"\n";
+  }
+}
+
+template <class T, bool _NL>
+void gsDynamicBathe<T,_NL>::_initOutput() const
 {
   if (m_options.getSwitch("Verbose"))
   {
@@ -158,7 +192,7 @@ void gsDynamicNewmark<T,_NL>::_initOutput() const
 }
 
 template <class T, bool _NL>
-void gsDynamicNewmark<T,_NL>::_stepOutput(const index_t it, const T resnorm, const T updatenorm) const
+void gsDynamicBathe<T,_NL>::_stepOutput(const index_t it, const T resnorm, const T updatenorm) const
 {
   if (m_options.getSwitch("Verbose"))
   {

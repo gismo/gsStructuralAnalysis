@@ -10,6 +10,8 @@
 
     Author(s): H.M. Verhelst (2019-..., TU Delft)
 
+    TODO (June 2023):
+    *    Change inputs to const references!
 */
 
 #pragma once
@@ -28,7 +30,7 @@ namespace gismo
 
     \ingroup gsStructuralAnalysis
 */
-template <class T>
+template <class T, bool _NL>
 class gsDynamicNewmark : public gsDynamicBase<T>
 {
     typedef gsDynamicBase<T> Base;
@@ -60,7 +62,9 @@ public:
                 )
     :
     Base(Mass,Damping,Stiffness,Force)
-    {}
+    {
+        this->defaultOptions();
+    }
 
     /// Constructor
     gsDynamicNewmark(
@@ -71,7 +75,9 @@ public:
                 )
     :
     Base(Mass,Damping,Stiffness,TForce)
-    {}
+    {
+        this->defaultOptions();
+    }
 
     /// Constructor
     gsDynamicNewmark(
@@ -82,7 +88,22 @@ public:
                 )
     :
     Base(Mass,Damping,Jacobian,Residual)
-    {}
+    {
+        this->defaultOptions();
+    }
+
+    /// Constructor
+    gsDynamicNewmark(
+                    const Mass_t        & Mass,
+                    const Damping_t     & Damping,
+                    const Jacobian_t    & Jacobian,
+                    const TResidual_t   & TResidual
+                )
+    :
+    Base(Mass,Damping,Jacobian,TResidual)
+    {
+        this->defaultOptions();
+    }
 
     /// Constructor
     gsDynamicNewmark(
@@ -93,7 +114,9 @@ public:
                 )
     :
     Base(Mass,Damping,TJacobian,TResidual)
-    {}
+    {
+        this->defaultOptions();
+    }
 
     /// Constructor
     gsDynamicNewmark(
@@ -104,69 +127,52 @@ public:
                 )
     :
     Base(TMass,TDamping,TJacobian,TResidual)
-    {}
-
-// General functions
+    {
+        this->defaultOptions();
+    }
 
     /// Set default options
-    void defaultOptions();
+    virtual void defaultOptions() override;
 
-    /// Apply options
-    void getOptions();
-
+// General functions
 protected:
-    gsStatus _step(const T dt)
+
+    gsStatus _step(const T t, const T dt, gsVector<T> & U, gsVector<T> & V, gsVector<T> & A) const
     {
         gsStatus status = gsStatus::NotStarted;
-        if (m_nonlinear)
-            status = _step_impl<true>(dt);
-        else
-            status = _step_impl<false>(dt);
-
+        status = _step_impl<_NL>(t,dt,U,V,A);
         return status;
     }
 
-    void _initOutput();
-    void _stepOutput(const index_t it, const index_t resnorm, const index_t updatenorm);
+    void _initOutput() const;
+    void _stepOutput(const index_t it, const T resnorm, const T updatenorm) const;
 
     gsSparseMatrix<T> m_sysmat;
 
     using Base::_computeForce;
     using Base::_computeResidual;
     using Base::_computeMass;
+    using Base::_computeMassInverse;
     using Base::_computeDamping;
     using Base::_computeJacobian;
 
 protected:
-    using Base::m_U;
-    using Base::m_V;
-    using Base::m_A;
-
-    using Base::m_Uold;
-    using Base::m_Vold;
-    using Base::m_Aold;
-
-    using Base::m_updateNorm;
-    using Base::m_residualNorm;
-    using Base::m_dt;
-    using Base::m_time;
-
-    using Base::m_tolerance;
 
     using Base::m_solver;
 
     using Base::m_numIterations;
-    using Base::m_maxIterations;
-    using Base::m_converged;
 
-    using Base::m_nonlinear;
+    using Base::m_options;
+
 
 private:
     template <bool _nonlinear>
-    typename std::enable_if<(_nonlinear==false), gsStatus>::type _step_impl(const T dt);
+    typename std::enable_if<(_nonlinear==false), gsStatus>::type 
+    _step_impl(const T t, const T dt, gsVector<T> & U, gsVector<T> & V, gsVector<T> & A) const;
 
     template <bool _nonlinear>
-    typename std::enable_if<(_nonlinear==true), gsStatus>::type _step_impl(const T dt);
+    typename std::enable_if<(_nonlinear==true), gsStatus>::type 
+    _step_impl(const T t, const T dt, gsVector<T> & U, gsVector<T> & V, gsVector<T> & A) const;
 };
 
 } // namespace gismo

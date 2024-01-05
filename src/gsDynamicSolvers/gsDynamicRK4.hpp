@@ -1,4 +1,4 @@
-/** @file gsDynamicExplicitEuler.hpp
+/** @file gsDynamicRK4.hpp
 
     @brief Performs the arc length method to solve a nonlinear equation system.
 
@@ -17,7 +17,7 @@ namespace gismo
 {
 
 // template <class T, bool _NL>
-// gsStatus gsDynamicExplicitEuler<T,_NL>::_step(const T dt)
+// gsStatus gsDynamicRK4<T,_NL>::_step(const T dt)
 // {
 //   gsVector<T> R;
 //   gsSparseMatrix<T> M, C;
@@ -50,7 +50,7 @@ namespace gismo
 template <class T, bool _NL>
 template <bool _nonlinear>
 typename std::enable_if<(_nonlinear==false), gsStatus>::type
-gsDynamicExplicitEuler<T,_NL>::_step_impl(const T t, const T dt, gsVector<T> & U, gsVector<T> & V, gsVector<T> & A) const
+gsDynamicRK4<T,_NL>::_step_impl(const T t, const T dt, gsVector<T> & U, gsVector<T> & V, gsVector<T> & A) const
 {
   gsVector<T> Uold = U;
   gsVector<T> Vold = V;
@@ -75,7 +75,6 @@ gsDynamicExplicitEuler<T,_NL>::_step_impl(const T t, const T dt, gsVector<T> & U
   sol.topRows(N) += dt * Vold;
   sol.bottomRows(N) += dt * Minv * (F - K * Uold - C * Vold);
   this->_stepOutput(0,sol.norm(),0.);
-  gsDebugVar(sol.transpose());
 
   U = sol.topRows(N);
   V = sol.bottomRows(N);
@@ -90,7 +89,7 @@ gsDynamicExplicitEuler<T,_NL>::_step_impl(const T t, const T dt, gsVector<T> & U
 template <class T, bool _NL>
 template <bool _nonlinear>
 typename std::enable_if<(_nonlinear==true), gsStatus>::type
-gsDynamicExplicitEuler<T,_NL>::_step_impl(const T t, const T dt, gsVector<T> & U, gsVector<T> & V, gsVector<T> & A) const
+gsDynamicRK4<T,_NL>::_step_impl(const T t, const T dt, gsVector<T> & U, gsVector<T> & V, gsVector<T> & A) const
 {
   gsVector<T> Uold = U;
   gsVector<T> Vold = V;
@@ -125,7 +124,7 @@ gsDynamicExplicitEuler<T,_NL>::_step_impl(const T t, const T dt, gsVector<T> & U
 }
 
 template <class T, bool _NL>
-void gsDynamicExplicitEuler<T,_NL>::_initOutput() const
+void gsDynamicRK4<T,_NL>::_initOutput() const
 {
   if (m_options.getSwitch("Verbose"))
   {
@@ -137,7 +136,7 @@ void gsDynamicExplicitEuler<T,_NL>::_initOutput() const
 }
 
 template <class T, bool _NL>
-void gsDynamicExplicitEuler<T,_NL>::_stepOutput(const index_t it, const T resnorm, const T updatenorm) const
+void gsDynamicRK4<T,_NL>::_stepOutput(const index_t it, const T resnorm, const T updatenorm) const
 {
   if (m_options.getSwitch("Verbose"))
   {

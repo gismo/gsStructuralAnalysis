@@ -9,14 +9,14 @@
     file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
     Author(s): H.M. Verhelst (2019-..., TU Delft)
-
+3
     TODO (June 2023):
     *    Change inputs to const references!
 */
 
 #pragma once
-#include <gsCore/gsLinearAlgebra.h>
 
+#include <gsCore/gsLinearAlgebra.h>
 #include <gsIO/gsOptionList.h>
 #include <gsStructuralAnalysis/src/gsStructuralAnalysisTools/gsStructuralAnalysisTypes.h>
 
@@ -62,8 +62,7 @@ public:
     m_mass(Mass),
     m_damping(Damping),
     m_stiffness(Stiffness),
-    m_force(Force),
-    m_nonlinear(false)
+    m_force(Force)
     {
         m_Tmass       = [this](                       const T time, gsSparseMatrix<T> & result) -> bool {return m_mass(result);};
         m_Tdamping    = [this](gsVector<T> const & x, const T time, gsSparseMatrix<T> & result) -> bool {return m_damping(x,result);};
@@ -84,8 +83,7 @@ public:
     m_mass(Mass),
     m_damping(Damping),
     m_stiffness(Stiffness),
-    m_Tforce(TForce),
-    m_nonlinear(false)
+    m_Tforce(TForce)
     {
         m_Tmass       = [this](                       const T time, gsSparseMatrix<T> & result) -> bool {return m_mass(result);};
         m_Tdamping    = [this](gsVector<T> const & x, const T time, gsSparseMatrix<T> & result) -> bool {return m_damping(x,result);};
@@ -105,14 +103,32 @@ public:
     m_mass(Mass),
     m_damping(Damping),
     m_jacobian(Jacobian),
-    m_residual(Residual),
-    m_nonlinear(true)
+    m_residual(Residual)
     {
         m_Tmass       = [this](                       const T time, gsSparseMatrix<T> & result) -> bool {return m_mass(result);};
         m_Tdamping    = [this](gsVector<T> const & x, const T time, gsSparseMatrix<T> & result) -> bool {return m_damping(x,result);};
         m_Tjacobian   = [this](gsVector<T> const & x, const T time, gsSparseMatrix<T> & result) -> bool {return m_jacobian(x,result);};
         m_Tforce      = [this](                       const T time, gsVector<T>       & result) -> bool {GISMO_ERROR("time-dependent force not available");};
         m_Tresidual   = [this](gsVector<T> const & x, const T time, gsVector<T>       & result) -> bool {return m_residual(x,result);};
+        _init();
+    }
+
+    /// Constructor
+    gsDynamicBase(
+                    const Mass_t        & Mass,
+                    const Damping_t     & Damping,
+                    const Jacobian_t   & Jacobian,
+                    const TResidual_t   & TResidual
+                )
+    :
+    m_mass(Mass),
+    m_damping(Damping),
+    m_jacobian(Jacobian),
+    m_Tresidual(TResidual)
+    {
+        m_Tmass       = [this](                       const T time, gsSparseMatrix<T> & result) -> bool {return m_mass(result);};
+        m_Tjacobian   = [this](gsVector<T> const & x, const T time, gsSparseMatrix<T> & result) -> bool {return m_jacobian(x,result);};
+        m_Tdamping    = [this](gsVector<T> const & x, const T time, gsSparseMatrix<T> & result) -> bool {return m_damping(x,result);};
         _init();
     }
 
@@ -127,8 +143,7 @@ public:
     m_mass(Mass),
     m_damping(Damping),
     m_Tjacobian(TJacobian),
-    m_Tresidual(TResidual),
-    m_nonlinear(true)
+    m_Tresidual(TResidual)
     {
         m_Tmass       = [this](                       const T time, gsSparseMatrix<T> & result) -> bool {return m_mass(result);};
         m_Tdamping    = [this](gsVector<T> const & x, const T time, gsSparseMatrix<T> & result) -> bool {return m_damping(x,result);};
@@ -146,8 +161,7 @@ public:
     m_Tmass(TMass),
     m_Tdamping(TDamping),
     m_Tjacobian(TJacobian),
-    m_Tresidual(TResidual),
-    m_nonlinear(true)
+    m_Tresidual(TResidual)
     {
         _init();
     }
@@ -158,10 +172,8 @@ protected:
     void _init()
     {
         // initialize variables
-        m_numIterations = 0;
-        this->defaultOptions();
-        m_converged = false;
-        m_initialized = false;
+        m_numIterations = -1;
+        defaultOptions();
 
         m_status = gsStatus::NotStarted;
     }
@@ -175,36 +187,33 @@ public:
     // virtual index_t numDofs() {return m_forcing.size();}
 
     // Returns the current time step
-    virtual T getTimeStep() const {return m_dt; }
+    virtual T getTimeStep() const {return m_options.getReal("DT"); }
 
     /// Perform one arc-length step
     virtual gsStatus step(T dt)
     {
-        return this->_step(dt);
+        return this->_step(m_time,dt,m_U,m_V,m_A);
     }
 
     virtual gsStatus step()
     {
-        return this->step(m_dt);
+        return this->step(m_options.getReal("DT"));
     }
 
-    /// Initialize the arc-length method, computes the stability of the initial configuration if \a stability is true
-    virtual void initialize()
+    virtual gsStatus step(const T t, const T dt, gsVector<T> & U, gsVector<T> & V, gsVector<T> & A) const
     {
-        m_initialized = true;
-        this->getOptions();
+        return _step(t,dt,U,V,A);
     }
 
     /// Set time step to \a dt
     virtual void setTimeStep(T dt)
     {
-      // m_options.setReal("Length",length);
-      // m_arcLength = m_arcLength_prev = m_arcLength_ori = m_options.getReal("Length");
+        m_options.setReal("DT",dt);
     }
 
     // Output
     /// True if the Arc Length method converged
-    virtual bool converged() const {return m_converged;}
+    virtual bool converged() const {return m_status==gsStatus::Success;}
 
     /// Returns the number of Newton iterations performed
     virtual index_t numIterations() const { return m_numIterations;}
@@ -231,13 +240,10 @@ public:
     virtual gsOptionList & options() {return m_options;};
 
     /// Set the options to \a options
-    virtual void setOptions(gsOptionList options) {m_options.update(options,gsOptionList::addIfUnknown); this->getOptions(); };
+    virtual void setOptions(gsOptionList options) {m_options.update(options,gsOptionList::addIfUnknown); };
 
     /// Return the options into \a options
     virtual const void options_into(gsOptionList options) {options = m_options;};
-
-    /// Apply the options
-    virtual void applyOptions() {this->getOptions(); }
 
 // ------------------------------------------------------------------------------------------------------------
 // ---------------------------------------Computations---------------------------------------------------------
@@ -246,39 +252,51 @@ protected:
     /// Set default options
     virtual void defaultOptions();
 
-    /// Apply options
-    virtual void getOptions();
-
     /// Compute the residual
-    virtual void _computeForce(const T time, gsVector<T> & F)
+    virtual void _computeForce(const T time, gsVector<T> & F) const
     {
         if (!m_Tforce(time,F))
             throw 2;
     }
 
     /// Compute the residual
-    virtual void _computeResidual(const gsVector<T> & U, const T time, gsVector<T> & R)
+    virtual void _computeResidual(const gsVector<T> & U, const T time, gsVector<T> & R) const
     {
         if (!m_Tresidual(U,time,R))
             throw 2;
     }
 
     /// Compute the mass matrix
-    virtual void _computeMass(const T time, gsSparseMatrix<T> & M)
+    virtual void _computeMass(const T time, gsSparseMatrix<T> & M) const
     {
         if (!m_Tmass(time,M))
             throw 2;
     }
 
+    /// Compute the mass matrix
+    virtual void _computeMassInverse(const gsSparseMatrix<T> & M, gsSparseMatrix<T> & Minv) const
+    {
+        if ((m_mass==nullptr) || (m_massInv.rows()==0 || m_massInv.cols()==0)) // then mass is time-dependent or the mass inverse is not stored, compute it
+        {
+            gsSparseMatrix<T> eye(M.rows(), M.cols());
+            eye.setIdentity();
+            gsSparseSolver<>::LU solver(M);
+            gsMatrix<T> MinvI = solver.solve(eye);
+            m_massInv = Minv = MinvI.sparseView();
+        }
+        else
+            Minv = m_massInv;
+    }
+
     /// Compute the damping matrix
-    virtual void _computeDamping(const gsVector<T> & U, const T time, gsSparseMatrix<T> & C)
+    virtual void _computeDamping(const gsVector<T> & U, const T time, gsSparseMatrix<T> & C) const
     {
         if (!m_Tdamping(U,time,C))
             throw 2;
     }
 
     /// Compute the Jacobian matrix
-    virtual void _computeJacobian(const gsVector<T> & U, const T time, gsSparseMatrix<T> & K)
+    virtual void _computeJacobian(const gsVector<T> & U, const T time, gsSparseMatrix<T> & K) const
     {
         if (!m_Tjacobian(U,time,K))
             throw 2;
@@ -287,7 +305,7 @@ protected:
 // Purely virtual functions
 protected:
     /// Initialize the ALM
-    virtual gsStatus _step(const T dt) = 0;
+    virtual gsStatus _step(const T t, const T dt, gsVector<T> & U, gsVector<T> & V, gsVector<T> & A) const = 0;
 
 protected:
 
@@ -295,6 +313,7 @@ protected:
     index_t m_numDof;
 
     Mass_t      m_mass;
+    mutable gsSparseMatrix<T> m_massInv;
     TMass_t     m_Tmass;
 
     Damping_t   m_damping;
@@ -311,8 +330,6 @@ protected:
     Residual_t  m_residual;
     TResidual_t m_Tresidual;
 
-    bool m_nonlinear;
-
     mutable typename gsSparseSolver<T>::uPtr m_solver; // Cholesky by default
 
 protected:
@@ -322,48 +339,37 @@ protected:
 protected:
 
 
-    /// Number of Arc Length iterations performed
-    index_t m_numIterations;
+    /// Number of iterations performed
+    mutable index_t m_numIterations;
 
-    /// Maximum number of Arc Length iterations allowed
-    index_t m_maxIterations;
+    // /// Maximum number of Arc Length iterations allowed
+    // index_t m_maxIterations;
 
-    /// Number of desired iterations
-    index_t m_desiredIterations;
+    // /// Number of desired iterations
+    // index_t m_desiredIterations;
 
-    /// Time step
-    T m_dt;
+    // /// Time step
+    // T m_dt;
 
     /// Time
     T m_time;
 
-    /// Tolerance value to decide convergence
-    T m_tolerance;
+    // /// Tolerance value to decide convergence
+    // T m_tolerance;
 
-    /// Tolerance value to decide convergence - Force criterion
-    T m_toleranceF;
+    // /// Tolerance value to decide convergence - Force criterion
+    // T m_toleranceF;
 
-    /// Tolerance value to decide convergence - Displacement criterion
-    T m_toleranceU;
+    // /// Tolerance value to decide convergence - Displacement criterion
+    // T m_toleranceU;
 
-    bool m_verbose;
+    // bool m_verbose;
     bool m_initialized;
 
-    bool m_quasiNewton;
-    index_t m_quasiNewtonInterval;
+    // bool m_quasiNewton;
+    // index_t m_quasiNewtonInterval;
 
     gsStatus m_status;
-
-protected:
-
-    /// Convergence result
-    bool m_converged;
-
-    /// Force residuum
-    T m_residualNorm;
-
-    /// Update norm
-    T m_updateNorm;
 
 protected:
 

@@ -17,6 +17,10 @@
 
 namespace gismo
 {
+	
+	enum struct gsStatus;
+	template <class T> struct gsStructuralAnalysisOps;
+
 	CLASS_TEMPLATE_INST gsALMBase<real_t>;
 	CLASS_TEMPLATE_INST gsALMLoadControl<real_t>;
 	CLASS_TEMPLATE_INST gsALMRiks<real_t>;

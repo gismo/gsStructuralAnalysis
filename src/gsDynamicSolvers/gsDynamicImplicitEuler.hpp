@@ -20,94 +20,76 @@
 namespace gismo
 {
 
-template <class T>
+template <class T, bool _NL>
 template <bool _nonlinear>
 typename std::enable_if<(_nonlinear==false), gsStatus>::type
-gsDynamicImplicitEuler<T>::_step_impl(const T dt)
+gsDynamicImplicitEuler<T,_NL>::_step_impl(const T t, const T dt, gsVector<T> & U, gsVector<T> & V, gsVector<T> & A) const
 {
-  m_Uold = m_U;
-  m_Vold = m_V;
+  gsVector<T> Uold = U;
+  gsVector<T> Vold = V;
+  gsVector<T> Aold = A;
 
-  index_t N = m_U.rows();
+  index_t N = U.rows();
   gsVector<T> sol(2*N);
-  sol.topRows(N) = m_U;
-  sol.bottomRows(N) = m_V;
+  sol.topRows(N) = U;
+  sol.bottomRows(N) = V;
 
   typename gsBlockOp<>::Ptr Amat;
 
   Amat=gsBlockOp<>::make(2,2);
-  gsGMRes<T> gmres(Amat);
+  gsGMRes<T> gmres(Amat); 
 
   gsSparseMatrix<T> eye(N,N);
   eye.setIdentity();
 
   gsVector<T> F;
   gsSparseMatrix<T> M, C, K;
+  gsSparseMatrix<T> Minv;
 
-  this->_computeMass(m_time,M);
-  this->_computeForce(m_time,F);
-  this->_computeDamping(m_U,m_time,C);
-  this->_computeJacobian(m_U,m_time,K);
-
-  gsSparseSolver<>::LU solver(M);
-  gsMatrix<T> MinvK = solver.solve(K);
-  gsMatrix<T> MinvC = solver.solve(C);
-
-  gsDebugVar(MinvK);
-  gsDebugVar(MinvC);
-
+  // Computed at t=t0+dt
+  this->_computeMass(t+dt,M);
+  this->_computeForce(t+dt,F);
+  this->_computeDamping(U,t+dt,C);
+  this->_computeJacobian(U,t,K);
 
   // top-left
-  Amat->addOperator(0,0,makeMatrixOp( eye) );
+  Amat->addOperator(0,0,gsIdentityOp<T>::make(N) );
   // top-right
-  Amat->addOperator(0,1,makeMatrixOp( m_dt*eye  ) );
+  Amat->addOperator(0,1,makeMatrixOp( -dt*eye  ) );
   // bottom-left
-  Amat->addOperator(1,0,makeMatrixOp( m_dt*MinvK ) );
+  Amat->addOperator(1,0,makeMatrixOp( dt*K ) );
   // bottom-right
-  Amat->addOperator(1,1,makeMatrixOp( eye+m_dt*MinvC ) );
+  Amat->addOperator(1,1,makeMatrixOp( M + dt*C ) );
 
-  gsVector<T> MinvF = solver.solve(F);
   gsVector<T> rhs(2*N);
-  rhs.setZero();
-
-  gsDebugVar(m_dt*MinvF);
-  rhs.bottomRows(N) = m_dt*MinvF;
-
-  gsDebugVar(M.toDense().inverse()*F);
-  gsDebugVar(MinvF);
-
-  gsDebugVar(rhs);
-  gsDebugVar(M.toDense());
-
-/*
-  P = M^-1 F
-  MP = F
-*/
+  rhs.topRows(N) = U;
+  rhs.bottomRows(N) = dt*F + M*V;
 
   gsMatrix<T> tmpsol;
-  gmres.solve(rhs+sol,tmpsol);
+  gmres.solve(rhs,tmpsol);
 
-  gsDebugVar(tmpsol);
+  U = tmpsol.topRows(N);
+  V = tmpsol.bottomRows(N);
+  this->_initOutput();
+  this->_stepOutput(0,sol.norm(),0.);
 
-  m_U = tmpsol.topRows(N);
-  m_V = tmpsol.bottomRows(N);
-  m_time += m_dt;
   return gsStatus::Success;
 }
 
 
-template <class T>
+template <class T, bool _NL>
 template <bool _nonlinear>
 typename std::enable_if<(_nonlinear==true), gsStatus>::type
-gsDynamicImplicitEuler<T>::_step_impl(const T dt)
+gsDynamicImplicitEuler<T,_NL>::_step_impl(const T t, const T dt, gsVector<T> & U, gsVector<T> & V, gsVector<T> & A) const
 {
-  m_Uold = m_U;
-  m_Vold = m_V;
+  gsVector<T> Uold = U;
+  gsVector<T> Vold = V;
+  gsVector<T> Aold = A;
 
-  index_t N = m_U.rows();
+  index_t N = U.rows();
   gsVector<T> sol(2*N);
-  sol.topRows(N) = m_U;
-  sol.bottomRows(N) = m_V;
+  sol.topRows(N) = U;
+  sol.bottomRows(N) = V;
 
   gsMatrix<T> dsol;
 
@@ -119,169 +101,87 @@ gsDynamicImplicitEuler<T>::_step_impl(const T dt)
   gsSparseMatrix<T> eye(N,N);
   eye.setIdentity();
 
-  gsVector<T> rhs(2*N);
-  rhs.setZero();
-
   gsVector<T> R;
   gsSparseMatrix<T> M, C, K;
 
-  this->_computeMass(m_time,M);
-  this->_computeResidual(m_U,m_time,R);
-
-  m_updateNorm   = 10*m_tolerance;
-  m_residualNorm  = R.norm();
-  T residualNorm0 = m_residualNorm;
-
-  this->_initOutput();
-  for (m_numIterations = 1; m_numIterations <= m_maxIterations; ++m_numIterations)
-  {
-      // Quasi newton
-      // Quasi newton
-      // Quasi newton
-      // Quasi newton
-
-      this->_computeDamping(m_U,m_time,C);
-      this->_computeJacobian(m_U,m_time,K);
-
-      Amat->addOperator(0,0,gsIdentityOp<T>::make(N) );
-      Amat->addOperator(0,1,makeMatrixOp(-m_dt*eye) );
-      Amat->addOperator(1,0,makeMatrixOp(m_dt*K) );
-      Amat->addOperator(1,1,makeMatrixOp(M + m_dt*C) );
-
-      rhs.topRows(m_U.rows()) = m_U - m_Uold + m_dt * m_V;
-      rhs.bottomRows(m_V.rows()) = M*(m_Vold - m_V) + m_dt * C * m_V + m_dt*(-R);
-
-      gmres.solve(-rhs,dsol);
-      sol += dsol;
-      m_updateNorm = dsol.norm() / sol.norm();
-
-      m_U = sol.topRows(N);
-      m_V = sol.bottomRows(N);
-
-      this->_computeResidual(m_U,m_time,R);
-      m_residualNorm = R.norm() / residualNorm0;
-
-      this->_stepOutput(m_numIterations,m_residualNorm,m_updateNorm);
-
-      if ( (m_updateNorm>m_tolerance && m_residualNorm>m_tolerance) )
-      {
-          m_converged = true;
-          break;
-      }
-  }
-
-  if (!m_converged)
-  {
-    gsInfo<<"maximum iterations reached. Solution did not converge\n";
-    return gsStatus::NotConverged;
-  }
-
-  m_time += m_dt;
-  return gsStatus::Success;
-
-}
-
-/*
-template <class T>
-gsStatus gsDynamicImplicitEuler<T>::_step(const T dt)
-{
-  m_Uold = m_U;
-  m_Vold = m_V;
-
-  index_t N = m_U.rows();
-  gsVector<T> sol(2*N);
-  sol.topRows(N) = m_U;
-  sol.bottomRows(N) = m_V;
-
-  gsMatrix<T> dsol;
-
-  typename gsBlockOp<>::Ptr Amat;
-
-  Amat=gsBlockOp<>::make(2,2);
-  gsGMRes<T> gmres(Amat);
-
-  gsSparseMatrix<T> eye(N,N);
-  eye.setIdentity();
+  // Computed at t=t0+dt
+  this->_computeMass(t+dt,M);
+  this->_computeDamping(U,t+dt,C);
+  this->_computeResidual(U,t+dt,R);
 
   gsVector<T> rhs(2*N);
-  rhs.setZero();
+  rhs.topRows(N) = - dt * V; // same as below, but U-Uold=0
+  rhs.bottomRows(N) = dt * C * V + dt*(-R); // same as below, but V-Vold=0
 
-  gsVector<T> R;
-  gsSparseMatrix<T> M, C, K;
-
-  this->_computeMass(m_time,M);
-  this->_computeResidual(m_U,m_time,R);
-
-  m_updateNorm   = 10*m_tolerance;
-  m_residualNorm  = R.norm();
-  T residualNorm0 = m_residualNorm;
+  T tolU = m_options.getReal("TolU");
+  T tolF = m_options.getReal("TolF");
+  T updateNorm   = 10.0*tolU;
+  T residualNorm  = rhs.norm();
+  T residualNorm0 = residualNorm;
 
   this->_initOutput();
-  for (m_numIterations = 1; m_numIterations <= m_maxIterations; ++m_numIterations)
+  for (index_t numIterations = 0; numIterations < m_options.getInt("MaxIter"); ++numIterations)
   {
-      // Quasi newton
-      // Quasi newton
-      // Quasi newton
-      // Quasi newton
+      // TODO: Quasi newton
+    if ((!m_options.getSwitch("Quasi")) || ((numIterations==0) || (numIterations % m_options.getInt("QuasiIterations") == 0)))
+    {
+      // Computed at t=t0+dt
+      this->_computeDamping(U,t+dt,C);
+      this->_computeJacobian(U,t+dt,K);
+    }
+      
+    Amat->addOperator(0,0,gsIdentityOp<T>::make(N) );
+    Amat->addOperator(0,1,makeMatrixOp(-dt*eye) );
+    Amat->addOperator(1,0,makeMatrixOp(dt*K) );
+    Amat->addOperator(1,1,makeMatrixOp(M + dt*C) );
 
-      this->_computeDamping(m_U,m_time,C);
-      this->_computeJacobian(m_U,m_time,K);
+    rhs.topRows(N) = U - Uold - dt * V;
+    rhs.bottomRows(N) = M*(V - Vold) + dt * C * V + dt*(-R);
 
-      Amat->addOperator(0,0,gsIdentityOp<T>::make(N) );
-      Amat->addOperator(0,1,makeMatrixOp(-m_dt*eye) );
-      Amat->addOperator(1,0,makeMatrixOp(m_dt*K) );
-      Amat->addOperator(1,1,makeMatrixOp(M + m_dt*C) );
+    gmres.solve(-rhs,dsol);
+    sol += dsol;
+    updateNorm = dsol.norm() / sol.norm();
 
-      rhs.topRows(m_U.rows()) = m_U - m_Uold + m_dt * m_V;
-      rhs.bottomRows(m_V.rows()) = M*(m_Vold - m_V) + m_dt * C * m_V + m_dt*(-R);
+    U = sol.topRows(N);
+    V = sol.bottomRows(N);
 
-      gmres.solve(-rhs,dsol);
-      sol += dsol;
-      m_updateNorm = dsol.norm() / sol.norm();
+    this->_computeResidual(U,t,R);
+    residualNorm = rhs.norm() / residualNorm0;
 
-      m_U = sol.topRows(N);
-      m_V = sol.bottomRows(N);
+    this->_stepOutput(numIterations,residualNorm,updateNorm);
 
-      this->_computeResidual(m_U,m_time,R);
-      m_residualNorm = R.norm() / residualNorm0;
-
-      this->_stepOutput(m_numIterations,m_residualNorm,m_updateNorm);
-
-      if ( (m_updateNorm>m_tolerance && m_residualNorm>m_tolerance) )
-      {
-          m_converged = true;
-          break;
-      }
+    if ( (updateNorm<tolU && residualNorm<tolF) )
+    {
+        return gsStatus::Success;
+    }
   }
 
-  if (!m_converged)
+  gsInfo<<"maximum iterations reached. Solution did not converge\n";
+  return gsStatus::NotConverged;
+}
+
+template <class T, bool _NL>
+void gsDynamicImplicitEuler<T,_NL>::_initOutput() const
+{
+  if (m_options.getSwitch("Verbose"))
   {
-    gsInfo<<"maximum iterations reached. Solution did not converge\n";
-    return gsStatus::NotConverged;
+    gsInfo<<"\t";
+    gsInfo<<std::setw(4)<<std::left<<"It.";
+    gsInfo<<std::setw(17)<<std::left<<"|R|/|R0|";
+    gsInfo<<std::setw(17)<<std::left<<"|dU|/|U0|"<<"\n";
   }
-
-  m_time += m_dt;
-  return gsStatus::Success;
-
-}
-*/
-
-template <class T>
-void gsDynamicImplicitEuler<T>::_initOutput()
-{
-  gsInfo<<"\t";
-  gsInfo<<std::setw(4)<<std::left<<"It.";
-  gsInfo<<std::setw(17)<<std::left<<"|R|/|R0|";
-  gsInfo<<std::setw(17)<<std::left<<"|dU|/|U0|";
 }
 
-template <class T>
-void gsDynamicImplicitEuler<T>::_stepOutput(const index_t it, const index_t resnorm, const index_t updatenorm)
+template <class T, bool _NL>
+void gsDynamicImplicitEuler<T,_NL>::_stepOutput(const index_t it, const T resnorm, const T updatenorm) const
 {
-  gsInfo<<"\t";
-  gsInfo<<std::setw(4)<<std::left<<it;
-  gsInfo<<std::setw(17)<<std::left<<resnorm;
-  gsInfo<<std::setw(17)<<std::left<<updatenorm;
+  if (m_options.getSwitch("Verbose"))
+  {
+    gsInfo<<"\t";
+    gsInfo<<std::setw(4)<<std::left<<it;
+    gsInfo<<std::setw(17)<<std::left<<resnorm;
+    gsInfo<<std::setw(17)<<std::left<<updatenorm<<"\n";
+  }
 }
 
 } // namespace gismo

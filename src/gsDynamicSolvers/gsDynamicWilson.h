@@ -1,4 +1,4 @@
- /** @file gsDynamicImplicitEuler.h
+ /** @file gsDynamicWilson.h
 
     @brief Class to perform time integration of second-order structural dynamics systems using the Explicit Euler method
 
@@ -16,7 +16,9 @@
 
 #pragma once
 #include <gsCore/gsLinearAlgebra.h>
+
 #include <gsStructuralAnalysis/src/gsDynamicSolvers/gsDynamicBase.h>
+#include <gsStructuralAnalysis/src/gsDynamicSolvers/gsDynamicNewmark.h>
 #include <gsIO/gsOptionList.h>
 
 namespace gismo
@@ -30,9 +32,9 @@ namespace gismo
     \ingroup gsStructuralAnalysis
 */
 template <class T, bool _NL>
-class gsDynamicImplicitEuler : public gsDynamicBase<T>
+class gsDynamicWilson : public gsDynamicNewmark<T,_NL>
 {
-    typedef gsDynamicBase<T> Base;
+    typedef gsDynamicNewmark<T,_NL> Base;
 
 protected:
 
@@ -50,10 +52,10 @@ protected:
 
 public:
 
-    virtual ~gsDynamicImplicitEuler() {};
+    virtual ~gsDynamicWilson() {};
 
     /// Constructor
-    gsDynamicImplicitEuler(
+    gsDynamicWilson(
                     const Mass_t        & Mass,
                     const Damping_t     & Damping,
                     const Stiffness_t   & Stiffness,
@@ -61,10 +63,12 @@ public:
                 )
     :
     Base(Mass,Damping,Stiffness,Force)
-    {}
+    {
+        this->defaultOptions();
+    }
 
     /// Constructor
-    gsDynamicImplicitEuler(
+    gsDynamicWilson(
                     const Mass_t        & Mass,
                     const Damping_t     & Damping,
                     const Stiffness_t   & Stiffness,
@@ -72,10 +76,12 @@ public:
                 )
     :
     Base(Mass,Damping,Stiffness,TForce)
-    {}
+    {
+        this->defaultOptions();
+    }
 
     /// Constructor
-    gsDynamicImplicitEuler(
+    gsDynamicWilson(
                     const Mass_t        & Mass,
                     const Damping_t     & Damping,
                     const Jacobian_t    & Jacobian,
@@ -83,10 +89,12 @@ public:
                 )
     :
     Base(Mass,Damping,Jacobian,Residual)
-    {}
+    {
+        this->defaultOptions();
+    }
 
     /// Constructor
-    gsDynamicImplicitEuler(
+    gsDynamicWilson(
                     const Mass_t        & Mass,
                     const Damping_t     & Damping,
                     const Jacobian_t    & Jacobian,
@@ -94,10 +102,12 @@ public:
                 )
     :
     Base(Mass,Damping,Jacobian,TResidual)
-    {}
+    {
+        this->defaultOptions();
+    }
 
     /// Constructor
-    gsDynamicImplicitEuler(
+    gsDynamicWilson(
                     const Mass_t        & Mass,
                     const Damping_t     & Damping,
                     const TJacobian_t   & TJacobian,
@@ -105,10 +115,12 @@ public:
                 )
     :
     Base(Mass,Damping,TJacobian,TResidual)
-    {}
+    {
+        this->defaultOptions();
+    }
 
     /// Constructor
-    gsDynamicImplicitEuler(
+    gsDynamicWilson(
                     const TMass_t       & TMass,
                     const TDamping_t    & TDamping,
                     const TJacobian_t   & TJacobian,
@@ -116,7 +128,12 @@ public:
                 )
     :
     Base(TMass,TDamping,TJacobian,TResidual)
-    {}
+    {
+        this->defaultOptions();
+    }
+
+    /// Set default options
+    virtual void defaultOptions() override;
 
 // General functions
 protected:
@@ -129,6 +146,7 @@ protected:
     }
 
     void _initOutput() const;
+    void _stageOutput(index_t stage) const;
     void _stepOutput(const index_t it, const T resnorm, const T updatenorm) const;
 
     gsSparseMatrix<T> m_sysmat;
@@ -162,5 +180,5 @@ private:
 } // namespace gismo
 
 #ifndef GISMO_BUILD_LIB
-#include GISMO_HPP_HEADER(gsDynamicImplicitEuler.hpp)
+#include GISMO_HPP_HEADER(gsDynamicWilson.hpp)
 #endif

@@ -1,4 +1,4 @@
- /** @file gsDynamicImplicitEuler.h
+ /** @file gsDynamicRK4.h
 
     @brief Class to perform time integration of second-order structural dynamics systems using the Explicit Euler method
 
@@ -16,7 +16,7 @@
 
 #pragma once
 #include <gsCore/gsLinearAlgebra.h>
-#include <gsStructuralAnalysis/src/gsDynamicSolvers/gsDynamicBase.h>
+
 #include <gsIO/gsOptionList.h>
 
 namespace gismo
@@ -30,7 +30,7 @@ namespace gismo
     \ingroup gsStructuralAnalysis
 */
 template <class T, bool _NL>
-class gsDynamicImplicitEuler : public gsDynamicBase<T>
+class gsDynamicRK4 : public gsDynamicBase<T>
 {
     typedef gsDynamicBase<T> Base;
 
@@ -50,10 +50,10 @@ protected:
 
 public:
 
-    virtual ~gsDynamicImplicitEuler() {};
+    virtual ~gsDynamicRK4() {};
 
     /// Constructor
-    gsDynamicImplicitEuler(
+    gsDynamicRK4(
                     const Mass_t        & Mass,
                     const Damping_t     & Damping,
                     const Stiffness_t   & Stiffness,
@@ -64,7 +64,7 @@ public:
     {}
 
     /// Constructor
-    gsDynamicImplicitEuler(
+    gsDynamicRK4(
                     const Mass_t        & Mass,
                     const Damping_t     & Damping,
                     const Stiffness_t   & Stiffness,
@@ -75,7 +75,7 @@ public:
     {}
 
     /// Constructor
-    gsDynamicImplicitEuler(
+    gsDynamicRK4(
                     const Mass_t        & Mass,
                     const Damping_t     & Damping,
                     const Jacobian_t    & Jacobian,
@@ -86,7 +86,7 @@ public:
     {}
 
     /// Constructor
-    gsDynamicImplicitEuler(
+    gsDynamicRK4(
                     const Mass_t        & Mass,
                     const Damping_t     & Damping,
                     const Jacobian_t    & Jacobian,
@@ -97,7 +97,7 @@ public:
     {}
 
     /// Constructor
-    gsDynamicImplicitEuler(
+    gsDynamicRK4(
                     const Mass_t        & Mass,
                     const Damping_t     & Damping,
                     const TJacobian_t   & TJacobian,
@@ -108,7 +108,7 @@ public:
     {}
 
     /// Constructor
-    gsDynamicImplicitEuler(
+    gsDynamicRK4(
                     const TMass_t       & TMass,
                     const TDamping_t    & TDamping,
                     const TJacobian_t   & TJacobian,
@@ -162,5 +162,5 @@ private:
 } // namespace gismo
 
 #ifndef GISMO_BUILD_LIB
-#include GISMO_HPP_HEADER(gsDynamicImplicitEuler.hpp)
+#include GISMO_HPP_HEADER(gsDynamicRK4.hpp)
 #endif

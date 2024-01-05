@@ -543,7 +543,7 @@ namespace gismo
 
         m_vNew = 2/(gamma*m_dt)*(m_uNew-uOld) - vOld;
         m_aNew = (m_uNew-uOld-vOld*m_dt)*4/(math::pow(gamma*m_dt,2)) - aOld;
-    }
+        }
 
     template <class T>
     void gsTimeIntegrator<T>::stepNewmarkNL()
