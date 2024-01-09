@@ -42,7 +42,11 @@ class gsAPALM
 public:
   typedef typename std::pair<gsVector<T>,T> solution_t;
 
-  // virtual ~gsAPALM() { }
+  virtual ~gsAPALM()
+  {
+    if (m_comm_dummy)
+      delete m_comm_dummy;
+  }
 
   /**
    * @brief      Constructs the APALM with MPI communication
@@ -73,8 +77,17 @@ public:
    * @brief      Empty constructor
    */
   gsAPALM()
-  : m_comm(gsSerialComm())
-  {};
+  :
+#ifdef GISMO_WITH_MPI
+  m_comm_dummy(new gsMpiComm()),
+#else
+  m_comm_dummy(new gsSerialComm()),
+#endif
+  m_comm(*m_comm_dummy)
+  {
+
+
+  };
 
 private:
 
@@ -419,10 +432,12 @@ protected:
 
   // Conditional compilation
 #ifdef GISMO_WITH_MPI
-  const gsMpiComm & m_comm ;
+  const gsMpiComm * m_comm_dummy = nullptr;
+  const gsMpiComm & m_comm;
   std::queue<index_t> m_workers;
 #else
-  const gsSerialComm & m_comm ;
+  const gsSerialComm * m_comm_dummy = nullptr;
+  const gsSerialComm & m_comm;
 #endif
 
 

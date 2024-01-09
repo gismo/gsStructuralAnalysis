@@ -46,7 +46,12 @@ gsAPALM<T>::gsAPALM(  gsALMBase<T> * ALM,
 :
 m_ALM(ALM),
 m_dataEmpty(Data),
-m_comm(gsSerialComm())
+#ifdef GISMO_WITH_MPI
+  m_comm_dummy(new gsMpiComm()),
+#else
+  m_comm_dummy(new gsSerialComm()),
+#endif
+m_comm(*m_comm_dummy)
 {
   GISMO_ASSERT(m_dataEmpty.empty(),"gsAPALMData must be empty; it will be used to define the options!");
   this->_defaultOptions();
