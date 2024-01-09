@@ -245,6 +245,8 @@ public:
     /// Return the options into \a options
     virtual const void options_into(gsOptionList options) {options = m_options;};
 
+    /// Return the number of degrees of freedom
+    virtual index_t numDofs() {return m_numDofs; }
 // ------------------------------------------------------------------------------------------------------------
 // ---------------------------------------Computations---------------------------------------------------------
 // ------------------------------------------------------------------------------------------------------------
@@ -310,7 +312,7 @@ protected:
 protected:
 
     // Number of degrees of freedom
-    index_t m_numDof;
+    index_t m_numDofs;
 
     Mass_t      m_mass;
     mutable gsSparseMatrix<T> m_massInv;
