@@ -32,41 +32,56 @@ gsDynamicNewmark<T,_NL>::_step_impl(const T t, const T dt, gsVector<T> & U, gsVe
 {
   gsVector<T> Uold = U;
   gsVector<T> Vold = V;
-  gsVector<T> Aold = A;
 
-  gsVector<T> F;
-  gsSparseMatrix<T> M, C, K;
+  index_t N = U.rows();
+  gsVector<T> &sol(2*N);
+  sol.topRows(N) = Uold;
+  sol.bottomRows(N) = Vold;
 
-  T alpha = m_options.getReal("alpha");
-  T delta = m_options.getReal("delta");
+  gsVector<T> F, R;
+  gsSparseMatrix<T> M, Minv, C, K;
 
-  // Computed at t=t0+dt
-  this->_computeMass(t+dt,M);
-  this->_computeForce(t+dt,F);
+  // Computed at t=t0
+  this->_computeMass(t,M);
+  this->_computeMassInverse(M,Minv);
+  this->_computeForce(t,F);
+  this->_computeDamping(U,t,C);
+  this->_computeJacobian(U,t,K);
 
-  gsSparseMatrix<T> lhs;
-  gsMatrix<T> rhs;
-  // predictors
-  U = Uold + dt*Vold + Aold*(0.5 - alpha)*dt*dt;
-  V = Vold + Aold*(1 - delta)*dt;
+  gsVector<T> k1(2*N), k2(2*N), k3(2*N), k4(2*N);
+  gsVector<T> Utmp, Vtmp;
 
-  this->_computeDamping(U,t+dt,C);
-  this->_computeJacobian(U,t+dt,K);
+  // Stage 1
+  R = _computeForce(t) - K * Uold;
+  k1.topRows(N) = Vold;
+  k1.bottomRows(N) = Minv * ( R - C * Vold);
 
-  // lhs and rhs
-  lhs = M + delta*dt*C + dt*dt*alpha*K;
-  rhs = F - K*U - C * V;
+  // Stage 2
+  // NOTE: Compute K, C, M on t+dt/2
+  Utmp = Uold + dt/2. * k1.topRows(N);
+  Vtmp = Vold + dt/2. * k1.bottomRows(N);
+  R = _computeForce(t + dt/2.) - K * Utmp;
+  k2.topRows(N) = Vtmp;
+  k2.bottomRows(N) = Minv * ( R - C * Vtmp);
 
-  this->_initOutput();
-  typename gsSparseSolver<T>::uPtr solver;
-  solver = gsSparseSolver<T>::get( m_options.getString("Solver") ); 
-  solver->compute(lhs);
+  // Stage 3
+  Utmp = Uold + dt/2. * k2.topRows(N);
+  Vtmp = Vold + dt/2. * k2.bottomRows(N);
+  R = _computeForce(t + dt/2.) - K * Utmp;
+  k3.topRows(N) = Vtmp;
+  k3.bottomRows(N) = Minv * ( R - C * Vtmp);
 
-  A = solver->solve(rhs);
-  V += A*delta*dt;
-  U += A*alpha*dt*dt;
-  
-  this->_stepOutput(0,(F - K*U - M * A - C * V).norm(),U.norm());
+  // Stage 4
+  Utmp = Uold + dt * k3.topRows(N);
+  Vtmp = Vold + dt * k3.bottomRows(N);
+  R = _computeForce(t + dt) - K * Utmp;
+  k4.topRows(N) = Vtmp;
+  k4.bottomRows(N) = Minv * ( R - C * Vtmp);
+
+  sol += 1./6. * dt *  ( k1 + 2.*k2 + 2.*k3 + k4 );
+  U = sol.topRows(N);
+  V = sol.bottomRows(N);
+
   if (math::isinf(U.norm()) || math::isnan(U.norm()))
     return gsStatus::NotConverged;
   else
