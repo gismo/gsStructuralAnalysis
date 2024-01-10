@@ -61,20 +61,48 @@ gsDynamicRK4<T,_NL>::_step_impl(const T t, const T dt, gsVector<T> & U, gsVector
   sol.topRows(N) = Uold;
   sol.bottomRows(N) = Vold;
 
-  gsVector<T> F;
+  gsVector<T> F, R; //R is the residual vector
   gsSparseMatrix<T> M, Minv, C, K;
 
   // Computed at t=t0
   this->_computeMass(t,M);
   this->_computeMassInverse(M,Minv);
   this->_computeForce(t,F);
-  this->_computeDamping(U,t,C);
+  this->_computeDamping(U,t,C); //C is damping
   this->_computeJacobian(U,t,K);
 
-  this->_initOutput();
-  sol.topRows(N) += dt * Vold;
-  sol.bottomRows(N) += dt * Minv * (F - K * Uold - C * Vold);
-  this->_stepOutput(0,sol.norm(),0.);
+  // this->_initOutput();
+  // Initialize parameters for RK4
+  gsVector<T> k1(2*N), k2(2*N), k3(2*N), k4(2*N);
+  gsVector<T> Utmp, Vtmp;
+
+  //Step1 (calculate k1)
+  R = _computeForce(t) - K * Uold;
+  k1.topRows(N) = Vold;
+  k1.bottomRows(N) = Minv * (R - C * Vold);
+
+  //Step2 (calculate k2)
+  Utmp = Uold + dt/2. * k1.topRows(N);
+  Vtmp = Vold + dt/2. * k1.bottomRows(N);
+  R = _computeForce(t + dt/2.) - K * Utmp;
+  k2.topRows(N) = Vtmp;
+  k2.bottomRows(N) = Minv * ( R - C * Vtmp);
+
+  //Step3 (calculate k3)
+  Utmp = Uold + m_dt/2. * k2.topRows(N);
+  Vtmp = Vold + m_dt/2. * k2.bottomRows(N);
+  R = _computeForce(t + dt/2.) - K * Utmp;
+  k3.topRows(N) = Vtmp;
+  k3.bottomRows(N) = Minv * ( R - C * Vtmp);
+
+  //Step4 (calculate k4)
+  Utmp = Uold + m_dt/2. * k3.topRows(N);
+  Vtmp = Vold + m_dt/2. * k3.bottomRows(N);
+  R = _computeForce(t + dt/2.) - K * Utmp;
+  k4.topRows(N) = Vtmp;
+  k4.bottomRows(N) = Minv * ( R - C * Vtmp);
+
+  sol += 1./6 * dt * (k1 + 2.*k2 + 2.*k3 + k4);
 
   U = sol.topRows(N);
   V = sol.bottomRows(N);
