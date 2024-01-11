@@ -15,38 +15,6 @@
 
 namespace gismo
 {
-
-// template <class T, bool _NL>
-// gsStatus gsDynamicRK4<T,_NL>::_step(const T dt)
-// {
-//   gsVector<T> R;
-//   gsSparseMatrix<T> M, C;
-//   _computeResidual(m_U,m_time,R);
-//   _computeDamping(m_U,m_time,C);
-//   _computeMass(m_time,M);
-
-//   m_Uold = m_U;
-//   m_Vold = m_V;
-//   m_Aold = m_A;
-
-//   m_U = m_Uold + m_dt * m_Vold;
-//   // if (m_lumped)
-//   // {
-//   //     gsVector<T> M = _computeMassLumped(m_t);
-//   //     m_DeltaV = m_dt * M.cwiseProduct(R - C * m_Vold);// element-wise;
-//   // }
-//   // else
-//   // {
-//       // gsSparseMatrix<T> M = _computeMass(m_t);
-//       m_solver->compute(M);
-//       m_V = m_Vold + m_dt * m_solver->solve( R - C * m_Vold );
-//   // }
-
-//   m_time += m_dt;
-
-//   return gsStatus::Success;
-// }
-
 template <class T, bool _NL>
 template <bool _nonlinear>
 typename std::enable_if<(_nonlinear==false), gsStatus>::type
@@ -93,16 +61,18 @@ gsDynamicRK4<T,_NL>::_step_impl(const T t, const T dt, gsVector<T> & U, gsVector
   k2.bottomRows(N) = Minv * ( R - C * Vtmp);
 
   //Step3 (calculate k3)
-  Utmp = Uold + m_dt/2. * k2.topRows(N);
-  Vtmp = Vold + m_dt/2. * k2.bottomRows(N);
-  R = _computeForce(t + dt/2.) - K * Utmp;
+  Utmp = Uold + dt/2. * k2.topRows(N);
+  Vtmp = Vold + dt/2. * k2.bottomRows(N);
+  _computeForce(t + dt/2., F);
+  R =  F - K * Utmp;
   k3.topRows(N) = Vtmp;
   k3.bottomRows(N) = Minv * ( R - C * Vtmp);
 
   //Step4 (calculate k4)
-  Utmp = Uold + m_dt/2. * k3.topRows(N);
-  Vtmp = Vold + m_dt/2. * k3.bottomRows(N);
-  R = _computeForce(t + dt/2.) - K * Utmp;
+  Utmp = Uold + dt/2. * k3.topRows(N);
+  Vtmp = Vold + dt/2. * k3.bottomRows(N);
+  _computeForce(t + dt/2., F);
+  R = F - K * Utmp;
   k4.topRows(N) = Vtmp;
   k4.bottomRows(N) = Minv * ( R - C * Vtmp);
 
@@ -150,28 +120,28 @@ gsDynamicRK4<T,_NL>::_step_impl(const T t, const T dt, gsVector<T> & U, gsVector
   gsVector<T> Utmp, Vtmp;
 
   //Step1 (calculate k1)
-  R = _computeResidual(Uold, t);
+  _computeResidual(Uold, t, R);
   k1.topRows(N) = Vold;
   k1.bottomRows(N) = Minv * (R - C * Vold);
 
   //Step2 (calculate k2)
   Utmp = Uold + dt/2. * k1.topRows(N);
   Vtmp = Vold + dt/2. * k1.bottomRows(N);
-  R =_computeResidual(Utmp,t + dt/2.);
+  _computeResidual(Utmp,t + dt/2.,R);
   k2.topRows(N) = Vtmp;
   k2.bottomRows(N) = Minv * ( R - C * Vtmp);
 
   //Step3 (calculate k3)
-  Utmp = Uold + m_dt/2. * k2.topRows(N);
-  Vtmp = Vold + m_dt/2. * k2.bottomRows(N);
-  R =_computeResidual(Utmp,t + dt/2.);
+  Utmp = Uold + dt/2. * k2.topRows(N);
+  Vtmp = Vold + dt/2. * k2.bottomRows(N);
+  _computeResidual(Utmp,t + dt/2.,R);
   k3.topRows(N) = Vtmp;
   k3.bottomRows(N) = Minv * ( R - C * Vtmp);
 
   //Step4 (calculate k4)
-  Utmp = Uold + m_dt/2. * k3.topRows(N);
-  Vtmp = Vold + m_dt/2. * k3.bottomRows(N);
-  R =_computeResidual(Utmp,t + dt/2.);
+  Utmp = Uold + dt/2. * k3.topRows(N);
+  Vtmp = Vold + dt/2. * k3.bottomRows(N);
+  _computeResidual(Utmp,t + dt/2.,R);
   k4.topRows(N) = Vtmp;
   k4.bottomRows(N) = Minv * ( R - C * Vtmp);
 
@@ -184,7 +154,6 @@ gsDynamicRK4<T,_NL>::_step_impl(const T t, const T dt, gsVector<T> & U, gsVector
     return gsStatus::NotConverged;
   else
     return gsStatus::Success;
-}
 }
 
 template <class T, bool _NL>
