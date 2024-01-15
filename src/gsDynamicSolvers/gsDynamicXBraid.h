@@ -45,8 +45,8 @@ public:
                     const index_t numDofs,
                     index_t numSteps = 10)
     :
-    m_solver(solver),
     gsXBraid< gsMatrix<T> >::gsXBraid(comm, tstart, tend, (int)numSteps),
+    m_solver(solver),
     m_numDofs(numDofs)
     {
         defaultOptions();
@@ -117,14 +117,12 @@ public:
         u->setZero();
 
         *u_ptr = (braid_Vector) u;
-        gsDebugVar("Point 1");
         return braid_Int(0);
     }
 
     /// Performs a single step of the parallel-in-time multigrid
     braid_Int Step(braid_Vector    u, braid_Vector    ustop, braid_Vector    fstop, BraidStepStatus &status) override
     {
-        gsDebugVar("Point 1");
         gsVector<T>* u_ptr = (gsVector<T>*) u;
         // gsMatrix<T>* ustop_ptr = (gsMatrix<T>*) ustop; // the guess is not used
 
@@ -134,52 +132,42 @@ public:
             gsVector<T>* fstop_ptr = (gsVector<T>*) fstop;
             *u_ptr += *fstop_ptr;
         }
-        gsDebugVar("Point 1");
 
         // Get time step information
         std::pair<braid_Real, braid_Real> time = static_cast<gsXBraidStepStatus&>(status).timeInterval();
         T t  = time.first;
         T dt = time.second - time.first;
-        gsDebugVar("Point 1");
 
         // Solve time step
         gsVector<T> U = (*u_ptr).segment(0          ,m_numDofs);
         gsVector<T> V = (*u_ptr).segment(m_numDofs  ,m_numDofs);
         gsVector<T> A = (*u_ptr).segment(2*m_numDofs,m_numDofs);
-        gsDebugVar("Point 1");
 
         m_solver->step(t,dt,U,V,A);
-        gsDebugVar("Point 1");
 
         u_ptr->segment(0          ,m_numDofs) = U;
         u_ptr->segment(m_numDofs  ,m_numDofs) = V;
         u_ptr->segment(2*m_numDofs,m_numDofs) = A;
-        gsDebugVar("Point 1");
 
         // Carry out adaptive refinement in time
         if (static_cast<gsXBraidStepStatus&>(status).level() == 0)
         {
-        gsDebugVar("Point 1");
             braid_Real error = static_cast<gsXBraidStepStatus&>(status).error();
             if (error != braid_Real(-1.0))
             {
-        gsDebugVar("Point 1");
                 braid_Int rfactor = (braid_Int) std::ceil( std::sqrt( error / 1e-3) );
                 status.SetRFactor(rfactor);
             }
             else
                 status.SetRFactor(1);
         }
-        gsDebugVar("Point 1");
         return braid_Int(0);
     }
 
     /// Sets the size of the MPI communication buffer
     braid_Int BufSize(braid_Int *size_ptr, BraidBufferStatus &status) override
     {
-        gsDebugVar("Point 1");
-        *size_ptr = sizeof(T)*(m_numDofs+2);
-        gsDebugVar("Point 1");
+        *size_ptr = sizeof(T)*(m_numDofs*3+2); // +2 comes from rows, cols of the solution vector u.
         return braid_Int(0);
     }
 
@@ -195,7 +183,6 @@ public:
             gsInfo << "||V|| = "<<(*u_ptr).segment(m_numDofs  ,m_numDofs).norm()<<"\t";
             gsInfo << "||A|| = "<<(*u_ptr).segment(2*m_numDofs,m_numDofs).norm()<<std::endl;
         }
-        gsDebugVar("Point 1");
         return braid_Int(0);
     }
 
@@ -208,32 +195,20 @@ public:
     */
     braid_Int Coarsen(braid_Vector fu, braid_Vector *cu_ptr, BraidCoarsenRefStatus &status) override
     {
-// gsInfo << "Coarsen on level = "
-//        << static_cast<gsXBraidCoarsenRefStatus&>(status).level()
-//        << " of "
-//        << static_cast<gsXBraidCoarsenRefStatus&>(status).levels()
-//        << "\n";
         gsMatrix<T> *fu_ptr = (gsMatrix<T>*) fu;
         gsMatrix<T>* cu     = new gsMatrix<T>();
         *cu = *fu_ptr;
         *cu_ptr = (braid_Vector) cu;
-        gsDebugVar("Point 1");
         return braid_Int(0);
     }
 
     // Performs spatial refinement
     braid_Int Refine(braid_Vector cu, braid_Vector *fu_ptr, BraidCoarsenRefStatus &status) override
     {
-// gsInfo << "Refine on level = "
-//        << static_cast<gsXBraidCoarsenRefStatus&>(status).level()
-//        << " of "
-//        << static_cast<gsXBraidCoarsenRefStatus&>(status).levels()
-//        << "\n";
         gsMatrix<T> *cu_ptr = (gsMatrix<T>*) cu;
         gsMatrix<T>* fu     = new gsMatrix<T>();
         *fu = *cu_ptr;
         *fu_ptr = (braid_Vector) fu;
-        gsDebugVar("Point 1");
         return braid_Int(0);
     }
 
