@@ -137,7 +137,7 @@ public:
 // General functions
 protected:
 
-    gsStatus _step(const T t, const T dt, gsVector<T> & U, gsVector<T> & V, gsVector<T> & A) const
+    gsStatus _step(const T t, const T dt, gsVector<T> & U, gsVector<T> & V, gsVector<T> & A) const override
     {
         gsStatus status = gsStatus::NotStarted;
         status = _step_impl<_NL>(t,dt,U,V,A);

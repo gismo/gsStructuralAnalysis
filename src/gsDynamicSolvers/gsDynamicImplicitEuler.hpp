@@ -117,8 +117,8 @@ gsDynamicImplicitEuler<T,_NL>::_step_impl(const T t, const T dt, gsVector<T> & U
   T tolF = m_options.getReal("TolF");
   T updateNorm   = 10.0*tolU;
   T residualNorm  = rhs.norm();
-  T residualNorm0 = residualNorm;
-
+  T residualNorm0 = (residualNorm!=0) ? residualNorm : 1;
+  T solnorm, dsolnorm;
   this->_initOutput();
   for (index_t numIterations = 0; numIterations < m_options.getInt("MaxIter"); ++numIterations)
   {
@@ -140,7 +140,10 @@ gsDynamicImplicitEuler<T,_NL>::_step_impl(const T t, const T dt, gsVector<T> & U
 
     gmres.solve(-rhs,dsol);
     sol += dsol;
-    updateNorm = dsol.norm() / sol.norm();
+
+    solnorm = sol.norm();
+    dsolnorm = dsol.norm();
+    updateNorm = (solnorm != 0) ? dsolnorm / solnorm : dsolnorm;
 
     U = sol.topRows(N);
     V = sol.bottomRows(N);
