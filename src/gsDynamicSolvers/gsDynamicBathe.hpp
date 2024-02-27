@@ -125,7 +125,7 @@ gsDynamicBathe<T,_NL>::_step_impl(const T t, const T dt, gsVector<T> & U, gsVect
   T tolF = m_options.getReal("TolF");
   T updateNorm   = 10.0*tolU;
   T residualNorm  = rhs.norm();
-  T residualNorm0 = (residualNorm!=0) ? residualNorm : residualNorm;
+  T residualNorm0 = (residualNorm!=0) ? residualNorm : 1;
   this->_initOutput();
   T Unorm, dUnorm;
   for (index_t numIterations = 0; numIterations < m_options.getInt("MaxIter"); ++numIterations)
