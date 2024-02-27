@@ -125,8 +125,9 @@ gsDynamicBathe<T,_NL>::_step_impl(const T t, const T dt, gsVector<T> & U, gsVect
   T tolF = m_options.getReal("TolF");
   T updateNorm   = 10.0*tolU;
   T residualNorm  = rhs.norm();
-  T residualNorm0 = residualNorm;
+  T residualNorm0 = (residualNorm!=0) ? residualNorm : residualNorm;
   this->_initOutput();
+  T Unorm, dUnorm;
   for (index_t numIterations = 0; numIterations < m_options.getInt("MaxIter"); ++numIterations)
   {
     if ((!m_options.getSwitch("Quasi")) || ((numIterations==0) || (numIterations % m_options.getInt("QuasiIterations") == 0)))
@@ -147,6 +148,10 @@ gsDynamicBathe<T,_NL>::_step_impl(const T t, const T dt, gsVector<T> & U, gsVect
 
     dU = solver->solve(rhs);
     U += dU;
+
+    Unorm = U.norm();
+    dUnorm = dU.norm();
+    updateNorm = (Unorm!=0) ? dUnorm/Unorm : dUnorm;
 
     this->_computeResidual(U,t+dt,R);
     rhs = R - M*(c1*Vold+c2*Vstep+c1*c3*Uold+c3*c2*Ustep+c3*c3*U) - C*(c1*Uold+c2*Ustep+c3*U);

@@ -105,8 +105,9 @@ gsDynamicNewmark<T,_NL>::_step_impl(const T t, const T dt, gsVector<T> & U, gsVe
   T tolF = m_options.getReal("TolF");
   T updateNorm   = 10.0*tolU;
   T residualNorm  = rhs.norm();
-  T residualNorm0 = residualNorm;
+  T residualNorm0 = (residualNorm!=0) ? residualNorm : residualNorm;
   gsVector<T> dA;
+  T Anorm, dAnorm;
   this->_initOutput();
   typename gsSparseSolver<T>::uPtr solver;  
   for (index_t numIterations = 0; numIterations < m_options.getInt("MaxIter"); ++numIterations)
@@ -128,10 +129,13 @@ gsDynamicNewmark<T,_NL>::_step_impl(const T t, const T dt, gsVector<T> & U, gsVe
     V += dA*delta*dt;
     U += dA*alpha*dt*dt;
 
+    Anorm = A.norm();
+    dAnorm = dA.norm();
+    updateNorm = (Anorm!=0) ? dAnorm/Anorm : dAnorm;
+
     this->_computeResidual(U,t+dt,R);
     rhs = R - C*V - M*A;
     residualNorm = rhs.norm() / residualNorm0;
-    updateNorm = dA.norm() / A.norm();
 
     this->_stepOutput(numIterations,residualNorm,updateNorm);
 
