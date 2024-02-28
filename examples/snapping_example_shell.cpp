@@ -473,16 +473,11 @@ int main(int argc, char *argv[])
         gsInfo<<"Load step "<< k<<"\n";
         gsStopwatch timer;
         gsStatus status = arcLength->step();
-        if      (status==gsStatus::Success)
-            gsDebug<<"Step successful\n";
-        else if (status==gsStatus::NotConverged)
-            gsDebug<<"Not converged\n";
-        else if (status==gsStatus::AssemblyError)
-            gsDebug<<"Assembly error\n";
-        else if (status==gsStatus::SolverError)
-            gsDebug<<"Solver error\n";
-        else if (status==gsStatus::OtherError)
-            gsDebug<<"Other error\n";
+        if      (status==gsStatus::Success)         {gsDebug<<"Step successful\n";}
+        else if (status==gsStatus::NotConverged)    {gsDebug<<"Not converged\n";}
+        else if (status==gsStatus::AssemblyError)   {gsDebug<<"Assembly error\n";}
+        else if (status==gsStatus::SolverError)     {gsDebug<<"Solver error\n";}
+        else if (status==gsStatus::OtherError)      {gsDebug<<"Other error\n";}
         time += timer.stop();
         
         if (status==gsStatus::NotConverged || status==gsStatus::AssemblyError)

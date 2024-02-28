@@ -101,10 +101,9 @@ int main (int argc, char** argv)
     gsInfo<<"Density:\t"<<Density<<"\n";
 
     std::string dirname;
-    // dirname = "DynamicShellResults_NM_r" + std::to_string(numHref) + "e" + std::to_string(numElevate) + "_dt" + std::to_string(dt);
     dirname = "DynamicShellResults";
-    int systemRet = system(("mkdir -p " + dirname).c_str());
-    GISMO_ASSERT(systemRet!=-1,"Something went wrong with calling the system argument");
+    gsFileManager::mkdir(dirname);
+
 
 
     wn = dirname + "/output.csv";

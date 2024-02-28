@@ -286,13 +286,12 @@ int main (int argc, char** argv)
         collection.save();
     }
 
-    if (write)
-    {
-        int systemRet = system("mkdir -p BucklingResults");
-        GISMO_ASSERT(systemRet!=-1,"Something went wrong with calling the system argument");
-        std::string wnM = "BucklingResults/eigenvalues.txt";
-        // writeToCSVfile(wnM,values);
-    }
+    // if (write)
+    // {
+    //     gsFileManager::mkdir("BucklingResults");
+    //     std::string wnM = "BucklingResults/eigenvalues.txt";
+    //     writeToCSVfile(wnM,values);
+    // }
     return EXIT_SUCCESS;
 }
 #else//gsKLShell_ENABLED

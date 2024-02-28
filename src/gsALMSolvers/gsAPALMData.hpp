@@ -334,7 +334,7 @@ void gsAPALMData<T,solution_t>::submit(index_t ID, const std::vector<T> & distan
 
   // check if the total distance matches the original time step
   T dt_tmp = std::accumulate(distances.begin(), std::prev(distances.end()), 0.0);
-  GISMO_ASSERT((Dt-dt_tmp)/Dt<1e-12,"Total distance of the computed intervals should be equal to the original interval length ("<<dt_tmp<<"!="<<Dt<<")");
+  GISMO_ENSURE((Dt-dt_tmp)/Dt<1e-12,"Total distance of the computed intervals should be equal to the original interval length ("<<dt_tmp<<"!="<<Dt<<")");
 
   // get the total travelled distance
   dt = t.back()-tlow;
