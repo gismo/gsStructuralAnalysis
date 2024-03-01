@@ -133,7 +133,7 @@ int main(int argc, char *argv[])
 
     //! [Define nonlinear residual functions]
     // Function for the Residual
-    gsStructuralAnalysisOps<real_t>::ALResidual_t ALResidual = [&assembler,&F](gsVector<real_t> const &x, real_t lam, gsVector<real_t> & result)
+    gsStructuralAnalysisOps<real_t>::ALResidual_t ALResidual = [&assembler,&F](gsVector<real_t> const &x, real_t lam, gsVector<real_t> & v)
     {
         gsMultiPatch<> def;
         assembler.constructSolution(x,def);

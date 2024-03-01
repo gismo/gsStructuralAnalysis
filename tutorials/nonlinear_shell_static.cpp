@@ -153,7 +153,7 @@ int main(int argc, char *argv[])
     //! [Solve nonlinear problem]
     gsInfo<<"Solving system with "<<assembler.numDofs()<<" DoFs\n";
     gsStatus status = solver.solve();
-    GISMO_ASSERT(status==gsStatus::Converged,"Solver failed");
+    GISMO_ASSERT(status==gsStatus::Success,"Solver failed");
     gsVector<> solVector = solver.solution();
     //! [Solve nonlinear problem]
 
