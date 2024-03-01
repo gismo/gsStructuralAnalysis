@@ -184,7 +184,7 @@ public:
             else
             {
                 if (m_options.getSwitch("extraVerbose")) gsInfo<<"Step "<<(static_cast<gsXBraidStepStatus&>(status)).timeIndex()<<" did not converge";
-                status.SetRFactor(0.5);
+                status.SetRFactor((braid_Int)2);
             }
         }
         return braid_Int(0);
@@ -192,7 +192,7 @@ public:
 
     /// Computes the spatial norm of the given vector
     braid_Int SpatialNorm(  braid_Vector  u,
-                            braid_Real   *norm_ptr)
+                            braid_Real   *norm_ptr) override
     {
         gsVector<T>* u_ptr = (gsVector<T>*) u;
         *norm_ptr = u_ptr->segment(0,m_numDofs).norm(); // Displacement-based norm
