@@ -1,6 +1,11 @@
  /** @file gsDynamicBathe.h
 
-    @brief Class to perform time integration of second-order structural dynamics systems using the Explicit Euler method
+    @brief Class to perform time integration of second-order structural dynamics systems using the Bathe method
+
+    For the Bathe method, see:
+    Bathe, K. J., & Baig, M. M. I. (2005).
+    On a composite implicit time integration procedure for nonlinear dynamics.
+    Computers & Structures, 83(31-32), 2513-2524.
 
     This file is part of the G+Smo library.
 
@@ -9,9 +14,6 @@
     file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
     Author(s): H.M. Verhelst (2019-..., TU Delft)
-
-    TODO (June 2023):
-    *    Change inputs to const references!
 */
 
 #pragma once

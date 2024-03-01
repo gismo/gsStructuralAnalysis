@@ -1,6 +1,11 @@
  /** @file gsDynamicWilson.h
 
-    @brief Class to perform time integration of second-order structural dynamics systems using the Explicit Euler method
+    @brief Class to perform time integration of second-order structural dynamics systems using the Wilson-theta method
+
+    For the Wilson-theta method, see:
+    Wilson, E. L., Farhoomand, I., & Bathe, K. J. (1972).
+    Nonlinear dynamic analysis of complex structures.
+    Earthquake Engineering & Structural Dynamics, 1(3), 241-252.
 
     This file is part of the G+Smo library.
 
@@ -9,9 +14,6 @@
     file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
     Author(s): H.M. Verhelst (2019-..., TU Delft)
-
-    TODO (June 2023):
-    *    Change inputs to const references!
 */
 
 #pragma once
