@@ -27,6 +27,28 @@ enum struct gsStatus
     OtherError       ///< Other error
 };
 
+// template<typename T>
+// struct DynamicFunctor
+// {
+//     Force();
+
+//     gsVector<T>& operator(T time = 0) {};
+
+//     virtual index_t rows() = 0;
+//     virtual index_t cols() = 0;
+// };
+
+
+// template<typename T>
+// struct DynamicForce : public DynamicFunctor<T>
+// {
+//     DynamicForce(... ) {}
+
+
+// };
+
+
+
 template<class T>
 struct gsStructuralAnalysisOps
 {

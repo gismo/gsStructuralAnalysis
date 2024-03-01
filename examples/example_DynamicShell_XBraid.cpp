@@ -1,6 +1,6 @@
-/** @file example_DynamicShellNL.cpp
+/** @file example_DynamicShell.cpp
 
-    @brief Example for nonlinear time integration of a nonlinear shell
+    @brief Example for nonlinear time integration of a linear shell
 
     Fig 12 of:
     Filho, L. A. D., & Awruch, A. M. (2004).
@@ -23,8 +23,27 @@
 #include <gsKLShell/src/getMaterialMatrix.h>
 #endif
 
-#include <gsStructuralAnalysis/src/gsDynamicSolvers/gsTimeIntegrator.h>
+#include <gsStructuralAnalysis/src/gsDynamicSolvers/gsDynamicNewmark.h>
+#include <gsStructuralAnalysis/src/gsDynamicSolvers/gsDynamicXBraid.h>
+#include <gsUtils/gsStopwatch.h>
+
 using namespace gismo;
+
+// template<typename T>
+// struct DynamicForce : public DynamicFunctor<T>
+// {
+//     DynamicForce(gsVector<T> & F)
+//     :
+//     m_F(F)
+//     {}
+
+//     gsVector<T> m_F;
+
+//     index_t rows() {return m_F.rows(); };
+//     index_t cols() {return 1;};
+
+// };
+
 
 // Choose among various shell examples, default = Thin Plate
 #ifdef gsKLShell_ENABLED
@@ -34,7 +53,6 @@ int main (int argc, char** argv)
     int numElevate  = 1;
     int numHref     = 1;
     bool plot       = false;
-    bool quasiNewton = false;
 
     real_t thickness = 0.01576;
     real_t width = 1; // Width of the strip is equal to 1.
@@ -63,7 +81,7 @@ int main (int argc, char** argv)
 
     std::string assemberOptionsFile("options/solver_options.xml");
 
-    gsCmdLine cmd("Dynamics of a nonlinear spherical cap.");
+    gsCmdLine cmd("Dynamics of a linear spherical cap.");
     cmd.addString( "f", "file", "Input XML file for assembler options", assemberOptionsFile );
     cmd.addInt("r","hRefine",
                "Number of dyadic h-refinement (bisection) steps to perform before solving",
@@ -85,7 +103,6 @@ int main (int argc, char** argv)
                "Number of degree elevation steps to perform on the Geometry's basis before solving",
                numElevate);
     cmd.addSwitch("plot", "Plot result in ParaView format", plot);
-    cmd.addSwitch("q","quasi", "Use quasi newton method", quasiNewton);
     cmd.addSwitch("write", "Write convergence data to file", write);
 
     try { cmd.getValues(argc,argv); } catch (int rv) { return rv; }
@@ -122,6 +139,7 @@ int main (int argc, char** argv)
     else if (method==6)
       methodName = "RK4";
 
+
     if (write)
     {
       std::ofstream file;
@@ -147,8 +165,6 @@ int main (int argc, char** argv)
 
     gsInfo<<"Basis (patch 0): "<< mp.patch(0).basis() << "\n";
 
-    gsWriteParaview<>(mp, "mp", 500);
-
 //------------------------------------------------------------------------------
 // Define Boundary conditions and Initial conditions
 //------------------------------------------------------------------------------
@@ -168,8 +184,6 @@ int main (int argc, char** argv)
     BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 1 - y
     BCs.addCondition(boundary::south, condition_type::clamped,0,0,false,2);
 
-    BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 0 ); // unknown 1 - y
-    BCs.addCondition(boundary::west, condition_type::dirichlet, 0, 0, false, 1 ); // unknown 1 - y
     BCs.addCondition(boundary::west, condition_type::clamped,0,0,false,2);
     BCs.addCondition(boundary::west, condition_type::collapsed,0,0,false,2);
 
@@ -184,10 +198,10 @@ int main (int argc, char** argv)
 // Define Beam Assembler and Assembler for L2-projection
 //------------------------------------------------------------------------------
 
-    gsMultiPatch<> mp_def = mp;
+    gsMultiPatch<> mp_def = mp, solution = mp;
     gsMultiBasis<> dbasis(mp);
     // Linear isotropic material model
-    gsFunctionExpr<> force("0","0","0",3);
+    gsConstantFunction<> force(tmp,3);
     gsFunctionExpr<> t(std::to_string(thickness), 3);
     gsFunctionExpr<> E(std::to_string(E_modulus),3);
     gsFunctionExpr<> nu(std::to_string(PoissonRatio),3);
@@ -207,6 +221,7 @@ int main (int argc, char** argv)
     gsThinShellAssemblerBase<real_t>* assembler;
     assembler = new gsThinShellAssembler<3, real_t, true >(mp,dbasis,BCs,force,materialMatrix);
 
+    // Construct assembler object for dynamic computations
     assembler->setOptions(opts);
     assembler->setPointLoads(pLoads);
 
@@ -224,63 +239,48 @@ int main (int argc, char** argv)
 // Initiate mass and stiffness matrices and vectors for velocity, displacement and acceleration
 //------------------------------------------------------------------------------
 
-    gsSparseMatrix<> M, C;
+    gsMatrix<real_t> Minv;
+    gsSparseMatrix<> M;
     gsSparseMatrix<> K;
     gsSparseMatrix<> K_T;
+    gsVector<>       F;
 
 //------------------------------------------------------------------------------
 // Nonlinear time integration
 //------------------------------------------------------------------------------
 gsParaviewCollection collection(dirname + "/solution");
 
-// Function for the Jacobian
-gsStructuralAnalysisOps<real_t>::Jacobian_t Jacobian = [&assembler,&mp_def](gsMatrix<real_t> const &x, gsSparseMatrix<real_t> & m)
-{
-    // to do: add time dependency of forcing
-    ThinShellAssemblerStatus status;
-    assembler->constructSolution(x,mp_def);
-    status = assembler->assembleMatrix(mp_def);
-    m = assembler->matrix();
-    return status == ThinShellAssemblerStatus::Success;
-};
-
-// Function for the Residual
-gsStructuralAnalysisOps<real_t>::TResidual_t Residual = [&assembler,&mp_def](gsMatrix<real_t> const &x, real_t time, gsVector<real_t> & result)
-{
-    ThinShellAssemblerStatus status;
-    assembler->constructSolution(x,mp_def);
-    status = assembler->assembleVector(mp_def);
-    result = assembler->rhs();
-    return status == ThinShellAssemblerStatus::Success;
-  };
-
-// // Function for the Residual (TEST FO CHANGE FUNCTION!)
-// Residual_t Residual = [&force,&assembler,&solution](gsMatrix<real_t> const &x, real_t time)
-// {
-//   gsFunctionExpr<> force2("0","0",std::to_string(time),3);
-//   force.swap(force2);
-//   assembler->constructSolution(x,solution);
-//   assembler->assembleVector(solution);
-//   return assembler->rhs();
-// };
-
 // Compute mass matrix (since it is constant over time)
 assembler->assembleMass();
 M = assembler->matrix();
-C = gsSparseMatrix<>(assembler->numDofs(),assembler->numDofs());
 // pre-assemble system
 assembler->assemble();
+K = assembler->matrix();
+F = assembler->rhs();
+// Function for the Residual
+gsStructuralAnalysisOps<real_t>::Mass_t         Mass;
+gsStructuralAnalysisOps<real_t>::Damping_t      Damping;
+gsStructuralAnalysisOps<real_t>::Stiffness_t    Stiffness;
+gsStructuralAnalysisOps<real_t>::TForce_t       TForce;
+
+Mass      = [&M](                            gsSparseMatrix<real_t> & result){result = M; return true;};
+Damping   = [&M](  const gsVector<real_t> & x, gsSparseMatrix<real_t> & result){result = gsSparseMatrix<real_t>(M.rows(),M.cols()); return true;};
+Stiffness = [&K](                            gsSparseMatrix<real_t> & result){result = K; return true;};
+TForce    = [&F](real_t time,                gsVector<real_t>       & result){result = F; return true;};
 
 // // set damping Matrix (same dimensions as M)
 // C.setZero(M.rows(),M.cols());
+//
 
-gsTimeIntegrator<real_t> timeIntegrator(M,Jacobian,Residual,dt);
+// DynamicForce<real_t> myForce(...);
 
-timeIntegrator.verbose();
-timeIntegrator.setTolerance(1e-2);
-timeIntegrator.setMethod(methodName);
-if (quasiNewton)
-  timeIntegrator.quasiNewton();
+gsDynamicNewmark<real_t,false> timeIntegrator(Mass,Damping,Stiffness,TForce); // myForce(t)
+timeIntegrator.options().setReal("DT",dt);
+timeIntegrator.options().setReal("TolU",1e-2);
+timeIntegrator.options().setSwitch("Verbose",false);
+
+gsMpiComm comm = gsMpi::init().worldComm();
+gsDynamicXBraid<real_t> solver(&timeIntegrator,comm,0.0,tend,assembler->numDofs(),steps);
 
 //------------------------------------------------------------------------------
 // Initial Conditions
@@ -289,50 +289,53 @@ gsMatrix<> uNew,vNew,aNew;
 uNew = uOld;
 vNew = vOld;
 aNew = aOld;
-timeIntegrator.setDisplacement(uNew);
-timeIntegrator.setVelocity(vNew);
-timeIntegrator.setAcceleration(aNew);
+timeIntegrator.setU(uNew);
+timeIntegrator.setV(vNew);
+timeIntegrator.setA(aNew);
 
-real_t time;
-for (index_t i=0; i<steps; i++)
-{
-  gsStatus status = timeIntegrator.step();
-  if (status!=gsStatus::Success)
-    GISMO_ERROR("Time integrator did not succeed");
+//------------------------------------------------------------------------------
+// Nonlinear time integration
+//------------------------------------------------------------------------------
 
-  timeIntegrator.constructSolution();
-  gsMatrix<> displacements = timeIntegrator.displacements();
+solver.solve();
 
-  assembler->constructSolution(displacements,mp_def);
 
-  mp_def.patch(0).coefs() -= mp.patch(0).coefs();// assuming 1 patch here
-  gsField<> solField(mp,mp_def);
-  std::string fileName = dirname + "/solution" + util::to_string(i);
-  gsWriteParaview<>(solField, fileName, 500);
-  fileName = "solution" + util::to_string(i) + "0";
-  collection.addPart(fileName + ".vts",i);
+// real_t time;
+// for (index_t i=0; i<steps; i++)
+// {
+//   gsStatus status = timeIntegrator.step();
+//   if (status!=gsStatus::Success)
+//     GISMO_ERROR("Time integrator did not succeed");
 
-  if (write)
-  {
-    gsMatrix<> v(2,1);
-    v<<  0.0,0.0;
-    gsMatrix<> res2;
-    mp_def.patch(0).eval_into(v,res2);
-    time = timeIntegrator.currentTime();
-    std::ofstream file;
-    file.open(wn,std::ofstream::out | std::ofstream::app);
-    file  << std::setprecision(10)
-          << time << ","
-          << res2(2,0) <<"\n";
-    file.close();
-  }
-  // Update solution with multipatch coefficients to generate geometry again
-  mp_def.patch(0).coefs() += mp.patch(0).coefs();// assuming 1 patch here
+//   gsMatrix<> displacements = timeIntegrator.solutionU();
 
-  // gsInfo<<displacements.transpose()<<"\n";
-}
+//   assembler->constructSolution(displacements,solution);
 
-collection.save();
+//   solution.patch(0).coefs() -= mp.patch(0).coefs();// assuming 1 patch here
+//   gsField<> solField(mp,solution);
+//   std::string fileName = dirname + "/solution" + util::to_string(i);
+//   gsWriteParaview<>(solField, fileName, 500);
+//   fileName = "solution" + util::to_string(i) + "0";
+//   collection.addPart(fileName + ".vts",i);
+
+//   if (write)
+//   {
+//     gsMatrix<> v(2,1);
+//     v<<  0.0,0.0;
+//     gsMatrix<> res2;
+//     solution.patch(0).eval_into(v,res2);
+//     time = timeIntegrator.time();
+//     std::ofstream file;
+//     file.open(wn,std::ofstream::out | std::ofstream::app);
+//     file  << std::setprecision(10)
+//           << time << ","
+//           << res2(2,0) <<"\n";
+//     file.close();
+//   }
+//   // Update solution with multipatch coefficients to generate geometry again
+//   solution.patch(0).coefs() += mp.patch(0).coefs();// assuming 1 patch here
+// }
+// collection.save();
 
 delete materialMatrix;
 delete assembler;

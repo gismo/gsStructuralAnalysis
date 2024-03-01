@@ -68,7 +68,7 @@ public:
         m_Tdamping    = [this](gsVector<T> const & x, const T time, gsSparseMatrix<T> & result) -> bool {return m_damping(x,result);};
         m_Tjacobian   = [this](gsVector<T> const & x, const T time, gsSparseMatrix<T> & result) -> bool {return m_stiffness(result);};
         m_Tforce      = [this](                       const T time, gsVector<T>       & result) -> bool {return m_force(result);};
-        m_Tresidual   = [this](gsVector<T> const & x, const T time, gsVector<T>       & result) -> bool {GISMO_ERROR("time-dependent residual not available");};
+        m_Tresidual   = [    ](gsVector<T> const & x, const T time, gsVector<T>       & result) -> bool {GISMO_ERROR("time-dependent residual not available");};
         _init();
     }
 
@@ -88,7 +88,7 @@ public:
         m_Tmass       = [this](                       const T time, gsSparseMatrix<T> & result) -> bool {return m_mass(result);};
         m_Tdamping    = [this](gsVector<T> const & x, const T time, gsSparseMatrix<T> & result) -> bool {return m_damping(x,result);};
         m_Tjacobian   = [this](gsVector<T> const & x, const T time, gsSparseMatrix<T> & result) -> bool {return m_stiffness(result);};
-        m_Tresidual   = [this](gsVector<T> const & x, const T time, gsVector<T>       & result) -> bool {GISMO_ERROR("time-dependent residual not available");};
+        m_Tresidual   = [    ](gsVector<T> const & x, const T time, gsVector<T>       & result) -> bool {GISMO_ERROR("time-dependent residual not available");};
         _init();
     }
 
@@ -108,7 +108,7 @@ public:
         m_Tmass       = [this](                       const T time, gsSparseMatrix<T> & result) -> bool {return m_mass(result);};
         m_Tdamping    = [this](gsVector<T> const & x, const T time, gsSparseMatrix<T> & result) -> bool {return m_damping(x,result);};
         m_Tjacobian   = [this](gsVector<T> const & x, const T time, gsSparseMatrix<T> & result) -> bool {return m_jacobian(x,result);};
-        m_Tforce      = [this](                       const T time, gsVector<T>       & result) -> bool {GISMO_ERROR("time-dependent force not available");};
+        m_Tforce      = [    ](                       const T time, gsVector<T>       & result) -> bool {GISMO_ERROR("time-dependent force not available");};
         m_Tresidual   = [this](gsVector<T> const & x, const T time, gsVector<T>       & result) -> bool {return m_residual(x,result);};
         _init();
     }
@@ -171,6 +171,7 @@ public:
 protected:
     void _init()
     {
+        m_time = 0;
         // initialize variables
         m_numIterations = -1;
         defaultOptions();
@@ -192,7 +193,9 @@ public:
     /// Perform one arc-length step
     virtual gsStatus step(T dt)
     {
-        return this->_step(m_time,dt,m_U,m_V,m_A);
+        gsStatus status = this->_step(m_time,dt,m_U,m_V,m_A);
+        m_time += dt;
+        return status;
     }
 
     virtual gsStatus step()
@@ -245,6 +248,8 @@ public:
     /// Return the options into \a options
     virtual const void options_into(gsOptionList options) {options = m_options;};
 
+    /// Return the number of degrees of freedom
+    virtual index_t numDofs() {return m_numDofs; }
 // ------------------------------------------------------------------------------------------------------------
 // ---------------------------------------Computations---------------------------------------------------------
 // ------------------------------------------------------------------------------------------------------------
@@ -310,7 +315,7 @@ protected:
 protected:
 
     // Number of degrees of freedom
-    index_t m_numDof;
+    index_t m_numDofs;
 
     Mass_t      m_mass;
     mutable gsSparseMatrix<T> m_massInv;
