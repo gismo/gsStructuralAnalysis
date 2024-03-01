@@ -1,0 +1,44 @@
+namespace gismo {
+/**
+
+\page nonlinear_shell_static Tutorial: Non-Linear Kirchhoff-Love shell analysis using the gsStructuralAnalysis module
+
+This example solves a non-linear shell problem using the \ref gsThinShellAssembler and a static solver from \ref gsStructuralAnalysis. The goals of the tutorial are the following:
+- Solve a geometrically non-linear problem using \ref gsStaticNewton
+
+For detailed information about the construction of \ref gsThinShellAssembler and \ref gsMaterialMatrixBase, please consult the tutorials \ref linear_shell and \ref nonlinear_shell.
+
+\subsection nonlinear_shell_static_Setup Problem set-up
+The set-up of the problem to be solved for this example is identical to the one in \ref nonlinear_shell. The reader is referred to that example for a full overview of the code.
+
+\subsection nonlinear_shell_static_Jacobian Jacobian and Residual
+In \ref nonlinear_shell, the Jacobian and Residual operators are already defined as \c std::function objects. In the present example, we use a similar approach, now defined through \ref gsStructuralAnalysisOps. In particular, the Jacobian and Residual operators are given by:
+
+\snippet nonlinear_shell_static.cpp Define nonlinear residual functions
+
+\subsection nonlinear_shell_static_Solver Define the static solver
+The Newton-Raphson solver - \ref gsStaticNewton - used in this example is derived from \ref gsStaticBase. There are also other solvers available in the \ref gsStaticSolvers submodule. The Newton-Raphson solver needs to be defined using a linear stiffness matrix \f$K\f$, an external force vector \f$F\f$, a Jacobian matrix \f$K_{NL}(\mathbf{u})\f$ and a residual vector \f$R(\mathbf{u})\f$. The latter two are defined above in \ref nonlinear_shell_static_Jacobian, whereas the former two are defined like in \ref linear_shell_Assembler:
+
+\snippet nonlinear_shell_static.cpp Assemble linear part
+
+Consequently, the static solver is constructed as follows:
+
+\snippet nonlinear_shell_static.cpp Set static solver
+
+\subsection nonlinear_shell_static_Solve Solve the non-linear problem
+The \ref gsStaticNewton simply performs Newton-Raphson iterations under the hood. Solving the non-linear system is simply done by using:
+
+\snippet nonlinear_shell_static.cpp Solve nonlinear problem
+
+Where the solution vector is obtained in the last line. As can be seen in the snipped above, the solver returns a status via \ref gsStatus, which can be used to check whether the solver converged or not. Evaluation and export of the solutions is similar as in \ref linear_shell and \ref nonlinear_shell.
+
+\section nonlinear_shell_static_Annotated Annotated source file
+
+Here is the full file \c nonlinear_shell_static.cpp. Clicking on a function
+or class name will lead you to its reference documentation.
+
+\include nonlinear_shell_static.cpp
+
+*/
+
+}

@@ -27,6 +27,7 @@ enum struct gsStatus
     OtherError       ///< Other error
 };
 
+// ALTERNATIVE IMPLEMENTATION USING FUNCTORS
 // template<typename T>
 // struct DynamicFunctor
 // {
@@ -47,8 +48,11 @@ enum struct gsStatus
 
 // };
 
-
-
+/**
+ * @brief      Operators for the gsStructuralAnalysis module
+ *
+ * @tparam     T     Double type
+ */
 template<class T>
 struct gsStructuralAnalysisOps
 {

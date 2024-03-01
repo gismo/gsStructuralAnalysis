@@ -1,8 +1,7 @@
 namespace gismo
 {
 
-/** \page gsBucklingSolver gsBucklingSolver
-\defgroup gsBucklingSolver gsBucklingSolver
+/** \defgroup gsDynamicSolvers Dynamic solvers
 \ingroup gsStructuralAnalysis
 
 Linear buckling analysis is performed by solving the following eigenvalue problem:
@@ -18,7 +17,7 @@ obtained by solving a linear problem \f$K_L\mathbf{u}^L_h = \mathbf{P}\f$. Furth
 The modeshape is represented by \f$\phi\f$.
 
 Examples with the use of this class are:
-- \subpage gsThinShell_Buckling.cpp
+- \ref gsThinShell_Buckling.cpp
 
 */
 
