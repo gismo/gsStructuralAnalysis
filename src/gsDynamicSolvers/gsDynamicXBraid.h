@@ -32,7 +32,9 @@ namespace gismo
 template <class T>
 class gsDynamicXBraid : public gsXBraid< gsMatrix<T> >
 {
+
 public:
+    typedef typename std::function<void(const index_t&,const T&,const gsVector<T>&,const gsVector<T>&,const gsVector<T>&)> callback_type;
 
     virtual ~gsDynamicXBraid() {};
 
@@ -50,6 +52,7 @@ public:
     m_numDofs(numDofs)
     {
         defaultOptions();
+        m_callback = [](const index_t&,const T&,const gsVector<T>&,const gsVector<T>&,const gsVector<T>&){return;}; // set empty callback
     }
 
 // Member functions
@@ -69,7 +72,7 @@ public:
         m_options.addInt("numRelax", "Number of relaxation steps of the parallel-in-time multigrid solver", 1);
         m_options.addInt("numStorage", "Number of storage of the parallel-in-time multigrid solver", -1);
         m_options.addInt("print", "Print level (no output [=0], runtime inforation [=1], run statistics [=2(default)], debug [=3])", 2);
-        m_options.addReal("absTol", "Absolute tolerance of the parallel-in-time multigrid solver", 1e-10);
+        m_options.addReal("absTol", "Absolute tolerance of the parallel-in-time multigrid solver", 1e-6);
         m_options.addReal("relTol", "Relative tolerance of the parallel-in-time multigrid solver", 1e-3);
         m_options.addSwitch("fmg", "Perform full multigrid (default is off)", 0);
         m_options.addSwitch("incrMaxLevels", "Increase the maximum number of parallel-in-time multigrid levels after performing a refinement (default is off)", 0);
@@ -77,8 +80,11 @@ public:
         m_options.addSwitch("refine", "Perform refinement in time (default off)", 0);
         m_options.addSwitch("sequential", "Set the initial guess of the parallel-in-time multigrid solver as the sequential time stepping solution (default is off)", 0);
         m_options.addSwitch("skip", "Skip all work on the first down cycle of the parallel-in-time multigrid solver (default on)", 1);
-        m_options.addSwitch("spatial", "Perform spatial coarsening and refinement (default is off)", 1);
-        m_options.addSwitch("tol", "Tolerance type (absolute [=true], relative [=false(default)]", 1);
+        m_options.addSwitch("spatial", "Perform spatial coarsening and refinement (default is off)", 0);
+        m_options.addSwitch("tol", "Tolerance type (absolute [=true], relative [=false(default)]", 0);
+
+
+        m_options.addSwitch("extraVerbose", "Extra verbosity", 0);
     }
 
     void initialize()
@@ -116,9 +122,19 @@ public:
         // Does this mean zero displacements?
         u->setZero();
 
+        if (m_solver->solutionU().rows()==m_numDofs)
+            u->col(0).segment(0          ,m_numDofs) = m_solver->solutionU();
+        if (m_solver->solutionV().rows()==m_numDofs)
+            u->col(0).segment(m_numDofs  ,m_numDofs) = m_solver->solutionV();
+        if (m_solver->solutionA().rows()==m_numDofs)
+            u->col(0).segment(2*m_numDofs,m_numDofs) = m_solver->solutionA();
+
         *u_ptr = (braid_Vector) u;
         return braid_Int(0);
     }
+
+    gsOptionList & options() { return m_options; }
+    void setOptions(gsOptionList options) {m_options.update(options,gsOptionList::addIfUnknown); };
 
     /// Performs a single step of the parallel-in-time multigrid
     braid_Int Step(braid_Vector    u, braid_Vector    ustop, braid_Vector    fstop, BraidStepStatus &status) override
@@ -135,6 +151,7 @@ public:
 
         // Get time step information
         std::pair<braid_Real, braid_Real> time = static_cast<gsXBraidStepStatus&>(status).timeInterval();
+        if (m_options.getSwitch("extraVerbose")) gsInfo<<"Solving interval ["<<time.first<<" , "<<time.second<<"] (level "<<static_cast<gsXBraidStepStatus&>(status).level()<<")\n";
         T t  = time.first;
         T dt = time.second - time.first;
 
@@ -143,7 +160,7 @@ public:
         gsVector<T> V = (*u_ptr).segment(m_numDofs  ,m_numDofs);
         gsVector<T> A = (*u_ptr).segment(2*m_numDofs,m_numDofs);
 
-        m_solver->step(t,dt,U,V,A);
+        gsStatus stepStatus = m_solver->step(t,dt,U,V,A);
 
         u_ptr->segment(0          ,m_numDofs) = U;
         u_ptr->segment(m_numDofs  ,m_numDofs) = V;
@@ -152,15 +169,34 @@ public:
         // Carry out adaptive refinement in time
         if (static_cast<gsXBraidStepStatus&>(status).level() == 0)
         {
-            braid_Real error = static_cast<gsXBraidStepStatus&>(status).error();
-            if (error != braid_Real(-1.0))
+            if (stepStatus==gsStatus::Success)
             {
-                braid_Int rfactor = (braid_Int) std::ceil( std::sqrt( error / 1e-3) );
-                status.SetRFactor(rfactor);
+                braid_Real error = static_cast<gsXBraidStepStatus&>(status).error();
+                if (error != braid_Real(-1.0))
+                {
+                    braid_Int rfactor = (braid_Int) std::ceil( std::sqrt( error / 1e-3) );
+                    status.SetRFactor(rfactor);
+                }
+                else
+                    status.SetRFactor(1);
             }
+            // Refine if solution interval failed
             else
-                status.SetRFactor(1);
+            {
+                if (m_options.getSwitch("extraVerbose")) gsInfo<<"Step "<<(static_cast<gsXBraidStepStatus&>(status)).timeIndex()<<" did not converge";
+                status.SetRFactor(0.5);
+            }
         }
+        return braid_Int(0);
+    }
+
+    /// Computes the spatial norm of the given vector
+    braid_Int SpatialNorm(  braid_Vector  u,
+                            braid_Real   *norm_ptr)
+    {
+        gsVector<T>* u_ptr = (gsVector<T>*) u;
+        *norm_ptr = u_ptr->segment(0,m_numDofs).norm(); // Displacement-based norm
+        // *norm_ptr = u_ptr->norm();
         return braid_Int(0);
     }
 
@@ -171,18 +207,18 @@ public:
         return braid_Int(0);
     }
 
+    void setCallback(callback_type callback) const {m_callback = callback;}
+
     /// Handles access for input/output
     braid_Int Access(braid_Vector u, BraidAccessStatus &status) override
     {
-        if (static_cast<gsXBraidAccessStatus&>(status).done() &&
-            static_cast<gsXBraidAccessStatus&>(status).timeIndex() ==
-            static_cast<gsXBraidAccessStatus&>(status).times())
-        {
-            gsVector<T>* u_ptr = (gsVector<T>*) u;
-            gsInfo << "||U|| = "<<(*u_ptr).segment(0          ,m_numDofs).norm()<<"\t";
-            gsInfo << "||V|| = "<<(*u_ptr).segment(m_numDofs  ,m_numDofs).norm()<<"\t";
-            gsInfo << "||A|| = "<<(*u_ptr).segment(2*m_numDofs,m_numDofs).norm()<<std::endl;
-        }
+        gsVector<T>* u_ptr = (gsVector<T>*) u;
+        m_callback((index_t)    static_cast<gsXBraidAccessStatus&>(status).timeIndex(),
+                   (T)          static_cast<gsXBraidAccessStatus&>(status).time(),
+                   (gsVector<T>)(*u_ptr).segment(0          ,m_numDofs),
+                   (gsVector<T>)(*u_ptr).segment(m_numDofs  ,m_numDofs),
+                   (gsVector<T>)(*u_ptr).segment(2*m_numDofs,m_numDofs)
+                   );
         return braid_Int(0);
     }
 
@@ -219,6 +255,7 @@ protected:
     const gsDynamicBase<T> * m_solver;
     index_t m_numDofs;
     gsOptionList m_options;
+    mutable callback_type m_callback;
 
 };
 

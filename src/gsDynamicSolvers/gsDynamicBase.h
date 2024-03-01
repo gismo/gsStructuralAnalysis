@@ -171,6 +171,7 @@ public:
 protected:
     void _init()
     {
+        m_time = 0;
         // initialize variables
         m_numIterations = -1;
         defaultOptions();
@@ -192,7 +193,9 @@ public:
     /// Perform one arc-length step
     virtual gsStatus step(T dt)
     {
-        return this->_step(m_time,dt,m_U,m_V,m_A);
+        gsStatus status = this->_step(m_time,dt,m_U,m_V,m_A);
+        m_time += dt;
+        return status;
     }
 
     virtual gsStatus step()
