@@ -824,10 +824,7 @@ int main (int argc, char** argv)
     //   SingularPoint = false;
     // }
 
-    std::string commands = "mkdir -p " + dirname;
-    const char *command = commands.c_str();
-    int systemRet = system(command);
-    GISMO_ASSERT(systemRet!=-1,"Something went wrong with calling the system argument");
+    gsFileManager::mkdir(dirname);
 
 
     // plot geometry
@@ -1146,9 +1143,9 @@ int main (int argc, char** argv)
 
         real_t S = Lold / 1e-3 / lambdas(0) / lambdas(2);
         real_t San = mu * (math::pow(lambdas(1),2)-1/lambdas(1));
-        gsDebugVar(S);
-        gsDebugVar(San);
-        gsDebugVar(abs(S-San));
+        gsInfo<<"S = "<<S<<"\n";
+        gsInfo<<"San = "<<San<<"\n";
+        gsInfo<<"abs(S-San) = "<<abs(S-San)<<"\n";
       }
 
       deformation = mp_def;

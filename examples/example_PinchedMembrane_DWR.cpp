@@ -354,7 +354,6 @@ int main(int argc, char *argv[])
         DWR->assemblePrimalL();
         gsVector<> Force = DWR->primalL();
 
-        typedef std::function<gsVector<real_t> (gsVector<real_t> const &, real_t, gsVector<real_t> const &) >   ALResidual_t;
         // Function for the Jacobian
         gsStructuralAnalysisOps<real_t>::Jacobian_t Jacobian = [&DWR,&mp_def](gsVector<real_t> const &x, gsSparseMatrix<real_t> & m)
         {

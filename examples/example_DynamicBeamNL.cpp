@@ -242,8 +242,7 @@ int main (int argc, char** argv)
 // Nonlinear time integration
 //------------------------------------------------------------------------------
 std::string dirname = "DynamicBeamResults";
-int systemRet = system(("mkdir -p " + dirname).c_str());
-GISMO_ASSERT(systemRet!=-1,"Something went wrong with calling the system argument");
+gsFileManager::mkdir(dirname);
 
 std::string wn = dirname + "/output.csv";
 

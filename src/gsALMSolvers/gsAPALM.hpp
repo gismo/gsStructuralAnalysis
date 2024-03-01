@@ -298,7 +298,7 @@ gsAPALM<T>::parallelSolve_impl()
       ID = std::get<0>(dataEntry);
       dataLevel = m_data.branch(branch).jobLevel(ID);
       bool success = m_data.branch(branch).getReferenceByID(ID,reference);
-      GISMO_ASSERT(success,"Reference not found");
+      GISMO_ENSURE(success,"Reference not found");
 
       this->_sendMainToWorker(m_workers.front(),stop);
       this->_sendMainToWorker(m_workers.front(),
@@ -358,7 +358,7 @@ gsAPALM<T>::parallelSolve_impl()
         ID = std::get<0>(dataEntry);
         dataLevel = m_data.branch(branch).jobLevel(ID);
         bool success = m_data.branch(branch).getReferenceByID(ID,reference);
-        GISMO_ASSERT(success,"Reference not found");
+        GISMO_ENSURE(success,"Reference not found");
         this->_sendMainToWorker(m_workers.front(),stop);
         this->_sendMainToWorker(m_workers.front(),
                                 branch,
@@ -452,7 +452,7 @@ gsAPALM<T>::parallelSolve_impl()
     ID = std::get<0>(dataEntry);
     dataLevel = m_data.branch(branch).jobLevel(ID);
     bool success = m_data.branch(branch).getReferenceByID(ID,reference);
-    GISMO_ASSERT(success,"Reference not found");
+    GISMO_ENSURE(success,"Reference not found");
     this->_correction(dataEntry,
                       m_data.branch(branch).jobTimes(ID),
                       dataLevel,
@@ -600,7 +600,7 @@ gsAPALM<T>::_solve_impl(index_t Nsteps)
       else
       {
         bool success = m_data.branch(branch).getReferenceByID(ID,reference);
-        GISMO_ASSERT(success,"Reference not found");
+        GISMO_ENSURE(success,"Reference not found");
 
         this->_sendMainToWorker(m_workers.front(),stop);
         this->_sendMainToWorker(m_workers.front(),
@@ -720,7 +720,7 @@ gsAPALM<T>::_solve_impl(index_t Nsteps)
         else
         {
           bool success = m_data.branch(branch).getReferenceByID(ID,reference);
-          GISMO_ASSERT(success,"Reference not found");
+          GISMO_ENSURE(success,"Reference not found");
 
           this->_sendMainToWorker(m_workers.front(),stop);
           this->_sendMainToWorker(m_workers.front(),
@@ -910,7 +910,7 @@ gsAPALM<T>::_solve_impl(index_t Nsteps)
       std::vector<solution_t> stepSolutions;
       T lowerDistance, upperDistance;
       bool success = m_data.branch(branch).getReferenceByID(ID,reference);
-      GISMO_ASSERT(success,"Reference not found");
+      GISMO_ENSURE(success,"Reference not found");
       this->_correction(dataEntry,
                         m_data.branch(branch).jobTimes(ID),
                         dataLevel,

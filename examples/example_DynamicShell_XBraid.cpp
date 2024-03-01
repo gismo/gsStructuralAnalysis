@@ -29,6 +29,22 @@
 
 using namespace gismo;
 
+// template<typename T>
+// struct DynamicForce : public DynamicFunctor<T>
+// {
+//     DynamicForce(gsVector<T> & F)
+//     :
+//     m_F(F)
+//     {}
+
+//     gsVector<T> m_F;
+
+//     index_t rows() {return m_F.rows(); };
+//     index_t cols() {return 1;};
+
+// };
+
+
 // Choose among various shell examples, default = Thin Plate
 #ifdef gsKLShell_ENABLED
 int main (int argc, char** argv)
@@ -102,10 +118,9 @@ int main (int argc, char** argv)
     gsInfo<<"Density:\t"<<Density<<"\n";
 
     std::string dirname;
-    // dirname = "DynamicShellResults_NM_r" + std::to_string(numHref) + "e" + std::to_string(numElevate) + "_dt" + std::to_string(dt);
     dirname = "DynamicShellResults";
-    int systemRet = system(("mkdir -p " + dirname).c_str());
-    GISMO_ASSERT(systemRet!=-1,"Something went wrong with calling the system argument");
+    gsFileManager::mkdir(dirname);
+
 
 
     wn = dirname + "/output.csv";
@@ -257,10 +272,12 @@ TForce    = [&F](real_t time,                gsVector<real_t>       & result){re
 // C.setZero(M.rows(),M.cols());
 //
 
-gsDynamicNewmark<real_t,false> timeIntegrator(Mass,Damping,Stiffness,TForce);
+// DynamicForce<real_t> myForce(...);
+
+gsDynamicNewmark<real_t,false> timeIntegrator(Mass,Damping,Stiffness,TForce); // myForce(t)
 timeIntegrator.options().setReal("DT",dt);
 timeIntegrator.options().setReal("TolU",1e-2);
-timeIntegrator.options().setSwitch("Verbose",true);
+timeIntegrator.options().setSwitch("Verbose",false);
 
 gsMpiComm comm = gsMpi::init().worldComm();
 gsDynamicXBraid<real_t> solver(&timeIntegrator,comm,0.0,tend,assembler->numDofs(),steps);
