@@ -188,7 +188,7 @@ int main (int argc, char** argv)
 
     gsMassAssembler<real_t> assemblerMass(mp,dbasis,BCs,g);
     assemblerMass.options() = assembler.options();
-    assemblerMass.options().addReal("Density","Density of the material",1.);
+    assemblerMass.options().addReal("Density","Density of the material",Density);
 
     // Configure Structural Analsysis module
     assembler.assemble();
@@ -197,13 +197,20 @@ int main (int argc, char** argv)
     gsSparseMatrix<> M =  assemblerMass.matrix();
 
     gsModalSolver<real_t> modal(K,M);
-    modal.verbose();
+    modal.options().setInt("solver",2);
+    modal.options().setInt("selectionRule",0);
+    modal.options().setInt("sortRule",4);
+    modal.options().setSwitch("verbose",true);
+    modal.options().setInt("ncvFac",2);
+    modal.options().setReal("shift",shift);
 
+    gsStatus status;
     if (!sparse)
-      modal.compute();
+        status = modal.compute();
     else
-      modal.computeSparse(shift,10);
+        status = modal.computeSparse(10);//,2,Spectra::SortRule::LargestMagn,Spectra::SortRule::SmallestMagn);
 
+    GISMO_ENSURE(status == gsStatus::Success,"Buckling solver failed");
 
     gsMatrix<> values = modal.values();
     gsMatrix<> vectors = modal.vectors();
@@ -216,7 +223,7 @@ int main (int argc, char** argv)
     if (plot)
     {
       gsInfo<<"Plotting in Paraview...\n";
-      system("mkdir -p ModalResults");
+      gsFileManager::mkdir("ModalResults");
       gsMatrix<> modeShape;
       gsMultiPatch<> displacement;
       gsParaviewCollection collection("ModalResults/modes_solid");
@@ -309,9 +316,9 @@ gsMultiPatch<T> BrickDomain(int n, int m, int o, int p, int q ,int r, T L, T B, 
   // Define a matrix with ones
   gsVector<> temp(len0);
   temp.setOnes();
-  for (index_t l = 0; l < len2; l++)
+  for (size_t l = 0; l < len2; l++)
     {
-        for (index_t k = 0; k < len1; k++)
+        for (size_t k = 0; k < len1; k++)
         {
             index_t offset = l*len0*len1;
             // First column contains x-coordinates (length)

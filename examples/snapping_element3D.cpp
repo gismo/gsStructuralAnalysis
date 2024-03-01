@@ -138,7 +138,7 @@ int main(int argc, char *argv[])
     for (size_t p=0; p!=element.nPatches(); p++)
     {
         gsTensorBSpline<3,real_t>::uPtr tmp = gsNurbsCreator<>::lift3D(dynamic_cast<gsTensorBSpline<2,real_t> &>(element.patch(p)),3e-3);
-        mp.addPatch(*tmp,element.patch(p).label());
+        mp.addPatch(*tmp);
     }
     index_t topmid_ID = 14;
     mp.computeTopology();
@@ -381,7 +381,7 @@ else
             if (arcLength->stabilityChange())
             {
                 gsInfo<<"Bifurcation spotted!"<<"\n";
-                arcLength->computeSingularPoint(false);
+                arcLength->computeSingularPoint(Uold,Lold,false);
                 arcLength->switchBranch();
                 dLb0 = dLb = dL;
                 arcLength->setLength(dLb);

@@ -149,41 +149,50 @@ int main(int argc, char *argv[])
     gsInfo<<"-----------------------------------Making the element------------------------------------------------\n";
     gsInfo<<"-----------------------------------------------------------------------------------------------------\n";
     gsMultiPatch<> element = makeElement(tw,tg,tb,ts,l,a,curves);
-
-    gsWriteParaview(element,"element",1000,true);
+    auto elementlabels = element.getBoxProperty<std::string>("label");
 
     gsInfo<<"-----------------------------------------------------------------------------------------------------\n";
     gsInfo<<"-----------------------------------Making the bottom block-------------------------------------------\n";
     gsInfo<<"-----------------------------------------------------------------------------------------------------\n";
     gsMultiPatch<> bottom = makeBottom(tw,tg,tb,ts,l,a,curves);
-
-    gsWriteParaview(bottom,"bottom",1000,true);
+    auto bottomlabels = bottom.getBoxProperty<std::string>("label");
 
     gsInfo<<"-----------------------------------------------------------------------------------------------------\n";
     gsInfo<<"-----------------------------------Making the top block-------------------------------------------\n";
     gsInfo<<"-----------------------------------------------------------------------------------------------------\n";
     gsMultiPatch<> top = makeTop(tw,tg,tb,ts,l,a,curves);
-
-    gsWriteParaview(top,"top",1000,true);
+    auto toplabels = top.getBoxProperty<std::string>("label");
 
     gsInfo<<"-----------------------------------------------------------------------------------------------------\n";
     gsInfo<<"-----------------------------------Making the geometry--------------------------------------------\n";
     gsInfo<<"-----------------------------------------------------------------------------------------------------\n";
     gsMultiPatch<> mp;
+    auto labels = mp.addBoxProperty("label",std::string());
+
     real_t dx = l;
     real_t dy = 2*tg+ts+tb;
     index_t topmid_ID;
+    index_t pIndex;
+    gsMultiPatch<> tmp;
     for (index_t kx = 0; kx!=Nx; kx++)
     {
-        gsMultiPatch<> tmp;
         tmp = bottom;
         gsNurbsCreator<>::shift2D(tmp,kx*dx,0);
-        mp.addPatches(tmp);
+        for (auto patch = tmp.begin(); patch != tmp.end(); patch++)
+        {
+            pIndex = mp.addPatch(**patch);
+            labels[pIndex] = bottomlabels[(*patch)->id()];
+        }
+
         for (index_t ky = 0; ky!=Ny; ky++)
         {
             tmp = element;
             gsNurbsCreator<>::shift2D(tmp,kx*dx,ky*dy);
-            mp.addPatches(tmp);
+            for (auto patch = tmp.begin(); patch != tmp.end(); patch++)
+            {
+                pIndex = mp.addPatch(**patch);
+                labels[pIndex] = elementlabels[(*patch)->id()];
+            }
         }
         tmp = top;
         gsNurbsCreator<>::shift2D(tmp,kx*dx,Ny*dy);
@@ -196,8 +205,11 @@ int main(int argc, char *argv[])
 
             gsDebugVar(topmid_ID);
         }
-        mp.addPatches(tmp);
-
+        for (auto patch = tmp.begin(); patch != tmp.end(); patch++)
+        {
+            pIndex = mp.addPatch(**patch);
+            labels[pIndex] = toplabels[(*patch)->id()];
+        }
     }
     mp.computeTopology();
 
@@ -436,7 +448,7 @@ else
             if (arcLength->stabilityChange())
             {
                 gsInfo<<"Bifurcation spotted!"<<"\n";
-                arcLength->computeSingularPoint(false);
+                arcLength->computeSingularPoint(Uold,Lold,false);
                 arcLength->switchBranch();
                 dLb0 = dLb = dL;
                 arcLength->setLength(dLb);

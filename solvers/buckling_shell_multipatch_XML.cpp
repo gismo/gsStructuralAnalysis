@@ -23,11 +23,13 @@
 #include <gsStructuralAnalysis/src/gsStructuralAnalysisTools/gsStructuralAnalysisUtils.h>
 #endif
 
+#ifdef gsUnstructuredSplines_ENABLED
 #include <gsUnstructuredSplines/src/gsSmoothInterfaces.h>
 #include <gsUnstructuredSplines/src/gsAlmostC1.h>
 #include <gsUnstructuredSplines/src/gsDPatch.h>
 #include <gsUnstructuredSplines/src/gsApproxC1Spline.h>
 #include <gsUnstructuredSplines/src/gsC1SurfSpline.h>
+#endif
 
 using namespace gismo;
 
@@ -52,10 +54,10 @@ void writeToCSVfile(std::string name, gsMatrix<> matrix)
   }
 }
 
-#ifdef gsKLShell_ENABLED
-#ifdef gsUnstructuredSplines_ENABLED
 int main (int argc, char** argv)
 {
+#ifdef gsKLShell_ENABLED
+#ifdef gsUnstructuredSplines_ENABLED
     // Input options
     int numElevate    = 0;
     int numRefine     = 1;
@@ -476,18 +478,12 @@ int main (int argc, char** argv)
         file.close();
     }
     return EXIT_SUCCESS;
-}
 #else//gsUnstructuredSplines_ENABLED
-int main(int argc, char *argv[])
-{
     gsWarn<<"G+Smo is not compiled with the gsUnstructuredSplines module.";
     return EXIT_FAILURE;
-}
 #endif
 #else//gsKLShell_ENABLED
-int main(int argc, char *argv[])
-{
     gsWarn<<"G+Smo is not compiled with the gsKLShell module.";
     return EXIT_FAILURE;
-}
 #endif
+}

@@ -18,7 +18,13 @@
 #include <gsKLShell/src/getMaterialMatrix.h>
 #endif
 
-#include <gsStructuralAnalysis/src/gsDynamicSolvers/gsTimeIntegrator.h>
+#include <gsStructuralAnalysis/src/gsDynamicSolvers/gsDynamicExplicitEuler.h>
+#include <gsStructuralAnalysis/src/gsDynamicSolvers/gsDynamicImplicitEuler.h>
+#include <gsStructuralAnalysis/src/gsDynamicSolvers/gsDynamicNewmark.h>
+#include <gsStructuralAnalysis/src/gsDynamicSolvers/gsDynamicBathe.h>
+#include <gsStructuralAnalysis/src/gsDynamicSolvers/gsDynamicWilson.h>
+#include <gsStructuralAnalysis/src/gsDynamicSolvers/gsDynamicRK4.h>
+
 using namespace gismo;
 
 template <class T>
@@ -95,21 +101,6 @@ int main (int argc, char** argv)
     gsInfo<<"EI:\t"<<EI<<"\n";
     gsInfo<<"EA:\t"<<EA<<"\n";
     gsInfo<<"rho:\t"<<Density<<"\n";
-
-    std::string methodName;
-    if (method==1)
-      methodName = "ExplEuler";
-    else if (method==2)
-      methodName = "ImplEuler";
-    else if (method==3)
-      methodName = "Newmark";
-    else if (method==4)
-      methodName = "Bathe";
-    else if (method==5)
-      methodName = "CentralDiff";
-    else if (method==6)
-      methodName = "RK4";
-
 
 //------------------------------------------------------------------------------
 // Make domain and define basis
@@ -207,18 +198,21 @@ int main (int argc, char** argv)
 //------------------------------------------------------------------------------
 
     size_t N = assembler->numDofs();
-    gsMatrix<> uOld(N,1);
-    gsMatrix<> vOld(N,1);
-    gsMatrix<> aOld(N,1);
+    gsVector<> U(N);
+    gsVector<> V(N);
+    gsVector<> A(N);
+    // U.setZero();
+    // V.setZero();
+    // A.setZero();
 
-    uOld = assembler->projectL2(initialShape);
+    U = assembler->projectL2(initialShape);
     // Set initial velocity to zero
-    vOld.setZero();
-    aOld = assembler->projectL2(initialAcc);
+    V.setZero();
+    A = assembler->projectL2(initialAcc);
 
     // Compute Error
     gsMultiPatch<> deformationIni = mp;
-    assembler->constructSolution(uOld,deformationIni);
+    assembler->constructSolution(U,deformationIni);
     deformationIni.patch(0).coefs() -= mp.patch(0).coefs();
     gsField<> inifield(mp,deformationIni);
     gsInfo<<"Initial error:\t"<<inifield.distanceL2(initialShape)<<"\n";
@@ -289,40 +283,48 @@ M = assembler->matrix();
 // pre-assemble system
 assembler->assemble();
 
-// // set damping Matrix (same dimensions as M)
-// C.setZero(M.rows(),M.cols());
+gsSparseMatrix<> C = gsSparseMatrix<>(assembler->numDofs(),assembler->numDofs());
+gsStructuralAnalysisOps<real_t>::Damping_t Damping = [&C](const gsVector<real_t> &, gsSparseMatrix<real_t> & m) { m = C; return true; };
+gsStructuralAnalysisOps<real_t>::Mass_t    Mass    = [&M](                          gsSparseMatrix<real_t> & m) { m = M; return true; };
 
-gsTimeIntegrator<real_t> timeIntegrator(M,Jacobian,Residual,dt);
+gsDynamicBase<real_t> * timeIntegrator;
+if (method==1)
+    timeIntegrator = new gsDynamicExplicitEuler<real_t,true>(Mass,Damping,Jacobian,Residual);
+else if (method==2)
+    timeIntegrator = new gsDynamicImplicitEuler<real_t,true>(Mass,Damping,Jacobian,Residual);
+else if (method==3)
+    timeIntegrator = new gsDynamicNewmark<real_t,true>(Mass,Damping,Jacobian,Residual);
+else if (method==4)
+    timeIntegrator = new gsDynamicBathe<real_t,true>(Mass,Damping,Jacobian,Residual);
+else if (method==5)
+{
+    timeIntegrator = new gsDynamicWilson<real_t,true>(Mass,Damping,Jacobian,Residual);
+    timeIntegrator->options().setReal("gamma",1.4);
+}
+else if (method==6)
+    timeIntegrator = new gsDynamicRK4<real_t,true>(Mass,Damping,Jacobian,Residual);
+else
+    GISMO_ERROR("Method "<<method<<" not known");
 
-timeIntegrator.verbose();
-timeIntegrator.setTolerance(1e-6);
-timeIntegrator.setMethod(methodName);
-// if (quasiNewton)
-//   timeIntegrator.quasiNewton();
+timeIntegrator->options().setReal("DT",dt);
+timeIntegrator->options().setReal("TolU",1e-3);
+timeIntegrator->options().setSwitch("Verbose",true);
+
+timeIntegrator->setU(U);
+timeIntegrator->setV(V);
+timeIntegrator->setA(A);
 
 //------------------------------------------------------------------------------
 // Initial Conditions
 //------------------------------------------------------------------------------
-gsMatrix<> uNew,vNew,aNew;
-uNew = uOld;
-vNew = vOld;
-aNew = aOld;
-timeIntegrator.setDisplacement(uNew);
-timeIntegrator.setVelocity(vNew);
-timeIntegrator.setAcceleration(aNew);
-
 for (index_t i=0; i<steps; i++)
 {
-  gsStatus status = timeIntegrator.step();
-  if (status!=gsStatus::Success)
-    GISMO_ERROR("Time integrator did not succeed");
+  gsStatus status = timeIntegrator->step(time,dt,U,V,A);
+  GISMO_ASSERT(status == gsStatus::Success,"Time integrator did not succeed");
 
-  timeIntegrator.constructSolution();
-  uNew = timeIntegrator.displacements();
+  assembler->constructSolution(U,mp_def);
+  time = timeIntegrator->time();
 
-  assembler->constructSolution(uNew,mp_def);
-
-  time = timeIntegrator.currentTime();
   // Define manufactured solution
   char buffer_w_an[200];
   sprintf(buffer_w_an,"%e*x/(24*%e)*(%e^3-2*%e*x^2+x^3)*cos(%e*pi*%e)",load,EI,length,length,omega,time);
@@ -330,7 +332,7 @@ for (index_t i=0; i<steps; i++)
   gsFunctionExpr<> analytical("0","0",w_an,3);
 
   // Update solution and export
-  assembler->constructSolution(uNew,mp_def);
+  assembler->constructSolution(U,mp_def);
   mp_def.patch(0).coefs() -= mp.patch(0).coefs();// assuming 1 patch here
   gsField<> solField(mp,mp_def);
   std::string fileName = dirname + "/solution" + util::to_string(i);

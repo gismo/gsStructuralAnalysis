@@ -286,9 +286,7 @@ int main(int argc, char *argv[])
 
     gsThinShellAssemblerDWRBase<real_t> * DWR;
 
-    std::string commands = "mkdir -p " + dirname;
-    const char *command  = commands.c_str();
-    system(command);
+    gsFileManager::mkdir(dirname);
 
     gsParaviewCollection collection(dirname + "/" + "solution");
     gsParaviewCollection errors(dirname + "/" + "error_elem_ref");

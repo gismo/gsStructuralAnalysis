@@ -30,9 +30,11 @@
 #include <gsStructuralAnalysis/src/gsALMSolvers/gsALMRiks.h>
 #include <gsStructuralAnalysis/src/gsALMSolvers/gsALMCrisfield.h>
 
+#ifdef gsUnstructuredSplines_ENABLED
 #include <gsUnstructuredSplines/src/gsApproxC1Spline.h>
 #include <gsUnstructuredSplines/src/gsAlmostC1.h>
 #include <gsUnstructuredSplines/src/gsSmoothInterfaces.h>
+#endif
 
 using namespace gismo;
 
@@ -42,9 +44,10 @@ void initStepOutput( const std::string name, const gsMatrix<T> & points);
 template <class T>
 void writeStepOutput(const gsALMBase<T> * arcLength, const gsMultiPatch<T> & deformation, const std::string name, const gsMatrix<T> & points, const gsMatrix<index_t> & patches);
 
-#ifdef gsKLShell_ENABLED
 int main (int argc, char** argv)
 {
+#ifdef gsKLShell_ENABLED
+#ifdef gsUnstructuredSplines_ENABLED
     // Input options
     int numElevate  = 2;
     int numHref     = 5;
@@ -1073,14 +1076,16 @@ int main (int argc, char** argv)
   delete arcLength;
 
   return result;
-}
+
+#else//gsUnstructuredSplines_ENABLED
+    gsWarn<<"G+Smo is not compiled with the gsUnstructuredSplines module.";
+    return EXIT_FAILURE;
+#endif
 #else//gsKLShell_ENABLED
-int main(int argc, char *argv[])
-{
     gsWarn<<"G+Smo is not compiled with the gsKLShell module.";
     return EXIT_FAILURE;
-}
 #endif
+}
 
 template <class T>
 void initStepOutput(const std::string name, const gsMatrix<T> & points)
