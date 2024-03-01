@@ -2,7 +2,10 @@
 
     @brief This class provides an interface to XBraid for time integration methods deriving from \ref gsDynamicBase
 
+    For more information about XBraid, please check \ref gsXBraid or
 
+    [XBraid on GitHub] https://github.com/XBraid/xbraid/
+    [XBraid cite] XBraid: Parallel multigrid in time. http://llnl.gov/casc/xbraid.
 
     This file is part of the G+Smo library.
 
@@ -17,7 +20,7 @@
 #include <gsStructuralAnalysis/src/gsDynamicSolvers/gsDynamicBase.h>
 #include <gsIO/gsOptionList.h>
 
-#ifdef gsXbraid_ENABLED
+#ifdef gsXBraid_ENABLED
 #include <gsXBraid/gsXBraid.h>
 #endif
 
@@ -40,7 +43,7 @@ public:
 
     virtual ~gsDynamicXBraid() {};
 
-#ifdef gsXbraid_ENABLED
+#ifdef gsXBraid_ENABLED
     /// Constructor
     ///
     /// @param[in]  solver    A dynamic solver
@@ -152,7 +155,7 @@ public:
         else                                      this->SetRelTol(m_options.getReal("relTol"));
     }
 
-#ifdef gsXbraid_ENABLED
+#ifdef gsXBraid_ENABLED
     /// See \ref gsXBraid for the documentation
     braid_Int Init(braid_Real    t, braid_Vector *u_ptr) override
     {
@@ -194,7 +197,7 @@ public:
      */
     void setCallback(callback_type callback) const {m_callback = callback;}
 
-#ifdef gsXbraid_ENABLED
+#ifdef gsXBraid_ENABLED
     /// See \ref gsXBraid for the documentation
     braid_Int Step(braid_Vector    u, braid_Vector    ustop, braid_Vector    fstop, BraidStepStatus &status) override
     {
