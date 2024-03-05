@@ -1,0 +1,44 @@
+namespace gismo {
+/**
+
+\page nonlinear_shell_arclength Tutorial: Non-Linear Quasi-Static analysis using Kirchhoff-Love shells
+
+This example shows how to perform a non-linear quasi-static analysis using the \ref gsALMSolvers submodule of \ref gsStructuralAnalysis. The arc-length methods provided by this submodule work on user-defined operators from \ref gsStructuralAnalysisOps, hence can be used with any element and in any application. In this example, we use the \ref gsKLShell. The goals of the tutorial are the following:
+- Solve a non-linear quasi-static problem using \ref gsALMCrisfield
+
+For detailed information about the construction of \ref gsThinShellAssembler and \ref gsMaterialMatrixBase, please consult the tutorials \ref linear_shell and \ref nonlinear_shell.
+
+\subsection nonlinear_shell_arclength_Setup Problem set-up
+The set-up of the problem to be solved for this example is identical to the one in \ref nonlinear_shell. The reader is referred to that example for a full overview of the code.
+
+\subsection nonlinear_shell_arclength_Jacobian Jacobian and Residual
+To use the Crisfield arc-length method, or any other arc-length method in \ref gsALMSolvers, we need to define a Jacobian matrix and an arc-length residual. Th former is defined from the \ref gsStructuralAnalysisOps, similar to \ref nonlinear_shell_static. The latter is defined as follows:
+
+\snippet nonlinear_shell_arclength.cpp Define nonlinear residual functions
+
+Here, the external load vector \f$F\f$ is subtracted with a factor \f$\lambda\f$ to incorporate the load magnification factor in the residual.
+
+\subsection nonlinear_shell_arclength_Solver Define the arc-length solver
+Using the external force vector \f$F\f$, a Jacobian matrix \f$K_{NL}(\mathbf{u})\f$ and a residual vector \f$R(\mathbf{u})\f$, an arc-length solver can be defined. In the following, a \ref gsALMCrisfield is defined:
+
+\snippet nonlinear_shell_arclength.cpp Set ALM solver
+
+\subsection nonlinear_shell_arclength_Solve Solve the non-linear quasi-static problem
+The quasi-static problem is solved for combinations of the load factor \f$\lambda\f$ and the solution \f$\mathbf{u}\f$, also known as continuation. The full solution loop is given by:
+
+\snippet nonlinear_shell_arclength.cpp Solve nonlinear problem
+
+It can be seen that the export of the solution field is similar as in \ref linear_shell \ref nonlinear_shell, but the Paraview files are added to a \ref gsParaviewCollection. This is saved at the end of the simulation as follows:
+
+\snippet nonlinear_shell_arclength.cpp Save the paraview collection
+
+\section nonlinear_shell_arclength_Annotated Annotated source file
+
+Here is the full file \c nonlinear_shell_arclength.cpp. Clicking on a function
+or class name will lead you to its reference documentation.
+
+\include nonlinear_shell_arclength.cpp
+
+*/
+
+}

@@ -23,7 +23,7 @@
 #include <gsKLShell/src/getMaterialMatrix.h>
 #endif
 
-#include <gsStructuralAnalysis/src/gsDynamicSolvers/gsTimeIntegrator.h>
+#include <gsStructuralAnalysis/src/gsDynamicSolvers/gsDynamicWilson.h>
 #include <gsUtils/gsStopwatch.h>
 
 using namespace gismo;
@@ -101,10 +101,9 @@ int main (int argc, char** argv)
     gsInfo<<"Density:\t"<<Density<<"\n";
 
     std::string dirname;
-    // dirname = "DynamicShellResults_NM_r" + std::to_string(numHref) + "e" + std::to_string(numElevate) + "_dt" + std::to_string(dt);
     dirname = "DynamicShellResults";
-    int systemRet = system(("mkdir -p " + dirname).c_str());
-    GISMO_ASSERT(systemRet!=-1,"Something went wrong with calling the system argument");
+    gsFileManager::mkdir(dirname);
+
 
 
     wn = dirname + "/output.csv";
@@ -256,11 +255,10 @@ TForce    = [&F](real_t time,                gsVector<real_t>       & result){re
 // C.setZero(M.rows(),M.cols());
 //
 
-gsTimeIntegrator<real_t> timeIntegrator(M,K,TForce,dt);
-
-timeIntegrator.verbose();
-timeIntegrator.setTolerance(1e-6);
-timeIntegrator.setMethod(methodName);
+gsDynamicWilson<real_t,false> timeIntegrator(Mass,Damping,Stiffness,TForce);
+timeIntegrator.options().setReal("DT",dt);
+timeIntegrator.options().setReal("TolU",1e-2);
+timeIntegrator.options().setSwitch("Verbose",true);
 
 //------------------------------------------------------------------------------
 // Initial Conditions
@@ -269,9 +267,9 @@ gsMatrix<> uNew,vNew,aNew;
 uNew = uOld;
 vNew = vOld;
 aNew = aOld;
-timeIntegrator.setDisplacement(uNew);
-timeIntegrator.setVelocity(vNew);
-timeIntegrator.setAcceleration(aNew);
+timeIntegrator.setU(uNew);
+timeIntegrator.setV(vNew);
+timeIntegrator.setA(aNew);
 
 //------------------------------------------------------------------------------
 // Nonlinear time integration
@@ -280,12 +278,10 @@ real_t time;
 for (index_t i=0; i<steps; i++)
 {
   gsStatus status = timeIntegrator.step();
-
   if (status!=gsStatus::Success)
     GISMO_ERROR("Time integrator did not succeed");
 
-  timeIntegrator.constructSolution();
-  gsMatrix<> displacements = timeIntegrator.displacements();
+  gsMatrix<> displacements = timeIntegrator.solutionU();
 
   assembler->constructSolution(displacements,solution);
 
@@ -302,7 +298,7 @@ for (index_t i=0; i<steps; i++)
     v<<  0.0,0.0;
     gsMatrix<> res2;
     solution.patch(0).eval_into(v,res2);
-    time = timeIntegrator.currentTime();
+    time = timeIntegrator.time();
     std::ofstream file;
     file.open(wn,std::ofstream::out | std::ofstream::app);
     file  << std::setprecision(10)

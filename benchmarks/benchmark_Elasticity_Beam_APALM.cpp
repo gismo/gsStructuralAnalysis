@@ -283,9 +283,7 @@ int main (int argc, char** argv)
     wn = output + "data.txt";
   }
 
-  std::string commands = "mkdir -p " + dirname;
-  const char *command = commands.c_str();
-  system(command);
+  gsFileManager::mkdir(dirname);
 
   gsFunctionExpr<> g("0","0","0",3);
 

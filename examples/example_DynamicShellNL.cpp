@@ -23,7 +23,11 @@
 #include <gsKLShell/src/getMaterialMatrix.h>
 #endif
 
-#include <gsStructuralAnalysis/src/gsDynamicSolvers/gsTimeIntegrator.h>
+#include <gsStructuralAnalysis/src/gsDynamicSolvers/gsDynamicExplicitEuler.h>
+#include <gsStructuralAnalysis/src/gsDynamicSolvers/gsDynamicImplicitEuler.h>
+#include <gsStructuralAnalysis/src/gsDynamicSolvers/gsDynamicNewmark.h>
+#include <gsStructuralAnalysis/src/gsDynamicSolvers/gsDynamicBathe.h>
+#include <gsStructuralAnalysis/src/gsDynamicSolvers/gsDynamicWilson.h>
 using namespace gismo;
 
 // Choose among various shell examples, default = Thin Plate
@@ -101,27 +105,12 @@ int main (int argc, char** argv)
     gsInfo<<"Density:\t"<<Density<<"\n";
 
     std::string dirname;
-    // dirname = "DynamicShellResults_NM_r" + std::to_string(numHref) + "e" + std::to_string(numElevate) + "_dt" + std::to_string(dt);
     dirname = "DynamicShellResults";
-    int systemRet = system(("mkdir -p " + dirname).c_str());
-    GISMO_ASSERT(systemRet!=-1,"Something went wrong with calling the system argument");
+    gsFileManager::mkdir(dirname);
+
 
 
     wn = dirname + "/output.csv";
-
-    std::string methodName;
-    if (method==1)
-      methodName = "ExplEuler";
-    else if (method==2)
-      methodName = "ImplEuler";
-    else if (method==3)
-      methodName = "Newmark";
-    else if (method==4)
-      methodName = "Bathe";
-    else if (method==5)
-      methodName = "CentralDiff";
-    else if (method==6)
-      methodName = "RK4";
 
     if (write)
     {
@@ -225,8 +214,7 @@ int main (int argc, char** argv)
 // Initiate mass and stiffness matrices and vectors for velocity, displacement and acceleration
 //------------------------------------------------------------------------------
 
-    gsMatrix<real_t> Minv;
-    gsSparseMatrix<> M;
+    gsSparseMatrix<> M, C;
     gsSparseMatrix<> K;
     gsSparseMatrix<> K_T;
 
@@ -269,19 +257,34 @@ gsStructuralAnalysisOps<real_t>::TResidual_t Residual = [&assembler,&mp_def](gsM
 // Compute mass matrix (since it is constant over time)
 assembler->assembleMass();
 M = assembler->matrix();
+C = gsSparseMatrix<>(assembler->numDofs(),assembler->numDofs());
 // pre-assemble system
 assembler->assemble();
 
-// // set damping Matrix (same dimensions as M)
-// C.setZero(M.rows(),M.cols());
+gsStructuralAnalysisOps<real_t>::Mass_t    Mass    = [&M](                          gsSparseMatrix<real_t> & m) { m = M; return true; };
+gsStructuralAnalysisOps<real_t>::Damping_t Damping = [&C](const gsVector<real_t> &, gsSparseMatrix<real_t> & m) { m = C; return true; };
 
-gsTimeIntegrator<real_t> timeIntegrator(M,Jacobian,Residual,dt);
+gsDynamicBase<real_t> * timeIntegrator;
+if (method==1)
+    timeIntegrator = new gsDynamicExplicitEuler<real_t,true>(Mass,Damping,Jacobian,Residual);
+else if (method==2)
+    timeIntegrator = new gsDynamicImplicitEuler<real_t,true>(Mass,Damping,Jacobian,Residual);
+else if (method==3)
+    timeIntegrator = new gsDynamicNewmark<real_t,true>(Mass,Damping,Jacobian,Residual);
+else if (method==4)
+    timeIntegrator = new gsDynamicBathe<real_t,true>(Mass,Damping,Jacobian,Residual);
+else if (method==5)
+{
+    timeIntegrator = new gsDynamicWilson<real_t,true>(Mass,Damping,Jacobian,Residual);
+    timeIntegrator->options().setReal("gamma",1.4);
+}
+else
+    GISMO_ERROR("Method "<<method<<" not known");
 
-timeIntegrator.verbose();
-timeIntegrator.setTolerance(1e-2);
-timeIntegrator.setMethod(methodName);
-if (quasiNewton)
-  timeIntegrator.quasiNewton();
+timeIntegrator->options().setReal("DT",dt);
+timeIntegrator->options().setReal("TolU",1e-3);
+timeIntegrator->options().setSwitch("Quasi",quasiNewton);
+timeIntegrator->options().setSwitch("Verbose",true);
 
 //------------------------------------------------------------------------------
 // Initial Conditions
@@ -290,19 +293,18 @@ gsMatrix<> uNew,vNew,aNew;
 uNew = uOld;
 vNew = vOld;
 aNew = aOld;
-timeIntegrator.setDisplacement(uNew);
-timeIntegrator.setVelocity(vNew);
-timeIntegrator.setAcceleration(aNew);
+timeIntegrator->setU(uNew);
+timeIntegrator->setV(vNew);
+timeIntegrator->setA(aNew);
 
 real_t time;
 for (index_t i=0; i<steps; i++)
 {
-  gsStatus status = timeIntegrator.step();
+  gsStatus status = timeIntegrator->step();
   if (status!=gsStatus::Success)
     GISMO_ERROR("Time integrator did not succeed");
 
-  timeIntegrator.constructSolution();
-  gsMatrix<> displacements = timeIntegrator.displacements();
+  gsMatrix<> displacements = timeIntegrator->solutionU();
 
   assembler->constructSolution(displacements,mp_def);
 
@@ -319,7 +321,7 @@ for (index_t i=0; i<steps; i++)
     v<<  0.0,0.0;
     gsMatrix<> res2;
     mp_def.patch(0).eval_into(v,res2);
-    time = timeIntegrator.currentTime();
+    time = timeIntegrator->time();
     std::ofstream file;
     file.open(wn,std::ofstream::out | std::ofstream::app);
     file  << std::setprecision(10)
@@ -337,6 +339,8 @@ collection.save();
 
 delete materialMatrix;
 delete assembler;
+delete timeIntegrator;
+
 
 return result;
 }

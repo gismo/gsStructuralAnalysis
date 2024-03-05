@@ -1,0 +1,53 @@
+namespace gismo {
+/**
+
+\page nonlinear_shell_dynamic Tutorial: Non-Linear dynamic analysis using Kirchhoff-Love shells
+
+This example shows how to perform a non-linear dynamic analysis using the \ref gsDynamicSolvers submodule of \ref gsStructuralAnalysis. The dynamic solvers provided by this submodule work on user-defined operators from \ref gsStructuralAnalysisOps, hence can be used with any element and in any application. In this example, we use the \ref gsKLShell. The goals of the tutorial are the following:
+- Solve a non-linear quasi-static problem using \ref gsDynamicNewmark
+
+For detailed information about the construction of \ref gsThinShellAssembler and \ref gsMaterialMatrixBase, please consult the tutorials \ref linear_shell and \ref nonlinear_shell.
+
+\subsection nonlinear_shell_dynamic_Setup Problem set-up
+The set-up of the problem to be solved for this example is identical to the one in \ref nonlinear_shell. The reader is referred to that example for a full overview of the code.
+
+\subsection nonlinear_shell_dynamic_Assembly Mass matrix assembly
+The assembly of the linear stiffness matrix and the external force vector are similar as in \ref nonlinear_shell. To assemble the mass matrix, an additional assembly is performed using \c assembleMass(). The full assembly is given by:
+
+\snippet nonlinear_shell_dynamic.cpp Assemble linear part
+
+\subsection nonlinear_shell_dynamic_Jacobian Jacobian and Residual
+To use the Newmark time integrator or any other time integrator from \ref gsDynamicSolvers, we need to define a Jacobian matrix and a residual, optionally time-independent. Both are defined from the \ref gsStructuralAnalysisOps, similar to \ref nonlinear_shell_static.
+
+In addition, an operator for mass and damping needs to be defined. These operators are simple lambda functions returning a constant matrix:
+
+\snippet nonlinear_shell_dynamic.cpp Define damping and mass matrices
+
+\subsection nonlinear_shell_dynamic_Solver Define the dynamic solver
+Using the mass, damping and Jacobian matrices \f$M\f$, \f$C\f$ and \f$K_{NL}(\mathbf{u})\f$ and a residual vector \f$R(\mathbf{u})\f$, an non-linear dynamic solver can be defined. In the following, a \ref gsDynamicNewmark is defined:
+
+\snippet nonlinear_shell_dynamic.cpp Set dynamic solver
+
+The solution is initialized with zero-vectors, as follows:
+
+\snippet nonlinear_shell_dynamic.cpp Initialize solution
+
+\subsection nonlinear_shell_dynamic_Solve Solve the non-linear dynamic problem
+The non-linear dynamic problem is solved by stepping over time. After some initializations, a simple time stepping loop is used:
+
+\snippet nonlinear_shell_dynamic.cpp Solve nonlinear problem
+
+It can be seen that the export of the solution field is similar as in \ref linear_shell \ref nonlinear_shell, but the Paraview files are added to a \ref gsParaviewCollection. This is saved at the end of the simulation as follows:
+
+\snippet nonlinear_shell_dynamic.cpp Save the paraview collection
+
+\section nonlinear_shell_dynamic_Annotated Annotated source file
+
+Here is the full file \c nonlinear_shell_dynamic.cpp. Clicking on a function
+or class name will lead you to its reference documentation.
+
+\include nonlinear_shell_dynamic.cpp
+
+*/
+
+}

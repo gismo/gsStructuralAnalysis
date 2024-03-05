@@ -306,7 +306,7 @@ int main (int argc, char** argv)
       staticSolver.setOptions(solverOptions);
 
       gsStatus status = staticSolver.solveNonlinear(solVector);
-      GISMO_ASSERT(status==gsStatus::Success,"Newton solver failed");
+      GISMO_ENSURE(status==gsStatus::Success,"Newton solver failed");
 
       mp_def = assembler->constructSolution(solVector);
       gsMultiPatch<> deformation = mp_def;

@@ -317,10 +317,7 @@ int main (int argc, char** argv)
     output =  "solution";
     wn = output + "data.txt";
 
-    std::string commands = "mkdir -p " + dirname;
-    const char *command = commands.c_str();
-    int systemRet = system(command);
-    GISMO_ASSERT(systemRet!=-1,"Something went wrong with calling the system argument");
+    gsFileManager::mkdir(dirname);
 
 
     // plot geometry

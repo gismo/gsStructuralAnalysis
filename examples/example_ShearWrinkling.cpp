@@ -257,9 +257,7 @@ int main (int argc, char** argv)
     if (THB)
       dirname = dirname + "_THB";
 
-    std::string commands = "mkdir -p " + dirname;
-    const char *command = commands.c_str();
-    system(command);
+    gsFileManager::mkdir(dirname);
 
     // plot geometry
     if (plot)

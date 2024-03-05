@@ -9,31 +9,30 @@
 namespace gismo
 {
 
-/** \page gsStructuralAnalysis Structural Analysis module
-\defgroup gsStructuralAnalysis gsStructuralAnalysis
+/** \defgroup gsStructuralAnalysis Structural Analysis Module
 \ingroup Modules
 
 This module contains algorithms for structural analysis. The module is versatile in its use with the elasticity elements from \ref Elasticity and \ref KLShell. The module is enhanced by the \ref gsSpectra class for eigenvalue computations.
 
-\section IntroStructuralAnalysis Using the Structural Analysis module
+\section structuralAnalysis_Intro Using the Structural Analysis module
 
-The routines in the structural analysis module are typically based on four entities:
+The routines in the structural analysis module are typically based on different operators:
 - The external force vector (\f$\mathbf{F}_{\text{ext}}\f$),
 - The linear stiffness matrix (\f$K_L\f$),
 - The residual vector (\f$\mathbf{R}(\mathbf{u}_h)\f$),
 - The tangential stiffness matrix or Jacobian (\f$K(\mathbf{u}_h)\f$),
 
-Where \f$\mathbf{u}_h\f$ is the discrete solution.
+Where \f$\mathbf{u}_h\f$ is the discrete solution. All types for the operators used in the \ref gsStructuralAnalysis module are defined by \ref gsStructuralAnalysisOps
 
-\subsection forceVector The force vector
+\subsection structuralAnalysis_forceVector The force vector
 
 The force vector (\f$\mathbf{F}_{\text{ext}}\f$) is the vector that contains the external force contributions on the object. These could be due to body forces, point loads, etc. It is defined as a \ref gsVector throughout the module.
 
-\subsection linearMatrix The linear stiffness matrix
+\subsection structuralAnalysis_linearMatrix The linear stiffness matrix
 
 The linear stiffness matrix (\f$K_L\f$) is the matrix that has to be assembled given the undeformed configuration of the object. In fact, it is similar to assembling the tangential stiffness matrix around the zero vector (\f$K(\mathbf{0}_h)\f$). The linear stiffness matrix should always be provided as a \ref gsSparseMatrix.
 
-\subsection Residual The tangential stiffness matrix or Jacobian
+\subsection structuralAnalysis_Residual The tangential stiffness matrix or Jacobian
 
 The residual vector is the vector that represents the difference between the internal and external forces inside the body:
 \f{align*}{
@@ -73,7 +72,7 @@ ALResidual_t ALResidual = [&time,&stopwatch,&assembler,&mp_def](gsVector<real_t>
 };
 ~~~~~
 
-\subsection Jacobian The tangential stiffness matrix or Jacobian
+\subsection structuralAnalysis_Jacobian The tangential stiffness matrix or Jacobian
 
 The tangential stiffness matrix is the matrix that follows from linearizing the linear stiffness matrix with respect to the deformations collected a discrete vector (\f$\mathbf{u}_h\f$). Therefore, the tangential stiffness matrix is an object that takes the solution vector as an input. In the module, the tangential stiffness matrix has the following type:
 ~~~~~
@@ -90,6 +89,13 @@ Jacobian_t Jacobian = [&<objects needed to assemble the Jacobian>](gsVector<real
     return <Jacobian>
 };
 ~~~~~
+
+\subsection structuralAnalysis_Tutorials Tutorials
+In the folder \c gsStructuralAnalysis/tutorials, some tutorials are provided, explaining the use of the \ref gsStructuralAnalysis module. These tutorials follow-up on the tutorials provided in the \ref gsKLShell module, see \ref klShell_Tutorials. The tutorials can be compiled using the target \c gsStructuralAnalysis-tutorials. The available tutorials are:
+1. \ref nonlinear_shell_static
+2. \ref nonlinear_shell_arclength
+3. \ref nonlinear_shell_dynamic
+
 */
 
 }

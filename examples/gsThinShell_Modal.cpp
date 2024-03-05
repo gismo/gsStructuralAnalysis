@@ -542,8 +542,7 @@ int main (int argc, char** argv)
     if (plot)
     {
         gsInfo<<"Plotting in Paraview...\n";
-        int systemRet = system("mkdir -p ModalResults");
-        GISMO_ASSERT(systemRet!=-1,"Something went wrong with calling the system argument");
+        gsFileManager::mkdir("ModalResults");
 
         gsMultiPatch<> deformation = solution;
         gsMatrix<> modeShape;
@@ -588,8 +587,7 @@ int main (int argc, char** argv)
 
     if (write)
     {
-        int systemRet = system("mkdir -p ModalResults");
-        GISMO_ASSERT(systemRet!=-1,"Something went wrong with calling the system argument");
+        gsFileManager::mkdir("ModalResults");
 
         std::string wnM = "ModalResults/eigenvalues.txt";
         writeToCSVfile(wnM,values);

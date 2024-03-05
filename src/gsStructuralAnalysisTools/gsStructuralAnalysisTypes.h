@@ -16,47 +16,75 @@
 
 namespace gismo
 {
-    enum struct gsStatus
-    {
-        Success,         ///< Successful
-        NotConverged,    ///< Step did not converge
-        AssemblyError,   ///< Assembly problem in step
-        SolverError,     ///< Assembly problem in step
-        NotStarted,      ///< ALM has not started yet
-        OtherError       ///< Other error
-    };
 
-    template<class T>
-    struct gsStructuralAnalysisOps
-    {
-        /// Force
-        typedef std::function < bool (           gsVector<T> & )>     Force_t;
-        /// Time-dependent force
-        typedef std::function < bool ( const T,  gsVector<T> & )>     TForce_t;
+enum struct gsStatus
+{
+    Success,         ///< Successful
+    NotConverged,    ///< Step did not converge
+    AssemblyError,   ///< Assembly problem in step
+    SolverError,     ///< Assembly problem in step
+    NotStarted,      ///< ALM has not started yet
+    OtherError       ///< Other error
+};
 
-        /// Residual, Fint-Fext
-        typedef std::function < bool ( gsVector<T> const &,     gsVector<T> & )>    Residual_t;
-        /// Arc-Length Residual, Fint-lambda*Fext
-        typedef std::function < bool ( gsVector<T> const &, const T,  gsVector<T> & )>    ALResidual_t;
-        /// Time-dependent Residual Fint(t)-Fext(t)
-        typedef std::function < bool ( gsVector<T> const &, const T,  gsVector<T> & )>    TResidual_t;
-        
-        /// Mass matrix
-        typedef std::function < bool (                                              gsSparseMatrix<T> & ) > Mass_t;
-        /// Time-dependent mass matrix
-        typedef std::function < bool (                      const T,                gsSparseMatrix<T> & ) > TMass_t;
-        /// Damping matrix
-        typedef std::function < bool ( gsVector<T> const &,                         gsSparseMatrix<T> & ) > Damping_t;
-        /// Time-dependent Damping matrix
-        typedef std::function < bool ( gsVector<T> const &, const T,                gsSparseMatrix<T> & ) > TDamping_t;
+// ALTERNATIVE IMPLEMENTATION USING FUNCTORS
+// template<typename T>
+// struct DynamicFunctor
+// {
+//     Force();
 
-        /// Stiffness matrix
-        typedef std::function < bool (                                              gsSparseMatrix<T> & ) > Stiffness_t;
-        /// Jacobian
-        typedef std::function < bool ( gsVector<T> const &,                         gsSparseMatrix<T> & ) > Jacobian_t;
-        /// Jacobian
-        typedef std::function < bool ( gsVector<T> const &, const T,                gsSparseMatrix<T> & ) > TJacobian_t;
-        /// Jacobian with solution update as argument
-        typedef std::function < bool ( gsVector<T> const &, gsVector<T> const &,    gsSparseMatrix<T> & ) > dJacobian_t;
-    };
-} // namespace gismo
+//     gsVector<T>& operator(T time = 0) {};
+
+//     virtual index_t rows() = 0;
+//     virtual index_t cols() = 0;
+// };
+
+
+// template<typename T>
+// struct DynamicForce : public DynamicFunctor<T>
+// {
+//     DynamicForce(... ) {}
+
+
+// };
+
+/**
+ * @brief      Operators for the gsStructuralAnalysis module
+ *
+ * @tparam     T     Double type
+ */
+template<class T>
+struct gsStructuralAnalysisOps
+{
+    /// Force
+    typedef std::function < bool (           gsVector<T> & )>     Force_t;
+    /// Time-dependent force
+    typedef std::function < bool ( const T,  gsVector<T> & )>     TForce_t;
+
+    /// Residual, Fint-Fext
+    typedef std::function < bool ( gsVector<T> const &,     gsVector<T> & )>    Residual_t;
+    /// Arc-Length Residual, Fint-lambda*Fext
+    typedef std::function < bool ( gsVector<T> const &, const T,  gsVector<T> & )>    ALResidual_t;
+    /// Time-dependent Residual Fint(t)-Fext(t)
+    typedef std::function < bool ( gsVector<T> const &, const T,  gsVector<T> & )>    TResidual_t;
+    
+    /// Mass matrix
+    typedef std::function < bool (                                              gsSparseMatrix<T> & ) > Mass_t;
+    /// Time-dependent mass matrix
+    typedef std::function < bool (                      const T,                gsSparseMatrix<T> & ) > TMass_t;
+    /// Damping matrix
+    typedef std::function < bool ( gsVector<T> const &,                         gsSparseMatrix<T> & ) > Damping_t;
+    /// Time-dependent Damping matrix
+    typedef std::function < bool ( gsVector<T> const &, const T,                gsSparseMatrix<T> & ) > TDamping_t;
+
+    /// Stiffness matrix
+    typedef std::function < bool (                                              gsSparseMatrix<T> & ) > Stiffness_t;
+    /// Jacobian
+    typedef std::function < bool ( gsVector<T> const &,                         gsSparseMatrix<T> & ) > Jacobian_t;
+    /// Jacobian
+    typedef std::function < bool ( gsVector<T> const &, const T,                gsSparseMatrix<T> & ) > TJacobian_t;
+    /// Jacobian with solution update as argument
+    typedef std::function < bool ( gsVector<T> const &, gsVector<T> const &,    gsSparseMatrix<T> & ) > dJacobian_t;
+};
+
+}

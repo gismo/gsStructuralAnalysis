@@ -307,10 +307,7 @@ int main (int argc, char** argv)
     index_t cross_coordinate = 0;
     real_t cross_val = 0.0;
 
-
-    std::string commands = "mkdir -p " + dirname;
-    const char *command = commands.c_str();
-    system(command);
+    gsFileManager::mkdir(dirname);
 
     // plot geometry
     if (plot)
