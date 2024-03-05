@@ -14,8 +14,7 @@
 #include <gismo.h>
 
 #ifdef gsKLShell_ENABLED
-#include <gsKLShell/src/gsThinShellAssembler.h>
-#include <gsKLShell/src/getMaterialMatrix.h>
+#include <gsKLShell/gsKLShell.h>
 #endif
 
 #include <gsStructuralAnalysis/src/gsALMSolvers/gsALMCrisfield.h>

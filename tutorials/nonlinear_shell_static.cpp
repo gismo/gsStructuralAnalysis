@@ -16,8 +16,7 @@
 
 //! [Includes]
 #ifdef gsKLShell_ENABLED
-#include <gsKLShell/src/gsThinShellAssembler.h>
-#include <gsKLShell/src/getMaterialMatrix.h>
+#include <gsKLShell/gsKLShell.h>
 #endif
 
 #include <gsStructuralAnalysis/src/gsStaticSolvers/gsStaticNewton.h>
