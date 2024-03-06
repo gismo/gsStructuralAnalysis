@@ -125,6 +125,16 @@ gsDynamicExplicitEuler<T,_NL>::_step_impl(const T t, const T dt, gsVector<T> & U
 }
 
 template <class T, bool _NL>
+gsStatus gsDynamicExplicitEuler<T,_NL>::_step(const T t, const T dt,
+                                        gsVector<T> & U, gsVector<T> & V,
+                                        gsVector<T> & A) const
+{
+    gsStatus status = gsStatus::NotStarted;
+    status = _step_impl<_NL>(t,dt,U,V,A);
+    return status;
+}
+
+template <class T, bool _NL>
 void gsDynamicExplicitEuler<T,_NL>::_initOutput() const
 {
   if (m_options.getSwitch("Verbose"))
