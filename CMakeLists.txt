@@ -12,7 +12,7 @@ project(gsStructuralAnalysis)
 # Apply G+Smo config
 include(gsConfig)
 
-set (GISMO_INCLUDE_DIRS "${CMAKE_CURRENT_SOURCE_DIR}/src"
+set (APPEND GISMO_INCLUDE_DIRS "${CMAKE_CURRENT_SOURCE_DIR}/src"
      CACHE INTERNAL "${PROJECT_NAME} include directories" )
 
 # Add main sources directory

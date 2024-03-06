@@ -175,6 +175,16 @@ gsDynamicBathe<T,_NL>::_step_impl(const T t, const T dt, gsVector<T> & U, gsVect
 }
 
 template <class T, bool _NL>
+gsStatus gsDynamicBathe<T,_NL>::_step(const T t, const T dt,
+                                        gsVector<T> & U, gsVector<T> & V,
+                                        gsVector<T> & A) const
+{
+    gsStatus status = gsStatus::NotStarted;
+    status = _step_impl<_NL>(t,dt,U,V,A);
+    return status;
+}
+
+template <class T, bool _NL>
 void gsDynamicBathe<T,_NL>::_stageOutput(index_t stage) const
 {
   if (m_options.getSwitch("Verbose"))
