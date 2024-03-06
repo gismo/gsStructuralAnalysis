@@ -137,12 +137,7 @@ public:
 // General functions
 protected:
 
-    gsStatus _step(const T t, const T dt, gsVector<T> & U, gsVector<T> & V, gsVector<T> & A) const override
-    {
-        gsStatus status = gsStatus::NotStarted;
-        status = _step_impl<_NL>(t,dt,U,V,A);
-        return status;
-    }
+    gsStatus _step(const T t, const T dt, gsVector<T> & U, gsVector<T> & V, gsVector<T> & A) const override;
 
     void _initOutput() const;
     void _stepOutput(const index_t it, const T resnorm, const T updatenorm) const;
