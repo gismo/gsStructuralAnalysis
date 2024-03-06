@@ -24,7 +24,9 @@
 #endif
 
 #include <gsStructuralAnalysis/src/gsDynamicSolvers/gsDynamicNewmark.h>
+#ifdef gsXBraid_ENABLED
 #include <gsStructuralAnalysis/src/gsDynamicSolvers/gsDynamicXBraid.h>
+#endif
 #include <gsUtils/gsStopwatch.h>
 
 using namespace gismo;
@@ -46,9 +48,10 @@ using namespace gismo;
 
 
 // Choose among various shell examples, default = Thin Plate
-#ifdef gsKLShell_ENABLED
 int main (int argc, char** argv)
 {
+#ifdef gsKLShell_ENABLED
+#ifdef gsXBraid_ENABLED
     // Input options
     int numElevate  = 1;
     int numHref     = 1;
@@ -339,13 +342,14 @@ solver.solve();
 
 delete materialMatrix;
 delete assembler;
-
 return result;
-}
+
+#else//gsXBraid_ENABLED
+    gsWarn<<"G+Smo is not compiled with the gsXBraid module.";
+    return EXIT_FAILURE;
+#endif
 #else//gsKLShell_ENABLED
-int main(int argc, char *argv[])
-{
     gsWarn<<"G+Smo is not compiled with the gsKLShell module.";
     return EXIT_FAILURE;
-}
 #endif
+}
