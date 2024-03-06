@@ -47,6 +47,9 @@ namespace gismo
 	CLASS_TEMPLATE_INST gsDynamicNewmark<real_t,false>;
 	CLASS_TEMPLATE_INST gsDynamicNewmark<real_t,true>;
 
+    TEMPLATE_INST gsStatus
+    gsDynamicNewmark<real_t,true>::_step_impl<true>(const real_t t, const real_t dt, gsVector<real_t> & U, gsVector<real_t> & V, gsVector<real_t> & A) const;
+
 	CLASS_TEMPLATE_INST gsDynamicWilson<real_t,false>;
 	CLASS_TEMPLATE_INST gsDynamicWilson<real_t,true>;
 
