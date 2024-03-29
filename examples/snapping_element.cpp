@@ -25,9 +25,6 @@
 #include <gsElasticity/gsGeoUtils.h>
 #include <gsElasticity/gsElasticityAssembler.h>
 #include <gsElasticity/gsWriteParaviewMultiPhysics.h>
-
-#include <gsElasticity/gsNeoHookLogMaterial.h>
-#include <gsElasticity/gsLinearMaterial.h>
 #endif
 
 using namespace gismo;
@@ -211,8 +208,6 @@ int main(int argc, char *argv[])
 
     real_t E = 78e6;
     real_t nu = 0.4;
-    // gsLinearMaterial<real_t> material(E,nu,&mp,&mp_def);
-
     gsElasticityAssembler<real_t> assembler(mp,dbasis,bc,bodyForce);//,&material);
     gsInfo << "Initialized system with " << assembler.numDofs() << " dofs.\n";
 
