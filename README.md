@@ -6,9 +6,8 @@ Module for structural analysis with solids ([`gsElasticity`](https://github.com/
 |--:|---|
 |License|[MPL 2.0](https://www.mozilla.org/en-US/MPL/2.0/)|
 |OS support|Linux, Windows, macOS|
-|Build status| [CDash](link) |
+|Build status| [![ci](https://github.com/gismo/gsStructuralAnalysis/actions/workflows/ci.yml/badge.svg)](https://github.com/gismo/gsStructuralAnalysis/actions/workflows/ci.yml) |
 |Repository|[gismo/gismo](https://github.com/gismo/gismo)|
-|Status|completed|
 |Developer|[Hugo Verhelst](https://github.com/hverhelst)|
 |Maintainer|[h.m.verhelst@tudelft.nl](mailto:h.m.verhelst@tudelft.nl)|
 |Last checked|09-12-2021|
