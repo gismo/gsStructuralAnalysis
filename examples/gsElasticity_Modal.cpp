@@ -344,6 +344,7 @@ gsMultiPatch<T> BrickDomain(int n, int m, int o, int p, int q ,int r, T L, T B, 
 
 int main (int argc, char** argv)
 {
+  GISMO_UNUSED(argc); GISMO_UNUSED(argv);
   gsInfo<<"To run this example, compile G+Smo with gsElasticity\n";
   return EXIT_SUCCESS;
 }

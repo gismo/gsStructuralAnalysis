@@ -235,7 +235,7 @@ gsStructuralAnalysisOps<real_t>::Jacobian_t Jacobian = [&assembler,&mp_def](gsMa
 };
 
 // Function for the Residual
-gsStructuralAnalysisOps<real_t>::TResidual_t Residual = [&assembler,&mp_def](gsMatrix<real_t> const &x, real_t time, gsVector<real_t> & result)
+gsStructuralAnalysisOps<real_t>::TResidual_t Residual = [&assembler,&mp_def](gsMatrix<real_t> const &x, real_t /*time*/, gsVector<real_t> & result)
 {
     ThinShellAssemblerStatus status;
     assembler->constructSolution(x,mp_def);

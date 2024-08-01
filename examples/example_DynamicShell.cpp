@@ -247,9 +247,9 @@ gsStructuralAnalysisOps<real_t>::Stiffness_t    Stiffness;
 gsStructuralAnalysisOps<real_t>::TForce_t       TForce;
 
 Mass      = [&M](                            gsSparseMatrix<real_t> & result){result = M; return true;};
-Damping   = [&M](  const gsVector<real_t> & x, gsSparseMatrix<real_t> & result){result = gsSparseMatrix<real_t>(M.rows(),M.cols()); return true;};
+Damping   = [&M](  const gsVector<real_t> & /*x*/, gsSparseMatrix<real_t> & result){result = gsSparseMatrix<real_t>(M.rows(),M.cols()); return true;};
 Stiffness = [&K](                            gsSparseMatrix<real_t> & result){result = K; return true;};
-TForce    = [&F](real_t time,                gsVector<real_t>       & result){result = F; return true;};
+TForce    = [&F](real_t /*time*/,                gsVector<real_t>       & result){result = F; return true;};
 
 // // set damping Matrix (same dimensions as M)
 // C.setZero(M.rows(),M.cols());
