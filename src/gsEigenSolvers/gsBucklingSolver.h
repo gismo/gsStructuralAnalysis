@@ -57,7 +57,7 @@ public:
     m_scaling(scaling)
     {
         m_A = linear;
-        m_dnonlinear = [this](gsVector<T> const & x, gsVector<T> const & dx, gsSparseMatrix<T> & m) -> bool
+        m_dnonlinear = [this](gsVector<T> const & x, gsVector<T> const & /*dx*/, gsSparseMatrix<T> & m) -> bool
         {
             return m_nonlinear(x,m);
         };

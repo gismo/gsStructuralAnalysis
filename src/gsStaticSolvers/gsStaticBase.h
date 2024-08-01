@@ -60,7 +60,7 @@ public:
     /// Initialize output
     virtual void initOutput() {};
     /// Stepwise output
-    virtual void stepOutput(index_t k) {};
+    virtual void stepOutput(index_t /*k*/) {};
 
     /// Get default options
     virtual void defaultOptions()
@@ -208,6 +208,7 @@ protected:
         // gsEigen::SelfAdjointEigenSolver< gsMatrix<T> > es(jacMat);
         m_stabilityVec = es.eigenvalues();
 #else
+        GISMO_UNUSED(shift);
         gsEigen::SelfAdjointEigenSolver<gsMatrix<T>> es2(jacMat);
         m_stabilityVec = es2.eigenvalues();
 #endif

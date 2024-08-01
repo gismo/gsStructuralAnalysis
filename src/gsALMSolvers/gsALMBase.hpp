@@ -597,6 +597,7 @@ void gsALMBase<T>::_computeStability(const gsVector<T> & x, bool jacobian, T shi
     // gsEigen::SelfAdjointEigenSolver< gsMatrix<T> > es(m_jacMat);
     m_stabilityVec = es.eigenvalues();
     #else
+    GISMO_UNUSED(shift);
     gsEigen::SelfAdjointEigenSolver<gsMatrix<T>> es2(m_jacMat);
     m_stabilityVec = es2.eigenvalues();
     #endif

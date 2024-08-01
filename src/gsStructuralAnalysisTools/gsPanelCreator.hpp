@@ -152,7 +152,7 @@ gsMultiPatch<T> gsPanelCreator<T>::LBeam(T const & Lb, T const & Hw, T const & W
         result.patch(p).coefs().col(2).array() += z;
     }
 
-    result.addInterface(&result.patch(0),4,&result.patch(1),1);
+    result.addInterface(0,4,1,1);
 
     result.addAutoBoundaries();
 
@@ -254,7 +254,7 @@ gsMultiPatch<T> gsPanelCreator<T>::PanelL(T const & Lp, T const & Wp, T const & 
 }
 
 template <class T>
-gsMultiPatch<T> gsPanelCreator<T>::PlateGirderL(T const & Lp, T const & Wp, T const & Hwg, T const & Wfg, T const & Hws, T const & Wfs, T const & x, T const & y, T const & z)
+gsMultiPatch<T> gsPanelCreator<T>::PlateGirderL(T const & Lp, T const & Wp, T const & Hwg, T const & Wfg, T const & Hws, T const & Wfs, T const & /*x*/, T const & /*y*/, T const & /*z*/)
 {
     gsMultiPatch<T> result, tmp;
 
