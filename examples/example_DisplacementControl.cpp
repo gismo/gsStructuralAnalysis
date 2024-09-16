@@ -252,6 +252,17 @@ int main(int argc, char *argv[])
       return status == ThinShellAssemblerStatus::Success;
     };
 
+    gsStructuralAnalysisOps<real_t>::ALResidual_t ALResidual = [&displ,&bc,&assembler,&mp_def](gsVector<real_t> const &x, real_t lam, gsVector<real_t> & result)
+    {
+        ThinShellAssemblerStatus status;
+        displ.setValue(lam,3);
+        assembler->updateBCs(bc);
+        assembler->constructSolution(x,mp_def);
+        status = assembler->assembleVector(mp_def);
+        result = assembler->rhs();
+        return status == ThinShellAssemblerStatus::Success;
+    };
+
     displ.setValue(1.0,3);
     assembler->updateBCs(bc);
 
@@ -291,32 +302,44 @@ int main(int argc, char *argv[])
     OPT.setOptions(OPTOptions);
     OPT.initialize();
 
-    // gsInfo<<"Dynamic relaxation\n";
-    // DRM.solve();
-    // gsInfo<<"Solution: "<<DRM.solution().norm()<<"\n";
-
-    gsInfo<<"Newton\n";
-    NWT.solve();
-    gsInfo<<"Solution: "<<NWT.solution().norm()<<"\n";
-
-    gsInfo<<"Optimizer\n";
-    OPT.solve();
-    gsInfo<<"Solution: "<<OPT.solution().norm()<<"\n";
-
+    gsControlDisplacement<real_t> controlDR(&DRM);
+    gsControlDisplacement<real_t> controlDC(&NWT);
+    gsControlDisplacement<real_t> controlOPT(&OPT);
 
     gsStaticComposite<real_t> DRNWT({&DRM,&NWT});
     DRNWT.initialize();
-    gsInfo<<"Dynamic Relaxation -> Newton\n";
     DRNWT.solve();
-    gsInfo<<"Solution: "<<DRNWT.solution().norm()<<"\n";
+    gsDebugVar(DRNWT.solution().norm());
 
     gsStaticComposite<real_t> DROPT({&DRM,&OPT});
     DROPT.initialize();
-    gsInfo<<"Dynamic Relaxation -> Optimizer\n";
     DROPT.solve();
-    gsInfo<<"Solution: "<<DROPT.solution().norm()<<"\n";
+    gsDebugVar(DROPT.solution().norm());
 
-    gsVector<> displacements = NWT.solution();
+    return 0;
+
+    // control.step(0.5);
+    // control.step(0.5);
+    controlDR.step(1.0);
+    // controlOPT.step(1.0);
+
+    gsDebugVar(controlDR.solutionU().norm());
+
+    controlDC.step(1.0);
+    gsDebugVar(controlDC.solutionU().norm());
+
+    OPT.setUpdate(DRM.update());
+    controlOPT.step(1.0);
+    gsDebugVar(controlOPT.solutionU().norm());
+
+    NWT.reset();
+    NWT.setUpdate(DRM.update());
+    controlDC.step(1.0);
+    gsDebugVar(controlDC.solutionU().norm());
+
+    gsVector<> displacements = controlDR.solutionU();
+
+
 
     mp_def = assembler->constructSolution(displacements);
     gsMultiPatch<> deformation = mp_def;
