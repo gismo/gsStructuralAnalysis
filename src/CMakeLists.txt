@@ -50,6 +50,8 @@ FOREACH(subdir ${SUBDIRS})
     add_dependencies(${GM_NAME} mpfr)
   endif()
 
+  add_dependencies(${GM_NAME} ${PROJECT_NAME})
+
   ## Add extra instances (template instantiations)
   # NOTE: The static/non templated part of the library is
   # compiled above only for GISMO_COEFF_TYPE

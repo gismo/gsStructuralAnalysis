@@ -74,6 +74,7 @@ gsStatus gsEigenProblemBase<T>::computeSparse(const index_t number)
             return m_status;
         }
     #else
+        GISMO_UNUSED(number);
         gsWarn<<"Sparse solver is not implemented without gsSpectra. Please compile gismo with Spectra.\n";
         m_status=gsStatus::NotStarted;
         return gsStatus::NotStarted;

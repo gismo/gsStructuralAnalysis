@@ -78,7 +78,7 @@ public:
         m_residualFun(residual),
         m_ALresidualFun(nullptr)
     {
-        m_dnonlinear = [this](gsVector<T> const & x, gsVector<T> const & dx, gsSparseMatrix<T> & m) -> bool
+        m_dnonlinear = [this](gsVector<T> const & x, gsVector<T> const & /*dx*/, gsSparseMatrix<T> & m) -> bool
         {
             return m_nonlinear(x,m);
         };
@@ -112,7 +112,7 @@ public:
             return m_ALresidualFun(x,m_L,result);
         };
 
-        m_dnonlinear = [this](gsVector<T> const & x, gsVector<T> const & dx, gsSparseMatrix<T> & m) -> bool
+        m_dnonlinear = [this](gsVector<T> const & x, gsVector<T> const & /*dx*/, gsSparseMatrix<T> & m) -> bool
         {
             return m_nonlinear(x,m);
         };

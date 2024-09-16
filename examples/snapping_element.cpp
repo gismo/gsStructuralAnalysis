@@ -737,6 +737,7 @@ gsMultiPatch<T> makeElement(const T tw, const T tg, const T tb, const T ts, cons
 
 int main (int argc, char** argv)
 {
+  GISMO_UNUSED(argc); GISMO_UNUSED(argv);
   gsInfo<<"To run this example, compile G+Smo with gsElasticity\n";
   return EXIT_SUCCESS;
 }

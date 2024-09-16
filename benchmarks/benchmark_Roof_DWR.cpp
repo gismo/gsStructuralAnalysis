@@ -868,7 +868,7 @@ template <class T>
 void PlotResults(   index_t k,
                     gsThinShellAssemblerDWRBase<T> * assembler,
                     const gsMultiPatch<T> & mp, const gsMultiPatch<T> & mp_def,
-                    bool plot, bool stress, bool write, bool mesh, bool deformed,
+                    bool plot, bool stress, bool /* write */, bool mesh, bool deformed,
                     const std::string dirname, const std::string output,
                     gsParaviewCollection & collection,
                     gsParaviewCollection & Smembrane,

@@ -639,7 +639,7 @@ int main(int argc, char *argv[])
 #endif
 
 template <class T>
-std::vector<gsBSpline<T>> makeCurve(const T tw, const T tg, const T tb, const T ts, const T l, const T a, const std::string expr, const gsKnotVector<T> & kv1)
+std::vector<gsBSpline<T>> makeCurve(const T tw, const T /* tg */, const T /* tb */, const T /* ts */, const T l, const T /* a */, const std::string expr, const gsKnotVector<T> & kv1)
 {
 
     gsFunctionExpr<T> fun(expr,2);
@@ -715,7 +715,7 @@ gsMultiPatch<T> makeTop(const T tw, const T tg, const T tb, const T ts, const T 
 }
 
 template <class T>
-gsMultiPatch<T> makeTop(const T tw, const T tg, const T tb, const T ts, const T l, const T a, const std::vector<gsBSpline<T>> & curves)
+gsMultiPatch<T> makeTop(const T /* tw */, const T tg, const T tb, const T ts, const T l, const T a, const std::vector<gsBSpline<T>> & curves)
 {
     gsKnotVector<T> kv2(0, 1, 0, 2);
 
@@ -942,7 +942,7 @@ gsMultiPatch<T> makeElement(const T tw, const T tg, const T tb, const T ts, cons
 }
 
 template <class T>
-gsMultiPatch<T> makeElement(const T tw, const T tg, const T tb, const T ts, const T l, const T a, const std::vector<gsBSpline<T>> & curves)
+gsMultiPatch<T> makeElement(const T /* tw */, const T tg, const T tb, const T ts, const T l, const T a, const std::vector<gsBSpline<T>> & curves)
 {
     gsKnotVector<T> kv2(0, 1, 0, 2);
 
@@ -1177,7 +1177,7 @@ gsMultiPatch<T> makeBottom(const T tw, const T tg, const T tb, const T ts, const
 }
 
 template <class T>
-gsMultiPatch<T> makeBottom(const T tw, const T tg, const T tb, const T ts, const T l, const T a, const std::vector<gsBSpline<T>> & curves)
+gsMultiPatch<T> makeBottom(const T /* tw */, const T tg, const T /* tb */, const T /* ts */, const T l, const T a, const std::vector<gsBSpline<T>> & curves)
 {
     gsKnotVector<T> kv2(0, 1, 0, 2);
 

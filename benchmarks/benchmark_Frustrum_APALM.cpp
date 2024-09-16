@@ -66,7 +66,7 @@ public:
 
   }
 
-  void parallelIntervalOutput(const std::vector<std::pair<gsVector<T>,T>> & stepSolutions, const std::vector<T> & stepTimes, index_t level, index_t ID)
+  void parallelIntervalOutput(const std::vector<std::pair<gsVector<T>,T>> & stepSolutions, const std::vector<T> & /* stepTimes */, index_t level, index_t ID)
   {
     gsStructuralAnalysisOutput<real_t> data(m_dirname + "/interval_"+std::to_string(ID)+".csv",m_refPoints);
     gsMultiPatch<T> deformation,mp_tmp, mp;

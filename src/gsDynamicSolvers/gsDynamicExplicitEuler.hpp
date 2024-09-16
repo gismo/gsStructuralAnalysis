@@ -147,7 +147,7 @@ void gsDynamicExplicitEuler<T,_NL>::_initOutput() const
 }
 
 template <class T, bool _NL>
-void gsDynamicExplicitEuler<T,_NL>::_stepOutput(const index_t it, const T resnorm, const T updatenorm) const
+void gsDynamicExplicitEuler<T,_NL>::_stepOutput(const index_t it, const T resnorm, const T /*updatenorm*/) const
 {
   if (m_options.getSwitch("Verbose"))
   {

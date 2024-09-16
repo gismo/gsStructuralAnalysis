@@ -355,6 +355,7 @@ int main (int argc, char** argv)
 #else//gsUnstructuredSplines_ENABLED
 int main(int argc, char *argv[])
 {
+    GISMO_UNUSED(argc); GISMO_UNUSED(argv);
     gsWarn<<"G+Smo is not compiled with the gsUnstructuredSplines module.";
     return EXIT_FAILURE;
 }
@@ -362,6 +363,7 @@ int main(int argc, char *argv[])
 #else//gsKLShell_ENABLED
 int main(int argc, char *argv[])
 {
+    GISMO_UNUSED(argc); GISMO_UNUSED(argv);
     gsWarn<<"G+Smo is not compiled with the gsKLShell module.";
     return EXIT_FAILURE;
 }
