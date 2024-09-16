@@ -17,6 +17,10 @@
 #include <gsHLBFGS/gsHLBFGS.h>
 #endif
 
+#ifdef gsOptim_ENABLED
+#include <gsOptim/gsOptim.h>
+#endif
+
 #ifdef gsIpOpt_ENABLED
 #include <gsIpOpt/gsIpOpt.h>
 #endif
@@ -64,6 +68,13 @@ void gsStaticOpt<T,Optimizer>::getOptions()
     {
         m_optimizer.options().setReal("MinGradientLength",m_tolF);
         m_optimizer.options().setReal("MinStepLength",m_tolU);
+    }
+#endif
+#ifdef gsOptim_ENABLED
+    else if (dynamic_cast<gsOptim<T>*>(&m_optimizer))
+    {
+        m_optimizer.options().setReal("RelObjFnChangeTol",m_tolF);
+        m_optimizer.options().setReal("RelSolChangeTol",m_tolU);
     }
 #endif
 #ifdef gsIpOpt_ENABLED
