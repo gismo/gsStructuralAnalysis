@@ -11,7 +11,6 @@
     Author(s): H.M. Verhelst (2019-..., TU Delft)
 */
 
-#include <typeinfo>
 #pragma once
 
 namespace gismo

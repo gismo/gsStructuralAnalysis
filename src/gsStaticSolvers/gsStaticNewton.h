@@ -11,8 +11,6 @@
     Author(s): H.M. Verhelst (2019-..., TU Delft)
 */
 
-#include <typeinfo>
-
 #include <gsStructuralAnalysis/src/gsStaticSolvers/gsStaticBase.h>
 #pragma once
 

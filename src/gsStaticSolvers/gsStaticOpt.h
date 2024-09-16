@@ -12,9 +12,90 @@
 */
 
 #include <gsStructuralAnalysis/src/gsStaticSolvers/gsStaticBase.h>
+#include <gsOptimizer/gsGradientDescent.h>
+
+#pragma once
 
 namespace gismo
 {
+
+template <typename T> 
+class gsOptProblemStatic : public gsOptProblem<T>
+{
+protected:
+
+    typedef gsOptProblem<T> Base;
+    typedef typename gsStructuralAnalysisOps<T>::Residual_t   Residual_t;
+    typedef typename gsStructuralAnalysisOps<T>::ALResidual_t ALResidual_t;
+
+public:
+
+    gsOptProblemStatic(const typename gsStructuralAnalysisOps<T>::Residual_t & residualFun, const T & L, index_t numDesignVars)
+    :
+    m_residualFun(residualFun),
+    m_L(L) // unused, in fact, but needs to be assigned
+    {
+        m_numDesignVars = numDesignVars;
+        m_curDesign.resize(numDesignVars,1);
+        m_curDesign.setZero();
+    }
+
+    gsOptProblemStatic(const typename gsStructuralAnalysisOps<T>::ALResidual_t & ALresidualFun, const T & L, index_t numDesignVars)
+    :
+    m_ALresidualFun(ALresidualFun),
+    m_L(L)
+    {
+        m_numDesignVars = numDesignVars;
+        m_residualFun = [this](gsVector<T> const & x, gsVector<T> & result) -> bool
+        {
+            return m_ALresidualFun(x,m_L,result);
+        };
+        m_curDesign.resize(numDesignVars,1);
+        m_curDesign.setZero();
+    }
+
+public:
+
+    T evalObj( const gsAsConstVector<T> & u ) const
+    {
+        gsVector<T> result;
+        m_residualFun(u,result);
+        return result.norm();
+    }
+
+    void gradObj_into( const gsAsConstVector<T> & u, gsAsVector<T> & result) const
+    {
+        gsVector<T> tmp;
+        result.resize(u.rows());
+        m_residualFun(u,tmp);
+        result = -tmp;
+    }
+
+    // void evalCon_into( const gsAsConstVector<T> & u, gsAsVector<T> & result) const;
+
+    // void jacobCon_into( const gsAsConstVector<T> & u, gsAsVector<T> & result) const;
+
+private:
+
+    Residual_t m_residualFun;
+    ALResidual_t m_ALresidualFun;
+    const T & m_L;
+    // Lastly, we forward the memebers of the base clase gsOptProblem
+    using Base::m_numDesignVars;
+    using Base::m_numConstraints;
+    using Base::m_numConJacNonZero;
+
+    using Base::m_desLowerBounds;
+    using Base::m_desUpperBounds;
+
+    using Base::m_conLowerBounds;
+    using Base::m_conUpperBounds;
+
+    using Base::m_conJacRows;
+    using Base::m_conJacCols;
+
+    using Base::m_curDesign;
+};
 
 /**
  * @brief Static solver using the Dynamic Relaxation method
@@ -23,7 +104,7 @@ namespace gismo
  *
  * \ingroup gsStaticBase
  */
-template <class T>
+template <class T, class Optimizer = gsGradientDescent<T>>
 class gsStaticOpt : public gsStaticBase<T>
 {
 protected:
@@ -40,48 +121,12 @@ public:
      *
      * @param[in]  Residual  The residual
      */
-    gsStaticOpt( const Residual_t &Residual )
+    gsStaticOpt( const Residual_t &Residual, const index_t numDofs )
     :
-    m_residualFun(Residual),
-    m_ALresidualFun(nullptr),
-    m_jacobian(nullptr)
+    m_optProblem(Residual,m_L,numDofs),
+    m_optimizer(&m_optProblem)
     {
-        this->_init();
-    }
-
-    /**
-     * @brief      Constructor
-     *
-     * @param[in]  Residual  The residual
-     * @param[in]  Jacobian  The jacobian
-     */
-    gsStaticOpt( const Residual_t &Residual,
-                 const Jacobian_t &Jacobian )
-    :
-    m_residualFun(Residual),
-    m_ALresidualFun(nullptr),
-    m_jacobian(Jacobian)
-    {
-        this->_init();
-    }
-
-
-    /**
-     * @brief      Constructs a new instance.
-     *
-     * @param[in]  ALResidual  The residual as arc-length object
-     * @param[in]  Jacobian  The jacobian
-     */
-    gsStaticOpt( const ALResidual_t  & ALResidual )
-    :
-    m_ALresidualFun(ALResidual),
-    m_jacobian(nullptr)
-    {
-        m_L = 1.0;
-        m_residualFun = [this](gsVector<T> const & x, gsVector<T> & result) -> bool
-        {
-            return m_ALresidualFun(x,m_L,result);
-        };
+        m_dofs = numDofs;
         this->_init();
     }
 
@@ -89,44 +134,58 @@ public:
      * @brief      Constructs a new instance.
      *
      * @param[in]  ALResidual  The residual as arc-length object
-     * @param[in]  Jacobian  The jacobian
      */
-    gsStaticOpt( const ALResidual_t  & ALResidual,
-                 const Jacobian_t &Jacobian )
+    gsStaticOpt( const ALResidual_t  & ALResidual, const index_t numDofs )
     :
-    m_ALresidualFun(ALResidual),
-    m_jacobian(Jacobian)
+    m_optProblem(ALResidual,m_L,numDofs),
+    m_optimizer(&m_optProblem)
     {
         m_L = 1.0;
-        m_residualFun = [this](gsVector<T> const & x, gsVector<T> & result) -> bool
-        {
-            return m_ALresidualFun(x,m_L,result);
-        };
+        m_dofs = numDofs;
         this->_init();
     }
+
+public:
+    gsOptionList & optimizerOptions() { return m_optimizer.options(); }
 
 /// gsStaticBase base functions
 public:
     /// See \ref gsStaticBase
     gsStatus solve() override;
 
-    /// See \ref gsStaticBase
-    void initialize() override;
+    // /// See \ref gsStaticBase
+    // void initialize() override;
 
-    /// See \ref gsStaticBase
-    void initOutput() override;
+    // /// See \ref gsStaticBase
+    // void initOutput() override;
     
-    /// See \ref gsStaticBase
-    void stepOutput(index_t k) override;
+    // /// See \ref gsStaticBase
+    // void stepOutput(index_t k) override;
 
     /// See \ref gsStaticBase
     void defaultOptions() override;
 
-    /// See \ref gsStaticBase
-    void reset() override;
+    // /// See \ref gsStaticBase
+    // void reset() override;
 
     /// See \ref gsStaticBase
     void getOptions() override;
+
+    /// Returns the stability indicator
+    T indicator(const gsSparseMatrix<T> &, T)
+    {
+        GISMO_NO_IMPLEMENTATION;
+    }
+
+    /// Returns the stability vector
+    gsVector<T> stabilityVec(const gsSparseMatrix<T> &, T)
+    {
+        GISMO_NO_IMPLEMENTATION;
+    }
+
+// Class-specific functions
+// public:
+//     void initialize();
 
 protected:
     /// See \ref solve()
@@ -134,42 +193,36 @@ protected:
     /// Initializes the method
     void _init();
 
-    gsVector<T> _computeResidual(const gsVector<T> & U);
+//     gsVector<T> _computeResidual(const gsVector<T> & U);
 
-public:
+// public:
 
-    /// Return the residual norm
-    T residualNorm() const { return m_R.norm(); }
+//     /// Return the residual norm
+//     T residualNorm() const { return m_R.norm(); }
 
 protected:
-    Residual_t m_residualFun;
-    const ALResidual_t m_ALresidualFun;
-    const Jacobian_t m_jacobian;
+    Optimizer m_optimizer;
+    gsOptProblemStatic<T> m_optProblem;
 
-    // Solution
+    // // Solution
     using Base::m_U;
     using Base::m_DeltaU;
-    using Base::m_deltaU;
+    // using Base::m_deltaU;
 
     using Base::m_L;
-    using Base::m_DeltaL;
-    using Base::m_deltaL;
+    // using Base::m_DeltaL;
+    // using Base::m_deltaL;
 
     // Iterations
     using Base::m_numIterations;
     using Base::m_maxIterations;
 
-    // Residuals
-    using Base::m_R;
+    // // Residuals
+    // using Base::m_R;
 
-    // Tolerances
+    // // Tolerances
     using Base::m_tolF;
     using Base::m_tolU;
-
-    // Residual norms
-    using Base::m_residual;
-    using Base::m_residualIni;
-    using Base::m_residualOld;
 
     // Options
     using Base::m_options;
@@ -185,47 +238,9 @@ protected:
     using Base::m_status;
 };
 
-//! [OptProblemExample Class]
-template <typename T>
-class gsOptProblemStatic : public gsOptProblem<T>
-//! [OptProblemExample Class]
-{
-public:
 
-    gsOptProblemStatic();
-
-public:
-
-    T evalObj( const gsAsConstVector<T> & u ) const;
-
-    void gradObj_into( const gsAsConstVector<T> & u, gsAsVector<T> & result) const;
-
-    void evalCon_into( const gsAsConstVector<T> & u, gsAsVector<T> & result) const;
-
-    void jacobCon_into( const gsAsConstVector<T> & u, gsAsVector<T> & result) const;
-
-private:
-
-    // Lastly, we forward the memebers of the base clase gsOptProblem
-    using gsOptProblem<T>::m_numDesignVars;
-    using gsOptProblem<T>::m_numConstraints;
-    using gsOptProblem<T>::m_numConJacNonZero;
-
-    using gsOptProblem<T>::m_desLowerBounds;
-    using gsOptProblem<T>::m_desUpperBounds;
-
-    using gsOptProblem<T>::m_conLowerBounds;
-    using gsOptProblem<T>::m_conUpperBounds;
-
-    using gsOptProblem<T>::m_conJacRows;
-    using gsOptProblem<T>::m_conJacCols;
-
-    using gsOptProblem<T>::m_curDesign;
-};
-//! [OptProblem]
 
 } //namespace
-
 
 #ifndef GISMO_BUILD_LIB
 #include GISMO_HPP_HEADER(gsStaticOpt.hpp)

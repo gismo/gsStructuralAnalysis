@@ -56,6 +56,9 @@ enum struct gsStatus
 template<class T>
 struct gsStructuralAnalysisOps
 {
+    /// Residual energy
+    typedef std::function < bool ( gsVector<T> const &, T &)>     Energy_t;
+
     /// Force
     typedef std::function < bool (           gsVector<T> & )>     Force_t;
     /// Time-dependent force
