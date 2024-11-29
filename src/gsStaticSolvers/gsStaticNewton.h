@@ -55,6 +55,7 @@ public:
         m_nonlinear(nullptr),
         m_residualFun(nullptr)
     {
+        m_dofs = m_linear.rows();
         this->_init();
     }
 
@@ -78,6 +79,7 @@ public:
         m_residualFun(residual),
         m_ALresidualFun(nullptr)
     {
+        m_dofs = m_linear.rows();
         m_dnonlinear = [this](gsVector<T> const & x, gsVector<T> const & dx, gsSparseMatrix<T> & m) -> bool
         {
             return m_nonlinear(x,m);
@@ -106,6 +108,7 @@ public:
         m_residualFun(nullptr),
         m_ALresidualFun(ALResidual)
     {
+        m_dofs = m_linear.rows();
         m_L = 1.0;
         m_residualFun = [this](gsVector<T> const & x, gsVector<T> & result) -> bool
         {
@@ -141,6 +144,7 @@ public:
         m_residualFun(residual),
         m_ALresidualFun(nullptr)
     {
+        m_dofs = m_linear.rows();
         this->_init();
     }
 
@@ -270,7 +274,7 @@ protected:
 
     /// Linear solver employed
     using Base::m_solver;   // Cholesky by default
-    
+
     using Base::m_stabilityMethod;
 
     /// Indicator for bifurcation
