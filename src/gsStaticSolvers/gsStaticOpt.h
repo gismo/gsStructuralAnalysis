@@ -123,8 +123,8 @@ public:
      */
     gsStaticOpt( const Residual_t &Residual, const index_t numDofs )
     :
-    m_optProblem(Residual,m_L,numDofs),
-    m_optimizer(&m_optProblem)
+    m_optimizer(&m_optProblem),
+    m_optProblem(Residual,m_L,numDofs)
     {
         m_dofs = numDofs;
         this->_init();
@@ -137,8 +137,8 @@ public:
      */
     gsStaticOpt( const ALResidual_t  & ALResidual, const index_t numDofs )
     :
-    m_optProblem(ALResidual,m_L,numDofs),
-    m_optimizer(&m_optProblem)
+    m_optimizer(&m_optProblem),
+    m_optProblem(ALResidual,m_L,numDofs)
     {
         m_L = 1.0;
         m_dofs = numDofs;
