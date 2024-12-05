@@ -27,16 +27,21 @@ gsStatus gsStaticComposite<T>::solve()
     {
         if (m_verbose > 0)
             gsInfo<<"Solver "<<k<<" out of "<<m_solvers.size()<<"\n";
-        
+
         if (k>0)
         {
             m_solvers[k]->setUpdate(m_solvers[k-1]->update());
         }
 
         m_status = m_solvers[k]->solve();
-        m_numIterations += m_solvers[k]->iterations();
-        m_U = m_solvers[k]->solution();
-        m_DeltaU = m_solvers[k]->update();
+        if (m_status==gsStatus::Success)
+        {
+            m_numIterations += m_solvers[k]->iterations();
+            m_U = m_solvers[k]->solution();
+            m_DeltaU = m_solvers[k]->update();
+        }
+        else if (m_verbose > 0)
+            gsInfo<<"Solver "<<k<<" failed \n";
     }
     return m_status;
 };

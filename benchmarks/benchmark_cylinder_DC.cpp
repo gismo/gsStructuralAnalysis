@@ -25,7 +25,16 @@
 #include <gsUnstructuredSplines/src/gsSmoothInterfaces.h>
 #endif
 
+#ifdef gsHLBFGS_ENABLED
+#include <gsHLBFGS/gsHLBFGS.h>
+#endif
+
+#ifdef gsOptim_ENABLED
+#include <gsOptim/gsOptim.h>
+#endif
+
 #include <gsStructuralAnalysis/src/gsStaticSolvers/gsStaticDR.h>
+#include <gsStructuralAnalysis/src/gsStaticSolvers/gsStaticOpt.h>
 #include <gsStructuralAnalysis/src/gsStaticSolvers/gsStaticNewton.h>
 #include <gsStructuralAnalysis/src/gsStaticSolvers/gsStaticComposite.h>
 #include <gsStructuralAnalysis/src/gsStaticSolvers/gsControlDisplacement.h>
@@ -50,9 +59,14 @@ int main (int argc, char** argv)
     real_t  alpha = 1.0;
     real_t  damping = 0.1;
     bool DR  = false;
+    // * Optimizer
+    index_t maxitOPT = 1000;
+    bool OP  = false;
     // * Newton Raphson
     index_t maxitNR = 20;
     bool NR  = false;
+
+
     index_t testCase = 0;
 
 
@@ -80,6 +94,7 @@ int main (int argc, char** argv)
     cmd.addReal( "a", "alpha", "alpha",  alpha );
     cmd.addReal( "c", "damping", "damping",  damping );
     cmd.addSwitch("DR", "Use Dynamic Relaxation", DR);
+    cmd.addSwitch("OP", "Use Optimizer", OP);
     cmd.addSwitch("NR", "Use Newton Raphson", NR);
 
     // Output settings
@@ -277,6 +292,16 @@ int main (int argc, char** argv)
     DynamicRelaxationSolver.setOptions(DynamicRelaxationOptions);
     DynamicRelaxationSolver.initialize();
 
+    gsStaticOpt<real_t,gsOptim<real_t>::LBFGS> OptimizerSolver(Residual,assembler->numDofs());
+    gsOptionList OptimizerSolverOptions = OptimizerSolver.options();
+    OptimizerSolverOptions.setInt("maxIt",maxitOPT);
+    OptimizerSolverOptions.setReal("tolF",1e-4);
+    OptimizerSolverOptions.setReal("tolU",1e-4);
+    OptimizerSolverOptions.setInt("verbose",1);
+    OptimizerSolver.setOptions(OptimizerSolverOptions);
+    OptimizerSolver.initialize();
+
+
     gsStaticNewton<real_t> NewtonSolver(K,F,Jacobian,Residual);
     gsOptionList NewtonOptions = NewtonSolver.options();
     NewtonOptions.setInt("verbose",true);
@@ -290,6 +315,11 @@ int main (int argc, char** argv)
     {
       gsInfo<<"Using Dynamic Relaxation solver\n";
       solvers.push_back(&DynamicRelaxationSolver);
+    }
+    if (OP)
+    {
+      gsInfo<<"Using Optimizer solver\n";
+      solvers.push_back(&OptimizerSolver);
     }
     if (NR)
     {
