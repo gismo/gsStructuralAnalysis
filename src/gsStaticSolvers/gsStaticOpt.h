@@ -15,11 +15,27 @@
 #include <gsOptimizer/gsGradientDescent.h>
 
 #pragma once
-
 namespace gismo
 {
 
-template <typename T> 
+/**
+ * @file gsStaticOpt.h
+ * @brief Header file for the gsStaticOpt and gsOptProblemStatic classes.
+ *
+ * This file contains the definitions for the gsStaticOpt and gsOptProblemStatic classes,
+ * which are used for static optimization in structural analysis.
+ */
+
+/**
+ * @class gsOptProblemStatic
+ * @brief A class representing a static optimization problem.
+ *
+ * @tparam T The coefficient type.
+ *
+ * This class inherits from gsOptProblem and provides functionality for evaluating
+ * the objective function and its gradient for static optimization problems.
+ */
+template <typename T>
 class gsOptProblemStatic : public gsOptProblem<T>
 {
 protected:
@@ -29,7 +45,13 @@ protected:
     typedef typename gsStructuralAnalysisOps<T>::ALResidual_t ALResidual_t;
 
 public:
-
+    /**
+     * @brief Constructor for gsOptProblemStatic.
+     *
+     * @param residualFun The residual function.
+     * @param L A coefficient (unused but needs to be assigned).
+     * @param numDesignVars The number of design variables.
+     */
     gsOptProblemStatic(const typename gsStructuralAnalysisOps<T>::Residual_t & residualFun, const T & L, index_t numDesignVars)
     :
     m_residualFun(residualFun),
@@ -40,6 +62,13 @@ public:
         m_curDesign.setZero();
     }
 
+    /**
+     * @brief Constructor for gsOptProblemStatic with arc-length residual function.
+     *
+     * @param ALresidualFun The arc-length residual function.
+     * @param L A coefficient.
+     * @param numDesignVars The number of design variables.
+     */
     gsOptProblemStatic(const typename gsStructuralAnalysisOps<T>::ALResidual_t & ALresidualFun, const T & L, index_t numDesignVars)
     :
     m_ALresidualFun(ALresidualFun),
@@ -55,7 +84,12 @@ public:
     }
 
 public:
-
+    /**
+     * @brief Evaluates the objective function.
+     *
+     * @param u The input vector.
+     * @return The norm of the residual.
+     */
     T evalObj( const gsAsConstVector<T> & u ) const
     {
         gsVector<T> result;
@@ -63,6 +97,12 @@ public:
         return result.norm();
     }
 
+    /**
+     * @brief Computes the gradient of the objective function.
+     *
+     * @param u The input vector.
+     * @param result The output vector for the gradient.
+     */
     void gradObj_into( const gsAsConstVector<T> & u, gsAsVector<T> & result) const
     {
         gsVector<T> tmp;
@@ -70,10 +110,6 @@ public:
         m_residualFun(u,tmp);
         result = -tmp;
     }
-
-    // void evalCon_into( const gsAsConstVector<T> & u, gsAsVector<T> & result) const;
-
-    // void jacobCon_into( const gsAsConstVector<T> & u, gsAsVector<T> & result) const;
 
 private:
 
@@ -98,10 +134,15 @@ private:
 };
 
 /**
- * @brief Static solver using the Dynamic Relaxation method
+ * @class gsStaticOpt
+ * @brief Static solver using the Dynamic Relaxation method.
  *
- * @tparam     T     coefficient type
+ * @tparam T The coefficient type.
+ * @tparam Optimizer The optimizer type (default is gsGradientDescent<T>).
  *
+ * This class inherits from gsStaticBase and provides functionality for solving
+ * static optimization problems using the Dynamic Relaxation method.
+
  * \ingroup gsStaticBase
  */
 template <class T, class Optimizer = gsGradientDescent<T>>
@@ -117,9 +158,10 @@ protected:
 public:
 
     /**
-     * @brief      Constructor
+     * @brief Constructor for gsStaticOpt.
      *
-     * @param[in]  Residual  The residual
+     * @param Residual The residual function.
+     * @param numDofs The number of degrees of freedom.
      */
     gsStaticOpt( const Residual_t &Residual, const index_t numDofs )
     :
@@ -131,9 +173,10 @@ public:
     }
 
     /**
-     * @brief      Constructs a new instance.
+     * @brief Constructor for gsStaticOpt with arc-length residual function.
      *
-     * @param[in]  ALResidual  The residual as arc-length object
+     * @param ALResidual The arc-length residual function.
+     * @param numDofs The number of degrees of freedom.
      */
     gsStaticOpt( const ALResidual_t  & ALResidual, const index_t numDofs )
     :
@@ -146,6 +189,11 @@ public:
     }
 
 public:
+    /**
+     * @brief Returns the optimizer options.
+     *
+     * @return A reference to the optimizer options.
+     */
     gsOptionList & optimizerOptions() { return m_optimizer.options(); }
 
 /// gsStaticBase base functions
@@ -158,7 +206,7 @@ public:
 
     // /// See \ref gsStaticBase
     // void initOutput() override;
-    
+
     // /// See \ref gsStaticBase
     // void stepOutput(index_t k) override;
 
@@ -183,22 +231,12 @@ public:
         GISMO_NO_IMPLEMENTATION;
     }
 
-// Class-specific functions
-// public:
-//     void initialize();
-
 protected:
     /// See \ref solve()
     void _solve();
     /// Initializes the method
     void _init();
 
-//     gsVector<T> _computeResidual(const gsVector<T> & U);
-
-// public:
-
-//     /// Return the residual norm
-//     T residualNorm() const { return m_R.norm(); }
 
 protected:
     Optimizer m_optimizer;
