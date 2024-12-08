@@ -41,8 +41,8 @@
 #include <gsKLShell/gsKLShell.h>
 #endif
 
-#ifdef gsOptim_ENABLED
-#include <gsOptim/gsOptim.h>
+#ifdef gsHLBFGS_ENABLED
+#include <gsHLBFGS/gsHLBFGS.h>
 #endif
 
 #include <gsStructuralAnalysis/src/gsStaticSolvers/gsStaticDR.h>
@@ -75,7 +75,7 @@ SUITE(gsThinShellAssembler_test)                 // The suite should have the sa
     //     UAT_CHECK(solver);
     // }
 
-#ifdef gsOptim_ENABLED
+#ifdef gsHLBFGS_ENABLED
     TEST(StaticSolver_UAT_OP)
     {
         std::vector<index_t> solver({2});
@@ -83,7 +83,7 @@ SUITE(gsThinShellAssembler_test)                 // The suite should have the sa
     }
 #endif
 
-#ifdef gsOptim_ENABLED
+#ifdef gsHLBFGS_ENABLED
     TEST(StaticSolver_UAT_OP_NR)
     {
         std::vector<index_t> solver({2,0});
@@ -97,7 +97,7 @@ SUITE(gsThinShellAssembler_test)                 // The suite should have the sa
         UAT_CHECK(solver);
     }
 
-#ifdef gsOptim_ENABLED
+#ifdef gsHLBFGS_ENABLED
     TEST(StaticSolver_UAT_DR_OP)
     {
         std::vector<index_t> solver({1,2});
@@ -265,8 +265,8 @@ SUITE(gsThinShellAssembler_test)                 // The suite should have the sa
         DRM.setOptions(DROptions);
         DRM.initialize();
 
-#ifdef gsOptim_ENABLED
-        gsStaticOpt<real_t,gsOptim<real_t>::LBFGS> OPT(Residual,assembler->numDofs());
+#ifdef gsHLBFGS_ENABLED
+        gsStaticOpt<real_t,gsHLBFGS<real_t>> OPT(Residual,assembler->numDofs());
 #else
         gsStaticOpt<real_t,gsGradientDescent<real_t>> OPT(Residual,assembler->numDofs());
 #endif
