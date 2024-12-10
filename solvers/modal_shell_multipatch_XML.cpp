@@ -1,7 +1,7 @@
 /** @file modal_shell_multipatch_XML.cpp
 
     @brief Blackbox solver for shell modal analysis using unstructured splines
-    
+
     This file is part of the G+Smo library.
 
     This Source Code Form is subject to the terms of the Mozilla Public
@@ -334,7 +334,7 @@ int main (int argc, char** argv)
             for (size_t p = 0; p!=geom.nPatches(); p++)
             {
                 fileName = output + util::to_string(m);
-                collection.addTimestep(fileName,p,m,".vts");
+                collection.addPart(fileName+".vts",m,"Solution",p);
                 // if (mesh)
                 //     collection.addTimestep(fileName,p,m,"_mesh.vtp");
             }

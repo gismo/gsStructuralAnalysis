@@ -302,7 +302,7 @@ int main (int argc, char** argv)
   // Initialise solution object
   gsMultiPatch<> mp_def = mp;
 
-  gsMaterialMatrixBase<real_t>* materialMatrix;
+  gsMaterialMatrixBase<real_t>::uPtr materialMatrix;
 
   real_t pi = math::atan(1)*4;
   index_t kmax = 3;
@@ -346,7 +346,7 @@ int main (int argc, char** argv)
   gsOptionList options;
   if (composite)
   {
-      materialMatrix = new gsMaterialMatrixComposite<3,real_t>(mp,Ts,Gs,Phis);
+      materialMatrix = memory::make_unique(new gsMaterialMatrixComposite<3,real_t>(mp,Ts,Gs,Phis));
   }
   else
   {

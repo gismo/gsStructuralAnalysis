@@ -1,6 +1,6 @@
 /** @file example_ShearWrinkling.cpp
 
-    @brief Performs wrinkling simulations of the shear wrinkling case 
+    @brief Performs wrinkling simulations of the shear wrinkling case
     USING A PERTURBATION from a multipatch
 
     This file is part of the G+Smo library.
@@ -284,19 +284,9 @@ int main (int argc, char** argv)
     gsFunctionExpr<> nu(std::to_string(PoissonRatio),3);
     gsFunctionExpr<> rho(std::to_string(Density),3);
 
-    std::vector<gsFunctionSet<>*> parameters;
-    parameters.resize(2);
-    parameters[0] = &E;
-    parameters[1] = &nu;
-    gsMaterialMatrixBase<real_t>* materialMatrix;
-
-    gsOptionList options;
-    options.addInt("Material","Material model: (0): SvK | (1): NH | (2): NH_ext | (3): MR | (4): Ogden",0);
-    options.addInt("Implementation","Implementation: (0): Composites | (1): Analytical | (2): Generalized | (3): Spectral",1);
-    materialMatrix = getMaterialMatrix<3,real_t>(mp,t,parameters,rho,options);
-
+    gsMaterialMatrixLinear<3,real_t> materialMatrix(mp,t,E,nu,rho);
     gsThinShellAssemblerBase<real_t>* assembler;
-    assembler = new gsThinShellAssembler<3, real_t, true >(mp,dbasis,BCs,force,materialMatrix);
+    assembler = new gsThinShellAssembler<3, real_t, true >(mp,dbasis,BCs,force,&materialMatrix);
 
 
     // Construct assembler object
@@ -437,8 +427,8 @@ int main (int argc, char** argv)
         gsWrite(mp_def,fileName);
         gsWriteParaview<>(solField, fileName, 100000, mesh);
         fileName = output + util::to_string(k) + "0";
-        collection.addTimestep(fileName,k,".vts");
-        if (mesh) collection.addTimestep(fileName,k,"_mesh.vtp");
+        collection.addPart(fileName,k,"Solution",0);
+        if (mesh) collection.addPart(fileName,k,"Mesh",0);
       }
       if (plotfiles)
         gsWrite(deformation,dirname + "/" + output + util::to_string(k)+".xml");

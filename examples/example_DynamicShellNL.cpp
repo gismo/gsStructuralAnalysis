@@ -183,19 +183,9 @@ int main (int argc, char** argv)
     gsFunctionExpr<> nu(std::to_string(PoissonRatio),3);
     gsFunctionExpr<> rho(std::to_string(Density),3);
 
-    std::vector<gsFunctionSet<>*> parameters(2);
-    parameters[0] = &E;
-    parameters[1] = &nu;
-
-    gsMaterialMatrixBase<real_t>* materialMatrix;
-
-    gsOptionList options;
-    options.addInt("Material","Material model: (0): SvK | (1): NH | (2): NH_ext | (3): MR | (4): Ogden",0);
-    options.addInt("Implementation","Implementation: (0): Composites | (1): Analytical | (2): Generalized | (3): Spectral",1);
-    materialMatrix = getMaterialMatrix<3,real_t>(mp,t,parameters,rho,options);
-
+    gsMaterialMatrixLinear<3,real_t> materialMatrix(mp,t,E,nu,rho);
     gsThinShellAssemblerBase<real_t>* assembler;
-    assembler = new gsThinShellAssembler<3, real_t, true >(mp,dbasis,BCs,force,materialMatrix);
+    assembler = new gsThinShellAssembler<3, real_t, true >(mp,dbasis,BCs,force,&materialMatrix);
 
     assembler->setOptions(opts);
     assembler->setPointLoads(pLoads);
@@ -337,7 +327,6 @@ for (index_t i=0; i<steps; i++)
 
 collection.save();
 
-delete materialMatrix;
 delete assembler;
 delete timeIntegrator;
 

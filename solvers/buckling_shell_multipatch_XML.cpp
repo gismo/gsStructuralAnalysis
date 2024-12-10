@@ -163,7 +163,7 @@ int main (int argc, char** argv)
     if (gsTensorNurbsBasis<2,real_t> * basis = dynamic_cast<gsTensorNurbsBasis<2,real_t> * >(&mp.basis(0)))
       for (index_t dim = 0; dim!=2; dim++)
         gsDebug<<"dir "<<dim<<": "<<basis->knots(dim).asMatrix()<<"\n";
-    
+
     mp_def = mp;
 
     gsInfo<<"Looking for material matrices ...\n";
@@ -463,7 +463,7 @@ int main (int argc, char** argv)
             for (size_t p = 0; p!=geom.nPatches(); p++)
             {
                 fileName = output + util::to_string(m);
-                collection.addTimestep(fileName,p,m,".vts");
+                collection.addPart(fileName+".vts",m,"Solution",p);
             }
         }
         collection.save();

@@ -1,8 +1,8 @@
 /** @file snapping_element_shell.cpp
 
     @brief Arc-length analysis of a snapping meta material element. Inspired by
-    
-    Rafsanjani, A., Akbarzadeh, A., & Pasini, D. (2015). Snapping Mechanical Metamaterials under Tension. 
+
+    Rafsanjani, A., Akbarzadeh, A., & Pasini, D. (2015). Snapping Mechanical Metamaterials under Tension.
     Advanced Materials, 27(39), 5931–5935. https://doi.org/10.1002/adma.201502809
 
     This file is part of the G+Smo library.
@@ -216,7 +216,7 @@ int main(int argc, char *argv[])
     // Loads
     gsFunctionExpr<> force("0","0",2);
 
-    gsMaterialMatrixBase<real_t>* materialMatrix;
+    gsMaterialMatrixBase<real_t>::uPtr materialMatrix;
     gsOptionList options;
     std::vector<gsFunctionSet<>*> parameters(2);
     gsFunctionExpr<> t(std::to_string(b),2);
@@ -432,7 +432,6 @@ int main(int argc, char *argv[])
     }
 
     delete arcLength;
-    delete materialMatrix;
     return 1;
 }
 

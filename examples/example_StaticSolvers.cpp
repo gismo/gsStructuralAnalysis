@@ -204,7 +204,7 @@ int main(int argc, char *argv[])
         parameters[7] = &alpha3;
     }
 
-    gsMaterialMatrixBase<real_t>* materialMatrix;
+    gsMaterialMatrixBase<real_t>::uPtr materialMatrix;
 
     gsOptionList options;
     if      (material==0 && impl==1)
@@ -316,8 +316,6 @@ int main(int argc, char *argv[])
     }
 
     delete assembler;
-    delete materialMatrix;
-
     return EXIT_SUCCESS;
 
 }// end main
