@@ -50,7 +50,7 @@
 #include <gsStructuralAnalysis/src/gsStaticSolvers/gsStaticOpt.h>
 #include <gsStructuralAnalysis/src/gsStaticSolvers/gsStaticComposite.h>
 
-SUITE(gsThinShellAssembler_test)                 // The suite should have the same name as the file
+SUITE(gsStaticSolver_test)                 // The suite should have the same name as the file
 {
 
 #ifdef gsKLShell_ENABLED
