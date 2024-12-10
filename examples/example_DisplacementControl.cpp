@@ -20,7 +20,6 @@
 
 #include <gsStructuralAnalysis/src/gsStaticSolvers/gsStaticDR.h>
 #include <gsStructuralAnalysis/src/gsStaticSolvers/gsStaticNewton.h>
-#include <gsStructuralAnalysis/src/gsStaticSolvers/gsStaticOpt.h>
 #include <gsStructuralAnalysis/src/gsStaticSolvers/gsStaticComposite.h>
 #include <gsStructuralAnalysis/src/gsStaticSolvers/gsControlDisplacement.h>
 
@@ -207,7 +206,7 @@ int main(int argc, char *argv[])
         parameters[7] = &alpha3;
     }
 
-    gsMaterialMatrixBase<real_t>::uPtr materialMatrix;
+    gsMaterialMatrixBase<real_t>* materialMatrix;
 
     gsOptionList options;
     if      (material==0 && impl==1)
@@ -243,13 +242,15 @@ int main(int argc, char *argv[])
       return status == ThinShellAssemblerStatus::Success;
     };
 
-    gsStructuralAnalysisOps<real_t>::Residual_t Residual = [&assembler,&mp_def](gsVector<real_t> const &x, gsVector<real_t> & result)
+    gsStructuralAnalysisOps<real_t>::ALResidual_t ALResidual = [&displ,&bc,&assembler,&mp_def](gsVector<real_t> const &x, real_t lam, gsVector<real_t> & result)
     {
-      ThinShellAssemblerStatus status;
-      assembler->constructSolution(x,mp_def);
-      status = assembler->assembleVector(mp_def);
-      result = assembler->rhs();
-      return status == ThinShellAssemblerStatus::Success;
+        ThinShellAssemblerStatus status;
+        displ.setValue(lam,3);
+        assembler->updateBCs(bc);
+        assembler->constructSolution(x,mp_def);
+        status = assembler->assembleVector(mp_def);
+        result = assembler->rhs();
+        return status == ThinShellAssemblerStatus::Success;
     };
 
     displ.setValue(1.0,3);
@@ -262,7 +263,11 @@ int main(int argc, char *argv[])
     gsVector<> M = assembler->rhs();
 
 
-    gsStaticDR<real_t> DRM(M,F,Residual);
+
+
+
+
+    gsStaticDR<real_t> DRM(M,F,ALResidual);
     gsOptionList DROptions = DRM.options();
     DROptions.setReal("damping",damping);
     DROptions.setReal("alpha",alpha);
@@ -273,8 +278,13 @@ int main(int argc, char *argv[])
     DRM.setOptions(DROptions);
     DRM.initialize();
 
+    // gsControlDisplacement<real_t> controlDR(&DRM);
+    // controlDR.step(0.5);
+    // controlDR.step(0.5);
+    // controlDR.reset();
+    // controlDR.step(1.0);
 
-    gsStaticNewton<real_t> NWT(K,F,Jacobian,Residual);
+    gsStaticNewton<real_t> NWT(K,F,Jacobian,ALResidual);
     gsOptionList NWTOptions = NWT.options();
     NWTOptions.setInt("maxIt",maxIt);
     NWTOptions.setReal("tol",1e-6);
@@ -282,41 +292,19 @@ int main(int argc, char *argv[])
     NWT.setOptions(NWTOptions);
     NWT.initialize();
 
+    gsControlDisplacement<real_t> controlDC(&NWT);
+    gsInfo<<"Step 1 (dL=0.5)\n";
+    controlDC.step(0.5);
+    gsInfo<<"Step 2 (dL=0.5)\n";
+    controlDC.step(0.5);
+    gsInfo<<"Solution norm after 2 steps: "<<controlDC.solutionU().norm()<<"\n";
+    
+    controlDC.setZero();
+    gsInfo<<"Step 1 (dL=1.0)\n";
+    controlDC.step(1.0);
+    gsInfo<<"Solution norm after 1 step : "<<controlDC.solutionU().norm()<<"\n";
 
-    gsStaticOpt<real_t> OPT(Residual,assembler->numDofs());
-    gsOptionList OPTOptions = OPT.options();
-    OPTOptions.setInt("maxIt",maxIt);
-    OPTOptions.setReal("tol",1e-6);
-    OPTOptions.setInt("verbose",verbose);
-    OPT.setOptions(OPTOptions);
-    OPT.initialize();
-
-    // gsInfo<<"Dynamic relaxation\n";
-    // DRM.solve();
-    // gsInfo<<"Solution: "<<DRM.solution().norm()<<"\n";
-
-    gsInfo<<"Newton\n";
-    NWT.solve();
-    gsInfo<<"Solution: "<<NWT.solution().norm()<<"\n";
-
-    gsInfo<<"Optimizer\n";
-    OPT.solve();
-    gsInfo<<"Solution: "<<OPT.solution().norm()<<"\n";
-
-
-    gsStaticComposite<real_t> DRNWT({&DRM,&NWT});
-    DRNWT.initialize();
-    gsInfo<<"Dynamic Relaxation -> Newton\n";
-    DRNWT.solve();
-    gsInfo<<"Solution: "<<DRNWT.solution().norm()<<"\n";
-
-    gsStaticComposite<real_t> DROPT({&DRM,&OPT});
-    DROPT.initialize();
-    gsInfo<<"Dynamic Relaxation -> Optimizer\n";
-    DROPT.solve();
-    gsInfo<<"Solution: "<<DROPT.solution().norm()<<"\n";
-
-    gsVector<> displacements = NWT.solution();
+    gsVector<> displacements = controlDC.solutionU();
 
     mp_def = assembler->constructSolution(displacements);
     gsMultiPatch<> deformation = mp_def;
@@ -341,6 +329,8 @@ int main(int argc, char *argv[])
     }
 
     delete assembler;
+    delete materialMatrix;
+
     return EXIT_SUCCESS;
 
 }// end main

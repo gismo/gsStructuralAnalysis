@@ -77,6 +77,14 @@ public:
         m_solver->reset();
     }
 
+    void setZero()
+    {
+        m_solver->reset();
+        m_U = gsVector<T>::Zero(m_solver->numDofs());
+        m_L = 0;
+        m_solver->setLoad(m_L);
+    }
+
 protected:
     mutable gsStaticBase<T> * m_solver;
     T m_L;
