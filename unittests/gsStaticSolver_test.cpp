@@ -191,7 +191,7 @@ SUITE(gsThinShellAssembler_test)                 // The suite should have the sa
         parameters[0] = &E;
         parameters[1] = &nu;
         parameters[2] = &ratio;
-        gsMaterialMatrixBase<real_t>* materialMatrix;
+        gsMaterialMatrixBase<real_t>::uPtr materialMatrix;
 
         if (material==4)
         {
@@ -328,7 +328,6 @@ SUITE(gsThinShellAssembler_test)                 // The suite should have the sa
         result.first = L;
         result.second = S;
 
-        delete materialMatrix;
         delete assembler;
 
         return result;
