@@ -330,7 +330,7 @@ int main (int argc, char** argv)
     // Initialise solution object
     gsMultiPatch<> mp_def = mp0;
 
-    gsMaterialMatrixBase<real_t>* materialMatrix;
+    gsMaterialMatrixBase<real_t>::uPtr materialMatrix;
 
     real_t pi = math::atan(1)*4;
     index_t kmax = 3;
@@ -370,7 +370,7 @@ int main (int argc, char** argv)
     gsOptionList options;
     if (composite)
     {
-        materialMatrix = new gsMaterialMatrixComposite<3,real_t>(mp,Ts,Gs,Phis);
+        materialMatrix = memory::make_unique(new gsMaterialMatrixComposite<3,real_t>(mp,Ts,Gs,Phis));
     }
     else
     {
@@ -693,9 +693,9 @@ int main (int argc, char** argv)
                 if (mesh)
                     writeSingleCompMesh<>(mp_prev.basis(p), mp_prev.patch(p),fileName + "_mesh" + "_" + util::to_string(p));
                 fileName = "error" + util::to_string(k);
-                errors.addTimestep(fileName,p,k,".vts");
+                errors.addPart(fileName+".vts",k,"Solution",p);
                 if (mesh)
-                    errors.addTimestep(fileName + "_mesh",p,k,".vtp");
+                    errors.addPart(fileName + "_mesh"+".vtp",k,"Mesh",p);
             }
         }
 
@@ -760,7 +760,6 @@ int main (int argc, char** argv)
     }
     file.close();
 
-    delete materialMatrix;
     delete assembler;
 
     return result;
@@ -868,7 +867,7 @@ template <class T>
 void PlotResults(   index_t k,
                     gsThinShellAssemblerDWRBase<T> * assembler,
                     const gsMultiPatch<T> & mp, const gsMultiPatch<T> & mp_def,
-                    bool plot, bool stress, bool write, bool mesh, bool deformed,
+                    bool plot, bool stress, bool /* write */, bool mesh, bool deformed,
                     const std::string dirname, const std::string output,
                     gsParaviewCollection & collection,
                     gsParaviewCollection & Smembrane,
@@ -893,8 +892,8 @@ void PlotResults(   index_t k,
         std::string fileName = dirname + "/" + output + util::to_string(k);
         gsWriteParaview<T>(solField, fileName, 1000,mesh);
         fileName = output + util::to_string(k) + "0";
-        collection.addTimestep(fileName,k,".vts");
-        if (mesh) collection.addTimestep(fileName,k,"_mesh.vtp");
+        collection.addPart(fileName+".vts",k,"Solution");
+        if (mesh) collection.addPart(fileName+"_mesh.vtp",k,"Mesh");
     }
     if (stress)
     {
@@ -925,17 +924,17 @@ void PlotResults(   index_t k,
         fileName = dirname + "/" + "membrane" + util::to_string(k);
         gsWriteParaview( membraneStress, fileName, 1000);
         fileName = "membrane" + util::to_string(k) + "0";
-        Smembrane.addTimestep(fileName,k,".vts");
+        Smembrane.addPart(fileName+".vts",k,"Solution");
 
         fileName = dirname + "/" + "flexural" + util::to_string(k);
         gsWriteParaview( flexuralStress, fileName, 1000);
         fileName = "flexural" + util::to_string(k) + "0";
-        Sflexural.addTimestep(fileName,k,".vts");
+        Sflexural.addPart(fileName+".vts",k,"Solution");
 
         fileName = dirname + "/" + "membrane_p" + util::to_string(k);
         gsWriteParaview( membraneStress_p, fileName, 1000);
         fileName = "membrane_p" + util::to_string(k) + "0";
-        Smembrane_p.addTimestep(fileName,k,".vts");
+        Smembrane_p.addPart(fileName+".vts",k,"Solution");
     }
 }
 #else//gsKLShell_ENABLED

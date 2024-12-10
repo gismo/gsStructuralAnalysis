@@ -230,7 +230,7 @@ int main(int argc, char *argv[])
     std::vector<gsFunctionSet<>*> parameters(2);
     parameters[0] = &Emod;
     parameters[1] = &Pois;
-    gsMaterialMatrixBase<real_t>* materialMatrix;
+    gsMaterialMatrixBase<real_t>::uPtr materialMatrix;
     gsOptionList options;
     if (testCase==0)
     {
@@ -691,7 +691,6 @@ int main(int argc, char *argv[])
 
 
     delete DWR;
-    delete materialMatrix;
     return EXIT_SUCCESS;
 
 }// end main

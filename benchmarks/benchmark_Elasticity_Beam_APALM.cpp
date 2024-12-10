@@ -550,6 +550,7 @@ int main (int argc, char** argv)
 #else//gsElasticity_ENABLED
 int main(int argc, char *argv[])
 {
+    GISMO_UNUSED(argc); GISMO_UNUSED(argv);
     gsWarn<<"G+Smo is not compiled with the gsElasticity module.";
     return EXIT_FAILURE;
 }

@@ -128,7 +128,7 @@ public:
    * @param[in]  time  The parametric time
    * @param[in]  step  The step index
    */
-  virtual void serialStepOutput(const std::pair<gsVector<T>,T> & pair, const T & time, index_t step) {};
+  virtual void serialStepOutput(const std::pair<gsVector<T>,T> & /*pair*/, const T & /*time*/, index_t /*step*/) {};
   /**
    * @brief      Output function when performing parallel steps
    *
@@ -136,7 +136,7 @@ public:
    * @param[in]  time  The parametric time
    * @param[in]  step  The step index
    */
-  virtual void parallelStepOutput(const std::pair<gsVector<T>,T> & pair, const T & time, index_t step) {};
+  virtual void parallelStepOutput(const std::pair<gsVector<T>,T> & /*pair*/, const T & /*time*/, index_t /*step*/) {};
   /**
    * @brief      Output function within an interval
    *
@@ -145,7 +145,7 @@ public:
    * @param[in]  level          The level of the interval
    * @param[in]  ID             THe ID of the job
    */
-  virtual void parallelIntervalOutput(const std::vector<std::pair<gsVector<T>,T>> & stepSolutions, const std::vector<T> & stepTimes, index_t level, index_t ID) {};
+  virtual void parallelIntervalOutput(const std::vector<std::pair<gsVector<T>,T>> & /*stepSolutions*/, const std::vector<T> & /*stepTimes*/, index_t /*level*/, index_t /*ID*/) {};
 
   /**
    * @brief      Returns the options

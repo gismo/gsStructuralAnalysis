@@ -117,7 +117,7 @@ int main (int argc, char** argv)
             E_modulus = 210e9;
             Density = 7800;
         }
-        
+
         mp.addPatch(gsNurbsCreator<>::BSplineRectangle(0,0,length,width));
         mp.addAutoBoundaries();
         mp.embed(3);
@@ -492,7 +492,7 @@ int main (int argc, char** argv)
     parameters[0] = &E;
     parameters[1] = &nu;
 
-    gsMaterialMatrixBase<real_t>* materialMatrix;
+    gsMaterialMatrixBase<real_t>::uPtr materialMatrix;
 
     gsOptionList options;
     options.addInt("Material","Material model: (0): SvK | (1): NH | (2): NH_ext | (3): MR | (4): Ogden",0);
@@ -593,7 +593,6 @@ int main (int argc, char** argv)
         writeToCSVfile(wnM,values);
     }
 
-    delete materialMatrix;
     delete assembler;
 
     return result;

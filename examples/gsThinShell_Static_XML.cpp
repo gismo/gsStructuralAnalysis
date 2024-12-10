@@ -240,7 +240,7 @@ int main(int argc, char *argv[])
 
 
     // Set MaterialMatrix
-    gsMaterialMatrixBase<real_t>* materialMatrix;
+    gsMaterialMatrixBase<real_t>::uPtr materialMatrix;
 
     gsOptionList options;
 
@@ -300,7 +300,7 @@ int main(int argc, char *argv[])
     {
         if (composite)
         {
-            materialMatrix = new gsMaterialMatrixComposite<3,real_t>(mp,Ts,Gs,Phis);
+            materialMatrix = memory::make_unique(new gsMaterialMatrixComposite<3,real_t>(mp,Ts,Gs,Phis));
         }
         else
         {
@@ -482,7 +482,6 @@ int main(int argc, char *argv[])
         #endif
     }
 
-    delete materialMatrix;
     delete assembler;
 
     return EXIT_SUCCESS;

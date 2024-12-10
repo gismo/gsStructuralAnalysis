@@ -200,8 +200,8 @@ int main (int argc, char** argv)
     gsConstantFunction<> rho(Density,3);
     gsConstantFunction<> ratio(Ratio,3);
 
-    gsMaterialMatrixBase<real_t>* materialMatrix;
-    gsMaterialMatrixBase<real_t>* materialMatrixTFT;
+    gsMaterialMatrixBase<real_t>::uPtr materialMatrix;
+    gsMaterialMatrixBase<real_t>::uPtr materialMatrixTFT;
     gsOptionList options;
 
     std::vector<gsFunctionSet<>*> parameters;
@@ -214,8 +214,8 @@ int main (int argc, char** argv)
       options.addInt("Material","Material model: (0): SvK | (1): NH | (2): NH_ext | (3): MR | (4): Ogden",0);
       options.addInt("Implementation","Implementation: (0): Composites | (1): Analytical | (2): Generalized | (3): Spectral",1);
       materialMatrix = getMaterialMatrix<3,real_t>(mp,t,parameters,rho,options);
-      materialMatrixTFT = new gsMaterialMatrixTFT<3,real_t,true>(static_cast<gsMaterialMatrixBaseDim<3,real_t> * >(materialMatrix));
-      // materialMatrixTFT = new gsMaterialMatrixTFT<3,real_t,false>(static_cast<gsMaterialMatrixBaseDim<3,real_t> * >(materialMatrix));
+      materialMatrixTFT = memory::make_unique(new gsMaterialMatrixTFT<3,real_t,true>(*materialMatrix));
+      // materialMatrixTFT = new gsMaterialMatrixTFT<3,real_t,false>(materialMatri));
     }
     else if (material==1 || material==2)
     {
@@ -223,7 +223,7 @@ int main (int argc, char** argv)
       options.addSwitch("Compressibility","Compressibility: (false): Imcompressible | (true): Compressible",Compressibility);
       options.addInt("Implementation","Implementation: (0): Composites | (1): Analytical | (2): Generalized | (3): Spectral",impl);
       materialMatrix = getMaterialMatrix<3,real_t>(mp,t,parameters,rho,options);
-      materialMatrixTFT = new gsMaterialMatrixTFT<3,real_t,false>(static_cast<gsMaterialMatrixBaseDim<3,real_t> * >(materialMatrix));
+      materialMatrixTFT = memory::make_unique(new gsMaterialMatrixTFT<3,real_t,false>(*materialMatrix));
       // dynamic_cast<gsMaterialMatrixTFT<3,real_t,false> *>(materialMatrixTFT)->updateDeformed(&mp_def);
     }
     else
@@ -233,7 +233,7 @@ int main (int argc, char** argv)
     // gsMaterialMatrixTFT<3,real_t,false> * materialMatrixTFT = new gsMaterialMatrixTFT<3,real_t,false>(static_cast<gsMaterialMatrixBaseDim<3,real_t> * >(materialMatrix));
 
     materialMatrixTFT->options().setReal("SlackMultiplier",1e-6);
-    // materialMatrixTFT->options().setSwitch("Explicit",true);    
+    // materialMatrixTFT->options().setSwitch("Explicit",true);
 
     gsThinShellAssemblerBase<real_t>* assembler;
     if (TFT)
@@ -339,9 +339,9 @@ int main (int argc, char** argv)
         neuDataX<<maxLoad*(1-load_fac),0,0;
         neuDataY<<0,-maxLoad*(1-load_fac),0;
         neuX.setValue(neuDataX,3);
-        neuY.setValue(neuDataY,3);        
+        neuY.setValue(neuDataY,3);
       }
-      else 
+      else
       {
         neuDataX<<0,0,0;
         neuDataY<<0,0,0;
@@ -405,7 +405,7 @@ int main (int argc, char** argv)
           std::string fileName;
           gsField<> solField(mp_def, deformation);
           gsInfo<<"Plotting in Paraview...\n";
-          
+
           fileName = dirname + "/" + "solution" + util::to_string(step);
           gsWriteParaview<>( solField, fileName, 1000, true);
           solcollection.addPart(gsFileManager::getFilename(fileName) + "0.vts",step);
@@ -525,11 +525,9 @@ int main (int argc, char** argv)
       gsWriteParaview(stretchDir1,dirname + "/" + "PrincipalDirection1",5000);
       gsWriteParaview(stretchDir2,dirname + "/" + "PrincipalDirection2",5000);
       gsWriteParaview(stretchDir3,dirname + "/" + "PrincipalDirection3",5000);
-      
+
     }
 
-    delete materialMatrix;
-    delete materialMatrixTFT;
     delete assembler;
 
     return EXIT_SUCCESS;
