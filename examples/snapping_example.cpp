@@ -1,8 +1,8 @@
 /** @file snapping_example.cpp
 
     @brief Arc-length analysis of a snapping meta material. Inspired by
-    
-    Rafsanjani, A., Akbarzadeh, A., & Pasini, D. (2015). Snapping Mechanical Metamaterials under Tension. 
+
+    Rafsanjani, A., Akbarzadeh, A., & Pasini, D. (2015). Snapping Mechanical Metamaterials under Tension.
     Advanced Materials, 27(39), 5931–5935. https://doi.org/10.1002/adma.201502809
 
     This file is part of the G+Smo library.
@@ -521,6 +521,10 @@ else
 template <class T>
 std::vector<gsBSpline<T>> makeCurve(const T tw, const T tg, const T tb, const T ts, const T l, const T a, const std::string expr, const gsKnotVector<T> & kv1)
 {
+    GISMO_UNUSED(tg);
+    GISMO_UNUSED(tb);
+    GISMO_UNUSED(ts);
+    GISMO_UNUSED(a);
 
     gsFunctionExpr<T> fun(expr,2);
     gsKnotVector<T> kv2(0, 1, 0, 2);

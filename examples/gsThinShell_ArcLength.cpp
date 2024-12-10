@@ -919,14 +919,14 @@ int main (int argc, char** argv)
       parameters[7] = &alpha3;
     }
 
-    gsMaterialMatrixBase<real_t>* materialMatrix;
+    gsMaterialMatrixBase<real_t>::uPtr materialMatrix;
 
     gsOptionList options;
     if      (material==0 && impl==1)
     {
         if (composite)
         {
-            materialMatrix = new gsMaterialMatrixComposite<3,real_t>(mp,Ts,Gs,Phis);
+            materialMatrix = memory::make_unique(new gsMaterialMatrixComposite<3,real_t>(mp,Ts,Gs,Phis));
         }
         else
         {
@@ -1248,7 +1248,6 @@ int main (int argc, char** argv)
       Smembrane_p.save();
     }
 
-  delete materialMatrix;
   delete assembler;
   delete arcLength;
 

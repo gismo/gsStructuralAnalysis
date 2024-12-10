@@ -179,7 +179,7 @@ void gsDynamicRK4<T,_NL>::_initOutput() const
 }
 
 template <class T, bool _NL>
-void gsDynamicRK4<T,_NL>::_stepOutput(const index_t it, const T resnorm, const T updatenorm) const
+void gsDynamicRK4<T,_NL>::_stepOutput(const index_t it, const T resnorm, const T /*updatenorm*/) const
 {
   if (m_options.getSwitch("Verbose"))
   {

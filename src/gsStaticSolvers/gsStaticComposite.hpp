@@ -74,7 +74,7 @@ void gsStaticComposite<T>::getOptions()
 };
 
 template <class T>
-void gsStaticComposite<T>::setOptions(gsOptionList & options)
+void gsStaticComposite<T>::setOptions(gsOptionList & /*options*/)
 {
     gsWarn<<"setOptions cannot be used on a gsStaticComposite solver. Call setOptions on each solver individually\n";
 };

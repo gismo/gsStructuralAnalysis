@@ -253,7 +253,7 @@ int main (int argc, char** argv)
         std::string fileName = "ModalResults/modes_solid" + util::to_string(m);
         gsWriteParaview(displacementField,fileName,5000,true);
         fileName = "modes_solid" + util::to_string(m) + "0";
-        collection.addTimestep(fileName,m,".vts");
+        collection.addPart(fileName,m,"Solution",0);
       }
 
       collection.save();
@@ -344,6 +344,7 @@ gsMultiPatch<T> BrickDomain(int n, int m, int o, int p, int q ,int r, T L, T B, 
 
 int main (int argc, char** argv)
 {
+  GISMO_UNUSED(argc); GISMO_UNUSED(argv);
   gsInfo<<"To run this example, compile G+Smo with gsElasticity\n";
   return EXIT_SUCCESS;
 }
