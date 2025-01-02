@@ -63,7 +63,7 @@ int main (int argc, char** argv)
     index_t maxitOPT = 1000;
     bool OP  = false;
     // * Newton Raphson
-    index_t maxitNR = 20;
+    index_t maxitNR = 50;
     bool NR  = false;
 
 
@@ -110,7 +110,6 @@ int main (int argc, char** argv)
     gsOptionList opts;
     fd.getFirst<gsOptionList>(opts);
 
-    real_t R = 0.25, H = 1.0;
     real_t thickness = 0.05e-3;
     real_t YoungsModulus = 1e9;
     real_t PoissonRatio = 0.5;
@@ -341,14 +340,32 @@ int main (int argc, char** argv)
     file<<std::setprecision(10);
     file<<0<<","<<0<<"\n";
     file.close();
-    for (index_t k=0; k!=step; ++k)
+    index_t k=0;
+    while (D <= 1)
     {
+        if (gsClose(D,1.0,1e-8))
+            break;
+
         gsInfo<<"Displacement step "<<k<<"; D = "<<D<<"; dL = "<<dL<<"\n";
         dx.set_t(D);
         dy.set_t(D);
         assembler->updateBCs(BCs);
         StaticSolver.setDisplacement(U);
         StaticSolver.solve();
+
+        if (StaticSolver.status() != gsStatus::Success)
+        {
+            dL = dL/2;
+            D = D - dL;
+            continue;
+        }
+        else
+        {
+            dL = std::min(dL0,1-D);
+            D = D + dL;
+            k++;
+        }
+
         U = StaticSolver.solution();
 
         // 1. Get all the coefficients (including the ones from the eliminated BCs.)
@@ -550,12 +567,6 @@ int main (int argc, char** argv)
             << D << ","
             << Moment << "\n";
         file.close();
-
-
-
-
-        // controlDC.step(dL);
-        D+= dL;
     }
 
     if (plot)
