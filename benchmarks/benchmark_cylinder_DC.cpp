@@ -159,8 +159,7 @@ int main (int argc, char** argv)
         dz_val = 125e-3;
     else if (testCase==1)
         dz_val = 1.0;
-
-    gsConstantFunction<> dz(dz_val,3);
+    gsFunctionExpr<> dz(util::to_string(dz_val) + "*t",3);
 
     // Boundary conditions
     gsBoundaryConditions<> BCs;
@@ -349,6 +348,7 @@ int main (int argc, char** argv)
         gsInfo<<"Displacement step "<<k<<"; D = "<<D<<"; dL = "<<dL<<"\n";
         dx.set_t(D);
         dy.set_t(D);
+        dz.set_t(D);
         assembler->updateBCs(BCs);
         StaticSolver.setDisplacement(U);
         StaticSolver.solve();
