@@ -1,6 +1,6 @@
-/** @file example_StaticSolvers.cpp
+/** @file example_DisplacementControl.cpp
 
-    @brief Demonstrations of static solvers on a shell
+    @brief Demonstrations displacement-controlled simulation
 
     This file is part of the G+Smo library.
 
@@ -206,7 +206,7 @@ int main(int argc, char *argv[])
         parameters[7] = &alpha3;
     }
 
-    gsMaterialMatrixBase<real_t>* materialMatrix;
+    gsMaterialMatrixBase<real_t>::uPtr materialMatrix;
 
     gsOptionList options;
     if      (material==0 && impl==1)
@@ -298,7 +298,7 @@ int main(int argc, char *argv[])
     gsInfo<<"Step 2 (dL=0.5)\n";
     controlDC.step(0.5);
     gsInfo<<"Solution norm after 2 steps: "<<controlDC.solutionU().norm()<<"\n";
-    
+
     controlDC.setZero();
     gsInfo<<"Step 1 (dL=1.0)\n";
     controlDC.step(1.0);
@@ -329,7 +329,6 @@ int main(int argc, char *argv[])
     }
 
     delete assembler;
-    delete materialMatrix;
 
     return EXIT_SUCCESS;
 

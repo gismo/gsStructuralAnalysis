@@ -47,15 +47,13 @@ int main(int argc, char *argv[])
     real_t Density = 1.0;
     real_t thickness = 1.0;
 
-    real_t ifcDirichlet = 1.0;
-    real_t ifcClamped = 1.0;
+    real_t ifcPenalty = 1.0;
 
     real_t alpha = 0.5;
     real_t beta = 0.5;
 
     gsCmdLine cmd("Stiffened panel example.");
-    cmd.addReal( "D", "Dir", "Dirichlet penalty scalar",  ifcDirichlet );
-    cmd.addReal( "C", "Cla", "Clamped penalty scalar",  ifcClamped );
+    cmd.addReal( "D", "Dir", "Dirichlet penalty scalar",  ifcPenalty );
     cmd.addReal( "a", "alpha", "Alpha parameter",  alpha );
     cmd.addReal( "b", "beta", "Beta parameter", beta );
     cmd.addInt( "e", "degreeElevation",
@@ -648,8 +646,7 @@ int main(int argc, char *argv[])
 
     // Set the penalty parameter for the interface C1 continuity
     assembler->options().setInt("Continuity",-1);
-    assembler->options().setReal("IfcDirichlet",ifcDirichlet);
-    assembler->options().setReal("IfcClamped",ifcClamped);
+    assembler->options().setReal("IfcPenalty",ifcPenalty);
     assembler->addWeakC0(mp.topology().interfaces());
     assembler->addWeakC1(mp.topology().interfaces());
     assembler->initInterfaces();
