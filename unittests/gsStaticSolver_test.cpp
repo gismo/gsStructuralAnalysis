@@ -333,7 +333,7 @@ SUITE(gsStaticSolver_test)                 // The suite should have the same nam
         return result;
     }
 
-    std::pair<real_t,real_t> UAT_analytical(const std::vector<index_t> solver, const index_t material, const index_t impl, const bool Compressibility)
+    std::pair<real_t,real_t> UAT_analytical(const std::vector<index_t>, const index_t material, const index_t, const bool Compressibility)
     {
         real_t PoissonRatio;
         real_t Ratio = 7.0;
