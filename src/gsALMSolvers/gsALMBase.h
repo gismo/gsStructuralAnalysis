@@ -54,7 +54,7 @@ public:
       m_forcing(Force)
     {
         m_jacobian  = Jacobian;
-        m_djacobian = [this](gsVector<T> const & x, gsVector<T> const & dx, gsSparseMatrix<T> & m) -> bool
+        m_djacobian = [this](gsVector<T> const & x, gsVector<T> const & /*dx*/, gsSparseMatrix<T> & m) -> bool
         {
             return m_jacobian(x,m);
         };
@@ -203,12 +203,12 @@ public:
     virtual void setOptions(gsOptionList options) {m_options.update(options,gsOptionList::addIfUnknown); this->getOptions(); };
 
     /// Return the options into \a options
-    virtual const void options_into(gsOptionList options) {options = m_options;};
+    virtual void options_into(gsOptionList options) {options = m_options;};
 
     /// Apply the options
     virtual void applyOptions() {this->getOptions(); }
 
-    virtual T distance(const gsVector<T>& DeltaU, const T DeltaL) const
+    virtual T distance(const gsVector<T>& /*DeltaU*/, const T /*DeltaL*/) const
     {
         GISMO_NO_IMPLEMENTATION;
     }

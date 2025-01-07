@@ -1,8 +1,8 @@
 /** @file snapping_example_shell.cpp
 
     @brief Arc-length analysis of a snapping meta material. Inspired by
-    
-    Rafsanjani, A., Akbarzadeh, A., & Pasini, D. (2015). Snapping Mechanical Metamaterials under Tension. 
+
+    Rafsanjani, A., Akbarzadeh, A., & Pasini, D. (2015). Snapping Mechanical Metamaterials under Tension.
     Advanced Materials, 27(39), 5931–5935. https://doi.org/10.1002/adma.201502809
 
     This file is part of the G+Smo library.
@@ -332,7 +332,7 @@ int main(int argc, char *argv[])
     // Loads
     gsFunctionExpr<> force("0","0",2);
 
-    gsMaterialMatrixBase<real_t>* materialMatrix;
+    gsMaterialMatrixBase<real_t>::uPtr materialMatrix;
     gsOptionList options;
     std::vector<gsFunctionSet<>*> parameters(2);
     gsFunctionExpr<> t(std::to_string(b),2);
@@ -479,7 +479,7 @@ int main(int argc, char *argv[])
         else if (status==gsStatus::SolverError)     {gsDebug<<"Solver error\n";}
         else if (status==gsStatus::OtherError)      {gsDebug<<"Other error\n";}
         time += timer.stop();
-        
+
         if (status==gsStatus::NotConverged || status==gsStatus::AssemblyError)
         {
             gsInfo<<"Error: Loop terminated, arc length method failed.\n";
@@ -570,12 +570,11 @@ int main(int argc, char *argv[])
     }
 
     delete arcLength;
-    delete materialMatrix;
     return 1;
 }
 
 template <class T>
-std::vector<gsBSpline<T>> makeCurve(const T tw, const T tg, const T tb, const T ts, const T l, const T a, const std::string expr, const gsKnotVector<T> & kv1)
+std::vector<gsBSpline<T>> makeCurve(const T tw, const T /* tg */, const T /* tb */, const T /* ts */, const T l, const T /* a */, const std::string expr, const gsKnotVector<T> & kv1)
 {
 
     gsFunctionExpr<T> fun(expr,2);
@@ -651,7 +650,7 @@ gsMultiPatch<T> makeTop(const T tw, const T tg, const T tb, const T ts, const T 
 }
 
 template <class T>
-gsMultiPatch<T> makeTop(const T tw, const T tg, const T tb, const T ts, const T l, const T a, const std::vector<gsBSpline<T>> & curves)
+gsMultiPatch<T> makeTop(const T /* tw */, const T tg, const T tb, const T ts, const T l, const T a, const std::vector<gsBSpline<T>> & curves)
 {
     gsKnotVector<T> kv2(0, 1, 0, 2);
 
@@ -878,7 +877,7 @@ gsMultiPatch<T> makeElement(const T tw, const T tg, const T tb, const T ts, cons
 }
 
 template <class T>
-gsMultiPatch<T> makeElement(const T tw, const T tg, const T tb, const T ts, const T l, const T a, const std::vector<gsBSpline<T>> & curves)
+gsMultiPatch<T> makeElement(const T /* tw */, const T tg, const T tb, const T ts, const T l, const T a, const std::vector<gsBSpline<T>> & curves)
 {
     gsKnotVector<T> kv2(0, 1, 0, 2);
 
@@ -1113,7 +1112,7 @@ gsMultiPatch<T> makeBottom(const T tw, const T tg, const T tb, const T ts, const
 }
 
 template <class T>
-gsMultiPatch<T> makeBottom(const T tw, const T tg, const T tb, const T ts, const T l, const T a, const std::vector<gsBSpline<T>> & curves)
+gsMultiPatch<T> makeBottom(const T /* tw */, const T tg, const T /* tb */, const T /* ts */, const T l, const T a, const std::vector<gsBSpline<T>> & curves)
 {
     gsKnotVector<T> kv2(0, 1, 0, 2);
 

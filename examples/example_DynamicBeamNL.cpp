@@ -180,7 +180,7 @@ int main (int argc, char** argv)
     parameters[0] = &E;
     parameters[1] = &nu;
 
-    gsMaterialMatrixBase<real_t>* materialMatrix;
+    gsMaterialMatrixBase<real_t>::uPtr materialMatrix;
 
     gsOptionList options;
     options.addInt("Material","Material model: (0): SvK | (1): NH | (2): NH_ext | (3): MR | (4): Ogden",0);
@@ -393,7 +393,6 @@ for (index_t i=0; i<steps; i++)
 collection.save();
 collection_an.save();
 
-delete materialMatrix;
 delete assembler;
 
 return result;

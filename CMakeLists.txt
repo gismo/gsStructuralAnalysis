@@ -25,6 +25,8 @@ if( (NOT GISMO_BUILD_LIB) )
   endif()
 endif()
 
+add_custom_target(${PROJECT_NAME})
+
 # add filedata folder
 add_definitions(-DSTRAN_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/filedata/")
 

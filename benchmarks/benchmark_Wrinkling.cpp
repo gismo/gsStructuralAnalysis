@@ -635,7 +635,7 @@ int main (int argc, char** argv)
       parameters[3] = &alpha1;
     }
 
-    gsMaterialMatrixBase<real_t>* materialMatrix;
+    gsMaterialMatrixBase<real_t>::uPtr materialMatrix;
 
     gsOptionList options;
     if      (material==0 && impl==1)
@@ -1071,17 +1071,18 @@ int main (int argc, char** argv)
       TensionFields.save();
     }
 
-  delete materialMatrix;
   delete assembler;
   delete arcLength;
 
   return result;
 
 #else//gsUnstructuredSplines_ENABLED
+    GISMO_UNUSED(argc); GISMO_UNUSED(argv);
     gsWarn<<"G+Smo is not compiled with the gsUnstructuredSplines module.";
     return EXIT_FAILURE;
 #endif
 #else//gsKLShell_ENABLED
+    GISMO_UNUSED(argc); GISMO_UNUSED(argv);
     gsWarn<<"G+Smo is not compiled with the gsKLShell module.";
     return EXIT_FAILURE;
 #endif

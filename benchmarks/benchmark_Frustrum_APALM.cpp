@@ -66,7 +66,7 @@ public:
 
   }
 
-  void parallelIntervalOutput(const std::vector<std::pair<gsVector<T>,T>> & stepSolutions, const std::vector<T> & stepTimes, index_t level, index_t ID)
+  void parallelIntervalOutput(const std::vector<std::pair<gsVector<T>,T>> & stepSolutions, const std::vector<T> & /* stepTimes */, index_t level, index_t ID)
   {
     gsStructuralAnalysisOutput<real_t> data(m_dirname + "/interval_"+std::to_string(ID)+".csv",m_refPoints);
     gsMultiPatch<T> deformation,mp_tmp, mp;
@@ -364,14 +364,14 @@ int main (int argc, char** argv)
       parameters[7] = &alpha3;
     }
 
-    gsMaterialMatrixBase<real_t>* materialMatrix;
+    gsMaterialMatrixBase<real_t>::uPtr materialMatrix;
 
     gsOptionList options;
     if      (material==0 && impl==1)
     {
         if (composite)
         {
-            materialMatrix = new gsMaterialMatrixComposite<3,real_t>(mp,Ts,Gs,Phis);
+            materialMatrix = memory::make_unique(new gsMaterialMatrixComposite<3,real_t>(mp,Ts,Gs,Phis));
         }
         else
         {
@@ -398,7 +398,7 @@ int main (int argc, char** argv)
     // Assemble linear system to obtain the force vector
     assembler->assemble();
     gsVector<> Force = assembler->rhs();
-    
+
     // Function for the Jacobian
     gsStructuralAnalysisOps<real_t>::Jacobian_t Jacobian = [&time,&stopwatch,&assembler,&mp_def](gsVector<real_t> const &x, gsSparseMatrix<real_t> & m)
     {

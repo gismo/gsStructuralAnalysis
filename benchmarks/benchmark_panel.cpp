@@ -1,6 +1,6 @@
 /** @file benchmark_panel
 
-    @brief Showcase the use of the shell assembler on stiffened panels. 
+    @brief Showcase the use of the shell assembler on stiffened panels.
     Uses gsPanelCreator
 
     This file is part of the G+Smo library.
@@ -47,15 +47,13 @@ int main(int argc, char *argv[])
     real_t Density = 1.0;
     real_t thickness = 1.0;
 
-    real_t ifcDirichlet = 1.0;
-    real_t ifcClamped = 1.0;
+    real_t ifcPenalty = 1.0;
 
     real_t alpha = 0.5;
     real_t beta = 0.5;
 
     gsCmdLine cmd("Stiffened panel example.");
-    cmd.addReal( "D", "Dir", "Dirichlet penalty scalar",  ifcDirichlet );
-    cmd.addReal( "C", "Cla", "Clamped penalty scalar",  ifcClamped );
+    cmd.addReal( "D", "Dir", "Dirichlet penalty scalar",  ifcPenalty );
     cmd.addReal( "a", "alpha", "Alpha parameter",  alpha );
     cmd.addReal( "b", "beta", "Beta parameter", beta );
     cmd.addInt( "e", "degreeElevation",
@@ -562,12 +560,12 @@ int main(int argc, char *argv[])
 
     //! [Make assembler]
     std::vector<gsFunctionSet<>*> parameters;
-    gsMaterialMatrixBase<real_t>* materialMatrix;
+    gsMaterialMatrixBase<real_t>::uPtr materialMatrix;
     gsOptionList options;
     // Make gsMaterialMatrix depending on the user-defined choices
     if (composite)
     {
-        materialMatrix = new gsMaterialMatrixComposite<3,real_t>(mp,Ts,Gs,Phis);
+        materialMatrix = memory::make_unique(new gsMaterialMatrixComposite<3,real_t>(mp,Ts,Gs,Phis));
     }
     else
     {
@@ -581,7 +579,7 @@ int main(int argc, char *argv[])
 
     gsMaterialMatrixContainer<real_t> materialMats(mp.nPatches());
     for (size_t p = 0; p!=mp.nPatches(); p++)
-        materialMats.add(materialMatrix);
+        materialMats.add(*materialMatrix);
 
 
     // gsMaterialMatrixContainer<real_t> materialMatsSingle(mp.nPatches());
@@ -648,8 +646,7 @@ int main(int argc, char *argv[])
 
     // Set the penalty parameter for the interface C1 continuity
     assembler->options().setInt("Continuity",-1);
-    assembler->options().setReal("IfcDirichlet",ifcDirichlet);
-    assembler->options().setReal("IfcClamped",ifcClamped);
+    assembler->options().setReal("IfcPenalty",ifcPenalty);
     assembler->addWeakC0(mp.topology().interfaces());
     assembler->addWeakC1(mp.topology().interfaces());
     assembler->initInterfaces();
@@ -784,7 +781,6 @@ int main(int argc, char *argv[])
     gsInfo<<"Total ellapsed solution time (incl. assembly): \t"<<totaltime<<" s\n";
 
     delete assembler;
-    delete materialMatrix;
     return EXIT_SUCCESS;
 
 }// end main

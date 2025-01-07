@@ -14,7 +14,7 @@
 #include <gismo.h>
 
 #ifdef gsKLShell_ENABLED
-#include <gsKLShell/src/gsThinShellAssembler.h>
+#include <gsKLShell/gsKLShell.h>
 #endif
 
 #include <gsStructuralAnalysis/src/gsEigenSolvers/gsModalSolver.h>
@@ -281,7 +281,7 @@ int main (int argc, char** argv)
             for (size_t p = 0; p!=mp.nPatches(); p++)
             {
               fileName = output + util::to_string(m);
-              collection.addTimestep(fileName,p,m,".vts");
+              collection.addPart(fileName+".vts",m,"Solution",p);
               // if (mesh) collection.addPart(fileName + "_mesh.vtp",k);
             }
         }
