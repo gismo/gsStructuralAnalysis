@@ -1,7 +1,7 @@
 namespace gismo {
 /**
 
-\page nonlinear_solid_static nonlinear_solid_static.cpp
+\page nonlinear_solid_static Tutorial: Non-Linear solid analysis using the gsStructuralAnalysis module
 
 Static simulations of a solid
 

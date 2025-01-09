@@ -1,7 +1,7 @@
 namespace gismo {
 /**
 
-\page nonlinear_solid_arcLength nonlinear_solid_arcLength.cpp
+\page nonlinear_solid_arcLength Tutorial: Non-Linear Quasi-Static analysis using solids
 
 Static simulations of a solid
 

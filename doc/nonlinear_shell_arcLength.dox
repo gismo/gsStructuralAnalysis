@@ -1,7 +1,7 @@
 namespace gismo {
 /**
 
-\page nonlinear_shell_arclength Tutorial: Non-Linear Quasi-Static analysis using Kirchhoff-Love shells
+\page nonlinear_shell_arcLength Tutorial: Non-Linear Quasi-Static analysis using Kirchhoff-Love shells
 
 This example shows how to perform a non-linear quasi-static analysis using the \ref gsALMSolvers submodule of \ref gsStructuralAnalysis. The arc-length methods provided by this submodule work on user-defined operators from \ref gsStructuralAnalysisOps, hence can be used with any element and in any application. In this example, we use the \ref gsKLShell. The goals of the tutorial are the following:
 - Solve a non-linear quasi-static problem using \ref gsALMCrisfield
