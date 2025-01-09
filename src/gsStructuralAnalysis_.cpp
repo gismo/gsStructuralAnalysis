@@ -14,6 +14,7 @@ namespace gismo
   {
     gismo::pybind11_init_gsPanelCreator( m );
     /*Bindings for gsStructuralAnalysis go here*/
+
   }
 
 #endif
