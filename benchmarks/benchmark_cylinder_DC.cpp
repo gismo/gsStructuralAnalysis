@@ -218,7 +218,7 @@ int main (int argc, char** argv)
         materialMatrixTFT = memory::make_unique(new gsMaterialMatrixTFT<3,real_t,true>(*materialMatrix));
         for (size_t p = 0; p!=mp.nPatches(); p++)
             materialMatrixContainer.add(*materialMatrixTFT);
-        assembler = new gsThinShellAssembler<3, real_t, false >(geom,dbasis,BCs,force,materialMatrixContainer);
+        assembler = new gsThinShellAssembler<3, real_t, false>(geom,dbasis,BCs,force,materialMatrixContainer);
     }
     else
     {
@@ -256,7 +256,7 @@ int main (int argc, char** argv)
     };
 
     // Function for the Residual
-    gsStructuralAnalysisOps<real_t>::Residual_t Residual = [&dx,&dy,&BCs,&assembler,&bb2, &geom](gsVector<real_t> const &x, gsVector<real_t> & result)
+    gsStructuralAnalysisOps<real_t>::Residual_t Residual = [&assembler,&bb2, &geom](gsVector<real_t> const &x, gsVector<real_t> & result)
     {
         ThinShellAssemblerStatus status;
         gsMatrix<real_t> solFull = assembler->fullSolutionVector(x);
