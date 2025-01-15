@@ -560,10 +560,10 @@ int main (int argc, char** argv)
     auto dEf= -( deriv2(v,sn(deff).normalized().tr() ) + deriv2(deff,var1(v,deff) ) ) * reshape(m2,3,3);
 
 
-    gsDebugVar(evA.integral((
+    gsInfo<<"Moment = "<<(evA.integral((
                               N*dEm.tr() 
                             + M*dEf.tr()
-                            )*meas(ori)));
+                            )*meas(ori)))<<"\n";
     // std::vector<patchSide> bContainer({patchSide(0,boundary::north),patchSide(1,boundary::north),patchSide(2,boundary::north),patchSide(3,boundary::north)});
 
 
