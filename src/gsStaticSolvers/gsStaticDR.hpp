@@ -188,6 +188,7 @@ void gsStaticDR<T>::_iteration()
     m_Ek_prev = m_Ek;
     m_R = _computeResidual(m_U+m_DeltaU) - m_damp.cwiseProduct(m_v);
     m_residual = m_R.norm();
+    if (m_residualIni==0) m_residualIni = m_residual;
 //----------------------------------------------------------------------------------
     m_v += m_dt * m_massInv.cwiseProduct(m_R);                    // Velocities at t+dt/2
     m_deltaU = m_dt * m_v;               // Velocities at t+dt
@@ -231,7 +232,7 @@ void gsStaticDR<T>::_start()
         // m_residual = m_R.norm();
         m_residual = m_forcing.norm();
         // If the residual is 0 (e.g. with purely displacment loading), we set it to 1 to allow divisions
-        if (m_residual==0) m_residual=1;
+        if (m_residual==0) m_residual=0;
         // All residual norms are equal
         m_residualIni = m_residualOld = m_residual;
     }
