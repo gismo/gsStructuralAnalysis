@@ -216,10 +216,8 @@ int main (int argc, char** argv)
     if (TFT)
     {
         materialMatrixTFT = memory::make_unique(new gsMaterialMatrixTFT<3,real_t,true>(*materialMatrix));
-	materialMatrixTFT->options().setReal("SlackMultiplier",1e-6);
         for (size_t p = 0; p!=mp.nPatches(); p++)
             materialMatrixContainer.add(*materialMatrixTFT);
-        // materialMatrixTFT->options().setReal("SlackMultiplier",1e-6);
         assembler = new gsThinShellAssembler<3, real_t, false >(geom,dbasis,BCs,force,materialMatrixContainer);
     }
     else
