@@ -55,7 +55,7 @@ int main (int argc, char** argv)
     real_t dL = 1;
     // Solvers
     // * Dynamic Relaxation
-    index_t maxitDR = 1e4;
+    index_t maxitDR = 1e5;
     real_t  alpha = 1.0;
     real_t  damping = 0.1;
     bool DR  = false;
@@ -159,7 +159,7 @@ int main (int argc, char** argv)
         dz_val = 125e-3;
     else if (testCase==1)
         dz_val = 1.0;
-    gsFunctionExpr<> dz(util::to_string(dz_val) + "*t",3);
+    gsFunctionExpr<> dz(util::to_string(dz_val) + "*1",3);
 
     // Boundary conditions
     gsBoundaryConditions<> BCs;
@@ -203,8 +203,8 @@ int main (int argc, char** argv)
     parameters[0] = &E;
     parameters[1] = &nu;
 
-    gsMaterialMatrixBase<real_t> * materialMatrix;
-    gsMaterialMatrixBase<real_t> * materialMatrixTFT;
+    gsMaterialMatrixBase<real_t>::uPtr materialMatrix;
+    gsMaterialMatrixBase<real_t>::uPtr materialMatrixTFT;
     gsThinShellAssemblerBase<real_t>* assembler;
 
     gsOptionList options;
@@ -215,16 +215,17 @@ int main (int argc, char** argv)
     gsMaterialMatrixContainer<real_t> materialMatrixContainer;
     if (TFT)
     {
-        materialMatrixTFT = new gsMaterialMatrixTFT<3,real_t,true>(materialMatrix);
+        materialMatrixTFT = memory::make_unique(new gsMaterialMatrixTFT<3,real_t,true>(*materialMatrix));
+	materialMatrixTFT->options().setReal("SlackMultiplier",1e-6);
         for (size_t p = 0; p!=mp.nPatches(); p++)
-            materialMatrixContainer.add(materialMatrixTFT);
+            materialMatrixContainer.add(*materialMatrixTFT);
         // materialMatrixTFT->options().setReal("SlackMultiplier",1e-6);
         assembler = new gsThinShellAssembler<3, real_t, false >(geom,dbasis,BCs,force,materialMatrixContainer);
     }
     else
     {
         for (size_t p = 0; p!=mp.nPatches(); p++)
-            materialMatrixContainer.add(materialMatrix);
+            materialMatrixContainer.add(*materialMatrix);
         assembler = new gsThinShellAssembler<3, real_t, true >(geom,dbasis,BCs,force,materialMatrixContainer);
     }
 
@@ -284,8 +285,9 @@ int main (int argc, char** argv)
     DynamicRelaxationOptions.setReal("damping",damping);
     DynamicRelaxationOptions.setReal("alpha",alpha);
     DynamicRelaxationOptions.setInt("maxIt",maxitDR);
-    DynamicRelaxationOptions.setReal("tolE",1e-4);
-    DynamicRelaxationOptions.setReal("tol",1e-2);
+    DynamicRelaxationOptions.setReal("tolE",1e-2);
+    DynamicRelaxationOptions.setReal("tolF",1e-4);
+    DynamicRelaxationOptions.setReal("tolU",1e-4);
     DynamicRelaxationOptions.setInt("verbose",1);
     DynamicRelaxationSolver.setOptions(DynamicRelaxationOptions);
     DynamicRelaxationSolver.initialize();
@@ -293,8 +295,8 @@ int main (int argc, char** argv)
     gsStaticOpt<real_t,gsOptim<real_t>::LBFGS> OptimizerSolver(Residual,assembler->numDofs());
     gsOptionList OptimizerSolverOptions = OptimizerSolver.options();
     OptimizerSolverOptions.setInt("maxIt",maxitOPT);
-    OptimizerSolverOptions.setReal("tolF",1e-4);
-    OptimizerSolverOptions.setReal("tolU",1e-4);
+    OptimizerSolverOptions.setReal("tolF",1e-5);
+    OptimizerSolverOptions.setReal("tolU",1e-5);
     OptimizerSolverOptions.setInt("verbose",1);
     OptimizerSolver.setOptions(OptimizerSolverOptions);
     OptimizerSolver.initialize();
@@ -304,8 +306,8 @@ int main (int argc, char** argv)
     gsOptionList NewtonOptions = NewtonSolver.options();
     NewtonOptions.setInt("verbose",true);
     NewtonOptions.setInt("maxIt",maxitNR);
-    NewtonOptions.setReal("tolU",1e-4);
-    NewtonOptions.setReal("tolF",1e-6);
+    NewtonOptions.setReal("tolU",1e-6);
+    NewtonOptions.setReal("tolF",1e-8);
     NewtonSolver.setOptions(NewtonOptions);
 
     std::vector<gsStaticBase<real_t> *> solvers;
@@ -575,10 +577,7 @@ int main (int argc, char** argv)
         collectionTF.save();
     }
 
-    delete materialMatrix;
     delete assembler;
-    if (TFT)
-        delete materialMatrixTFT;
     return EXIT_SUCCESS;
 }
 
