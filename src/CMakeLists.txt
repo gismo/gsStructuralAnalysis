@@ -18,6 +18,8 @@ endif()
   add_library(gsStructuralAnalysis_pybind OBJECT
     gsStructuralAnalysis_.cpp
     )
+  set(gismo_MODULES ${gismo_MODULES} $<TARGET_OBJECTS:gsStructuralAnalysis_pybind>
+    CACHE INTERNAL "G+Smo modules" )
 
 FOREACH(subdir ${SUBDIRS})
 
