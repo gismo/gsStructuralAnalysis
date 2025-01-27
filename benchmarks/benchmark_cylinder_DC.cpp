@@ -326,6 +326,8 @@ int main (int argc, char** argv)
     }
 
     gsStaticComposite<real_t> StaticSolver(solvers);
+    StaticSolver.options().setInt("verbose",1);
+    StaticSolver.initialize();
     // gsControlDisplacement<real_t> controlDC(&StaticSolver);
     // Displacement-controlled simulation
     real_t dL0 = dL;
@@ -353,7 +355,7 @@ int main (int argc, char** argv)
         StaticSolver.setDisplacement(U);
         StaticSolver.solve();
 
-        if (StaticSolver.status() != gsStatus::Success)
+        if (StaticSolver.status() != gsStatus::Success && dL/dL0 > math::pow(0.5,3))
         {
             dL = dL/2;
             D = D - dL;
