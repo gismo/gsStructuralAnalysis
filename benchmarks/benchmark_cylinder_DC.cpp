@@ -52,6 +52,7 @@ int main (int argc, char** argv)
     int step = 10;
 
     bool    TFT = false;
+    bool membrane= false;
     real_t dL = 1;
     // Solvers
     // * Dynamic Relaxation
@@ -84,6 +85,7 @@ int main (int argc, char** argv)
 
     // Material settings
     cmd.addSwitch("TFT", "Use TFT material matrix", TFT);
+    cmd.addSwitch("membrane", "Use membrane material", membrane);
 
     // Test case
     cmd.addInt("t", "test", "Test case: (0): Annulus | (1): Cylinder", testCase);
@@ -220,6 +222,12 @@ int main (int argc, char** argv)
             materialMatrixContainer.add(*materialMatrixTFT);
         assembler = new gsThinShellAssembler<3, real_t, false>(geom,dbasis,BCs,force,materialMatrixContainer);
     }
+    else if (membrane)
+    {
+        for (size_t p = 0; p!=mp.nPatches(); p++)
+            materialMatrixContainer.add(*materialMatrix);
+        assembler = new gsThinShellAssembler<3, real_t, false >(geom,dbasis,BCs,force,materialMatrixContainer);
+    }
     else
     {
         for (size_t p = 0; p!=mp.nPatches(); p++)
@@ -342,11 +350,8 @@ int main (int argc, char** argv)
     file<<0<<","<<0<<"\n";
     file.close();
     index_t k=0;
-    while (D <= 1)
+    while (true)
     {
-        if (gsClose(D,1.0,1e-8))
-            break;
-
         gsInfo<<"Displacement step "<<k<<"; D = "<<D<<"; dL = "<<dL<<"\n";
         dx.set_t(D);
         dy.set_t(D);
@@ -355,17 +360,11 @@ int main (int argc, char** argv)
         StaticSolver.setDisplacement(U);
         StaticSolver.solve();
 
-        if (StaticSolver.status() != gsStatus::Success && dL/dL0 > math::pow(0.5,3))
+        if ((StaticSolver.status() != gsStatus::Success && dL/dL0 > math::pow(0.5,3)) || gsClose(D,0.4,1e-8))
         {
             dL = dL/2;
             D = D - dL;
             continue;
-        }
-        else
-        {
-            dL = std::min(dL0,1-D);
-            D = D + dL;
-            k++;
         }
 
         U = StaticSolver.solution();
@@ -569,6 +568,14 @@ int main (int argc, char** argv)
             << D << ","
             << Moment << "\n";
         file.close();
+
+        if (gsClose(D,1.0,1e-8))
+            break;
+
+        // GO TO THE NEXT STEPs
+        dL = std::min(dL0,1-D);
+        D = D + dL;
+        k++;
     }
 
     if (plot)
