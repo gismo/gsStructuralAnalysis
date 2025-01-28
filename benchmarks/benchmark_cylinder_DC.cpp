@@ -182,6 +182,8 @@ int main (int argc, char** argv)
         GISMO_ERROR("Test case "<<testCase<<" not implemented");
     if (TFT)
         dirname = dirname + "_TFT";
+    if (membrane)
+  	dirname = dirname + "_membrane";
 
     gsFileManager::mkdir(dirname);
 
