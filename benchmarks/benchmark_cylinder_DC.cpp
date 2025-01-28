@@ -40,6 +40,27 @@
 #include <gsStructuralAnalysis/src/gsStaticSolvers/gsControlDisplacement.h>
 using namespace gismo;
 
+void writeToCSVfile(std::string name, gsMatrix<> matrix)
+{
+  std::ofstream file(name.c_str());
+  for(int  i = 0; i < matrix.rows(); i++)
+  {
+    for(int j = 0; j < matrix.cols(); j++)
+    {
+       std::string str = std::to_string(matrix(i,j));
+       if(j+1 == matrix.cols())
+       {
+           file<<std::setprecision(10)<<str;
+       }
+       else
+       {
+           file<<std::setprecision(10)<<str<<',';
+       }
+    }
+    file<<'\n';
+  }
+}
+
 #ifdef gsKLShell_ENABLED
 
 int main (int argc, char** argv)
@@ -362,7 +383,7 @@ int main (int argc, char** argv)
         StaticSolver.setDisplacement(U);
         StaticSolver.solve();
 
-        if ((StaticSolver.status() != gsStatus::Success && dL/dL0 > math::pow(0.5,3)) || gsClose(D,0.4,1e-8))
+        if ((StaticSolver.status() != gsStatus::Success && dL/dL0 > math::pow(0.5,3)))
         {
             dL = dL/2;
             D = D - dL;
@@ -405,6 +426,22 @@ int main (int argc, char** argv)
             fileNameTF = gsFileManager::getFilename(fileNameTF);
             for (size_t p=0; p<geom.nPatches(); ++p)
                 collectionTF.addPart(fileNameTF + "_" + util::to_string(p) + ".vts",k,"solution",p);
+
+
+            index_t N = 100;
+            gsMatrix<> coords(2,N), supp, result;
+            index_t dir = 1;
+            for (index_t patch=0; patch!=def.nPieces(); patch++)
+            {
+                supp = def.piece(patch).support();
+                coords.row(dir).setConstant( 0.5*( supp(dir,1)-supp(dir,0) )+supp(dir,0) );
+                coords.row(1-dir).setLinSpaced(N,0,1);
+                coords.row(1-dir).array() *= ( supp(1-dir,1)-supp(1-dir,0) );
+                coords.row(1-dir).array() += supp(1-dir,0);
+                def.piece(patch).eval_into(coords,result);
+                result.transposeInPlace();
+                writeToCSVfile(dirname + "/" + "line_step=" + std::to_string(k) + "_dir=" + std::to_string(dir) + ".csv",result);
+            }
         }
 
         /////////////////////////////////////////////////////////////////////////////////
