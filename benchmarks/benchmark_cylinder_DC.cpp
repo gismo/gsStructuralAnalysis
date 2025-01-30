@@ -431,18 +431,26 @@ int main (int argc, char** argv)
             index_t N = 100;
             gsMatrix<> coords(2,N), supp, result;
             index_t dir = 1;
-            for (index_t patch=0; patch!=def.nPieces(); patch++)
-            {
-                supp = def.piece(patch).support();
-                coords.row(dir).setConstant( 0.5*( supp(dir,1)-supp(dir,0) )+supp(dir,0) );
-                coords.row(1-dir).setLinSpaced(N,0,1);
-                coords.row(1-dir).array() *= ( supp(1-dir,1)-supp(1-dir,0) );
-                coords.row(1-dir).array() += supp(1-dir,0);
-                def.piece(patch).eval_into(coords,result);
-                result.transposeInPlace();
-                writeToCSVfile(dirname + "/" + "line_step=" + std::to_string(k) + "_dir=" + std::to_string(dir) + ".csv",result);
+            std::vector<real_t> par;
+            if (testCase==0)
+                par = {0.5,0.7,0.9};
+            else if (testCase==1)
+                par = {0.5,0.75};
+            else
+                GISMO_ERROR("Test case "<<testCase<<" not implemented");
+            for (size_t p=0; p!=par.size(); p++)
+                for (index_t patch=0; patch!=def.nPieces(); patch++)
+                {
+                    supp = def.piece(patch).support();
+                    coords.row(dir).setConstant( par[p]*( supp(dir,1)-supp(dir,0) )+supp(dir,0) );
+                    coords.row(1-dir).setLinSpaced(N,0,1);
+                    coords.row(1-dir).array() *= ( supp(1-dir,1)-supp(1-dir,0) );
+                    coords.row(1-dir).array() += supp(1-dir,0);
+                    def.piece(patch).eval_into(coords,result);
+                    result.transposeInPlace();
+                    writeToCSVfile(dirname + "/" + "line_D=" + std::to_string(D) + "_u=" + util::to_string(par[p]) + "_dir=" + std::to_string(dir) + ".csv",result);
+                }
             }
-        }
 
         /////////////////////////////////////////////////////////////////////////////////
         // MOMENT COMPUTATION ///////////////////////////////////////////////////////////
