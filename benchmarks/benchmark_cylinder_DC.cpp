@@ -429,7 +429,7 @@ int main (int argc, char** argv)
 
 
             index_t N = 100;
-            gsMatrix<> coords(2,N), supp, result;
+            gsMatrix<> coords(2,N), supp, result, tmp;
             index_t dir = 1;
             std::vector<real_t> par;
             if (testCase==0)
@@ -438,7 +438,10 @@ int main (int argc, char** argv)
                 par = {0.5,0.75};
             else
                 GISMO_ERROR("Test case "<<testCase<<" not implemented");
+
             for (size_t p=0; p!=par.size(); p++)
+            {
+                result.resize(mp.geoDim(),mp.nPatches()*N);
                 for (index_t patch=0; patch!=def.nPieces(); patch++)
                 {
                     supp = def.piece(patch).support();
@@ -446,11 +449,13 @@ int main (int argc, char** argv)
                     coords.row(1-dir).setLinSpaced(N,0,1);
                     coords.row(1-dir).array() *= ( supp(1-dir,1)-supp(1-dir,0) );
                     coords.row(1-dir).array() += supp(1-dir,0);
-                    def.piece(patch).eval_into(coords,result);
-                    result.transposeInPlace();
-                    writeToCSVfile(dirname + "/" + "line_D=" + std::to_string(D) + "_u=" + util::to_string(par[p]) + "_dir=" + std::to_string(dir) + ".csv",result);
+                    def.piece(patch).eval_into(coords,tmp);
+                    result.block(0,patch*N,tmp.rows(),tmp.cols()) = tmp;
                 }
+                result.transposeInPlace();
+                writeToCSVfile(dirname + "/" + "line_D=" + std::to_string(D) + "_u=" + util::to_string(par[p]) + "_dir=" + std::to_string(dir) + ".csv",result);
             }
+        }
 
         /////////////////////////////////////////////////////////////////////////////////
         // MOMENT COMPUTATION ///////////////////////////////////////////////////////////
