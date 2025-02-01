@@ -373,6 +373,12 @@ int main (int argc, char** argv)
     file<<0<<","<<0<<"\n";
     file.close();
     index_t k=0;
+    std::queue<real_t> Dcheckpoints;
+    Dcheckpoints.push(0.7);
+    Dcheckpoints.push(0.8);
+    Dcheckpoints.push(0.9);
+    Dcheckpoints.push(1.0);
+    dL = std::min(dL,Dcheckpoints.front());
     while (true)
     {
         gsInfo<<"Displacement step "<<k<<"; D = "<<D<<"; dL = "<<dL<<"\n";
@@ -621,11 +627,15 @@ int main (int argc, char** argv)
             << Moment << "\n";
         file.close();
 
-        if (gsClose(D,1.0,1e-8))
-            break;
+        if (gsClose(D,Dcheckpoints.front(),1e-8))
+        {
+            Dcheckpoints.pop();
+            if (Dcheckpoints.empty())
+                break;
+        }
 
         // GO TO THE NEXT STEPs
-        dL = std::min(dL0,1-D);
+        dL = std::min(dL0,Dcheckpoints.front()-D);
         D = D + dL;
         k++;
     }
