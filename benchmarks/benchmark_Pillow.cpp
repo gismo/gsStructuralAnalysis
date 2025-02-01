@@ -42,6 +42,7 @@ int main (int argc, char** argv)
     bool DR  = false;
     bool NR  = false;
     int verbose = 0;
+    bool membrane = false;
 
     index_t Compressibility = 1;
     index_t material = 1;
@@ -86,6 +87,7 @@ int main (int argc, char** argv)
     cmd.addSwitch("split", "Split to a multi-patch", split);
     cmd.addSwitch("smooth", "Use a smooth basis (maximum regularity)", smooth);
     cmd.addInt("v","verbose", "0: no; 1: iteration output; 2: Full matrix and vector output", verbose);
+    cmd.addSwitch("membrane", "Membrane element", membrane);
 
     try { cmd.getValues(argc,argv); } catch (int rv) { return rv; }
     GISMO_ASSERT(NR || DR,"At least a Newton Raphson or a Dynamic Relaxation solver needs to be enabled. Run with option NR or DR.");
@@ -236,7 +238,11 @@ int main (int argc, char** argv)
     // materialMatrixTFT->options().setSwitch("Explicit",true);
 
     gsThinShellAssemblerBase<real_t>* assembler;
-    if (TFT)
+    if (!membrane && TFT)
+      assembler = new gsThinShellAssembler<3, real_t, true >(mp,dbasis,BCs,force,materialMatrixTFT);
+    else if (!membrane && !TFT)
+      assembler = new gsThinShellAssembler<3, real_t, true >(mp,dbasis,BCs,force,materialMatrix);
+    else if (membrane && TFT)
       assembler = new gsThinShellAssembler<3, real_t, false >(mp,dbasis,BCs,force,materialMatrixTFT);
     else
       assembler = new gsThinShellAssembler<3, real_t, false >(mp,dbasis,BCs,force,materialMatrix);
