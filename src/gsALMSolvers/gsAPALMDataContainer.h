@@ -16,7 +16,7 @@
 #include <gsCore/gsLinearAlgebra.h>
 #include <gsNurbs/gsKnotVector.h>
 #include <gsIO/gsOptionList.h>
-#include <gsHSplines/gsKdNode.h>
+#include <gsDomain/gsKdNode.h>
 #include <queue>
 
 namespace gismo
