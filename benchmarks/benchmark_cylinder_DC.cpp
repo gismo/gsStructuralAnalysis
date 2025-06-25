@@ -359,16 +359,13 @@ int main (int argc, char** argv)
     gsStaticComposite<real_t> StaticSolver(solvers);
     StaticSolver.options().setInt("verbose",1);
     StaticSolver.initialize();
-    // gsControlDisplacement<real_t> controlDC(&StaticSolver);
-    // Displacement-controlled simulation
-    real_t dL0 = dL;
-    real_t D   = dL;
+
     gsMatrix<> U = gsMatrix<>::Zero(assembler->numDofs(),1);
 
     std::string writeName = dirname + "/out.csv";
     std::ofstream file;
     file.open(writeName);
-    file<<"Load factor, Moment\n";
+    file<<"Load factor, Moment1, Moment2, Moment3\n";
     file<<std::setprecision(10);
     file<<0<<","<<0<<"\n";
     file.close();
@@ -378,7 +375,9 @@ int main (int argc, char** argv)
     Dcheckpoints.push(0.8);
     Dcheckpoints.push(0.9);
     Dcheckpoints.push(1.0);
+    real_t dL0 = dL;
     dL = std::min(dL,Dcheckpoints.front());
+    real_t D   = dL;
     while (true)
     {
         gsInfo<<"Displacement step "<<k<<"; D = "<<D<<"; dL = "<<dL<<"\n";
@@ -466,165 +465,100 @@ int main (int argc, char** argv)
         /////////////////////////////////////////////////////////////////////////////////
         // MOMENT COMPUTATION ///////////////////////////////////////////////////////////
         /////////////////////////////////////////////////////////////////////////////////
+        // See: https://comet-fenics.readthedocs.io/en/latest/demo/tips_and_tricks/computing_reactions.html
 
-        // gsExprAssembler<> A(1,1);
-        // A.setIntegrationElements(dbasis);
-        // gsExprEvaluator<> evA(A);
-        // gsExprAssembler<>::space u = A.getSpace(bb2,3);
+        // Define vectors representing the distance from the origin to the boundary for the moment around the x and y axes.
+        std::vector<gsFunctionExpr<>> Mz_x_vec(3);
+        std::vector<gsFunctionExpr<>> Mz_y_vec(3);
+        Mz_x_vec[0] = gsFunctionExpr<>("sqrt(x^2+y^2)*cos(atan2(y,x))",3);
+        Mz_x_vec[1] = dx;
+        Mz_x_vec[2] = gsFunctionExpr<>("sqrt(x^2+y^2)*cos(atan2(y,x)+pi/2*t)",3);
+        Mz_x_vec[2].set_t(D);
 
-        // // gsConstantFunction<> one(1.0,3);
-        // // gsBoundaryConditions<> bc_dummy;
-        // // bc_dummy.addCondition(0,boundary::north, condition_type::dirichlet, &one, 0 ,false,0);
-        // // bc_dummy.addCondition(1,boundary::north, condition_type::dirichlet, &one, 0 ,false,0);
-        // // bc_dummy.addCondition(2,boundary::north, condition_type::dirichlet, &one, 0 ,false,0);
-        // // bc_dummy.addCondition(3,boundary::north, condition_type::dirichlet, &one, 0 ,false,0);
+        Mz_y_vec[0] = gsFunctionExpr<>("-sqrt(x^2+y^2)*sin(atan2(y,x))",3);
+        Mz_y_vec[1] = dy;
+        Mz_y_vec[2] = gsFunctionExpr<>("sqrt(x^2+y^2)*sin(atan2(y,x)+pi/2*t)",3);
+        Mz_y_vec[2].set_t(D);
 
-        // gsFunctionExpr<> Mz_x("sqrt(x^2+y^2)*cos(atan2(y,x))",3);
-        // gsFunctionExpr<> Mz_y("sqrt(x^2+y^2)*sin(atan2(y,x))",3);
-        // gsBoundaryConditions<> bc_dummy;
-        // bc_dummy.addCondition(0,boundary::north, condition_type::dirichlet, &Mz_y, 0 ,false,0);
-        // bc_dummy.addCondition(1,boundary::north, condition_type::dirichlet, &Mz_y, 0 ,false,0);
-        // bc_dummy.addCondition(2,boundary::north, condition_type::dirichlet, &Mz_y, 0 ,false,0);
-        // bc_dummy.addCondition(3,boundary::north, condition_type::dirichlet, &Mz_y, 0 ,false,0);
+        std::vector<real_t> Moments(3);
 
-        // bc_dummy.addCondition(0,boundary::north, condition_type::dirichlet, &Mz_x, 0 ,false,1);
-        // bc_dummy.addCondition(1,boundary::north, condition_type::dirichlet, &Mz_x, 0 ,false,1);
-        // bc_dummy.addCondition(2,boundary::north, condition_type::dirichlet, &Mz_x, 0 ,false,1);
-        // bc_dummy.addCondition(3,boundary::north, condition_type::dirichlet, &Mz_x, 0 ,false,1);
-
-
-        // bc_dummy.setGeoMap(geom);
-        // u.setup(bc_dummy,dirichlet::interpolation,-1);
-        // gsDebugVar(u.mapper());
-
-        // gsMatrix<> coefs(bb2.size(),3);
-        // for (size_t d=0; d!=geom.geoDim(); d++)
-        //   for (index_t k=0; k!=bb2.size(); k++)
-        //   {
-        //       const index_t ii = u.mapper().index(k,0,d);
-        //       if (u.mapper().is_free(k,0,d))
-        //           coefs(k,d) = 0.0;
-        //       else if (u.mapper().is_boundary(k,0,d))
-        //           coefs(k,d) = u.fixedPart().at(u.mapper().global_to_bindex(ii));
-        //       else
-        //           GISMO_ERROR("WHAT?");
-        //   }
-
-        // gsMappedSpline<2,real_t> geo(bb2,coefs);
-
-
-        gsExprAssembler<> A(1,1);
-        A.setIntegrationElements(dbasis);
-        gsExprEvaluator<> evA(A);
-        gsExprAssembler<>::space u = A.getSpace(dbasis,3);
-
-        // gsConstantFunction<> one(1.0,3); // for X reaction force
-        // gsBoundaryConditions<> bc_dummy;
-        // bc_dummy.addCondition(0,boundary::north, condition_type::dirichlet, &one, 0 ,false,0);
-        // bc_dummy.addCondition(1,boundary::north, condition_type::dirichlet, &one, 0 ,false,0);
-        // bc_dummy.addCondition(2,boundary::north, condition_type::dirichlet, &one, 0 ,false,0);
-        // bc_dummy.addCondition(3,boundary::north, condition_type::dirichlet, &one, 0 ,false,0);
-
-        gsBoundaryConditions<> bc_dummy;
-        gsFunctionExpr<> Mz_x("sqrt(x^2+y^2)*cos(atan2(y,x))",3);
-        gsFunctionExpr<> Mz_y("-sqrt(x^2+y^2)*sin(atan2(y,x))",3); // X loads contribute negatively to M_z, so we need to flip the sign
-        bc_dummy.addCondition(0,boundary::north, condition_type::dirichlet, &Mz_y, 0 ,false,0);
-        bc_dummy.addCondition(1,boundary::north, condition_type::dirichlet, &Mz_y, 0 ,false,0);
-        bc_dummy.addCondition(2,boundary::north, condition_type::dirichlet, &Mz_y, 0 ,false,0);
-        bc_dummy.addCondition(3,boundary::north, condition_type::dirichlet, &Mz_y, 0 ,false,0);
-
-        bc_dummy.addCondition(0,boundary::north, condition_type::dirichlet, &Mz_x, 0 ,false,1);
-        bc_dummy.addCondition(1,boundary::north, condition_type::dirichlet, &Mz_x, 0 ,false,1);
-        bc_dummy.addCondition(2,boundary::north, condition_type::dirichlet, &Mz_x, 0 ,false,1);
-        bc_dummy.addCondition(3,boundary::north, condition_type::dirichlet, &Mz_x, 0 ,false,1);
-
-    /*
-        gsBoundaryConditions<> bc_dummy;
-        gsMultiPatch<> mp_x =  mp.coord(0);
-        gsMultiPatch<> mp_y =  mp.coord(1);
-        // X loads contribute negatively to M_z, so we need to flip the sign
-        for (size_t p=0; p!=mp_y.nPatches(); p++)
-        mp_y.patch(p).coefs().array() *= -1;
-        bc_dummy.addCondition(0,boundary::north, condition_type::dirichlet, mp_y, 0 ,true,0);
-        bc_dummy.addCondition(1,boundary::north, condition_type::dirichlet, mp_y, 0 ,true,0);
-        bc_dummy.addCondition(2,boundary::north, condition_type::dirichlet, mp_y, 0 ,true,0);
-        bc_dummy.addCondition(3,boundary::north, condition_type::dirichlet, mp_y, 0 ,true,0);
-
-        bc_dummy.addCondition(0,boundary::north, condition_type::dirichlet, mp_x, 0 ,true,1);
-        bc_dummy.addCondition(1,boundary::north, condition_type::dirichlet, mp_x, 0 ,true,1);
-        bc_dummy.addCondition(2,boundary::north, condition_type::dirichlet, mp_x, 0 ,true,1);
-        bc_dummy.addCondition(3,boundary::north, condition_type::dirichlet, mp_x, 0 ,true,1);
-    */
-        bc_dummy.setGeoMap(mp);
-        u.setup(bc_dummy,dirichlet::interpolation,-1);
-        gsDebugVar(u.mapper());
-
-        gsMultiPatch<> geo;
-        for (size_t b=0; b!=dbasis.nBases(); b++)
+        for (index_t k=0; k!=Mz_x_vec.size(); k++)
         {
-        gsMatrix<> coefs(dbasis.basis(b).size(),mp.geoDim());
-        coefs.setZero();
-        for (size_t d=0; d!=mp.geoDim(); d++)
-            for (index_t k=0; k!=dbasis.basis(b).size(); k++)
+            gsExprAssembler<> A(1,1);
+            A.setIntegrationElements(dbasis);
+            gsExprEvaluator<> evA(A);
+            gsExprAssembler<>::space u = A.getSpace(dbasis,3);
+
+            // Define dummy boundary conditions.
+            // These conditions are used to define the test space on the boundary and compute its values there.
+            gsBoundaryConditions<> bc_dummy;
+            bc_dummy.addCondition(0,boundary::north, condition_type::dirichlet, &Mz_y_vec[k], 0 ,false,0);
+            bc_dummy.addCondition(1,boundary::north, condition_type::dirichlet, &Mz_y_vec[k], 0 ,false,0);
+            bc_dummy.addCondition(2,boundary::north, condition_type::dirichlet, &Mz_y_vec[k], 0 ,false,0);
+            bc_dummy.addCondition(3,boundary::north, condition_type::dirichlet, &Mz_y_vec[k], 0 ,false,0);
+
+            bc_dummy.addCondition(0,boundary::north, condition_type::dirichlet, &Mz_x_vec[k], 0 ,false,1);
+            bc_dummy.addCondition(1,boundary::north, condition_type::dirichlet, &Mz_x_vec[k], 0 ,false,1);
+            bc_dummy.addCondition(2,boundary::north, condition_type::dirichlet, &Mz_x_vec[k], 0 ,false,1);
+            bc_dummy.addCondition(3,boundary::north, condition_type::dirichlet, &Mz_x_vec[k], 0 ,false,1);
+
+            bc_dummy.setGeoMap(mp);
+            u.setup(bc_dummy,dirichlet::interpolation,-1);
+
+            // Set all coefficients corresponding to the space to zero, except for the boundary conditions.
+            gsMultiPatch<> geo;
+            for (size_t b=0; b!=dbasis.nBases(); b++)
             {
-                const index_t ii = u.mapper().index(k,b,d);
-                if (u.mapper().is_free(k,b,d))
-                    coefs(k,d) = 0.0;
-                else if (u.mapper().is_boundary(k,b,d))
-                    coefs(k,d) = u.fixedPart().at(u.mapper().global_to_bindex(ii));
-                else
-                    GISMO_ERROR("WHAT?");
+                gsMatrix<> coefs(dbasis.basis(b).size(),mp.geoDim());
+                coefs.setZero();
+                for (size_t d=0; d!=mp.geoDim(); d++)
+                    for (index_t k=0; k!=dbasis.basis(b).size(); k++)
+                    {
+                        const index_t ii = u.mapper().index(k,b,d);
+                        if (u.mapper().is_free(k,b,d))
+                            coefs(k,d) = 0.0;
+                        else if (u.mapper().is_boundary(k,b,d))
+                            coefs(k,d) = u.fixedPart().at(u.mapper().global_to_bindex(ii));
+                        else
+                            GISMO_ERROR("WHAT?");
+                    }
+                geo.addPatch(*dbasis.basis(b).makeGeometry(give(coefs)));
             }
-        geo.addPatch(*dbasis.basis(b).makeGeometry(give(coefs)));
 
+            // Cleanup the assembler
+            A.initSystem();
+            // Set the geometry map and the deformation map.
+            gsExprAssembler<>::geometryMap ori   = A.getMap(mp);
+            gsExprAssembler<>::geometryMap deff  = A.getMap(def);
+            // Register the custom solution with coefficients defined above to the assembler.
+            auto v = A.getCoeff(geo);
+            // Add the stress tensors based on the materials defined for the shell solver
+            gsMaterialMatrixIntegrate<real_t,MaterialOutput::VectorN> S0f(materialMatrixContainer,&mp,&def);
+            gsMaterialMatrixIntegrate<real_t,MaterialOutput::VectorM> S1f(materialMatrixContainer,&mp,&def);
+            auto S0  = A.getCoeff(S0f);
+            auto S1  = A.getCoeff(S1f);
+            // Helper matrix for flexural components (see gsThinShellAssembler::assembleMatrix)
+            gsFunctionExpr<> mult2t("1","0","0","0","1","0","0","0","2",2);
+            auto m2 = A.getCoeff(mult2t);
+            // Define the components used in the variational formulation, using the solution v as the deformation
+            auto N  = S0.tr();
+            auto dEm= flat( jac(deff).tr() * jac(v) ) ;
+            auto M  = S1.tr();
+            auto dEf= -( deriv2(v,sn(deff).normalized().tr() ) + deriv2(deff,var1(v,deff) ) ) * reshape(m2,3,3);
+            // Integrate the variational formulation, this gives the moments.
+            Moments[k] = evA.integral((
+                                    N*dEm.tr()
+                                    + M*dEf.tr()
+                                    )*meas(ori)
+                                    );
         }
-
-        // for (size_t b=0; b!=dbasis.nBases(); b++)
-        //   for (size_t d=0; d!=2; d++)
-        //       for (index_t k=0; k!=dbasis.basis(b).size(); k++)
-        //       {
-        //           const index_t ii = u.mapper().index(k,0,d);
-        //           if (u.mapper().is_free(k,0,d))
-        //               coefs(k,d) = 0.0;
-        //           else if (u.mapper().is_boundary(k,0,d))
-        //               coefs(k,d) = u.fixedPart().at(u.mapper().global_to_bindex(ii));
-        //           else
-        //               GISMO_ERROR("WHAT?");
-        //       }
-
-        // gsGeometry<>::uPtr geo = dbasis.basis(0).makeGeometry(give(coefs));
-
-        A.initSystem();
-
-        gsExprAssembler<>::geometryMap ori   = A.getMap(mp);
-        gsExprAssembler<>::geometryMap deff  = A.getMap(def);
-
-        auto v = A.getCoeff(geo);
-
-        gsMaterialMatrixIntegrate<real_t,MaterialOutput::VectorN> S0f(materialMatrixContainer,&mp,&def);
-        gsMaterialMatrixIntegrate<real_t,MaterialOutput::VectorM> S1f(materialMatrixContainer,&mp,&def);
-        auto S0  = A.getCoeff(S0f);
-        auto S1  = A.getCoeff(S1f);
-
-        // Helper matrix for flexural components
-        gsFunctionExpr<> mult2t("1","0","0","0","1","0","0","0","2",2);
-        auto m2 = A.getCoeff(mult2t);
-
-        auto N  = S0.tr();
-        auto dEm= flat( jac(deff).tr() * jac(v) ) ;
-        auto M  = S1.tr();
-        auto dEf= -( deriv2(v,sn(deff).normalized().tr() ) + deriv2(deff,var1(v,deff) ) ) * reshape(m2,3,3);
-
-        real_t Moment = evA.integral((
-                                N*dEm.tr()
-                                + M*dEf.tr()
-                                )*meas(ori)
-                                );
 
         file.open(writeName,std::ofstream::out | std::ofstream::app);
         file<< std::setprecision(10)
             << D << ","
-            << Moment << "\n";
+            << Moments[0] << ","
+            << Moments[1] << ","
+            << Moments[2] << "\n";
         file.close();
 
         if (gsClose(D,Dcheckpoints.front(),1e-8))
