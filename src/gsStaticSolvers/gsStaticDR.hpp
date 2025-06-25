@@ -232,7 +232,7 @@ void gsStaticDR<T>::_start()
         // m_residual = m_R.norm();
         m_residual = m_forcing.norm();
         // If the residual is 0 (e.g. with purely displacment loading), we set it to 1 to allow divisions
-        if (m_residual==0) m_residual=0;
+        if (m_residual==0) m_residual=1;
         // All residual norms are equal
         m_residualIni = m_residualOld = m_residual;
     }

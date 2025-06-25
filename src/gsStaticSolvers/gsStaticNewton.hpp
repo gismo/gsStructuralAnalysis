@@ -259,6 +259,7 @@ void gsStaticNewton<T>::_init()
     m_stabilityMethod = 0;
     m_start = false;
 
+    m_dofs = m_linear.rows();
     if (m_dofs==0)
         gsWarn<<"The number of degrees of freedom is equal to zero. This can lead to bad initialization.\n";
 
