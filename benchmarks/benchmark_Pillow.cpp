@@ -44,6 +44,8 @@ int main (int argc, char** argv)
     int verbose = 0;
     bool membrane = false;
 
+    real tolDR = 1e-1;
+
     index_t Compressibility = 1;
     index_t material = 1;
     index_t impl = 1; // 1= analytical, 2= generalized, 3= spectral
@@ -78,6 +80,8 @@ int main (int argc, char** argv)
     cmd.addSwitch( "TFT", "Use Tension-Field Theory",  TFT );
 
     cmd.addReal( "L", "maxLoad", "Maximum load",  maxLoad );
+
+    cmd.addReal( "T", "tolDR", "Tolerance for the DR solver",  tolDR );
 
     cmd.addSwitch("plot", "Plot result in ParaView format", plot);
     cmd.addSwitch("write", "Write data to file", write);
@@ -311,7 +315,7 @@ int main (int argc, char** argv)
     DROptions.setReal("damping",damping);
     DROptions.setReal("alpha",alpha);
     DROptions.setInt("maxIt",1e6);
-    DROptions.setReal("tol",1e-2);
+    DROptions.setReal("tol",tolDR);
     DROptions.setReal("tolE",1e-5);
     DROptions.setInt("verbose",verbose);
     DROptions.setInt("ResetIt",(index_t)(100));
@@ -443,6 +447,8 @@ int main (int argc, char** argv)
         gsVector<> data(1);
         data<<load_fac;
         writer.add(result,data);
+
+        gsWrite(mp_def,dirname + "/" + "deformed");
       }
 
 /*
