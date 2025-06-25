@@ -37,7 +37,7 @@ template <class T>
 class gsStaticBase
 {
 protected:
-    
+
     typedef typename gsStructuralAnalysisOps<T>::Residual_t      Residual_t;
     typedef typename gsStructuralAnalysisOps<T>::ALResidual_t    ALResidual_t;
     typedef typename gsStructuralAnalysisOps<T>::Jacobian_t      Jacobian_t;
@@ -89,7 +89,8 @@ public:
     virtual void setOptions(gsOptionList & options) {m_options.update(options,gsOptionList::addIfUnknown); }
 
     /// Get options
-    virtual gsOptionList options() const {return m_options;}
+    virtual const gsOptionList & options() const {return m_options;}
+    virtual       gsOptionList & options()       {return m_options;}
 
     /// Access the solution
     virtual gsVector<T> solution() const {return m_U;}
@@ -199,7 +200,7 @@ protected:
         if (es.info()!=Spectra::CompInfo::Successful)
         {
             gsWarn<<"Spectra did not converge!\n";
-            return false;   
+            return false;
         }
 
         // if (es.info()==Spectra::CompInfo::NotComputed)

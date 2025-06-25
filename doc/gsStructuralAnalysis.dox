@@ -93,8 +93,11 @@ Jacobian_t Jacobian = [&<objects needed to assemble the Jacobian>](gsVector<real
 \subsection structuralAnalysis_Tutorials Tutorials
 In the folder \c gsStructuralAnalysis/tutorials, some tutorials are provided, explaining the use of the \ref gsStructuralAnalysis module. These tutorials follow-up on the tutorials provided in the \ref gsKLShell module, see \ref klShell_Tutorials. The tutorials can be compiled using the target \c gsStructuralAnalysis-tutorials. The available tutorials are:
 1. \ref nonlinear_shell_static
-2. \ref nonlinear_shell_arclength
+2. \ref nonlinear_shell_arcLength
 3. \ref nonlinear_shell_dynamic
+4. \ref nonlinear_solid_static
+5. \ref nonlinear_solid_arcLength
+6. \ref nonlinear_solid_dynamic
 
 */
 

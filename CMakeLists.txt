@@ -28,7 +28,7 @@ endif()
 add_custom_target(${PROJECT_NAME})
 
 # add filedata folder
-add_definitions(-DSTRAN_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/filedata/")
+add_definitions(-D${PROJECT_NAME}_DATA="${CMAKE_CURRENT_SOURCE_DIR}/filedata/")
 
 # add example files
 if(GISMO_BUILD_EXAMPLES)

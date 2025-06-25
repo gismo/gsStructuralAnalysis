@@ -66,8 +66,8 @@ void gsStaticOpt<T,Optimizer>::getOptions()
 #ifdef gsHLBFGS_ENABLED
     else if (dynamic_cast<gsHLBFGS<T>*>(&m_optimizer))
     {
-        m_optimizer.options().setReal("MinGradientLength",m_tolF);
-        m_optimizer.options().setReal("MinStepLength",m_tolU);
+        m_optimizer.options().setReal("MinGradLen",m_tolF);
+        m_optimizer.options().setReal("MinStepLen",m_tolU);
     }
 #endif
 #ifdef gsOptim_ENABLED

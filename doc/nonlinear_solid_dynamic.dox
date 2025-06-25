@@ -1,0 +1,17 @@
+namespace gismo {
+/**
+
+\page nonlinear_solid_dynamic Tutorial: Non-Linear dynamic analysis using solids
+
+Static simulations of a solid
+
+\section nonlinear_solid_static_Annotated Annotated source file
+
+Here is the full file \c nonlinear_solid_dynamic.cpp. Clicking on a function
+or class name will lead you to its reference documentation.
+
+\include nonlinear_solid_dynamic.cpp
+
+*/
+
+}

@@ -1,7 +1,6 @@
-/** @file @file gsStructuralAnalysis/tutorials/nonlinear_shell_arclength.cpp
+/** @file gsKLShell/tutorials/linear_solid.cpp
 
-    @brief Tutorial for assembling the Kirchhoff-Love shell
-    and solving it with a static solver
+    @brief Tutorial for assembling solid elasticity
 
     This file is part of the G+Smo library.
 
@@ -15,9 +14,12 @@
 #include <gismo.h>
 
 //! [Includes]
-#ifdef gsKLShell_ENABLED
-#include <gsKLShell/gsKLShell.h>
+#ifdef gsElasticity_ENABLED
+#include <gsElasticity/gsElasticityAssembler.h>
+#include <gsElasticity/gsWriteParaviewMultiPhysics.h>
+#include <gsElasticity/gsGeoUtils.h>
 #endif
+
 
 #include <gsStructuralAnalysis/src/gsStaticSolvers/gsStaticNewton.h>
 #include <gsStructuralAnalysis/src/gsStructuralAnalysisTools/gsStructuralAnalysisUtils.h>
@@ -25,16 +27,15 @@
 
 using namespace gismo;
 
-// Choose among various shell examples, default = Thin Plate
+#ifdef gsElasticity_ENABLED
 int main(int argc, char *argv[])
 {
-#ifdef gsKLShell_ENABLED
     //! [Parse command line]
     bool plot  = false;
     index_t numRefine  = 1;
     index_t numElevate = 1;
 
-    gsCmdLine cmd("Nonlinear static shell tutorial.");
+    gsCmdLine cmd("Linear shell tutorial.");
     cmd.addInt( "e", "degreeElevation","Number of degree elevation steps to perform before solving (0: equalize degree in all directions)", numElevate );
     cmd.addInt( "r", "uniformRefine", "Number of Uniform h-refinement steps to perform before solving",  numRefine );
     cmd.addSwitch("plot", "Create a ParaView visualization file with the solution", plot);
@@ -44,22 +45,24 @@ int main(int argc, char *argv[])
     //! [Read geometry]
     // Initialize [ori]ginal and [def]ormed geometry
     gsMultiPatch<> ori;
-    gsReadFile<>("surfaces/paraboloid.xml", ori);
-    ori.computeTopology();
+    std::string fileName = "paraboloid_volume.xml";
+    gsReadFile<>(fileName, ori);
     //! [Read geometry]
 
     //! [Initialize geometry]
     // p-refine
     if (numElevate!=0)
         ori.degreeElevate(numElevate);
-    // h-refine
+    // h-refine (only in first two directions)
     for (int r =0; r < numRefine; ++r)
-        ori.uniformRefine();
-    //! [Initialize geometry]
+    {
+        ori.uniformRefine(1,1,0);
+        ori.uniformRefine(1,1,1);
+    }
 
-    //! [Construct basis]
-    gsMultiBasis<> bases(ori);
-    //! [Construct basis]
+    // creating basis
+    gsMultiBasis<> basis(ori);
+    //! [Initialize geometry]
 
     //! [Set boundary conditions]
     // Define the boundary conditions object
@@ -68,74 +71,48 @@ int main(int argc, char *argv[])
     bc.setGeoMap(ori);
 
     // Set the boundary conditions
-    bc.addCornerValue(boundary::southwest, 0.0, 0, -1); // (corner,value, patch, unknown)
-    bc.addCornerValue(boundary::southeast, 0.0, 0, -1); // (corner,value, patch, unknown)
-    bc.addCornerValue(boundary::northwest, 0.0, 0, -1); // (corner,value, patch, unknown)
-    bc.addCornerValue(boundary::northeast, 0.0, 0, -1); // (corner,value, patch, unknown)
-
-    gsPointLoads<real_t> pLoads = gsPointLoads<real_t>();
-    gsVector<> point(2);
-    gsVector<> load (3);
-    point<< 0.5, 0.5 ; load << 0, 0.0, -1e4 ;
-    pLoads.addLoad(point, load, 0 );
+    gsFunctionExpr<> surf_force("0","0","-1e5",3);
+    for (index_t c=0; c!=3; c++)
+    {
+        bc.addCornerValue(boundary::southwestfront, 0.0, 0, c); // (corner,value, patch, unknown)
+        bc.addCornerValue(boundary::southeastfront, 0.0, 0, c); // (corner,value, patch, unknown)
+        bc.addCornerValue(boundary::northwestfront, 0.0, 0, c); // (corner,value, patch, unknown)
+        bc.addCornerValue(boundary::northeastfront, 0.0, 0, c); // (corner,value, patch, unknown)
+    }
+    bc.addCondition(boundary::front, condition_type::neumann, &surf_force);
+    bc.addCondition(boundary::front, condition_type::neumann, &surf_force);
     //! [Set boundary conditions]
 
     //! [Set surface force]
     // The surface force is defined in the physical space, i.e. 3D
-    gsFunctionExpr<> force("0","0","0",3);
+    gsFunctionExpr<> body_force("0","0","0",3);
     //! [Set surface force]
 
-
-    //! [Define the material matrix class]
-    // Define material parameters
-    // The material parameters are defined in the physical domain as well (!)
-    gsConstantFunction<> E (1.E9,3);
-    gsConstantFunction<> nu(0.45,3);
-    gsConstantFunction<> t (1E-2,3);
-
-    // Define a linear material, see \ref gsMaterialMatrixLinear.h
-    // The first parameter is the physical domain dimension
-
-    // gsMaterialMatrixLinear<3,real_t> materialMatrix(ori,t,E,nu);
-
-    std::vector<gsFunctionSet<>*> parameters{&E,&nu};
-    gsOptionList options;
-    options.addInt("Material","Material model: (0): SvK | (1): NH | (2): NH_ext | (3): MR | (4): Ogden",1);
-    options.addInt("Implementation","Implementation: (0): Composites | (1): Analytical | (2): Generalized | (3): Spectral",1);
-    gsMaterialMatrixBase<real_t>::uPtr materialMatrix = getMaterialMatrix<3,real_t>(ori,t,parameters,options);
-    //! [Define the material matrix class]
-
     //! [Define the assembler]
-    // Define the assembler.
-    // The first parameter is the physical domain dimension
-    // The second parameter is the real type
-    // The third parameter controls the bending stiffness
-    gsThinShellAssembler<3, real_t, true > assembler(ori,bases,bc,force,materialMatrix);
-    assembler.setPointLoads(pLoads);
-    //! [Define the assembler]
-
+    gsElasticityAssembler<real_t> assembler(ori,basis,bc,body_force);
+    assembler.options().setReal("YoungsModulus",1.E9);
+    assembler.options().setReal("PoissonsRatio",0.45);
+    assembler.options().setInt("MaterialLaw",material_law::saint_venant_kirchhoff);
+    assembler.options().setInt("DirichletValues",dirichlet::l2Projection);
 
     //! [Define nonlinear residual functions]
+    std::vector<gsMatrix<> > fixedDofs = assembler.allFixedDofs();
     // Function for the Jacobian
-    gsStructuralAnalysisOps<real_t>::Jacobian_t Jacobian = [&assembler](gsVector<real_t> const &x, gsSparseMatrix<real_t> & m)
+    gsStructuralAnalysisOps<real_t>::Jacobian_t Jacobian = [&assembler,&fixedDofs](gsVector<real_t> const &x, gsSparseMatrix<real_t> & m)
     {
-        gsMultiPatch<> def;
-        assembler.constructSolution(x,def);
-        ThinShellAssemblerStatus status = assembler.assembleMatrix(def);
+        assembler.assemble(x,fixedDofs);
         m = assembler.matrix();
-        return status==ThinShellAssemblerStatus::Success;
+        return true;
     };
+
     // Function for the Residual
-    gsStructuralAnalysisOps<real_t>::Residual_t Residual = [&assembler](gsVector<real_t> const &x, gsVector<real_t> & v)
+    gsStructuralAnalysisOps<real_t>::Residual_t Residual = [&fixedDofs,&assembler](gsVector<real_t> const &x, gsVector<real_t> & v)
     {
-        gsMultiPatch<> def;
-        assembler.constructSolution(x,def);
-        ThinShellAssemblerStatus status = assembler.assembleVector(def);
+        assembler.assemble(x,fixedDofs);
         v = assembler.rhs();
-        return status==ThinShellAssemblerStatus::Success;
+        return true;
     };
     //! [Define nonlinear residual functions]
-
 
     //! [Assemble linear part]
     assembler.assemble();
@@ -157,15 +134,19 @@ int main(int argc, char *argv[])
     //! [Solve nonlinear problem]
 
     //! [Construct solution and deformed geometry]
-    gsMultiPatch<> displ = assembler.constructDisplacement(solVector);
-    gsMultiPatch<> def = assembler.constructSolution(solVector);
+    // constructing solution as an IGA function
+    gsMultiPatch<> displ;
+    assembler.constructSolution(solVector,assembler.allFixedDofs(),displ);
+    gsMultiPatch<> def = ori;
+    for (index_t p = 0; p < def.nPieces(); ++p)
+        def.patch(p).coefs() += displ.patch(p).coefs();
     //! [Construct solution and deformed geometry]
 
     //! [Evaluate solution]
     // Evaluate the solution on a reference point (parametric coordinates)
     // The reference points are stored column-wise
-    gsMatrix<> refPoint(2,1);
-    refPoint<<0.5,0.5;
+    gsMatrix<> refPoint(3,1);
+    refPoint<<0.5,0.5,1.0;
     // Compute the values
     gsVector<> physpoint = def.patch(0).eval(refPoint);
     gsVector<> refVals = displ.patch(0).eval(refPoint);
@@ -181,19 +162,20 @@ int main(int argc, char *argv[])
         // Plot the displacements on the deformed geometry
         gsField<> solField(def, displ);
         gsInfo<<"Plotting in Paraview...\n";
-        gsWriteParaview<>( solField, "Deformation", 1000, true);
+        gsWriteParaview<>( solField, "Deformation", 10000, true);
 
         // Plot the membrane Von-Mises stresses on the geometry
         gsPiecewiseFunction<> VMm;
-        assembler.constructStress(def,VMm,stress_type::von_mises_membrane);
+        assembler.constructCauchyStresses(displ,VMm,stress_components::von_mises);
         gsField<> membraneStress(def,VMm, true);
-        gsWriteParaview(membraneStress,"MembraneStress",1000);
+        gsWriteParaview(membraneStress,"MembraneStress",10000);
     }
     // ! [Export visualization in ParaView]
 
     return EXIT_SUCCESS;
 #else
-    GISMO_ERROR("The tutorial needs to be compiled with gsKLShell enabled");
+    GISMO_ERROR("The tutorial needs to be compiled with gsElasticity enabled");
     return EXIT_FAILED;
 #endif
+
 }// end main
