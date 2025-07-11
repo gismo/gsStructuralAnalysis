@@ -40,21 +40,20 @@
 #include <gsStructuralAnalysis/src/gsStaticSolvers/gsControlDisplacement.h>
 using namespace gismo;
 
-void writeToCSVfile(std::string name, gsMatrix<> matrix)
+void writeToCSVfile(const std::string& name, const gsMatrix<>& matrix)
 {
   std::ofstream file(name.c_str());
   for(int  i = 0; i < matrix.rows(); i++)
   {
     for(int j = 0; j < matrix.cols(); j++)
     {
-       std::string str = std::to_string(matrix(i,j));
        if(j+1 == matrix.cols())
        {
-           file<<std::setprecision(10)<<str;
+           file<<std::setprecision(10)<<matrix(i,j);
        }
        else
        {
-           file<<std::setprecision(10)<<str<<',';
+           file<<std::setprecision(10)<<matrix(i,j)<<',';
        }
     }
     file<<'\n';
