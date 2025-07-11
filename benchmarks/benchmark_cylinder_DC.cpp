@@ -47,14 +47,13 @@ void writeToCSVfile(const std::string& name, const gsMatrix<>& matrix)
   {
     for(int j = 0; j < matrix.cols(); j++)
     {
-       std::string str = std::to_string(matrix(i,j));
        if(j+1 == matrix.cols())
        {
-           file<<std::setprecision(10)<<str;
+           file<<std::setprecision(10)<<matrix(i,j);
        }
        else
        {
-           file<<std::setprecision(10)<<str<<',';
+           file<<std::setprecision(10)<<matrix(i,j)<<',';
        }
     }
     file<<'\n';
