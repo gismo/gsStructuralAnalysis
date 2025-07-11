@@ -1,7 +1,7 @@
 
-/** @file benchmark_TensionWrinkling.cpp
+/** @file benchmark_cylinder_DC.cpp
 
-    @brief Computes the wrinkling behaviour of a thin sheet
+    @brief Computes the wrinkling behaviour of a cylinder or annulus
 
     This file is part of the G+Smo library.
 
@@ -203,7 +203,7 @@ int main (int argc, char** argv)
     if (TFT)
         dirname = dirname + "_TFT";
     if (membrane)
-  	dirname = dirname + "_membrane";
+      	dirname = dirname + "_membrane";
 
     gsFileManager::mkdir(dirname);
 
