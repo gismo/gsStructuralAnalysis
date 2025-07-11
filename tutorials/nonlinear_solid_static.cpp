@@ -15,9 +15,9 @@
 
 //! [Includes]
 #ifdef gsElasticity_ENABLED
-#include <gsElasticity/gsElasticityAssembler.h>
-#include <gsElasticity/gsWriteParaviewMultiPhysics.h>
-#include <gsElasticity/gsGeoUtils.h>
+#include <gsElasticity/src/gsElasticityAssembler.h>
+#include <gsElasticity/src/gsWriteParaviewMultiPhysics.h>
+#include <gsElasticity/src/gsGeoUtils.h>
 #endif
 
 
@@ -27,9 +27,9 @@
 
 using namespace gismo;
 
-#ifdef gsElasticity_ENABLED
 int main(int argc, char *argv[])
 {
+#ifdef gsElasticity_ENABLED
     //! [Parse command line]
     bool plot  = false;
     index_t numRefine  = 1;
@@ -175,7 +175,7 @@ int main(int argc, char *argv[])
     return EXIT_SUCCESS;
 #else
     GISMO_ERROR("The tutorial needs to be compiled with gsElasticity enabled");
-    return EXIT_FAILED;
+    return EXIT_FAILURE;
 #endif
 
 }// end main

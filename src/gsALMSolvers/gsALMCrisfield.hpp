@@ -341,7 +341,6 @@ void gsALMCrisfield<T>::computeLambdas()
     m_note += "\tC";
     // Compute eta
     computeLambdasModified();
-    gsDebugVar(m_discriminant);
     if ((m_discriminant >= 0) && m_eta > 0.05)
     {
       // recompute lambdas with new eta

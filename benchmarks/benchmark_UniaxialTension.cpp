@@ -3,7 +3,7 @@
     @brief Uniaxial Tension Test benchmark
 
     e.g. Section 8.1. from Kiendl et al 2015
-    Kiendl, J., Hsu, M.-C., Wu, M. C. H., & Reali, A. (2015). Isogeometric Kirchhoff–Love shell formulations for general hyperelastic materials. Computer Methods in Applied Mechanics and Engineering, 291, 280–303. https://doi.org/10.1016/J.CMA.2015.03.010
+    Kiendl, J., Hsu, M.-C., Wu, M. C. H., & Reali, A. (2015). Isogeometric Kirchhoff–Love shell formlations for general hyperelastic materials. Computer Methods in Applied Mechanics and Engineering, 291, 280–303. https://doi.org/10.1016/J.CMA.2015.03.010
 
     This file is part of the G+Smo library.
 
@@ -344,11 +344,30 @@ int main (int argc, char** argv)
       assembler->constructSolution(solVector,mp_def);
 
       gsMatrix<> pts(2,1);
-      pts<<0.5,0.5;
+      pts<<1,0;
 
       lambdas.col(k) = assembler->computePrincipalStretches(pts,mp_def,0);
       S.at(k) = Lold / 1e-3 / lambdas(0,k) / lambdas(2,k);
-      San.at(k) = mu * (math::pow(lambdas(1,k),2)-1/lambdas(1,k));
+      if (material==1 && !Compressibility)
+        San.at(k) = mu * (math::pow(lambdas(0,k),2)-1/lambdas(0,k));
+      else if (material==3 && !Compressibility)
+      {
+        real_t c2 = 1.0 / (Ratio+1);
+        real_t c1 = 1.0 - c2;
+        San.at(k) =-mu*(c2*lambdas(0,k)*lambdas(0,k)+c2/lambdas(0,k)+c1)/lambdas(0,k)+lambdas(0,k)*(c1*lambdas(0,k)*mu+2*c2*mu);
+      }
+      else if (material==4 && !Compressibility)
+      {
+        real_t a1 = alpha1.value(0);
+        real_t a2 = alpha2.value(0);
+        real_t a3 = alpha3.value(0);
+        real_t m1 = mu1.value(0);
+        real_t m2 = mu2.value(0);
+        real_t m3 = mu3.value(0);
+        San.at(k) =-m1*math::pow((1./lambdas(0,k)),0.5*a1)-m2*math::pow((1./lambdas(0,k)),0.5*a2)-m3*math::pow((1./lambdas(0,k)),0.5*a3)+m1*math::pow(lambdas(0,k),a1)+m2*math::pow(lambdas(0,k),a2)+m3*math::pow(lambdas(0,k),a3);
+      }
+      else
+        San.at(k) = 0.;
 
       deformation = mp_def;
       deformation.patch(0).coefs() -= mp.patch(0).coefs();// assuming 1 patch here
@@ -408,6 +427,7 @@ int main (int argc, char** argv)
     gsInfo<<"Lambdas:\n"<<lambdas<<"\n";
     gsInfo<<"S\t:\n"<<S<<"\n";
     gsInfo<<"San\t:\n"<<San<<"\n";
+    gsInfo<<"NOTE: If San is zero, the analytical solution is not implemented for this material.\n";
 
     if (plot)
     {

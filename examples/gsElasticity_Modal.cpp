@@ -14,9 +14,9 @@
 #include <gismo.h>
 
 #ifdef gsElasticity_ENABLED
-#include <gsElasticity/gsGeoUtils.h>
-#include <gsElasticity/gsElasticityAssembler.h>
-#include <gsElasticity/gsMassAssembler.h>
+#include <gsElasticity/src/gsGeoUtils.h>
+#include <gsElasticity/src/gsElasticityAssembler.h>
+#include <gsElasticity/src/gsMassAssembler.h>
 #endif
 
 #include <gsStructuralAnalysis/src/gsEigenSolvers/gsModalSolver.h>

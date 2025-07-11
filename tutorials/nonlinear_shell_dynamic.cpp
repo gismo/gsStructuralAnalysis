@@ -206,6 +206,6 @@ int main(int argc, char *argv[])
     return EXIT_SUCCESS;
 #else
     GISMO_ERROR("The tutorial needs to be compiled with gsKLShell enabled");
-    return EXIT_FAILED;
+    return EXIT_FAILURE;
 #endif
 }// end main

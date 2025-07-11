@@ -44,7 +44,7 @@ int main (int argc, char** argv)
     int verbose = 0;
     bool membrane = false;
 
-    real tolDR = 1e-1;
+    real_t tolDR = 1e-1;
 
     index_t Compressibility = 1;
     index_t material = 1;

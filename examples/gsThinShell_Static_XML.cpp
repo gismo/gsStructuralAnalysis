@@ -19,7 +19,7 @@
 #endif
 
 #ifdef gsElasticity_ENABLED
-#include <gsElasticity/gsWriteParaviewMultiPhysics.h>
+#include <gsElasticity/src/gsWriteParaviewMultiPhysics.h>
 #endif
 
 #include <gsStructuralAnalysis/src/gsStaticSolvers/gsStaticNewton.h>
