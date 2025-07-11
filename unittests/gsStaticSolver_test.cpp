@@ -74,7 +74,6 @@ SUITE(gsStaticSolver_test)                 // The suite should have the same nam
     //     std::vector<index_t> solver({1});
     //     UAT_CHECK(solver);
     // }
-
 #ifdef gsHLBFGS_ENABLED
     TEST(StaticSolver_UAT_OP)
     {

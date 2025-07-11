@@ -42,6 +42,9 @@ int main (int argc, char** argv)
     bool DR  = false;
     bool NR  = false;
     int verbose = 0;
+    bool membrane = false;
+
+    real_t tolDR = 1e-1;
 
     index_t Compressibility = 1;
     index_t material = 1;
@@ -78,6 +81,8 @@ int main (int argc, char** argv)
 
     cmd.addReal( "L", "maxLoad", "Maximum load",  maxLoad );
 
+    cmd.addReal( "T", "tolDR", "Tolerance for the DR solver",  tolDR );
+
     cmd.addSwitch("plot", "Plot result in ParaView format", plot);
     cmd.addSwitch("write", "Write data to file", write);
     cmd.addSwitch("stress", "Plot stress in ParaView format", stress);
@@ -86,6 +91,7 @@ int main (int argc, char** argv)
     cmd.addSwitch("split", "Split to a multi-patch", split);
     cmd.addSwitch("smooth", "Use a smooth basis (maximum regularity)", smooth);
     cmd.addInt("v","verbose", "0: no; 1: iteration output; 2: Full matrix and vector output", verbose);
+    cmd.addSwitch("membrane", "Membrane element", membrane);
 
     try { cmd.getValues(argc,argv); } catch (int rv) { return rv; }
     GISMO_ASSERT(NR || DR,"At least a Newton Raphson or a Dynamic Relaxation solver needs to be enabled. Run with option NR or DR.");
@@ -236,7 +242,11 @@ int main (int argc, char** argv)
     // materialMatrixTFT->options().setSwitch("Explicit",true);
 
     gsThinShellAssemblerBase<real_t>* assembler;
-    if (TFT)
+    if (!membrane && TFT)
+      assembler = new gsThinShellAssembler<3, real_t, true >(mp,dbasis,BCs,force,materialMatrixTFT);
+    else if (!membrane && !TFT)
+      assembler = new gsThinShellAssembler<3, real_t, true >(mp,dbasis,BCs,force,materialMatrix);
+    else if (membrane && TFT)
       assembler = new gsThinShellAssembler<3, real_t, false >(mp,dbasis,BCs,force,materialMatrixTFT);
     else
       assembler = new gsThinShellAssembler<3, real_t, false >(mp,dbasis,BCs,force,materialMatrix);
@@ -305,7 +315,7 @@ int main (int argc, char** argv)
     DROptions.setReal("damping",damping);
     DROptions.setReal("alpha",alpha);
     DROptions.setInt("maxIt",1e6);
-    DROptions.setReal("tol",1e-2);
+    DROptions.setReal("tol",tolDR);
     DROptions.setReal("tolE",1e-5);
     DROptions.setInt("verbose",verbose);
     DROptions.setInt("ResetIt",(index_t)(100));
@@ -437,6 +447,8 @@ int main (int argc, char** argv)
         gsVector<> data(1);
         data<<load_fac;
         writer.add(result,data);
+
+        gsWrite(mp_def,dirname + "/" + "deformed");
       }
 
 /*

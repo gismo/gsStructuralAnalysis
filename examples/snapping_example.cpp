@@ -22,9 +22,9 @@
 #include <gsStructuralAnalysis/src/gsALMSolvers/gsALMCrisfield.h>
 
 #ifdef gsElasticity_ENABLED
-#include <gsElasticity/gsGeoUtils.h>
-#include <gsElasticity/gsElasticityAssembler.h>
-#include <gsElasticity/gsWriteParaviewMultiPhysics.h>
+#include <gsElasticity/src/gsGeoUtils.h>
+#include <gsElasticity/src/gsElasticityAssembler.h>
+#include <gsElasticity/src/gsWriteParaviewMultiPhysics.h>
 #endif
 
 using namespace gismo;

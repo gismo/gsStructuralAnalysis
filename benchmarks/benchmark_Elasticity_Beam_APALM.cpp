@@ -14,9 +14,9 @@
 #include <gismo.h>
 
 #ifdef gsElasticity_ENABLED
-#include <gsElasticity/gsGeoUtils.h>
-#include <gsElasticity/gsElasticityAssembler.h>
-#include <gsElasticity/gsWriteParaviewMultiPhysics.h>
+#include <gsElasticity/src/gsGeoUtils.h>
+#include <gsElasticity/src/gsElasticityAssembler.h>
+#include <gsElasticity/src/gsWriteParaviewMultiPhysics.h>
 #endif
 
 #include <gsStructuralAnalysis/src/gsALMSolvers/gsALMBase.h>

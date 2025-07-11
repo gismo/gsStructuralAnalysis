@@ -240,9 +240,8 @@ int main (int argc, char** argv)
     assembler->assemble();
     gsSparseMatrix<> K = assembler->matrix();
     gsVector<> F = assembler->rhs();
-    assembler->assembleMass(false);
-    gsSparseMatrix<> Mmat = assembler->matrix();
-    gsVector<> M = Mmat.toDense().rowwise().sum();
+    assembler->assembleMass(true);
+    gsVector<> M = assembler->rhs();
 
     // Function for the Jacobian
     gsStructuralAnalysisOps<real_t>::Jacobian_t Jacobian = [&assembler,&mp_def](gsVector<real_t> const &x, gsSparseMatrix<real_t> & m)
@@ -330,7 +329,7 @@ int main (int argc, char** argv)
         result.col(k) = deformation.patch(refPatches.at(k)).eval(refPoints.col(k));
       writer.add(result);
 
-      gsWrite(mp_def,"deformed");
+      gsWrite(mp_def,dirname + sep + "deformed");
     }
 
     // ! [Export visualization in ParaView]
@@ -392,7 +391,7 @@ int main (int argc, char** argv)
       gsWriteParaview(stretchDir1,dirname + sep + "PrincipalDirection1",5000);
       gsWriteParaview(stretchDir2,dirname + sep + "PrincipalDirection2",5000);
       gsWriteParaview(stretchDir3,dirname + sep + "PrincipalDirection3",5000);
-      
+
     }
 
     delete assembler;

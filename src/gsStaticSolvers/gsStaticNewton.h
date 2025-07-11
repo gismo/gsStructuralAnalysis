@@ -268,7 +268,7 @@ protected:
 
     /// Linear solver employed
     using Base::m_solver;   // Cholesky by default
-    
+
     using Base::m_stabilityMethod;
 
     /// Indicator for bifurcation

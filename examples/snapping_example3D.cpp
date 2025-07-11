@@ -1,8 +1,8 @@
 /** @file snapping_example3D.cpp
 
     @brief Arc-length analysis of a snapping meta material. Inspired by
-    
-    Rafsanjani, A., Akbarzadeh, A., & Pasini, D. (2015). Snapping Mechanical Metamaterials under Tension. 
+
+    Rafsanjani, A., Akbarzadeh, A., & Pasini, D. (2015). Snapping Mechanical Metamaterials under Tension.
     Advanced Materials, 27(39), 5931–5935. https://doi.org/10.1002/adma.201502809
 
     This file is part of the G+Smo library.
@@ -22,9 +22,9 @@
 #include <gsStructuralAnalysis/src/gsALMSolvers/gsALMCrisfield.h>
 
 #ifdef gsElasticity_ENABLED
-#include <gsElasticity/gsGeoUtils.h>
-#include <gsElasticity/gsElasticityAssembler.h>
-#include <gsElasticity/gsWriteParaviewMultiPhysics.h>
+#include <gsElasticity/src/gsGeoUtils.h>
+#include <gsElasticity/src/gsElasticityAssembler.h>
+#include <gsElasticity/src/gsWriteParaviewMultiPhysics.h>
 #endif
 
 using namespace gismo;
@@ -332,7 +332,7 @@ int main(int argc, char *argv[])
     };
 
     assembler.options().setInt("MaterialLaw",material_law::neo_hooke_quad);
-    
+
     //=============================================//
                   // Solving //
     //=============================================//

@@ -34,7 +34,11 @@
 
 <!-- Boundary conditions and loads -->
 <boundaryConditions id="20" multipatch="0">
-  <Function type="FunctionExpr" dim="3" index="0">0</Function>
+  <Function type="FunctionExpr" dim="3" index="0">
+  <c> 0 </c>
+  <c> 0 </c>
+  <c> 0 </c>
+  </Function>
   <Function type="FunctionExpr" dim="3" index="1">sqrt(x^2+y^2)*(cos(atan2(y,x) + pi/2)- cos(atan2(y,x)))</Function>
   <Function type="FunctionExpr" dim="3" index="2">sqrt(x^2+y^2)*(sin(atan2(y,x) + pi/2)- sin(atan2(y,x)))</Function>
   <Function type="FunctionExpr" dim="3" index="3">125e-3</Function>

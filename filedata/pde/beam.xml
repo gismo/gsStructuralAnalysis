@@ -38,7 +38,11 @@
 
 <!-- Boundary conditions and loads -->
 <boundaryConditions id="20" multipatch="0">
-  <Function type="FunctionExpr" dim="3" index="0">0</Function>
+  <Function type="FunctionExpr" dim="3" index="0">
+  <c>0</c>
+  <c>0</c>
+  <c>0</c>
+  </Function>
   <bc type="Dirichlet" function="0" unknown="0" component="-1">
     0 1
     1 1
@@ -116,7 +120,7 @@
 <!-- Thin Shell Assembler options -->
 <OptionList id="92">
 <int label="Continuity" desc="Set the continuity of the interface assembly [int]" value="-1"/>
-<real label="IfcPenalty" desc="Set the continuity of the interface assembly [int]" value="1e10"/>
+<real label="IfcPenalty" desc="Set the continuity of the interface assembly [int]" value="1e3"/>
 </OptionList>
 
 <OptionList id="95">
