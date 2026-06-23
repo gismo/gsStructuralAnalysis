@@ -24,7 +24,8 @@ namespace gismo
 {
 
 /**
-    @brief Performs the arc length method to solve a nonlinear system of equations.
+    @brief Base class for solution strategies of nonlinear second-order dynamic 
+    systems.
 
     \tparam T coefficient type
 
@@ -193,7 +194,7 @@ public:
     // Returns the current time step
     virtual T getTimeStep() const {return m_options.getReal("DT"); }
 
-    /// Perform one arc-length step
+    /// Perform one time step
     virtual gsStatus step(T dt)
     {
         if (m_preStepCallback && !m_preStepCallback(m_time,dt,m_options))
@@ -225,7 +226,7 @@ public:
     }
 
     // Output
-    /// True if the Arc Length method converged
+    /// True if the method converged
     virtual bool converged() const {return m_status==gsStatus::Success;}
 
     /// Returns the number of Newton iterations performed
@@ -249,8 +250,8 @@ public:
     virtual void setVelocities(const gsVector<T> & V)    {this->setV(V);}
     virtual void setAccelerations(const gsVector<T> & A) {this->setA(A);}
 
-    /// @brief Set a function that is called before each timestep. WARNING: This
-    ///        callback is only performed for the non-const step().
+    /// @brief Set a function that is executed when non-const step() is called before
+    ///        the actual step is performed. 
     virtual void setPreStepCallback(const StepCallback_t & callback)
     {
         m_preStepCallback = callback;
@@ -372,7 +373,7 @@ protected:
     /// Number of iterations performed
     mutable index_t m_numIterations;
 
-    // /// Maximum number of Arc Length iterations allowed
+    // /// Maximum number of iterations allowed
     // index_t m_maxIterations;
 
     // /// Number of desired iterations
