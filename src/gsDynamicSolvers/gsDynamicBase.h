@@ -49,6 +49,9 @@ protected:
 
 public:
 
+    /// @brief Callback that is evaluated before each timestep.
+    typedef std::function<bool(const T, const T, const gsOptionList &)> StepCallback_t;
+
     virtual ~gsDynamicBase() {};
 
     /// Constructor
@@ -193,8 +196,15 @@ public:
     /// Perform one arc-length step
     virtual gsStatus step(T dt)
     {
+        if (m_preStepCallback && !m_preStepCallback(m_time,dt,m_options))
+        {
+            m_status = gsStatus::OtherError;
+            return m_status;
+        }
+
         gsStatus status = this->_step(m_time,dt,m_U,m_V,m_A);
         m_time += dt;
+        m_status = status;
         return status;
     }
 
@@ -238,6 +248,19 @@ public:
     virtual void setDisplacements(const gsVector<T> & U) {this->setU(U);}
     virtual void setVelocities(const gsVector<T> & V)    {this->setV(V);}
     virtual void setAccelerations(const gsVector<T> & A) {this->setA(A);}
+
+    /// @brief Set a function that is called before each timestep. WARNING: This
+    ///        callback is only performed for the non-const step().
+    virtual void setPreStepCallback(const StepCallback_t & callback)
+    {
+        m_preStepCallback = callback;
+    }
+
+    /// @brief Clear the pre-step callback.
+    virtual void clearPreStepCallback()
+    {
+        m_preStepCallback = StepCallback_t();
+    }
 
     /// Access the options
     virtual gsOptionList & options() {return m_options;};
@@ -334,6 +357,8 @@ protected:
 
     Residual_t  m_residual;
     TResidual_t m_Tresidual;
+
+    StepCallback_t m_preStepCallback;
 
     mutable typename gsSparseSolver<T>::uPtr m_solver; // Cholesky by default
 
