@@ -51,8 +51,8 @@ protected:
 public:
 
     /// @brief Callback that is evaluated before each timestep.
-    typedef std::function<bool(const T, const T, const gsOptionList &)> StepCallback_t;
-
+    typedef std::function<bool(const T /* time */, const T /* dtime */, 
+        const gsOptionList & /* solver options */)> StepCallback_t;
     virtual ~gsDynamicBase() {};
 
     /// Constructor
