@@ -61,19 +61,19 @@ gsDynamicExplicitEuler<T,_NL>::_step_impl(const T t, const T dt, gsVector<T> & U
   sol.topRows(N) = Uold;
   sol.bottomRows(N) = Vold;
 
-  gsVector<T> F;
-  gsSparseMatrix<T> M, Minv, C, K;
+  gsVector<T> F, massRhs, massSolve;
+  gsSparseMatrix<T> C, K;
 
   // Computed at t=t0
-  this->_computeMass(t,M);
-  this->_computeMassInverse(M,Minv);
   this->_computeForce(t,F);
   this->_computeDamping(U,t,C);
   this->_computeJacobian(U,t,K);
 
   this->_initOutput();
   sol.topRows(N) += dt * Vold;
-  sol.bottomRows(N) += dt * Minv * (F - K * Uold - C * Vold);
+  massRhs = F - K * Uold - C * Vold;
+  this->_applyMassInverse(t, massRhs, massSolve);
+  sol.bottomRows(N) += dt * massSolve;
   this->_stepOutput(0,sol.norm(),0.);
   gsDebugVar(sol.transpose());
 
@@ -101,18 +101,18 @@ gsDynamicExplicitEuler<T,_NL>::_step_impl(const T t, const T dt, gsVector<T> & U
   sol.topRows(N) = Uold;
   sol.bottomRows(N) = Vold;
 
-  gsVector<T> R;
-  gsSparseMatrix<T> M, Minv, C, K;
+  gsVector<T> R, massRhs, massSolve;
+  gsSparseMatrix<T> C, K;
 
   // Computed at t=t0
-  this->_computeMass(t,M);
-  this->_computeMassInverse(M,Minv);
   this->_computeDamping(Uold,t,C);
   this->_computeResidual(Uold,t,R);
 
   this->_initOutput();
   sol.topRows(N) += dt * Vold;
-  sol.bottomRows(N) += dt * Minv * ( - R - C * Vold);
+  massRhs = - R - C * Vold;
+  this->_applyMassInverse(t, massRhs, massSolve);
+  sol.bottomRows(N) += dt * massSolve;
   this->_stepOutput(0,sol.norm(),0.);
 
   U = sol.topRows(N);
