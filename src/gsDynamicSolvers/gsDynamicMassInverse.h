@@ -46,7 +46,8 @@ public:
     {
         gsSparseMatrix<T> eye(mass.rows(), mass.cols());
         eye.setIdentity();
-        typename gsSparseSolver<T>::LU solver(mass);
+        typename gsSparseSolver<T>::LU solver;
+        solver.compute(mass);
         GISMO_ENSURE(solver.info() == gsEigen::Success,
                      "LU factorization of mass matrix failed.");
         gsMatrix<T> inverse = solver.solve(eye);
