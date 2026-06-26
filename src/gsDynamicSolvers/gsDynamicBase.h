@@ -185,7 +185,7 @@ protected:
 
         m_status = gsStatus::NotStarted;
 
-        mass_is_timedependent = mass_timedependent;
+        m_massIsTimeDependent = mass_timedependent;
         m_massInverse = MassInversePtr(new gsDynamicExplicitMassInverse<T>);
         m_massInverseComputed = false;
     }
@@ -327,7 +327,7 @@ protected:
     /// Return true if the inverse mass representation needs a fresh mass matrix.
     virtual bool _massInverseNeedsUpdate() const
     {
-        return mass_is_timedependent || !m_massInverseComputed;
+        return m_massIsTimeDependent || !m_massInverseComputed;
     }
 
     /// Compute or update the inverse mass representation.
@@ -379,7 +379,7 @@ protected:
 
     Mass_t      m_mass;
     TMass_t     m_Tmass;
-    bool mass_is_timedependent;
+    bool m_massIsTimeDependent;
     mutable MassInversePtr m_massInverse;
     mutable bool m_massInverseComputed;
 
