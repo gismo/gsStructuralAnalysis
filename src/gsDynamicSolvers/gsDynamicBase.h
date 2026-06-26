@@ -350,6 +350,7 @@ protected:
             this->_computeMass(time,M);
             this->_computeMassInverse(M);
         }
+        result.setZero(rhs.size());
         m_massInverse->apply(rhs,result);
     }
 
