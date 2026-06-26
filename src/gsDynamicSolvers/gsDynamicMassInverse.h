@@ -67,14 +67,17 @@ public:
     explicit gsDynamicSparseMassInverse(const std::string & solver = "SimplicialLDLT")
     :
     m_solver(gsSparseSolver<T>::get(solver))
-    {}
-
-    void compute(const gsSparseMatrix<T> & mass)
     {
-        m_solver->compute(mass);
+        GISMO_ENSURE(m_solver, "Unknown sparse solver: "<<solver);
     }
 
-    void apply(const gsVector<T> & rhs, gsVector<T> & result) const
+    void compute(const gsSparseMatrix<T> & mass) override
+    {
+        m_solver->compute(mass);
+        GISMO_ENSURE(m_solver->info()==gsEigen::ComputationInfo::Success, "Mass matrix factorization failed.");
+    }
+
+    void apply(const gsVector<T> & rhs, gsVector<T> & result) const override
     {
         result = m_solver->solve(rhs);
     }
