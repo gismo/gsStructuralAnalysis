@@ -18,6 +18,7 @@
 
 #include <gsCore/gsLinearAlgebra.h>
 #include <gsIO/gsOptionList.h>
+#include <gsStructuralAnalysis/src/gsDynamicSolvers/gsDynamicMassInverse.h>
 #include <gsStructuralAnalysis/src/gsStructuralAnalysisTools/gsStructuralAnalysisTypes.h>
 
 namespace gismo
@@ -53,6 +54,8 @@ public:
     /// @brief Callback that is evaluated before each timestep.
     typedef std::function<bool(const T /* time */, const T /* dtime */, 
         const gsOptionList & /* solver options */)> StepCallback_t;
+    typedef gsDynamicMassInverse<T> MassInverse_t;
+    typedef typename MassInverse_t::Ptr MassInversePtr;
     virtual ~gsDynamicBase() {};
 
     /// Constructor
@@ -73,7 +76,7 @@ public:
         m_Tjacobian   = [this](gsVector<T> const & /*x*/, const T /*time*/, gsSparseMatrix<T> & result)     -> bool {return m_stiffness(result);};
         m_Tforce      = [this](                           const T /*time*/, gsVector<T>       & result)     -> bool {return m_force(result);};
         m_Tresidual   = [    ](gsVector<T> const & /*x*/, const T /*time*/, gsVector<T>       & /*result*/) -> bool {GISMO_ERROR("time-dependent residual not available");};
-        _init();
+        _init(false);
     }
 
     /// Constructor
@@ -93,7 +96,7 @@ public:
         m_Tdamping    = [this](gsVector<T> const & x,     const T /*time*/, gsSparseMatrix<T> & result)     -> bool {return m_damping(x,result);};
         m_Tjacobian   = [this](gsVector<T> const & /*x*/, const T /*time*/, gsSparseMatrix<T> & result)     -> bool {return m_stiffness(result);};
         m_Tresidual   = [    ](gsVector<T> const & /*x*/, const T /*time*/, gsVector<T>       & /*result*/) -> bool {GISMO_ERROR("time-dependent residual not available");};
-        _init();
+        _init(false);
     }
 
     /// Constructor
@@ -114,7 +117,7 @@ public:
         m_Tjacobian   = [this](gsVector<T> const & x, const T /*time*/, gsSparseMatrix<T> & result)     -> bool {return m_jacobian(x,result);};
         m_Tforce      = [    ](                       const T /*time*/, gsVector<T>       & /*result*/) -> bool {GISMO_ERROR("time-dependent force not available");};
         m_Tresidual   = [this](gsVector<T> const & x, const T /*time*/, gsVector<T>       & result)     -> bool {return m_residual(x,result);};
-        _init();
+        _init(false);
     }
 
     /// Constructor
@@ -133,7 +136,7 @@ public:
         m_Tmass       = [this](                       const T /*time*/, gsSparseMatrix<T> & result) -> bool {return m_mass(result);};
         m_Tjacobian   = [this](gsVector<T> const & x, const T /*time*/, gsSparseMatrix<T> & result) -> bool {return m_jacobian(x,result);};
         m_Tdamping    = [this](gsVector<T> const & x, const T /*time*/, gsSparseMatrix<T> & result) -> bool {return m_damping(x,result);};
-        _init();
+        _init(false);
     }
 
     /// Constructor
@@ -151,7 +154,7 @@ public:
     {
         m_Tmass       = [this](                       const T /*time*/, gsSparseMatrix<T> & result) -> bool {return m_mass(result);};
         m_Tdamping    = [this](gsVector<T> const & x, const T /*time*/, gsSparseMatrix<T> & result) -> bool {return m_damping(x,result);};
-        _init();
+        _init(false);
     }
 
     /// Constructor
@@ -167,13 +170,13 @@ public:
     m_Tjacobian(TJacobian),
     m_Tresidual(TResidual)
     {
-        _init();
+        _init(true);
     }
 
-    gsDynamicBase() {_init();}
+    gsDynamicBase() {_init(true);}
 
 protected:
-    void _init()
+    void _init(const bool mass_timedependent)
     {
         m_time = 0;
         // initialize variables
@@ -181,6 +184,10 @@ protected:
         defaultOptions();
 
         m_status = gsStatus::NotStarted;
+
+        mass_is_timedependent = mass_timedependent;
+        m_massInverse = MassInversePtr(new gsDynamicExplicitMassInverse<T>);
+        m_massInverseComputed = false;
     }
 
 // General functions
@@ -263,6 +270,21 @@ public:
         m_preStepCallback = StepCallback_t();
     }
 
+    /// @brief Set a custom inverse mass function object.
+    virtual void setMassInverse(const MassInversePtr & massInverse)
+    {
+        GISMO_ENSURE(massInverse, "Cannot set an empty inverse mass function object.");
+        m_massInverse = massInverse;
+        m_massInverseComputed = false;
+    }
+
+    /// @brief Restore the default explicit inverse mass function object.
+    virtual void clearMassInverse()
+    {
+        m_massInverse = MassInversePtr(new gsDynamicExplicitMassInverse<T>);
+        m_massInverseComputed = false;
+    }
+
     /// Access the options
     virtual gsOptionList & options() {return m_options;};
 
@@ -302,19 +324,33 @@ protected:
             throw 2;
     }
 
-    /// Compute the mass matrix
-    virtual void _computeMassInverse(const gsSparseMatrix<T> & M, gsSparseMatrix<T> & Minv) const
+    /// Return true if the inverse mass representation needs a fresh mass matrix.
+    virtual bool _massInverseNeedsUpdate() const
     {
-        if ((m_mass==nullptr) || (m_massInv.rows()==0 || m_massInv.cols()==0)) // then mass is time-dependent or the mass inverse is not stored, compute it
+        return mass_is_timedependent || !m_massInverseComputed;
+    }
+
+    /// Compute or update the inverse mass representation.
+    virtual void _computeMassInverse(const gsSparseMatrix<T> & M) const
+    {
+        if (this->_massInverseNeedsUpdate())
         {
-            gsSparseMatrix<T> eye(M.rows(), M.cols());
-            eye.setIdentity();
-            gsSparseSolver<>::LU solver(M);
-            gsMatrix<T> MinvI = solver.solve(eye);
-            m_massInv = Minv = MinvI.sparseView();
+            GISMO_ENSURE(M.rows()!=0 && M.cols()!=0, "Cannot compute inverse mass from an empty mass matrix.");
+            m_massInverse->compute(M);
+            m_massInverseComputed = true;
         }
-        else
-            Minv = m_massInv;
+    }
+
+    /// Apply the inverse mass matrix without necessarily forming it explicitly.
+    virtual void _applyMassInverse(const T time, const gsVector<T> & rhs, gsVector<T> & result) const
+    {
+        if (this->_massInverseNeedsUpdate())
+        {
+            gsSparseMatrix<T> M;
+            this->_computeMass(time,M);
+            this->_computeMassInverse(M);
+        }
+        m_massInverse->apply(rhs,result);
     }
 
     /// Compute the damping matrix
@@ -342,8 +378,10 @@ protected:
     index_t m_numDofs;
 
     Mass_t      m_mass;
-    mutable gsSparseMatrix<T> m_massInv;
     TMass_t     m_Tmass;
+    bool mass_is_timedependent;
+    mutable MassInversePtr m_massInverse;
+    mutable bool m_massInverseComputed;
 
     Damping_t   m_damping;
     TDamping_t  m_Tdamping;
