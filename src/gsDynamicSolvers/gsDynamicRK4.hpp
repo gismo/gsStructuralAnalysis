@@ -69,9 +69,9 @@ gsDynamicRK4<T,_NL>::_step_impl(const T t, const T dt, gsVector<T> & U, gsVector
   k3.bottomRows(N) = Minv * ( R - C * Vtmp);
 
   //Step4 (calculate k4)
-  Utmp = Uold + dt/2. * k3.topRows(N);
-  Vtmp = Vold + dt/2. * k3.bottomRows(N);
-  _computeForce(t + dt/2., F);
+  Utmp = Uold + dt * k3.topRows(N);
+  Vtmp = Vold + dt * k3.bottomRows(N);
+  _computeForce(t + dt, F);
   R = F - K * Utmp;
   k4.topRows(N) = Vtmp;
   k4.bottomRows(N) = Minv * ( R - C * Vtmp);
@@ -139,9 +139,9 @@ gsDynamicRK4<T,_NL>::_step_impl(const T t, const T dt, gsVector<T> & U, gsVector
   k3.bottomRows(N) = Minv * ( R - C * Vtmp);
 
   //Step4 (calculate k4)
-  Utmp = Uold + dt/2. * k3.topRows(N);
-  Vtmp = Vold + dt/2. * k3.bottomRows(N);
-  _computeResidual(Utmp,t + dt/2.,R);
+  Utmp = Uold + dt * k3.topRows(N);
+  Vtmp = Vold + dt * k3.bottomRows(N);
+  _computeResidual(Utmp,t + dt,R);
   k4.topRows(N) = Vtmp;
   k4.bottomRows(N) = Minv * ( R - C * Vtmp);
 
