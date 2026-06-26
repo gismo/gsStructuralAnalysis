@@ -13,6 +13,7 @@
 
 #pragma once
 
+#include <gsCore/gsDebug.h>
 #include <gsCore/gsLinearAlgebra.h>
 
 #include <string>
@@ -46,7 +47,11 @@ public:
         gsSparseMatrix<T> eye(mass.rows(), mass.cols());
         eye.setIdentity();
         typename gsSparseSolver<T>::LU solver(mass);
+        GISMO_ENSURE(solver.info() == gsEigen::Success,
+                     "LU factorization of mass matrix failed.");
         gsMatrix<T> inverse = solver.solve(eye);
+        GISMO_ENSURE(solver.info() == gsEigen::Success,
+                     "Solving for inverse mass matrix failed.");
         m_massInv = inverse.sparseView();
     }
 
