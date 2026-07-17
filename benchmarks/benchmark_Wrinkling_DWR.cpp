@@ -480,10 +480,10 @@ int main (int argc, char** argv)
     real_t indicator = 0.0;
     bool unstable_prev = false;
 
-    gsAdaptiveMeshing<real_t> mesher;
+    gsAdaptiveMeshing<2,real_t> mesher;
     if (adaptiveMesh)
     {
-        mesher = gsAdaptiveMeshing<real_t>(mp);
+        mesher = gsAdaptiveMeshing<2,real_t>(mp);
         mesher.options() = mesherOpts;
         mesher.getOptions();
     }

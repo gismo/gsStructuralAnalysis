@@ -25,10 +25,6 @@
 #include <gsUnstructuredSplines/src/gsSmoothInterfaces.h>
 #endif
 
-#ifdef gsHLBFGS_ENABLED
-#include <gsHLBFGS/gsHLBFGS.h>
-#endif
-
 #ifdef gsOptim_ENABLED
 #include <gsOptim/gsOptim.h>
 #endif
@@ -61,6 +57,7 @@ void writeToCSVfile(const std::string& name, const gsMatrix<>& matrix)
 }
 
 #ifdef gsKLShell_ENABLED
+#ifdef gsUnstructuredSplines_ENABLED
 
 int main (int argc, char** argv)
 {
@@ -320,6 +317,7 @@ int main (int argc, char** argv)
     DynamicRelaxationSolver.setOptions(DynamicRelaxationOptions);
     DynamicRelaxationSolver.initialize();
 
+#ifdef gsOptim_ENABLED
     gsStaticOpt<real_t,gsOptim<real_t>::LBFGS> OptimizerSolver(Residual,assembler->numDofs());
     gsOptionList OptimizerSolverOptions = OptimizerSolver.options();
     OptimizerSolverOptions.setInt("maxIt",maxitOPT);
@@ -328,7 +326,7 @@ int main (int argc, char** argv)
     OptimizerSolverOptions.setInt("verbose",1);
     OptimizerSolver.setOptions(OptimizerSolverOptions);
     OptimizerSolver.initialize();
-
+#endif
 
     gsStaticNewton<real_t> NewtonSolver(K,F,Jacobian,Residual);
     gsOptionList NewtonOptions = NewtonSolver.options();
@@ -346,8 +344,12 @@ int main (int argc, char** argv)
     }
     if (OP)
     {
+#ifdef gsOptim_ENABLED
       gsInfo<<"Using Optimizer solver\n";
       solvers.push_back(&OptimizerSolver);
+#else
+        gsWarn<<"G+Smo is not compiled with the gsOptim module, cannot use Optimizer solver.\n";
+#endif
     }
     if (NR)
     {
@@ -584,11 +586,17 @@ int main (int argc, char** argv)
 }
 
 
-
+#else //gsUnstructuredSplines_ENABLED
+int main(int argc, char *argv[])
+{
+    gsWarn<<"G+Smo is not compiled with the gsUnstructuredSplines module, cannot use unstructured splines for this benchmark.\n";
+    return EXIT_FAILURE;
+}
+#endif//gsUnstructuredSplines_ENABLED
 #else//gsKLShell_ENABLED
 int main(int argc, char *argv[])
 {
-    gsWarn<<"G+Smo is not compiled with the gsKLShell module.";
+    gsWarn<<"G+Smo is not compiled with the gsKLShell, gsUnstructuredSplines and gsOptim modules.\n";
     return EXIT_FAILURE;
 }
-#endif
+#endif//gsKLShell_ENABLED

@@ -302,14 +302,14 @@ int main (int argc, char** argv)
             mapper.finalize();
             gsMatrix<> coefs;
             // First project the geometry mp onto bb2 and make a mapped spline
-            gsInfo<<"L2-Projection error of mp on bb2 = "<<gsL2Projection<real_t>::projectGeometry(dbasis,bb2,mp,coefs)<<"\n";
+            gsInfo<<"L2-Projection error of mp on bb2 = "<<gsL2Projection<real_t>::project(bb2,dbasis,mp,coefs)<<"\n";
             coefs.resize(coefs.rows()/mp.geoDim(),mp.geoDim());
             gsMappedSpline<2,real_t> mspline;
             mspline.init(bb2,coefs);
             if (plot) gsWriteParaview( mspline, "mspline");
 
             // Then project onto dbasis so that geom represents the mapped geometry
-            gsInfo<<"L2-Projection error of mspline on dbasis = "<<gsL2Projection<real_t>::projectGeometry(dbasis,mspline,coefs)<<"\n";
+            gsInfo<<"L2-Projection error of mspline on dbasis = "<<gsL2Projection<real_t>::project(dbasis,mp,mspline,coefs)<<"\n";
             coefs.resize(coefs.rows()/mp.geoDim(),mp.geoDim());
 
             index_t offset = 0;

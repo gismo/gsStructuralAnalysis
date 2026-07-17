@@ -460,10 +460,10 @@ int main (int argc, char** argv)
     gsFileData<> fd_mesher(mesherOptionsFile);
     gsOptionList mesherOpts;
     fd_mesher.getFirst<gsOptionList>(mesherOpts);
-    gsAdaptiveMeshing<real_t> mesher;
+    gsAdaptiveMeshing<2,real_t> mesher;
     if (adaptiveMesh)
     {
-        mesher = gsAdaptiveMeshing<real_t>(mp);
+        mesher = gsAdaptiveMeshing<2,real_t>(mp);
         mesher.options() = mesherOpts;
         mesher.getOptions();
     }
