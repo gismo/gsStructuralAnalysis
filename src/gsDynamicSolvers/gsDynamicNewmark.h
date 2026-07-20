@@ -1,6 +1,11 @@
  /** @file gsDynamicNewmark.h
 
-    @brief Class to perform time integration of second-order structural dynamics systems using the Explicit Euler method
+    @brief Class to perform time integration of second-order structural dynamics systems using the Newmark method
+
+    For the Newmark method, see:
+    Newmark, N. M. (1959).
+    A method of computation for structural dynamics.
+    Journal of the engineering mechanics division, 85(3), 67-94.
 
     This file is part of the G+Smo library.
 
@@ -9,9 +14,6 @@
     file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
     Author(s): H.M. Verhelst (2019-..., TU Delft)
-
-    TODO (June 2023):
-    *    Change inputs to const references!
 */
 
 #pragma once

@@ -1,6 +1,11 @@
- /** @file gsDynamicImplicitEuler.h
+ /** @file gsDynamicXBraid.h
 
-    @brief Class to perform time integration of second-order structural dynamics systems using the Explicit Euler method
+    @brief This class provides an interface to XBraid for time integration methods deriving from \ref gsDynamicBase
+
+    For more information about XBraid, please check \ref gsXBraid or
+
+    [XBraid on GitHub] https://github.com/XBraid/xbraid/
+    [XBraid cite] XBraid: Parallel multigrid in time. http://llnl.gov/casc/xbraid.
 
     This file is part of the G+Smo library.
 
@@ -9,15 +14,15 @@
     file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
     Author(s): H.M. Verhelst (2019-..., TU Delft)
-
-    TODO (June 2023):
-    *    Change inputs to const references!
 */
 
 #pragma once
 #include <gsStructuralAnalysis/src/gsDynamicSolvers/gsDynamicBase.h>
-#include <gsXBraid/gsXBraid.h>
 #include <gsIO/gsOptionList.h>
+
+#ifdef gsXBraid_ENABLED
+#include <gsXBraid/gsXBraid.h>
+#endif
 
 namespace gismo
 {
@@ -38,7 +43,16 @@ public:
 
     virtual ~gsDynamicXBraid() {};
 
+#ifdef gsXBraid_ENABLED
     /// Constructor
+    ///
+    /// @param[in]  solver    A dynamic solver
+    /// @param[in]  comm      The MPI communication channel
+    /// @param[in]  tstart    The start time of the simulation
+    /// @param[in]  tend      The end time of the simulation
+    /// @param[in]  numDofs   The number of degrees of freedom
+    /// @param[in]  numSteps  The number time steps to perform
+    ///
     gsDynamicXBraid(
                     const gsDynamicBase<T> * solver,
                     const gsMpiComm& comm,
@@ -54,9 +68,33 @@ public:
         defaultOptions();
         m_callback = [](const index_t&,const T&,const gsVector<T>&,const gsVector<T>&,const gsVector<T>&){return;}; // set empty callback
     }
+#else
+    /// Constructor
+    ///
+    /// @param[in]  solver    A dynamic solver
+    /// @param[in]  comm      The MPI communication channel
+    /// @param[in]  tstart    The start time of the simulation
+    /// @param[in]  tend      The end time of the simulation
+    /// @param[in]  numDofs   The number of degrees of freedom
+    /// @param[in]  numSteps  The number time steps to perform
+    ///
+    gsDynamicXBraid(
+                    const gsDynamicBase<T> * solver,
+                    const gsMpiComm& comm,
+                    const T& tstart,
+                    const T& tend,
+                    const index_t numDofs,
+                    index_t numSteps = 10)
+    {
+        GISMO_ERROR("XBraid needs to be enabled to use the gsDynamicXBraid interface")
+    }
+#endif
 
 // Member functions
 public:
+    /**
+     * @brief      Dets the default options
+     */
     void defaultOptions()
     {
         // see gsXBraid/filedata/pde/heat2d_square_ibvp1.xml
@@ -87,6 +125,9 @@ public:
         m_options.addSwitch("extraVerbose", "Extra verbosity", 0);
     }
 
+    /**
+     * @brief      Initializes the class
+     */
     void initialize()
     {
         // see gsXBraid/examples/xbraid_heatEquation_example.cpp
@@ -114,7 +155,8 @@ public:
         else                                      this->SetRelTol(m_options.getReal("relTol"));
     }
 
-    /// Initializes a vector
+#ifdef gsXBraid_ENABLED
+    /// See \ref gsXBraid for the documentation
     braid_Int Init(braid_Real    t, braid_Vector *u_ptr) override
     {
         gsMatrix<T>* u = new gsMatrix<T>(3*m_numDofs, 1);
@@ -132,11 +174,31 @@ public:
         *u_ptr = (braid_Vector) u;
         return braid_Int(0);
     }
+#endif
 
+    /**
+     * @brief      Access the options of the class
+     *
+     * @return     The options stored in the class
+     */
     gsOptionList & options() { return m_options; }
+
+    /**
+     * @brief      Set the class options
+     *
+     * @param[in]  options  The options to be set
+     */
     void setOptions(gsOptionList options) {m_options.update(options,gsOptionList::addIfUnknown); };
 
-    /// Performs a single step of the parallel-in-time multigrid
+    /**
+     * @brief      Provide a callback function to be executed after the simulation
+     *
+     * @param[in]  callback  The callback function
+     */
+    void setCallback(callback_type callback) const {m_callback = callback;}
+
+#ifdef gsXBraid_ENABLED
+    /// See \ref gsXBraid for the documentation
     braid_Int Step(braid_Vector    u, braid_Vector    ustop, braid_Vector    fstop, BraidStepStatus &status) override
     {
         gsVector<T>* u_ptr = (gsVector<T>*) u;
@@ -190,7 +252,7 @@ public:
         return braid_Int(0);
     }
 
-    /// Computes the spatial norm of the given vector
+    /// See \ref gsXBraid for the documentation
     braid_Int SpatialNorm(  braid_Vector  u,
                             braid_Real   *norm_ptr) override
     {
@@ -200,16 +262,14 @@ public:
         return braid_Int(0);
     }
 
-    /// Sets the size of the MPI communication buffer
+    /// See \ref gsXBraid for the documentation
     braid_Int BufSize(braid_Int *size_ptr, BraidBufferStatus &status) override
     {
         *size_ptr = sizeof(T)*(m_numDofs*3+2); // +2 comes from rows, cols of the solution vector u.
         return braid_Int(0);
     }
 
-    void setCallback(callback_type callback) const {m_callback = callback;}
-
-    /// Handles access for input/output
+    /// See \ref gsXBraid for the documentation
     braid_Int Access(braid_Vector u, BraidAccessStatus &status) override
     {
         gsVector<T>* u_ptr = (gsVector<T>*) u;
@@ -222,7 +282,7 @@ public:
         return braid_Int(0);
     }
 
-    /// Performs spatial coarsening
+    /// See \ref gsXBraid for the documentation
     /*
         NOTE: This routine is not implemented. How to do it:
         1. Make the Coarsen and Refine routines virtual
@@ -238,7 +298,7 @@ public:
         return braid_Int(0);
     }
 
-    // Performs spatial refinement
+    /// See \ref gsXBraid for the documentation
     braid_Int Refine(braid_Vector cu, braid_Vector *fu_ptr, BraidCoarsenRefStatus &status) override
     {
         gsMatrix<T> *cu_ptr = (gsMatrix<T>*) cu;
@@ -247,7 +307,7 @@ public:
         *fu_ptr = (braid_Vector) fu;
         return braid_Int(0);
     }
-
+#endif
 
 // Class members
 protected:
@@ -256,11 +316,6 @@ protected:
     index_t m_numDofs;
     gsOptionList m_options;
     mutable callback_type m_callback;
-
 };
 
 } // namespace gismo
-
-#ifndef GISMO_BUILD_LIB
-#include GISMO_HPP_HEADER(gsDynamicImplicitEuler.hpp)
-#endif

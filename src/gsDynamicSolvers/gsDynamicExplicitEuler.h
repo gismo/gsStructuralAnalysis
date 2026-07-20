@@ -9,9 +9,6 @@
     file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
     Author(s): H.M. Verhelst (2019-..., TU Delft)
-
-    TODO (June 2023):
-    *    Change inputs to const references!
 */
 
 #pragma once
