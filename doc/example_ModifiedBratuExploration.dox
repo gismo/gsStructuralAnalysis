@@ -1,0 +1,80 @@
+namespace gismo {
+/**
+
+\page example_ModifiedBratuExploration example_ModifiedBratuExploration.cpp
+
+
+Explores the landscape of the one-dimensional MODIFIED Bratu problem with
+\ref gsALMExploration, validated against exact discrete oracles.
+
+The problem, known as a continuation benchmark from pde2path, is
+
+\f{align*}{
+-\psi'' + \lambda\left(\psi - \mu\exp(\psi)\right) = 0 \quad \text{on } (0,1),
+\f}
+
+with homogeneous Neumann boundary conditions and \f$\lambda\f$ fixed; the continuation
+parameter is \f$\mu\f$, which plays the role of the load factor of \ref gsALMBase. Unlike
+the two-dimensional fold driver \ref example_BratuExploration.cpp, this landscape contains
+both singular-point types, and both are known in closed form on the discrete space:
+
+- the spatially CONSTANT states \f$\psi\equiv c\f$ are exact discrete equilibria with
+  \f$\mu(c) = c\exp(-c)\f$ (the constant lies in the null space of the stiffness matrix and
+  \f$\exp(c)\f$ integrates exactly on the spline space);
+- that branch folds at \f$c=1\f$, i.e. at \f$\mu^* = e^{-1}\f$, where the singular mode is
+  the constant one and the crossing must be classified as a LIMIT point;
+- it loses stability to a nonconstant mode at \f$c_1 = 1 + \theta_1/\lambda\f$, where
+  \f$\theta_1\f$ is the first nonzero Neumann eigenvalue of the pencil; the mode has zero
+  mean, so the reduced force projection is small and the crossing must be classified as a
+  BRANCH point, from which a mirror pair of one-sided states emanates.
+
+The driver therefore exercises the whole orchestrator: limit-versus-branch classification,
+branch-switch job queueing per critical-mode sign, retrace removal, and the assembly of
+parent and child curves into one \ref gsALMLandscape, each check being compared against
+the closed-form values above.
+
+The main command-line arguments are \c -r / \c -e (h-refinement and degree elevation),
+\c -l (the fixed reaction stiffness \f$\lambda\f$),
+\c -L (arc length on the \f$\mu\f$ scale), \c -N and \c --maxCurves (the exploration
+budget), \c -m (0 = load control, 1 = Riks, 2 = Crisfield), \c --solver (linear solver:
+pivoted \c LU, the default, or \c SimplicialLDLT), \c --switchLen and \c --tau
+(arc length and nudge scale for branch curves), \c --branchPoints (critical-mode signs
+explored per singular point), \c --bifmethod, \c --sptestit and \c --sptesttol (stability
+detection and limit-versus-branch test; unset/negative lets the library's own
+\c SingularPointTestIt / \c SingularPointTestTol default govern -- see
+\ref gsALMSolvers_SingularPoints), \c --forcingCallback, \c --gateSteps (cap on ATTEMPTED
+steps in the gate-(a) fold-rounding loop), \c --verbose, \c --quiet and \c --plot.
+
+\note Verbose exploration output is ON by default. \c --quiet turns it off; \c --verbose
+requests it explicitly and wins if both flags are given.
+
+This driver and \ref example_ShearExploration.cpp follow the same sentinel convention for
+\c SingularPointTestTol: an unset/negative local leaves the library's own default in force,
+while a value \c >= 0 is an explicit override -- the test is \c >= 0, not \c > 0, because
+\c SingularPointTestTol \c = \c 0 is itself a meaningful, valid explicit value. The one
+remaining difference is the flag spelling: \c --sptesttol here versus \c -t / \c --spTolT in
+\ref example_ShearExploration.cpp, so recorded invocations of either driver are not
+interchangeable.
+
+This driver also sets the explorer option \c RetraceBallFloor explicitly, to \f$1.2458\f$,
+a value derived as an equality at this driver's own A-B calibration locus (see
+\ref gsALMSolvers_BranchSwitching for the option's general rationale). This is a
+PER-DRIVER calibration and not a library-wide default -- the library itself ships
+\c RetraceBallFloor \c = \c 0 (disabled) -- so a caller applying this driver's approach to a
+different high-state-norm problem must derive and set their own value.
+
+The landscape is written to \c ModifiedBratuResults/landscape.csv (and, in
+\c gsHDF5 -enabled builds, to the matching <tt>.h5</tt> file), which
+\c examples/plot_landscape.py can render; its \c --merge-loci mode, which merges the traced
+segments belonging to one solution locus, reads the <tt>.h5</tt> file and needs \c h5py.
+
+\section example_ModifiedBratuExploration_Annotated Annotated source file
+
+Here is the full file \c examples/example_ModifiedBratuExploration.cpp. Clicking on a function
+or class name will lead you to its reference documentation.
+
+\include example_ModifiedBratuExploration.cpp
+
+*/
+
+}

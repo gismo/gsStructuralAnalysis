@@ -1,0 +1,57 @@
+namespace gismo {
+/**
+
+\page example_BratuExploration example_BratuExploration.cpp
+
+
+Traces the fold of the Liouville-Bratu-Gelfand problem with \ref gsALMRiks driven by
+\ref gsALMExploration.
+
+The benchmark is the unit-square problem
+
+\f{align*}{
+-\Delta u = \lambda \exp(u) \quad \text{on } (0,1)^2, \qquad u = 0 \text{ on the whole boundary,}
+\f}
+
+whose equilibrium diagram has a single FOLD (limit / turning point) at the literature value
+\f$\lambda^* \approx 6.808124423\f$. The driver traces the equilibrium curve from the rest
+state through the fold, and then checks that
+
+- the crossing is classified as a LIMIT point: no branch job is queued and the landscape
+  holds exactly one curve, whose stability sign flips across the fold;
+- three independent estimates of \f$\lambda^*\f$ agree with the reference value: a
+  least-squares parabola in arc length over the traced points, a least-squares
+  extrapolation of \f$\lambda\f$ in the smallest eigenvalue of the tangent to the fold's
+  known abscissa, and the extended (bordered) singular-point system.
+
+Riks is mandatory here: a load-control corrector holds \f$\lambda\f$ fixed and dies AT the
+fold instead of rounding it. Because the load \f$\lambda\exp(u)\f$ is not of the form
+\f$\lambda\mathbf{F}\f$, the constant force handed to the solver is only a frozen
+representative of \f$-\partial\mathbf{R}/\partial\lambda\f$; \c --forcingCallback installs
+the consistent state-dependent load derivative through \ref gsALMBase::setForcingFunction
+and lets the driver measure what that changes.
+
+The main command-line arguments are \c -r / \c -e (h-refinement and degree elevation),
+\c -L (arc length), \c -N (points per curve), \c -m (0 = Riks, 1 = Crisfield,
+2 = consistent Crisfield), \c -M (points in the fold-estimate fit window),
+\c --forcingCallback, \c --gateSteps (cap on ATTEMPTED steps in the gate-(a)
+fold-rounding Riks loop; \c <=0 auto-scales with \c -L), \c --verbose, \c --quiet and
+\c --plot.
+
+\note Verbose exploration output is ON by default. \c --quiet turns it off; \c --verbose
+requests it explicitly and wins if both flags are given.
+
+The landscape is written to \c BratuExplorationResults/landscape.csv (and, in
+\c gsHDF5 -enabled builds, to the matching <tt>.h5</tt> file), which
+\c examples/plot_landscape.py can render.
+
+\section example_BratuExploration_Annotated Annotated source file
+
+Here is the full file \c examples/example_BratuExploration.cpp. Clicking on a function
+or class name will lead you to its reference documentation.
+
+\include example_BratuExploration.cpp
+
+*/
+
+}

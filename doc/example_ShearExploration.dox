@@ -1,0 +1,53 @@
+namespace gismo {
+/**
+
+\page example_ShearExploration example_ShearExploration.cpp
+
+
+Perturbation-free detection of the first wrinkling bifurcation of a sheared
+Kirchhoff-Love shell, followed by a branch switch onto the wrinkled branch.
+
+A thick, coarse-mesh sheet is loaded in shear by a prescribed displacement on its north
+edge, scaled by the arc-length parameter \f$\lambda\f$. No geometric perturbation or
+imperfection is introduced: the bifurcation is found from the tangent alone, refined with
+the extended (bordered-Newton) singular-point system of \ref gsALMBase, and the emanating
+branch is then traced. That the followed branch is genuinely the wrinkling mode is
+confirmed two ways: the critical mode \c solutionV() is out-of-plane dominated, and the
+out-of-plane amplitude of the deformed sheet grows along the traced branch, whereas the
+flat fundamental path keeps zero out-of-plane displacement.
+
+The example runs the loop by hand -- step, halve the arc length and retry on a failed step,
+stability check, extended singular-point solve seeded from the last converged point BEFORE
+the crossing, branch switch, continue -- which is exactly the loop that
+\ref gsALMExploration automates; it is the shell counterpart of the landscape drivers
+\ref example_BratuExploration.cpp and \ref example_ModifiedBratuExploration.cpp. It
+requires the \ref KLShell module.
+
+The main command-line arguments are \c -r / \c -e (h-refinement and degree elevation),
+\c -a, \c -b and \c -T (sheet length, width and thickness), \c -m (0 = load control,
+1 = Crisfield), \c -B (0 = determinant, 1 = eigenvalue stability indicator), \c -L and
+\c -l (arc length before and after the branch switch), \c -F (branch-switch perturbation
+scale), \c -E, \c -D and \c -t (extended-system, bisection and detection tolerances -- \c -t
+unset/negative lets the library's own \c SingularPointTestTol default govern, see
+\ref gsALMSolvers_SingularPoints),
+\c -I (maximum Newton corrector iterations per step), \c -N and \c -P (total steps and
+post-switch steps), \c --noSwitch (detection only) and \c --plot.
+
+\note This driver's \c -t / \c --spTolT option sets \c SingularPointTestTol only when the
+flag is actually given: the underlying local starts at a negative sentinel, so with no flag
+the freshly constructed solver keeps the library's own default, and a future recalibration
+of that default is picked up automatically. A value \c >= 0 passed via \c -t is an explicit
+override; the test is \c >= 0, not \c > 0, because \c SingularPointTestTol \c = \c 0 is
+itself a meaningful, valid explicit value. See \ref gsALMSolvers_SingularPoints for the
+default itself.
+
+\section example_ShearExploration_Annotated Annotated source file
+
+Here is the full file \c examples/example_ShearExploration.cpp. Clicking on a function
+or class name will lead you to its reference documentation.
+
+\include example_ShearExploration.cpp
+
+*/
+
+}
