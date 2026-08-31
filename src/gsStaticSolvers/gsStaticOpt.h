@@ -143,7 +143,7 @@ private:
  * This class inherits from gsStaticBase and provides functionality for solving
  * static optimization problems using the Dynamic Relaxation method.
 
- * \ingroup gsStaticBase
+ * \ingroup gsStaticSolvers
  */
 template <class T, class Optimizer = gsGradientDescent<T>>
 class gsStaticOpt : public gsStaticBase<T>

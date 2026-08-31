@@ -648,7 +648,7 @@ int main (int argc, char** argv)
     {
         loadstep_errors.clear();
         gsInfo<<"Bifurcation spotted!"<<"\n";
-        arcLength.computeSingularPoint(Uold,false);
+        arcLength.computeSingularPoint(Uold,Lold,false);
         arcLength.switchBranch();
         dLb = dL;
         arcLength.setLength(dLb);

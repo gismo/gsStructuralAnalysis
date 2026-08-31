@@ -70,6 +70,12 @@ struct gsStructuralAnalysisOps
     typedef std::function < bool ( gsVector<T> const &,     gsVector<T> & )>    Residual_t;
     /// Arc-Length Residual, Fint-lambda*Fext
     typedef std::function < bool ( gsVector<T> const &, const T,  gsVector<T> & )>    ALResidual_t;
+    /// Arc-Length Force, i.e. the load derivative \f$ f(U,\Lambda) = -\partial R/\partial\Lambda \f$
+    /// evaluated at the state \f$(U,\Lambda)\f$. For a dead load this is the constant
+    /// external force vector \f$F_{ext}\f$; for state-dependent (follower, configuration-
+    /// dependent) loads it varies with \f$U\f$ and/or \f$\Lambda\f$. See
+    /// gsALMBase::setForcingFunction for the role this plays in the arc-length correctors.
+    typedef std::function < bool ( gsVector<T> const &, const T,  gsVector<T> & )>    ALForce_t;
     /// Time-dependent Residual Fint(t)-Fext(t)
     typedef std::function < bool ( gsVector<T> const &, const T,  gsVector<T> & )>    TResidual_t;
     

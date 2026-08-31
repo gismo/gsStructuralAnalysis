@@ -520,12 +520,12 @@ int main(int argc, char *argv[])
     const gsMpi & mpi = gsMpi::init(argc, argv);
     gsMpiComm comm = mpi.worldComm();
 
-    std::string dirname = "ArcLengthResults/snapping_2D_al=" + std::to_string(al) + "_r=" + std::to_string(numHref) + "_e=" + std::to_string(numElevate);
+    std::string rootdir = gsFileManager::getCurrentPath() + "ArcLengthResults";
+    std::string dirname = rootdir + "/snapping_2D_al=" + std::to_string(al) + "_r=" + std::to_string(numHref) + "_e=" + std::to_string(numElevate);
     std::string cores = "_ncores="+std::to_string(comm.size());
     dirname = dirname + cores;
 
-    // Prepare and create directory with dirname
-    dirname = gsFileManager::getCurrentPath() + dirname;
+    GISMO_ENSURE(gsFileManager::mkdir(rootdir),"Failed to create directory " + rootdir);
     GISMO_ENSURE(gsFileManager::mkdir(dirname),"Failed to create directory " + dirname);
     // Made directory
     gsParaviewCollection collection(dirname + "/" + output);

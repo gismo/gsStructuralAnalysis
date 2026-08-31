@@ -33,14 +33,41 @@ gsStatus gsEigenProblemBase<T>::compute()
         else
             m_eigSolver.compute(m_A,m_B);
 
-        if (verbose) { gsInfo<<"." ; }
-        m_values  = m_eigSolver.eigenvalues();
-        m_values.array() += shift;
-        if (verbose) { gsInfo<<"." ; }
-        m_vectors = m_eigSolver.eigenvectors();
-        if (verbose) { gsInfo<<"." ; }
-        if (verbose) { gsInfo<<"Finished\n" ; }
-        m_status = gsStatus::Success;
+        // Eigen reports solver failure through info(), never by throwing, so the
+        // status must be checked before the accessors below are called: they are
+        // undefined on a failed computation.
+        const gsEigen::ComputationInfo einfo = m_eigSolver.info();
+        if      (einfo==gsEigen::Success)
+        {
+            if (verbose) { gsInfo<<"." ; }
+            m_values  = m_eigSolver.eigenvalues();
+            m_values.array() += shift;
+            if (verbose) { gsInfo<<"." ; }
+            m_vectors = m_eigSolver.eigenvectors();
+            if (verbose) { gsInfo<<"." ; }
+            if (verbose) { gsInfo<<"Finished\n" ; }
+            m_status = gsStatus::Success;
+        }
+        else if (einfo==gsEigen::NoConvergence)
+        {
+            gsWarn<<"Eigenvalue solver did not converge! Error code: NoConvergence\n";
+            m_status = gsStatus::NotConverged;
+        }
+        else if (einfo==gsEigen::NumericalIssue)
+        {
+            gsWarn<<"Eigenvalue solver failed! Error code: NumericalIssue\n";
+            m_status = gsStatus::SolverError;
+        }
+        else if (einfo==gsEigen::InvalidInput)
+        {
+            gsWarn<<"Eigenvalue solver failed! Error code: InvalidInput\n";
+            m_status = gsStatus::SolverError;
+        }
+        else
+        {
+            gsWarn<<"No error code known\n";
+            m_status = gsStatus::OtherError;
+        }
     }
     catch (...)
     {

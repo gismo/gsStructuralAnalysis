@@ -4,20 +4,14 @@ namespace gismo
 /** \defgroup gsDynamicSolvers Dynamic solvers
 \ingroup gsStructuralAnalysis
 
-Linear buckling analysis is performed by solving the following eigenvalue problem:
+This group collects the time integrators for second-order structural dynamics systems:
+\ref gsDynamicExplicitEuler, \ref gsDynamicImplicitEuler, \ref gsDynamicRK4,
+\ref gsDynamicNewmark, \ref gsDynamicWilson, \ref gsDynamicBathe and \ref gsDynamicXBraid.
+They act on user-defined mass \f$M\f$, damping \f$C\f$, Jacobian and residual
+\f$R(\mathbf{u})\f$ operators from \ref gsStructuralAnalysisOps, which is what makes them
+element-agnostic.
 
-\f[
-    (K_L-\sigma K_{NL}(\mathbf{u}^L_h))\mathbf{v}_h = \lambda K_{NL}(\mathbf{u}_h) \mathbf{v}_h
-\f]
-
-Where \f$K_L\f$ is the linear stiffness matrix, \f$K_{NL}(\mathbf{u}_h)\f$ is the tangential
-stiffness matrix assembled around \f$\mathbf{u}^L_h\f$. The solution \f$\mathbf{u}^L_h\f$ is
-obtained by solving a linear problem \f$K_L\mathbf{u}^L_h = \mathbf{P}\f$. Furthermore,
-\f$\sigma\f$ is a shift and \f$(\lambda+\sigma\f)\mathbf{P}\f$ is the critical buckling load.
-The modeshape is represented by \f$\phi\f$.
-
-Examples with the use of this class are:
-- \ref gsThinShell_Buckling.cpp
+See \ref nonlinear_shell_dynamic for a worked tutorial.
 
 */
 

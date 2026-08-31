@@ -389,10 +389,10 @@ int main(int argc, char *argv[])
 
     gsControlDisplacement<real_t> control(&staticSolver);
 
-    std::string dirname = "ArcLengthResults/snapping_DC_2D_" + std::to_string(Nx) + "x" + std::to_string(Ny+1) + "_al=" + std::to_string(al) + "_r=" + std::to_string(numHref) + "_e=" + std::to_string(numElevate);
+    std::string rootdir = gsFileManager::getCurrentPath() + "ArcLengthResults";
+    std::string dirname = rootdir + "/snapping_DC_2D_" + std::to_string(Nx) + "x" + std::to_string(Ny+1) + "_al=" + std::to_string(al) + "_r=" + std::to_string(numHref) + "_e=" + std::to_string(numElevate);
 
-    // Prepare and create directory with dirname
-    dirname = gsFileManager::getCurrentPath() + dirname;
+    GISMO_ENSURE(gsFileManager::mkdir(rootdir),"Failed to create directory " + rootdir);
     GISMO_ENSURE(gsFileManager::mkdir(dirname),"Failed to create directory " + dirname);
     // Made directory
 
@@ -429,6 +429,7 @@ int main(int argc, char *argv[])
     assembler.updateBCs(bc);
     gsMatrix<> solVector;
     real_t time = 0;
+    int result = EXIT_SUCCESS;
     while (eps<=Emax && k < step)
     {
         gsInfo<<"Load step "<<k<<"; D = "<<D<<"; dL = "<<dL<<"eps = "<<eps<<"\n";
@@ -443,6 +444,15 @@ int main(int argc, char *argv[])
             mp_def = mp_def0;
             gsInfo<<"Iterations did not converge\n";
             continue;
+        }
+        else if (status != gsStatus::Success)
+        {
+            gsInfo<<"control.step returned status "<<(index_t)status<<" at load step "<<k
+                  <<" (see enum gsStatus in gsStructuralAnalysisTools/gsStructuralAnalysisTypes.h): "
+                  <<"neither a converged step nor a failure that step-size reduction can repair. "
+                  <<"Giving up.\n";
+            result = EXIT_FAILURE;
+            break;
         }
 
         solVector = control.solutionU();
@@ -511,7 +521,7 @@ int main(int argc, char *argv[])
         file.close();
     }
 
-    return 1;
+    return result;
 }
 
 template <class T>

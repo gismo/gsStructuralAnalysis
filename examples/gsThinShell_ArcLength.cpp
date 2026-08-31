@@ -120,6 +120,7 @@ int main (int argc, char** argv)
     real_t tol        = 1e-6;
     real_t tolU       = 1e-6;
     real_t tolF       = 1e-3;
+    real_t minLengthRatio = 1e-6; // give-up floor on |dLb/dLb0|; see the loop below
 
     std::string wn("data.csv");
 
@@ -146,6 +147,9 @@ int main (int argc, char** argv)
     cmd.addReal("L","dLb", "arc length", dLb);
     cmd.addReal("l","dL", "arc length after bifurcation", dL);
     cmd.addReal("A","relaxation", "Relaxation factor for arc length method", relax);
+    cmd.addReal("","minLengthRatio","Give-up floor on the arc-length step reduction: stop when "
+                "|dLb/dLb0| falls below this ratio (auto-07p DSMIN / pde2path p.nc.dsmin analogue). "
+                "<= 0 restores the previous unbounded halving and is diagnostic only.", minLengthRatio);
 
     cmd.addReal("F","factor", "factor for bifurcation perturbation", tau);
     cmd.addInt("q","QuasiNewtonInt","Use the Quasi Newton method every INT iterations",quasiNewtonInt);
@@ -824,7 +828,9 @@ int main (int argc, char** argv)
     //   SingularPoint = false;
     // }
 
-    gsFileManager::mkdir(dirname);
+    std::string rootdir = "ArcLengthResults";
+    GISMO_ENSURE(gsFileManager::mkdir(rootdir),"Failed to create directory " + rootdir);
+    GISMO_ENSURE(gsFileManager::mkdir(dirname),"Failed to create directory " + dirname);
 
 
     // plot geometry
@@ -1068,6 +1074,8 @@ int main (int argc, char** argv)
     arcLength->setIndicator(indicator); // RESET INDICATOR
     bool bisected = false;
     real_t dLb0 = dLb;
+    index_t nHalvings = 0;
+    index_t stepsCompleted = 0;
     for (index_t k=0; k<step; k++)
     {
       gsInfo<<"Load step "<< k<<"\n";
@@ -1080,6 +1088,25 @@ int main (int argc, char** argv)
       {
         gsInfo<<"Error: Loop terminated, arc length method failed.\n";
         dLb = dLb / 2.;
+        ++nHalvings;
+        // Relative step-size floor, in the SAME form and with the same default constant as the
+        // explorer's underflow guard (gsALMExploration.hpp:747-763), which is our in-tree
+        // equivalent of auto-07p's DSMIN / pde2path's p.nc.dsmin. NEGATED comparison on purpose:
+        // it also fires on NaN (dLb0 == 0 gives dLb/dLb0 == NaN, and `NaN < ratio` is FALSE,
+        // which would spin this retry loop forever).
+        // The ratio is commensurable here because this driver pins Scaling = 0.0 (see :1043),
+        // i.e. run-constant arc-length weights. A driver using Scaling = -1 has a state-dependent
+        // metric and reopens the caveat in
+        // .claude/plans/gsALMExploration/AUDIT-REFERENCE-CODES-2026-08-13.md:96-98.
+        if (!(math::abs(dLb / dLb0) >= minLengthRatio))
+        {
+          gsInfo<<"Arc-length step-size floor reached at load step "<<k<<": |dLb/dLb0| = "
+                <<math::abs(dLb/dLb0)<<" < "<<minLengthRatio<<" after "<<nHalvings
+                <<" halving(s) (dLb = "<<dLb<<", dLb0 = "<<dLb0<<"). The continuation cannot "
+                <<"advance past this point; giving up.\n";
+          result = EXIT_FAILURE;
+          break;
+        }
         arcLength->setLength(dLb);
         arcLength->setSolution(Uold,Lold);
         bisected = true;
@@ -1103,6 +1130,15 @@ int main (int argc, char** argv)
         // }
         // break;
       }
+      else if (status != gsStatus::Success)
+      {
+        gsInfo<<"Arc-length step returned status "<<(index_t)status<<" at load step "<<k
+              <<" (see enum gsStatus in gsStructuralAnalysisTools/gsStructuralAnalysisTypes.h): "
+              <<"neither a converged step nor a failure that step-size reduction can repair. "
+              <<"Giving up.\n";
+        result = EXIT_FAILURE;
+        break;
+      }
 
       if (SingularPoint)
       {
@@ -1122,6 +1158,10 @@ int main (int argc, char** argv)
       Uold = solVector;
       Lold = arcLength->solutionL();
       assembler->constructSolution(solVector,mp_def);
+
+      ++stepsCompleted;
+      gsInfo<<"Load step "<<k<<" accepted: dLb = "<<dLb<<", L = "<<Lold
+            <<", |U| = "<<Uold.norm()<<"\n";
 
       if (testCase==4 || testCase==8 || testCase==9)
       {
@@ -1235,10 +1275,15 @@ int main (int argc, char** argv)
       {
         dLb = dLb0;
         arcLength->setLength(dLb);
+        nHalvings = 0;
       }
       bisected = false;
 
     }
+
+    gsInfo<<"[gsThinShell_ArcLength] finished: "<<stepsCompleted<<" of "<<step
+          <<" load steps completed; final L = "<<Lold<<", |U| = "<<Uold.norm()
+          <<", final dLb = "<<dLb<<"; exit = "<<(result==0 ? "SUCCESS" : "GIVE-UP")<<"\n";
 
     if (plot)
     {

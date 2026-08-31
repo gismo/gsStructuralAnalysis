@@ -423,10 +423,10 @@ int main(int argc, char *argv[])
     arcLength->applyOptions();
     arcLength->initialize();
 
-    std::string dirname = "ArcLengthResults/snapping_2D_"+ std::to_string(Nx) + "x" + std::to_string(Ny+1) + "_al=" + std::to_string(al) + "-r" + std::to_string(numHref) + "-e" + std::to_string(numElevate) + "-L=" + std::to_string(dLb);
+    std::string rootdir = gsFileManager::getCurrentPath() + "ArcLengthResults";
+    std::string dirname = rootdir + "/snapping_2D_"+ std::to_string(Nx) + "x" + std::to_string(Ny+1) + "_al=" + std::to_string(al) + "-r" + std::to_string(numHref) + "-e" + std::to_string(numElevate) + "-L=" + std::to_string(dLb);
 
-    // Prepare and create directory with dirname
-    dirname = gsFileManager::getCurrentPath() + dirname;
+    GISMO_ENSURE(gsFileManager::mkdir(rootdir),"Failed to create directory " + rootdir);
     GISMO_ENSURE(gsFileManager::mkdir(dirname),"Failed to create directory " + dirname);
     // Made directory
 
@@ -467,6 +467,7 @@ int main(int argc, char *argv[])
     real_t eps = 0;
     real_t sig = 0;
     real_t time = 0;
+    int result = EXIT_SUCCESS;
     while (eps<=Emax && k < step)
     {
 
@@ -488,6 +489,15 @@ int main(int argc, char *argv[])
             arcLength->setSolution(Uold,Lold);
 //            bisected = true;
             continue;
+        }
+        else if (status != gsStatus::Success)
+        {
+            gsInfo<<"Arc-length step returned status "<<(index_t)status<<" at load step "<<k
+                  <<" (see enum gsStatus in gsStructuralAnalysisTools/gsStructuralAnalysisTypes.h): "
+                  <<"neither a converged step nor a failure that step-size reduction can repair. "
+                  <<"Giving up.\n";
+            result = EXIT_FAILURE;
+            break;
         }
 
         if (SingularPoint)
@@ -570,7 +580,7 @@ int main(int argc, char *argv[])
     }
 
     delete arcLength;
-    return 1;
+    return result;
 }
 
 template <class T>

@@ -387,20 +387,42 @@ protected:
   typename std::enable_if<!_hasWorkers, void>::type
   parallelSolve_impl();
 
-  void _initiation(   const std::tuple<index_t, T     , solution_t, solution_t> & dataEntry,
-                      const T &               startTime,
-                      T &                     endTime,
-                      std::vector<solution_t>&solutions,
-                      bool &                  bifurcation   );
+  /**
+   * @brief      Traces ONE initiation interval, i.e. a single accepted arc-length step.
+   *
+   * @return     gsStatus::Success when a step was accepted; otherwise the status of the
+   *             LAST failed gsALMBase::step(), in which case \a solutions is EMPTY and
+   *             \a distance is 0 -- see the retry clause in the implementation.
+   *
+   * @note The return value was added to give the (previously unbounded) retry
+   *       loop somewhere to go on arc-length underflow. It is a protected member with no
+   *       out-of-class caller, so this is not a public-API change; call sites that ignore
+   *       the value still compile, which is why the MPI branches are untouched.
+   */
+  gsStatus _initiation(   const std::tuple<index_t, T     , solution_t, solution_t> & dataEntry,
+                          const T &               startTime,
+                          T &                     endTime,
+                          std::vector<solution_t>&solutions,
+                          bool &                  bifurcation   );
 
-  void _correction(   const std::tuple<index_t, T     , solution_t, solution_t> & dataEntry,
-                      const std::pair<T,T> &  dataInterval,
-                      const index_t &         dataLevel,
-                      const solution_t &      dataReference,
-                      std::vector<T> &        distances,
-                      std::vector<solution_t>&stepSolutions,
-                      T &                     upperDistance,
-                      T &                     lowerDistance   );
+  /**
+   * @brief      Traces the sub-intervals of ONE correction job.
+   *
+   * @return     gsStatus::Success when every sub-interval was accepted; otherwise the
+   *             status of the LAST failed gsALMBase::step(), in which case \a distances
+   *             and \a stepSolutions are EMPTY (a partially filled interval is not a
+   *             submittable result) and the two distances are 0.
+   *
+   * @note See the note on \a _initiation for why returning a status is not an API change.
+   */
+  gsStatus _correction(   const std::tuple<index_t, T     , solution_t, solution_t> & dataEntry,
+                          const std::pair<T,T> &  dataInterval,
+                          const index_t &         dataLevel,
+                          const solution_t &      dataReference,
+                          std::vector<T> &        distances,
+                          std::vector<solution_t>&stepSolutions,
+                          T &                     upperDistance,
+                          T &                     lowerDistance   );
 
   void _finalize();
 

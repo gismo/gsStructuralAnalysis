@@ -75,7 +75,11 @@ void gsALMLoadControl<T>::predictor()
   this->factorizeMatrix(m_jacMat);
 
   m_DeltaL = m_deltaL = m_arcLength;
-  m_deltaUt = this->solveSystem(m_forcing);
+  // Predictor tangent at the linearization state (m_U,m_L) of the Jacobian above; note
+  // that m_DeltaL was just set to the step size, so (m_U,m_L) - not (m_U,m_L+m_DeltaL) -
+  // is the state the tangent belongs to. The load-control CORRECTOR never uses the
+  // forcing (it is plain fixed-load Newton), so this is its only forcing site.
+  m_deltaUt = this->solveSystem(this->computeForcing(m_U,m_L));
   m_DeltaU = m_deltaL*m_deltaUt;
 
   // gsDebugVar(m_DeltaU.norm());
@@ -89,7 +93,8 @@ void gsALMLoadControl<T>::predictorGuess()
   this->factorizeMatrix(m_jacMat);
 
   m_DeltaL = m_deltaL = m_Lguess - m_L;
-  m_deltaUt = this->solveSystem(m_forcing);
+  // See predictor(): forcing at the Jacobian's linearization state (m_U,m_L).
+  m_deltaUt = this->solveSystem(this->computeForcing(m_U,m_L));
   m_DeltaU = m_deltaL*m_deltaUt;
 
   // gsDebugVar(m_DeltaU.norm());

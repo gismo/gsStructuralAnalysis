@@ -23,7 +23,7 @@ namespace gismo
 
     \tparam T coefficient type
 
-    \ingroup gsALMBase
+    \ingroup gsALMSolvers
 */
 template <class T>
 class gsALMRiks : public gsALMBase<T>
@@ -38,6 +38,10 @@ class gsALMRiks : public gsALMBase<T>
 public:
 
     using Base::setLength;
+    // computeStability() is PUBLIC on gsALMBase; re-exporting it protected here would
+    // narrow the base interface (callers holding a gsALMBase& could reach it, callers
+    // holding the derived type could not). Kept public, as in gsALMCrisfield.
+    using Base::computeStability;
 
 protected:
 
@@ -48,7 +52,6 @@ protected:
     using Base::computeResidualNorms;
     using Base::computeUt;
     using Base::computeUbar;
-    using Base::computeStability;
     using Base::computeLength;
 
 public:
@@ -78,9 +81,24 @@ public:
     }
 
 public:
+    /// Distance in the (U,L) plane, measured in the CONVEX constraint metric this class
+    /// enforces: \f$ \phi|\Delta U|^2 + (1-\phi)\Delta\Lambda^2 = \Delta s^2 \f$, with
+    /// \f$\phi\f$ = \a m_convexWeight (see its declaration; it is NOT the metric scaling
+    /// \f$\psi\f$ that gsALMCrisfield/gsALMConsistentCrisfield expose as their \c Scaling
+    /// option).
+    /// @note PUBLIC, and the value ESCAPES this class - it is load-bearing, not diagnostic.
+    ///       Verified at source 2026-08-03, CORRECTED 2026-08-04: the live readers are
+    ///       \a gsAPALM::_initiation and \a gsAPALM::_correction, which accumulate it into their
+    ///       interval distances (including the \c upperDistance / \c lowerDistance of a bisected
+    ///       interval). Outside those, the only in-tree readers are stepOutput() and the unit
+    ///       tests.
+    ///       !! The earlier version of this note also credited \c gsAPALMBase::parallelSolve with
+    ///       two more consumer sites. That class was DEAD CODE and was DELETED 2026-08-04, so the
+    ///       live consumer count is FIVE, not the seven recorded earlier. Anyone re-deriving
+    ///       the read-site map should start from five.
     T distance(const gsVector<T>& DeltaU, const T DeltaL) const
     {
-        return math::pow(m_phi * math::pow(DeltaU.norm(),2.0) + (1.0-m_phi) * math::pow(DeltaL,2.0),0.5);
+        return math::pow(m_convexWeight * math::pow(DeltaU.norm(),2.0) + (1.0-m_convexWeight) * math::pow(DeltaL,2.0),0.5);
     }
 
 protected:
@@ -187,8 +205,17 @@ protected:
     using Base::m_jacMat;
     using Base::m_detKT;
 
-    /// Scaling parameter
-    T m_phi;
+    /// Convex interpolation weight \f$\phi \in (0,1)\f$ of Riks's constraint
+    /// \f$ \phi|\Delta U|^2 + (1-\phi)\Delta\Lambda^2 = \Delta s^2 \f$. Purely INTERNAL:
+    /// this class registers no \c Scaling option and the weight is hard-set to
+    /// \f$1/n_{dof}\f$ by \a predictor() / \a predictorGuess().
+    ///
+    /// @note Renamed out of the historical member name \c phi, which the siblings
+    ///       gsALMCrisfield and gsALMConsistentCrisfield still carry for an INCOMPATIBLE
+    ///       quantity - the metric scaling \f$\psi\f$ of \f$A_0 = \psi^2\|f\|^2\f$, exposed
+    ///       as their \c Scaling option. The two are related by
+    ///       \f$\psi^2 = (1-\phi)/\phi\f$; only the test harness translates between them.
+    T m_convexWeight;
 };
 
 } // namespace gismo

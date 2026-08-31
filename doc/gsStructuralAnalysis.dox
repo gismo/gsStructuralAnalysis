@@ -99,6 +99,12 @@ In the folder \c gsStructuralAnalysis/tutorials, some tutorials are provided, ex
 5. \ref nonlinear_solid_arcLength
 6. \ref nonlinear_solid_dynamic
 
+Continuation beyond a single equilibrium curve -- tracing a whole solution landscape, with
+singular-point classification and automatic branch switching -- is not covered by a tutorial. It is
+documented in \ref gsALMSolvers, and demonstrated by the driver examples
+\ref example_BratuExploration.cpp, \ref example_ModifiedBratuExploration.cpp and
+\ref example_ShearExploration.cpp.
+
 */
 
 }

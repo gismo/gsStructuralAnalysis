@@ -28,7 +28,7 @@ namespace gismo
 
     \tparam T coefficient type
 
-    \ingroup gsALMBase
+    \ingroup gsALMSolvers
 */
 template <class T>
 class gsALMConsistentCrisfield : public gsALMBase<T>
@@ -43,6 +43,10 @@ class gsALMConsistentCrisfield : public gsALMBase<T>
 public:
 
     using Base::setLength;
+    // computeStability() is PUBLIC on gsALMBase; re-exporting it protected here would
+    // narrow the base interface (callers holding a gsALMBase& could reach it, callers
+    // holding the derived type could not). Kept public, as in gsALMCrisfield.
+    using Base::computeStability;
 
 protected:
 
@@ -51,7 +55,6 @@ protected:
     using Base::computeResidualNorms;
     using Base::computeUt;
     using Base::computeUbar;
-    using Base::computeStability;
     using Base::computeLength;
 
 public:
@@ -78,6 +81,18 @@ public:
         getOptions();
 
         initMethods();
+    }
+
+public:
+    /// Distance in the (U,L) plane, measured in the constraint metric of the CURRENT step.
+    /// iteration() writes the constraint as
+    /// \f$ \Delta U\cdot\Delta U + \phi^2\Delta\Lambda^2\, f\cdot f - \Delta s^2 = 0\f$,
+    /// so this is exactly that metric; the \f$\|f\|^2\f$ scaling is the frozen step
+    /// forcing (see gsALMBase::stepForcing), which is the very vector iteration() uses.
+    T distance(const gsVector<T>& DeltaU, const T DeltaL) const
+    {
+        T A0 = math::pow(m_phi,2)*this->stepForcing().dot(this->stepForcing());
+        return math::pow(DeltaU.dot(DeltaU) + A0*math::pow(DeltaL,2.0),0.5);
     }
 
 protected:

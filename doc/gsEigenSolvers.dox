@@ -6,20 +6,23 @@ namespace gismo
 
 \section gsEigenSolvers_buckling Linear buckling analysis
 
-Linear buckling analysis is performed by solving the following eigenvalue problem:
+Linear buckling analysis is performed by posing and solving the *definite* pencil
 
 \f[
-    (K_L-\sigma K_{NL}(\mathbf{u}^L_h))\mathbf{v}_h = \lambda K_{NL}(\mathbf{u}_h) \mathbf{v}_h
+    K_G \mathbf{v}_h = \nu K_L \mathbf{v}_h , \qquad K_G := K_{NL}(\mathbf{u}^L_h) - K_L ,
 \f]
 
-Where \f$K_L\f$ is the linear stiffness matrix, \f$K_{NL}(\mathbf{u}_h)\f$ is the tangential
-stiffness matrix assembled around \f$\mathbf{u}^L_h\f$. The solution \f$\mathbf{u}^L_h\f$ is
-obtained by solving a linear problem \f$K_L\mathbf{u}^L_h = \mathbf{P}\f$. Furthermore,
-\f$\sigma\f$ is a shift and \f$(\lambda+\sigma\f)\mathbf{P}\f$ is the critical buckling load.
-The modeshape is represented by \f$\phi\f$.
+where \f$K_L\f$ is the linear stiffness matrix and \f$K_{NL}(\mathbf{u}^L_h)\f$ is the
+tangential stiffness matrix assembled around the pre-buckling state \f$\mathbf{u}^L_h\f$,
+obtained from the linear solve \f$K_L\mathbf{u}^L_h = \mathbf{P}\f$. The buckling factor is
+\f$\lambda = -1/\nu\f$, with \f$\nu<0 \Leftrightarrow \lambda>0\f$, and the critical buckling
+load is \f$\lambda \mathbf{P}\f$. The mode shape is \f$\mathbf{v}_h\f$.
+
+The optional `shift` option shifts the \f$(K_G,K_L)\f$ pencil that is actually factored,
+i.e. it acts on \f$\nu\f$, not on \f$\lambda\f$.
 
 Examples with the use of this class are:
-- \ref gsThinShell_Buckling.cpp
+- \ref example_ShearBuckling.cpp
 
 \section gsEigenSolvers_modal Linear modal analysis
 

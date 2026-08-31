@@ -31,7 +31,7 @@ namespace gismo
 
     \tparam T coefficient type
 
-    \ingroup gsStaticBase
+    \ingroup gsStaticSolvers
 */
 template <class T>
 class gsStaticBase

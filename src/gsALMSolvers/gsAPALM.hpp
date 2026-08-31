@@ -78,6 +78,17 @@ void gsAPALM<T>::_getOptions()
   m_maxIterations = m_options.getInt("MaxIt");
   m_verbose = m_options.getSwitch("Verbose");
   m_subIntervals = m_options.getInt("SubIntervals");
+  // Two independent reasons this must be >= 1, and no clamp existed:
+  //  * _correction() sizes stepSolutions to m_subIntervals and then dereferences
+  //    stepSolutions.back() in its tail -- at 0 that is UB on an empty vector, a
+  //    PRE-EXISTING hazard reachable from a plain setInt("SubIntervals",0);
+  //  * the MPI failure protocol uses an EMPTY stepSolutions as its failure sentinel
+  //    (see the worker clauses under #ifdef GISMO_WITH_MPI), which is only unambiguous
+  //    because a SUCCESSFUL correction returns m_subIntervals >= 1 solutions.
+  // ENSURE, not ASSERT: the build tree defines -DNDEBUG, where GISMO_ASSERT is ABSENT,
+  // not silent, so an ASSERT here would guard nothing in a release build.
+  GISMO_ENSURE(m_subIntervals >= 1,
+               "gsAPALM: SubIntervals must be at least 1, but it is "<<m_subIntervals<<".");
   m_singularPoint = m_options.getSwitch("SingularPoint");
   m_branchLengthMult = m_options.getReal("BranchLengthMultiplier");
   m_bifLengthMult = m_options.getReal("BifLengthMultiplier");
@@ -123,8 +134,31 @@ template <class T>
 void gsAPALM<T>::serialSolve(index_t Nsteps)
 {
 #ifdef GISMO_WITH_MPI
+  // (2026-08-04 follow-up) the two barriers below were guarded by the COMPILE-TIME
+  // #ifdef alone, with no runtime check. gsMpiComm::barrier() is an unconditional
+  // MPI_Barrier(m_comm), and this class's NO-COMMUNICATOR constructor builds its dummy from
+  // gsMpiComm's default constructor -- which sets rank_/size_ but leaves its MPI_Comm member
+  // uninitialized and never calls MPI_Init. So in an MPI-ENABLED build, ANY caller that
+  // constructed gsAPALM without a communicator and never called gsMpi::init() aborted here
+  // with "The MPI_Barrier() function was called before MPI_INIT was invoked".
+  // That is exactly what bin/unittests does: its UnitTest++ main never initializes MPI, so
+  // build_mpi/bin/unittests died in apalm_serial_solve_terminates_when_every_step_fails and
+  // FIVE tests never got a verdict -- i.e. the unit suite could not validate anything at all
+  // in an MPI build.
+  //
+  // MPI_Initialized is the same idiom gsMpiComm(const MPI_Comm&) already uses, except that
+  // its check is #ifndef NDEBUG and this build tree defines -DNDEBUG, so that one is absent.
+  // Semantics are unchanged where it matters: if MPI was never initialized there is exactly
+  // one process, and a barrier over one process is a no-op. Real multi-rank runs call
+  // gsMpi::init() up front (see benchmarks/benchmark_Beam_APALM.cpp), so mpiReady is true and
+  // both barriers fire exactly as before.
+  int mpiReady = 0;
+  MPI_Initialized(&mpiReady);
+
   if (m_rank!=0)
-    m_comm.barrier();
+  {
+    if (mpiReady) m_comm.barrier();
+  }
   else
   {
 #endif
@@ -172,7 +206,19 @@ void gsAPALM<T>::serialSolve(index_t Nsteps)
 
       std::tuple<index_t, T, solution_t, solution_t> dataEntry = std::make_tuple(k,dL,start,prev);
 
-      this->_initiation(dataEntry,s,dL,tmpSolutions,finished);
+      const gsStatus initStatus = this->_initiation(dataEntry,s,dL,tmpSolutions,finished);
+      // _initiation now reports arc-length underflow instead of spinning. Its
+      // `tmpSolutions` is then EMPTY, so there is nothing to append. Keep what the branch
+      // has traced so far and stop stepping this start point -- the precedent is
+      // gsALMExploration<T>::traceCurve, which breaks out of its own trace loop on
+      // underflow and keeps the partial curve.
+      if (initStatus!=gsStatus::Success)
+      {
+        gsWarn<<"gsAPALM::serialSolve: initiation failed at load step "<<k
+              <<" (status "<<(index_t)initStatus<<"); branch truncated after "
+              <<solutions.size()<<" point(s).\n";
+        break;
+      }
 
       // Update curve length
       s += dL;
@@ -198,6 +244,16 @@ void gsAPALM<T>::serialSolve(index_t Nsteps)
       k++;
     } // end of steps
 
+    // A start point whose FIRST initiation already failed leaves no solutions at
+    // all (a `bisected` start does not push its seed either), and setData()/init() below
+    // would then build the branch from empty vectors. Drop such a branch, the same rule
+    // gsALMExploration<T>::traceCurve applies to an empty curve.
+    if (solutions.empty())
+    {
+      gsWarn<<"gsAPALM::serialSolve: start point produced no solutions; branch dropped.\n";
+      continue;
+    }
+
     // Store data of the branch
     gsAPALMData<T,solution_t> data = m_dataEmpty; // create new data set
     data.setData(times,solutions); // initialize the dataset with the newly computed data
@@ -212,7 +268,8 @@ void gsAPALM<T>::serialSolve(index_t Nsteps)
   } // end of start points
 
 #ifdef GISMO_WITH_MPI
-    m_comm.barrier();
+    // Guarded for the same reason as the rank!=0 barrier above -- see the note there.
+    if (mpiReady) m_comm.barrier();
   }
 #endif
 }
@@ -330,7 +387,15 @@ gsAPALM<T>::parallelSolve_impl()
                               upperDistance,
                               lowerDistance);
 
-      m_data.branch(branch).submit(ID,distances,stepSolutions,upperDistance,lowerDistance);
+      // Honour the failure sentinel the worker clause below sends (an EMPTY
+      // stepSolutions at size == 0). Textually the same clause as the one in
+      // parallelSolve_impl<false>() -- serial and MPI must not diverge on failure
+      // handling. finishJob(ID) runs on BOTH paths: the job is released, never re-queued.
+      if (stepSolutions.empty())
+        gsWarn<<"gsAPALM::parallelSolve: correction of job "<<ID<<" on branch "<<branch
+              <<" failed on worker "<<source<<"; interval not refined.\n";
+      else
+        m_data.branch(branch).submit(ID,distances,stepSolutions,upperDistance,lowerDistance);
       m_data.branch(branch).finishJob(ID);
 
       // Remove job
@@ -398,7 +463,7 @@ gsAPALM<T>::parallelSolve_impl()
                               reference
                               );
 
-      this->_correction(dataEntry,
+      const gsStatus corrStatus = this->_correction(dataEntry,
                         dataInterval,
                         dataLevel,
                         reference,
@@ -406,6 +471,41 @@ gsAPALM<T>::parallelSolve_impl()
                         stepSolutions,
                         upperDistance,
                         lowerDistance);
+
+      // FAILURE PROTOCOL: report the failure, do NOT abort.
+      //
+      // A GISMO_ENSURE was placed here on the premise that the worker->main protocol
+      // has no field for a failed job. That premise is CORRECT but the conclusion was
+      // wrong: no new field is needed, because the solution count `size` that
+      // _sendWorkerToMain already transmits is an unambiguous failure sentinel.
+      //  * on SUCCESS  _correction returns stepSolutions.size() == m_subIntervals >= 1
+      //    (the >= 1 is enforced by the GISMO_ENSURE in _getOptions);
+      //  * on FAILURE it returns EMPTY outputs, i.e. size == 0.
+      // So main can distinguish the two from the existing wire format, and the fix is a
+      // main-side guard rather than a protocol change. See the collect loop below.
+      //
+      // Why the dummy `distances`: the wire format carries size+1 distances and sends the
+      // trailing one unconditionally, so an EMPTY distances vector would throw
+      // std::out_of_range in the SENDER (distances.at(0)) before main ever heard about the
+      // failure. One element restores the size+1 invariant at size == 0; its value is never
+      // read, because main skips submit() entirely.
+      //
+      // What main then does is exactly what parallelSolve_impl<false>() does with the same
+      // failure: warn, skip submit(), finishJob(ID). The job is DROPPED, never re-queued --
+      // which is also the termination argument, since m_queue cannot grow from a failure.
+      //
+      // ! UNVERIFIED: this clause sits inside #ifdef GISMO_WITH_MPI, which is #undef in
+      //   this build tree. It is compile-verified under -DGISMO_WITH_MPI only; no MPI
+      //   runtime exercises it.
+      if (corrStatus!=gsStatus::Success)
+      {
+        gsWarn<<"gsAPALM::parallelSolve (MPI worker "<<m_rank<<"): correction of job "
+              <<ID<<" on branch "<<branch<<" failed (status "<<(index_t)corrStatus
+              <<"); reporting an empty result to main.\n";
+        stepSolutions.clear();
+        distances.assign(1,(T)0);
+        upperDistance = lowerDistance = (T)0;
+      }
 
       this->_sendWorkerToMain(0,
                               branch,
@@ -453,7 +553,7 @@ gsAPALM<T>::parallelSolve_impl()
     dataLevel = m_data.branch(branch).jobLevel(ID);
     bool success = m_data.branch(branch).getReferenceByID(ID,reference);
     GISMO_ENSURE(success,"Reference not found");
-    this->_correction(dataEntry,
+    const gsStatus corrStatus = this->_correction(dataEntry,
                       m_data.branch(branch).jobTimes(ID),
                       dataLevel,
                       reference,
@@ -463,7 +563,14 @@ gsAPALM<T>::parallelSolve_impl()
                       lowerDistance
                       );
 
-    m_data.branch(branch).submit(ID,distances,stepSolutions,upperDistance,lowerDistance);
+    // On arc-length underflow _correction returns non-Success with EMPTY
+    // outputs. Submitting those would insert an interval carrying no solutions into the
+    // hierarchy, so the job is only RELEASED and the interval keeps the level it had.
+    if (corrStatus!=gsStatus::Success)
+      gsWarn<<"gsAPALM::parallelSolve: correction of job "<<ID<<" on branch "<<branch
+            <<" failed (status "<<(index_t)corrStatus<<"); interval not refined.\n";
+    else
+      m_data.branch(branch).submit(ID,distances,stepSolutions,upperDistance,lowerDistance);
     m_data.branch(branch).finishJob(ID);
 
     it++;
@@ -491,9 +598,38 @@ void gsAPALM<T>::_finalize()
     m_levels.at(b)    = levels;
 
     index_t maxLevel = m_data.branch(b).maxLevel();
+    // ⚠ _finalize() must be IDEMPOTENT. It is called unconditionally at the end
+    // of every solve path, and parallelSolve() on an already-drained queue does no work but
+    // still finalizes. Two reasons the clear()s are load-bearing:
+    //  * resize() does NOT clear: without them the push_back()s below ADD to whatever the
+    //    previous call left behind, so the level-wise view double-counts every point
+    //    (measured: flat = 7, perLevel = 14 after a second parallelSolve()).
+    //  * the push_back()s store POINTERS INTO m_solutions[b] / m_times[b], which the
+    //    assignments above may have REALLOCATED -- every surviving pointer from a previous
+    //    call is then dangling (measured under valgrind: 135 errors / 16 contexts, free
+    //    site _finalize() <- parallelSolve_impl<false>()).
+    // clear() + resize(maxLevel+1) yields maxLevel+1 empty vectors unconditionally.
+    // The top-level resize(nBranches) above needs no such treatment: gsAPALMDataContainer
+    // exposes only push_back (no erase/clear/resize), so nBranches is monotone
+    // non-decreasing -- and a shrink would truncate, not leave stale branches, anyway.
+    m_lvlSolutions[b].clear();
+    m_lvlTimes[b].clear();
     m_lvlSolutions[b].resize(maxLevel+1);
     m_lvlTimes[b].resize(maxLevel+1);
-    for (size_t k=0; k!=m_solutions.size(); k++)
+    // ⚠ m_solutions[b].size(), NOT m_solutions.size(). m_solutions is indexed by BRANCH
+    // (it was resized to nBranches above), while k indexes the POINTS WITHIN branch b.
+    // The bound was the branch count, which is a different quantity that merely happens to
+    // be 1 in the single-branch case that every in-tree driver exercises. Consequences of
+    // the old bound:
+    //  * nBranches == 1: the loop ran exactly ONE iteration, so only point 0 was ever
+    //    registered -- getSolutions(level)/getSolutionsPerLevel()/getTimes* silently
+    //    returned a single point for a branch of any length. Wrong, but quiet.
+    //  * nBranches >= 2 with a branch shorter than nBranches: m_levels[b][k] is an
+    //    OUT-OF-RANGE read. The two GISMO_ASSERTs below do not catch it -- they bound the
+    //    LEVEL, not k -- and they are ABSENT anyway under this build tree's -DNDEBUG.
+    // Short branches became materially more likely with the failure protocol above, whose
+    // "branch not extended" path ends a branch early.
+    for (size_t k=0; k!=m_solutions[b].size(); k++)
     {
       GISMO_ASSERT(m_lvlSolutions[b].size() > (size_t)m_levels[b][k],"level mismatch, maxLevel = " << maxLevel << "level = "<<m_levels[b][k]);
       GISMO_ASSERT(m_lvlTimes[b].size() > (size_t)m_levels[b][k],"level mismatch, maxLevel = " << maxLevel << "level = "<<m_levels[b][k]);
@@ -636,31 +772,47 @@ gsAPALM<T>::_solve_impl(index_t Nsteps)
                                 solutions,
                                 bifurcation);
 
-        T tstart = m_data.branch(branch).jobStartTime(ID);
-        m_data.branch(branch).appendData(tstart+distance,solutions[0],false);
-        m_data.branch(branch).finishJob(ID);
-
-        if (K[branch]++ < Nsteps-1) // add a new point
+        // Honour the failure sentinel (EMPTY solutions). Without this guard
+        // solutions[0] below is an out-of-range read. Mirrors the `continue` in
+        // _solve_impl<false>(): release the job, append nothing, queue no successor.
+        // NOTE the guard must sit BEFORE the K[branch]++ test -- the increment is a side
+        // effect INSIDE that condition, so a failed job placed after it would still consume
+        // a step from the branch's budget. Do not "simplify" this into a guard around the
+        // inner body.
+        if (solutions.empty())
         {
-          if (!bifurcation)
+          gsWarn<<"gsAPALM::solve: initiation of job "<<ID<<" on branch "<<branch
+                <<" failed on worker "<<source<<"; branch not extended.\n";
+          m_data.branch(branch).finishJob(ID);
+        }
+        else
+        {
+          T tstart = m_data.branch(branch).jobStartTime(ID);
+          m_data.branch(branch).appendData(tstart+distance,solutions[0],false);
+          m_data.branch(branch).finishJob(ID);
+
+          if (K[branch]++ < Nsteps-1) // add a new point
           {
-            GISMO_ASSERT(solutions.size()==1,"There must be one solution, but solutions.size() = "<<solutions.size());
-            m_data.branch(branch).appendPoint(true);
-            // sets the default length that is used when started from a Point.
-            // After bifurcation, it's the original one times the branch length multiplier times the bifurcation length multiplier
-            if (branch!=0 && ID==0)
-              m_data.branch(branch).setLength(m_data.branch(branch).getLength()/m_bifLengthMult);
-          }
-          else
-          {
-            GISMO_ASSERT(solutions.size()==2,"There must be two solutions!");
-            gsAPALMData<T,solution_t> data = m_dataEmpty;
-            branch = m_data.add(data);
-            K.push_back(1);
-            m_data.branch(branch).addStartPoint(T(0),solutions[1],true);
-            // Sets the default length that is used when started from a Point.
-            // After bifurcation, it's the original one times the branch length multiplier times the bifurcation length multiplier
-            m_data.branch(branch).setLength(m_ALM->getLength()*m_branchLengthMult*m_bifLengthMult);
+            if (!bifurcation)
+            {
+              GISMO_ASSERT(solutions.size()==1,"There must be one solution, but solutions.size() = "<<solutions.size());
+              m_data.branch(branch).appendPoint(true);
+              // sets the default length that is used when started from a Point.
+              // After bifurcation, it's the original one times the branch length multiplier times the bifurcation length multiplier
+              if (branch!=0 && ID==0)
+                m_data.branch(branch).setLength(m_data.branch(branch).getLength()/m_bifLengthMult);
+            }
+            else
+            {
+              GISMO_ASSERT(solutions.size()==2,"There must be two solutions!");
+              gsAPALMData<T,solution_t> data = m_dataEmpty;
+              branch = m_data.add(data);
+              K.push_back(1);
+              m_data.branch(branch).addStartPoint(T(0),solutions[1],true);
+              // Sets the default length that is used when started from a Point.
+              // After bifurcation, it's the original one times the branch length multiplier times the bifurcation length multiplier
+              m_data.branch(branch).setLength(m_ALM->getLength()*m_branchLengthMult*m_bifLengthMult);
+            }
           }
         }
       }
@@ -673,7 +825,14 @@ gsAPALM<T>::_solve_impl(index_t Nsteps)
                                 upperDistance,
                                 lowerDistance);
 
-        m_data.branch(branch).submit(ID,distances,stepSolutions,upperDistance,lowerDistance);
+        // Honour the failure sentinel (EMPTY stepSolutions). Same clause as
+        // _solve_impl<false>() and as parallelSolve_impl<false>(); finishJob(ID) on both
+        // paths, so the job is released and never re-queued.
+        if (stepSolutions.empty())
+          gsWarn<<"gsAPALM::solve: correction of job "<<ID<<" on branch "<<branch
+                <<" failed on worker "<<source<<"; interval not refined.\n";
+        else
+          m_data.branch(branch).submit(ID,distances,stepSolutions,upperDistance,lowerDistance);
         m_data.branch(branch).finishJob(ID);
       }
 
@@ -765,12 +924,29 @@ gsAPALM<T>::_solve_impl(index_t Nsteps)
                                 tstart
                                 );
 
-        this->_initiation(dataEntry,
+        const gsStatus initStatus = this->_initiation(dataEntry,
                           tstart,
                           distance,
                           solutions,
                           bifurcation
                           );
+
+        // Report, do not abort. See the worker clause in
+        // parallelSolve_impl<true>() for the full rationale of the size == 0 sentinel.
+        // This overload needs NO dummy: _sendWorkerToMain(mainID,distance,solutions,
+        // bifurcation) sends no trailing element, so every loop and MPI_Waitall degenerates
+        // cleanly at size == 0. Main's guard is in the collect loop above.
+        // ! UNVERIFIED: inside #ifdef GISMO_WITH_MPI, never compiled here; compile-verified
+        //   under -DGISMO_WITH_MPI only.
+        if (initStatus!=gsStatus::Success)
+        {
+          gsWarn<<"gsAPALM::solve (MPI worker "<<m_rank<<"): initiation of job "
+                <<ID<<" on branch "<<branch<<" failed (status "<<(index_t)initStatus
+                <<"); reporting an empty result to main.\n";
+          solutions.clear();
+          distance    = (T)0;
+          bifurcation = false;
+        }
 
         this->_sendWorkerToMain(0,
                                 branch,
@@ -789,7 +965,7 @@ gsAPALM<T>::_solve_impl(index_t Nsteps)
                                 reference
                                 );
 
-        this->_correction(dataEntry,
+        const gsStatus corrStatus = this->_correction(dataEntry,
                           dataInterval,
                           dataLevel,
                           reference,
@@ -797,6 +973,21 @@ gsAPALM<T>::_solve_impl(index_t Nsteps)
                           stepSolutions,
                           upperDistance,
                           lowerDistance);
+
+        // Report, do not abort. Same sentinel and same one-element `distances`
+        // dummy as the worker clause in parallelSolve_impl<true>() -- see there for why the
+        // dummy is required by this overload and not by the initiation one above.
+        // ! UNVERIFIED: inside #ifdef GISMO_WITH_MPI, never compiled here; compile-verified
+        //   under -DGISMO_WITH_MPI only.
+        if (corrStatus!=gsStatus::Success)
+        {
+          gsWarn<<"gsAPALM::solve (MPI worker "<<m_rank<<"): correction of job "
+                <<ID<<" on branch "<<branch<<" failed (status "<<(index_t)corrStatus
+                <<"); reporting an empty result to main.\n";
+          stepSolutions.clear();
+          distances.assign(1,(T)0);
+          upperDistance = lowerDistance = (T)0;
+        }
 
         this->_sendWorkerToMain(0,
                                 branch,
@@ -867,12 +1058,23 @@ gsAPALM<T>::_solve_impl(index_t Nsteps)
       T distance;
       std::vector<solution_t> solutions;
       bool bifurcation;
-      this->_initiation(dataEntry,
+      const gsStatus initStatus = this->_initiation(dataEntry,
                         startTime,
                         distance,
                         solutions,
                         bifurcation
                         );
+
+      // On failure `solutions` is EMPTY, so solutions[0] below would be an
+      // out-of-range read. Release the job without appending a point and without queueing
+      // a successor point: this branch simply stops growing.
+      if (initStatus!=gsStatus::Success)
+      {
+        gsWarn<<"gsAPALM::solve: initiation of job "<<ID<<" on branch "<<branch
+              <<" failed (status "<<(index_t)initStatus<<"); branch not extended.\n";
+        m_data.branch(branch).finishJob(ID);
+        continue;
+      }
 
       m_data.branch(branch).appendData(startTime+distance,solutions[0],false);
       m_data.branch(branch).finishJob(ID);
@@ -911,7 +1113,7 @@ gsAPALM<T>::_solve_impl(index_t Nsteps)
       T lowerDistance, upperDistance;
       bool success = m_data.branch(branch).getReferenceByID(ID,reference);
       GISMO_ENSURE(success,"Reference not found");
-      this->_correction(dataEntry,
+      const gsStatus corrStatus = this->_correction(dataEntry,
                         m_data.branch(branch).jobTimes(ID),
                         dataLevel,
                         reference,
@@ -921,7 +1123,13 @@ gsAPALM<T>::_solve_impl(index_t Nsteps)
                         lowerDistance
                         );
 
-      m_data.branch(branch).submit(ID,distances,stepSolutions,upperDistance,lowerDistance);
+      // See the identical clause in parallelSolve_impl<false>() -- an
+      // underflowed correction returns EMPTY outputs, which must not be submitted.
+      if (corrStatus!=gsStatus::Success)
+        gsWarn<<"gsAPALM::solve: correction of job "<<ID<<" on branch "<<branch
+              <<" failed (status "<<(index_t)corrStatus<<"); interval not refined.\n";
+      else
+        m_data.branch(branch).submit(ID,distances,stepSolutions,upperDistance,lowerDistance);
       m_data.branch(branch).finishJob(ID);
 
       it++;
@@ -932,11 +1140,11 @@ gsAPALM<T>::_solve_impl(index_t Nsteps)
 
 // NOTE: This does not make new branches!
 template <class T>
-void gsAPALM<T>::_initiation( const std::tuple<index_t, T     , solution_t, solution_t> & dataEntry,
-                              const T &               startTime,
-                              T &                     distance,
-                              std::vector<solution_t>&solutions,
-                              bool &                  bifurcation )
+gsStatus gsAPALM<T>::_initiation( const std::tuple<index_t, T     , solution_t, solution_t> & dataEntry,
+                                  const T &               startTime,
+                                  T &                     distance,
+                                  std::vector<solution_t>&solutions,
+                                  bool &                  bifurcation )
 {
   solution_t start, prev;
   index_t ID;
@@ -964,16 +1172,55 @@ void gsAPALM<T>::_initiation( const std::tuple<index_t, T     , solution_t, solu
 
   bool diverged = true;
   bifurcation = false;
+  distance = 0;
+  gsStatus status = gsStatus::NotStarted;
   while (diverged)
   {
     gsMPIInfo(m_rank)<<"Starting with ID "<<ID<<" from (|U|,L) = ("<<Uold.norm()<<","<<Lold<<"), curve time = "<<tstart<<", arc-length = "<<dL<<"\n";
     // Set a step
-    gsStatus status = m_ALM->step();
+    status = m_ALM->step();
     diverged = (status!=gsStatus::Success);
-    if (status==gsStatus::NotConverged || status==gsStatus::AssemblyError)
+    // --- Step-fail retry: halve the arc length and re-seed from (Uold,Lold) ---
+    //
+    // TERMINATION GUARD. Before this clause NEITHER branch of the loop
+    // terminated:
+    //  * the predicate enumerated NotConverged || AssemblyError, so a SolverError or
+    //    OtherError left `diverged` true while SKIPPING the halve-and-reseed body. A
+    //    failed step commits nothing -- m_U += m_DeltaU happens in iterationFinish(),
+    //    which gsALMBase<T>::_step() reaches only after the convergence test -- so the
+    //    next pass re-ran step() from the BIT-IDENTICAL state. A deterministic
+    //    SolverError was an infinite loop at fixed cost.
+    //  * the handled branch had no arc-length floor and no iteration cap: it halved
+    //    towards denormal indefinitely.
+    //
+    // Both are closed the way gsALMExploration<T>::traceCurve already does it, so the
+    // module has ONE termination story: a CATCH-ALL on status != Success (see the long
+    // rationale at the corresponding site in
+    // gsALMExploration<T>::traceCurve), plus that function's own |dL/dL0| < 1e-6
+    // underflow break, same ratio test and same constant. Twenty halvings reach it
+    // (2^-20 = 9.5e-7), so the loop is bounded by 20 steps per initiation.
+    //
+    // On exhaustion the failure is PROPAGATED (see the return type) and `solutions` is
+    // left EMPTY: recording m_ALM->solutionU()/solutionL() after a failed step would
+    // store the unchanged previous state as if it were a traced point -- the same phantom
+    // point already excluded from gsALMExploration<T>::traceCurve.
+    if (diverged)
     {
-      if (m_verbose) gsMPIInfo(m_rank)<<"Error: Loop terminated, arc length method did not converge.\n";
+      if (m_verbose) gsMPIInfo(m_rank)<<"Error: arc length method did not converge (status "<<(index_t)status<<"); halving the arc length.\n";
       dL = dL / 2;
+      // NEGATED form of gsALMExploration<T>::traceCurve's `< 1e-6` break -- same ratio
+      // test, same constant, but it also fires on NaN. A job queued with dL0 = 0 makes
+      // dL/dL0 = 0/0 = NaN, and `NaN < 1e-6` is FALSE, which would resurrect exactly the
+      // spin-loop this clause exists to remove.
+      if (!(math::abs(dL / dL0) >= (T)1e-6))
+      {
+        gsWarn<<"gsAPALM::_initiation: arc length underflow on job ID "<<ID
+              <<" (last status "<<(index_t)status<<", |dL/dL0| = "<<math::abs(dL/dL0)
+              <<"); no solution is produced for this interval.\n";
+        solutions.clear();
+        distance = 0;
+        return status;
+      }
       m_ALM->setLength(dL);
       m_ALM->setSolution(Uold,Lold);
       continue;
@@ -1007,18 +1254,19 @@ void gsAPALM<T>::_initiation( const std::tuple<index_t, T     , solution_t, solu
     // add the extra point after bifurcation to the export
     solutions.push_back(std::make_pair(m_ALM->solutionU(),m_ALM->solutionL()));
   }
+  return gsStatus::Success;
 }
 
 // NOTE: This does not make new branches!
 template <class T>
-void gsAPALM<T>::_correction( const std::tuple<index_t, T     , solution_t, solution_t> & dataEntry,
-                              const std::pair<T,T> &  dataInterval,
-                              const index_t &         dataLevel,
-                              const solution_t &      dataReference,
-                              std::vector<T> &        distances,
-                              std::vector<solution_t>&stepSolutions,
-                              T &                     upperDistance,
-                              T &                     lowerDistance )
+gsStatus gsAPALM<T>::_correction( const std::tuple<index_t, T     , solution_t, solution_t> & dataEntry,
+                                  const std::pair<T,T> &  dataInterval,
+                                  const index_t &         dataLevel,
+                                  const solution_t &      dataReference,
+                                  std::vector<T> &        distances,
+                                  std::vector<solution_t>&stepSolutions,
+                                  T &                     upperDistance,
+                                  T &                     lowerDistance )
 {
   solution_t start, prev, reference;
   index_t ID;
@@ -1069,10 +1317,50 @@ void gsAPALM<T>::_correction( const std::tuple<index_t, T     , solution_t, solu
     gsMPIDebug(m_rank)<<"Start - ||u|| = "<<Uold.norm()<<", L = "<<Lold<<"\n";
 
     gsStatus status = m_ALM->step();
-    if (status==gsStatus::NotConverged || status==gsStatus::AssemblyError)
+    // --- Step-fail retry: halve the sub-interval and re-seed from (Uold,Lold) ---
+    //
+    // TERMINATION GUARD + PHANTOM-POINT FIX. Two distinct defects lived here:
+    //  * the predicate enumerated NotConverged || AssemblyError, so a SolverError or
+    //    OtherError FELL THROUGH to the recording block below. A failed step commits
+    //    nothing (see the rationale in gsAPALM<T>::_initiation), so stepSolutions.at(k)
+    //    and distances.at(k) were then filled with the UNCHANGED previous state -- a
+    //    phantom point submitted to gsAPALMData<T,solution_t>::submit as a converged
+    //    interval solution. Exactly the same defect already excluded from
+    //    gsALMExploration<T>::traceCurve. The catch-all below closes it, and the
+    //    recording block is now reachable ONLY on Success.
+    //  * `k -= 1; continue;` never advanced the loop counter and had no arc-length floor
+    //    and no cap, so a deterministic NotConverged halved towards denormal forever.
+    //
+    // Same clause and same constant as gsALMExploration<T>::traceCurve: catch-all on
+    // status != Success, break at |dL/dL0| < 1e-6. NOTE the asymmetry with _initiation:
+    // dL0 was rebound above to the PER-SUB-INTERVAL length (dL0 = dL0 / Nintervals), and
+    // after a bisected sub-interval the next one starts from dL = dL_rem < dL0, so the
+    // ratio test starts below 1 there and the floor is reached in fewer than 20 halvings.
+    // That is deliberately conservative -- the reference length is the one the job was
+    // budgeted with -- and it keeps the loop bounded in every case.
+    //
+    // On exhaustion the failure is PROPAGATED and the outputs are CLEARED rather than
+    // left half-filled: a partially traced interval is not a submittable result, and the
+    // tail of this function (upperDistance/lowerDistance, the export swap) dereferences
+    // stepSolutions.back(), which for an unwritten entry is a default-constructed pair
+    // whose gsVector has size 0.
+    if (status != gsStatus::Success)
     {
-      gsMPIInfo(m_rank)<<"Error: Loop terminated, arc length method did not converge.\n";
+      gsMPIInfo(m_rank)<<"Error: arc length method did not converge (status "<<(index_t)status<<"); halving the arc length.\n";
       dL = dL / 2.;
+      // Negated form, see the identical break in gsAPALM<T>::_initiation: it fires on
+      // NaN too, which is what dL/dL0 becomes for a job queued with dL0 = 0.
+      if (!(math::abs(dL / dL0) >= (T)1e-6))
+      {
+        gsWarn<<"gsAPALM::_correction: arc length underflow on job ID "<<ID
+              <<" at sub-interval "<<k+1<<" of "<<Nintervals
+              <<" (last status "<<(index_t)status<<", |dL/dL0| = "<<math::abs(dL/dL0)
+              <<"); no interval solution is produced for this job.\n";
+        stepSolutions.clear();
+        distances.clear();
+        upperDistance = lowerDistance = 0;
+        return status;
+      }
       dL_rem += dL; // add the remainder of the interval to dL_rem
       m_ALM->setLength(dL);
       m_ALM->setSolution(Uold,Lold);
@@ -1162,6 +1450,7 @@ void gsAPALM<T>::_correction( const std::tuple<index_t, T     , solution_t, solu
     std::swap(stepSolutionsExport.at(k+1),stepSolutions.at(k));
     std::swap(stepTimesExport.at(k+1),stepTimes.at(k));
   }
+  return gsStatus::Success;
 }
 
 // -----------------------------------------------------------------------------------------------------

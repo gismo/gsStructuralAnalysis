@@ -23,7 +23,7 @@ namespace gismo
 
     \tparam T coefficient type
 
-    \ingroup gsALMBase
+    \ingroup gsALMSolvers
 */
 template <class T>
 class gsALMLoadControl : public gsALMBase<T>
@@ -38,6 +38,10 @@ class gsALMLoadControl : public gsALMBase<T>
 public:
 
     using Base::setLength;
+    // computeStability() is PUBLIC on gsALMBase; re-exporting it protected here would
+    // narrow the base interface (callers holding a gsALMBase& could reach it, callers
+    // holding the derived type could not). Kept public, as in gsALMCrisfield.
+    using Base::computeStability;
 
 protected:
 
@@ -48,7 +52,6 @@ protected:
     using Base::computeResidualNorms;
     using Base::computeUt;
     using Base::computeUbar;
-    using Base::computeStability;
     using Base::computeLength;
 
 public:
@@ -77,6 +80,15 @@ public:
         initMethods();
     }
 
+public:
+    /// Distance in the (U,L) plane, measured in the constraint metric of load control.
+    /// Load control constrains the LOAD alone (predictor(): m_DeltaL = m_arcLength, and
+    /// the corrector keeps m_DeltaL fixed), so its arc length is |DeltaL| - the
+    /// displacement increment carries no weight in this method's own constraint.
+    T distance(const gsVector<T>& /*DeltaU*/, const T DeltaL) const
+    {
+        return math::abs(DeltaL);
+    }
 
 protected:
 

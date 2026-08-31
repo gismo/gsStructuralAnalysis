@@ -8,6 +8,332 @@ Performs the arc length method to solve a nonlinear equation system.
 
 More details can be found in [1].
 
+The classes of this group are \ref gsALMBase (the base class, with the singular-point
+detection, the extended-system singular-point solve and the branch switch), its methods
+\ref gsALMLoadControl, \ref gsALMRiks, \ref gsALMCrisfield and
+\ref gsALMConsistentCrisfield, the parallel \ref gsAPALM, and the landscape-exploration
+pair \ref gsALMExploration and \ref gsALMLandscape described below. Singular-point
+localization and classification are documented in \ref gsALMSolvers_SingularPoints; the
+two branch-switch mechanisms (the true emanating tangent, and its fallback) in
+\ref gsALMSolvers_BranchSwitching.
+
+\section gsALMSolvers_Exploration Landscape exploration
+
+A single arc-length run follows one equilibrium curve. Obtaining a whole bifurcation
+diagram means driving that solver in a loop -- step, stability check, singular-point
+computation, branch switch -- and book-keeping the curves it produces.
+\ref gsALMExploration automates exactly that loop on top of a caller-configured
+\ref gsALMBase solver: starting from one (or several) converged seed states it works off a
+job queue, classifies each detected crossing as a turning (limit) point or a branch point,
+queues one branch-switch job per critical-mode sign, de-duplicates jobs and retraced
+sweeps, and assembles the result in a \ref gsALMLandscape. It is library code: it carries
+no shell or elasticity dependency, everything problem-specific enters through the solver
+and an optional callback mapping a free-DOF vector to a deformed geometry.
+
+Four properties govern how it is configured:
+- <b>One job produces one curve, traced in BOTH arc-length directions.</b> A subcritical
+  branch lies on the other side of the critical load and the side cannot be read off the
+  critical mode, so both directions are swept -- into a SINGLE curve object, running from
+  one far end through the start state to the other. The two halves of a seed, or of a
+  branch, can therefore never be duplicates of each other.
+- <b>Three independent comparison tolerances, with three different scopes.</b>
+  \c DedupTol (default \f$10^{-4}\f$) de-duplicates branch JOBS; \c MoveTol (default
+  \f$10^{-6}\f$) is the no-progress guard rejecting a stalled step; \c RetraceTol (default
+  \f$8\cdot10^{-2}\f$) decides whether a SWEEP is retracing an already-stored curve. The
+  last is deliberately the loosest: it compares samplings of two curves which, on different
+  arc-length grids, never coincide. It is not compared directly either -- the test fires
+  once, when the sweep has travelled \c StartSteps*SwitchLength from the branch point, and
+  a genuinely emanating branch has by then departed from its parent only as the square root
+  of that distance, so the tolerance is scaled by
+  \f$\sqrt{\texttt{StartSteps}\cdot\texttt{SwitchLength}/\texttt{Length}}\f$ and the
+  criterion is the same one at every arc length.
+- <b>A retracing sweep is rewound, not the curve.</b> Of the two directions swept at a
+  singular point, the one pointing away from the emanating branch falls back onto the
+  parent; since it is a sweep and not a curve, rewinding it leaves the genuine half found
+  by the other sweep intact.
+- <b>\c MaxPointsPerCurve is a per-SWEEP budget.</b> A curve traced in both directions runs
+  it once per direction and may hold up to twice that many accepted points, plus the
+  singular points stored on it, which the budget never counted.
+
+<b>Arc-length control: halve-on-failure by default, opt-in growth.</b> The shipped control
+is halve-and-snap-back: a failed step halves the arc length, and the next accepted step
+snaps back to the sweep's base length (\c Length on a seed curve, \c SwitchLength on a
+branch curve). \c StepGrowth (default \c false, opt-in) replaces the snap-back with a
+pde2path-style (\c sscontrol.m) doubling ladder: an accepted step whose corrector converged
+within \c StepGrowthIter iterations doubles the arc length instead, clamped in MAGNITUDE at
+the base length, so with \c StepGrowth on the arc length can only APPROACH what the default
+control already uses, more gradually, after a halving -- it never exceeds it. This makes
+\c StepGrowth strictly MORE conservative than the default, not faster: it trades a single
+snap-back for a multi-step ramp, so read it as a smoother RECOVERY, not as an acceleration
+of a slow default (the default recovery is not slow -- it is immediate).
+\c StepGrowthIter (default \c -1, meaning half the solver's own \c MaxIter) sets the
+iteration-count threshold below which a step counts as "grew"; \c -1 follows pde2path's own
+convention \c dsinciter \c = \c imax/2 (\c stanparam.m), because this tree's \c MaxIter is a
+generous cap (default 100), not a target iteration count, and has no direct counterpart of
+pde2path's \c imax in this library.
+
+<b>Localizing a singular point.</b> \c BisecMax and \c BisecLengthFloor control the
+bisection that localizes a detected inertia crossing before it is classified; see
+\ref gsALMSolvers_SingularPoints for the whole pipeline. \c RetraceBallFloor (default
+\c 0, disabled) is a related but separate knob: it floors the FALLBACK-NUDGE branch job's
+absolute escape magnitude \f$1/\f$\c Perturbation against a multiple of the retrace-ball
+radius at the branch point, because that radius scales with the solution norm while the
+nudge magnitude does not (see \ref gsALMSolvers_BranchSwitching for the full rationale and
+its per-driver calibration in \ref example_ModifiedBratuExploration.cpp).
+
+Not every point of a landscape is equally certified. A converged curve point, a limit
+point, and a converged extended-system singular-point solve (status \c Success) are all
+stored with \c gsALMLandscape::Point::equilibrium \c == \c true: each met its OWN
+termination test, regardless of how strict that test was. The solver option
+\c SingularPointComposite (default \c false) is what decides how strict a converged
+extended solve's own test was -- with it off, only \f$\|K_T V\|\to0\f$ was required
+(the point is certified singular, not certified to be an equilibrium); with it on, the
+equilibrium residuals \c TolF/TolU were required too. That choice is a RUN-LEVEL property
+of the caller's own \c SingularPointComposite setting and is not re-encoded per row, so a
+consumer that needs the stronger certificate must track its own setting rather than read a
+per-point flag. A singular-point solve that did NOT converge is a different case entirely:
+its traced, post-crossing point is stored with \c equilibrium \c == \c false AND the
+companion flag \c gsALMLandscape::Point::unresolved \c == \c true (set atomically by
+\c markUnresolvedSingular) -- a crossing was DETECTED but never refined, no \f$(U^*,L^*)\f$
+exists, and no branch was followed. Such a point keeps its traced \c stability at whatever
+\f$\pm1\f$ the tangent inertia gave it there (a genuine, converged equilibrium whose inertia
+WAS measured) rather than being reset to \c 0, which is exactly what makes \c stability
+usable as part of the certified-point filter below.
+
+\note A consumer written against an OLDER version of this library that filtered
+\c equilibrium \c == \c false to select genuine equilibria is now selecting the WRONG rows:
+that filter's polarity was a defect and has been corrected. The replacement selectors, in order
+of what they certify:
+- \c isBifurcation \c && \c stability \c == \c 0 -- a point produced by a converged,
+  certified extended-system solve (whether or not \c SingularPointComposite made that solve
+  the stricter composite test -- check that option separately if the distinction matters);
+- \c SingularPointComposite (read from the run, not the row) -- whether the RUN required the
+  stricter composite termination test for every such point;
+- \c unresolved \c == \c true -- a singular point that was detected but NOT refined; its
+  location is only the traced, post-crossing point, and it must never be treated as a
+  certified bifurcation.
+
+A consumer that only needs the location of a crossing (plots, connectivity) may use every
+point regardless of these flags.
+
+The landscape CSV written by \c writeCsv has the header
+<tt>curve,point,L,normU,stability,negatives,isBifurcation,parentCurve,parentPointIdx,equilibrium,unresolved</tt>
+(column order matters to consumers). \c negatives is the tangent inertia count -- the
+number of negative eigenvalues/pivots of \f$K_T\f$ that drove detection -- with \c -1
+meaning "not recorded"; storing the count, rather than collapsing it to the \f$\pm1\f$ of
+\c stability, is what lets a reader distinguish a \f$0\to1\f$ crossing from a
+\f$1\to2\f$ secondary one. \c examples/plot_landscape.py parses this file KEYED ON THE
+HEADER NAMES, never on column position, so the column order above is informative, not a
+positional contract a consumer must match exactly.
+
+\ref gsALMLandscape is a pure container plus writers: setting the explorer's
+\c OutputPrefix rewrites <tt>&lt;prefix&gt;.csv</tt> -- and, in \c gsHDF5 -enabled builds,
+<tt>&lt;prefix&gt;.h5</tt> -- after every completed curve, as a crash checkpoint;
+\c writeParaview and \c saveHDF5 / \c loadHDF5 are available directly. The companion
+script \c examples/plot_landscape.py renders such a CSV as a
+\f$\lambda\f$--\f$\|\mathbf{u}\|\f$ equilibrium diagram (stable/unstable line styles,
+bifurcation and fold markers, parent-child links); it needs NumPy and Matplotlib, and its
+HDF5-based modes -- which reclassify points by their solution profile instead of by norm --
+additionally need \c h5py and the <tt>.h5</tt> sibling of the CSV.
+
+<b>The fold test function.</b> \a gsALMBase::foldTestFunction() returns AUTO-07p's fold
+test function (\c toolboxae.f90), computed from the SAME already-factorized tangent a
+stability evaluation forms, as one extra back-substitution against the (frozen) step
+forcing \f$f\f$, bordered with \f$(w,\gamma)=(f,0)\f$: this bordering choice is OURS, not
+AUTO's. The MAGNITUDE of the resulting scalar is bordering-independent, so any choice of
+\f$(w,\gamma)\f$ would do on that count; what \f$(w,\gamma)=(f,0)\f$ fixes is the SIGN,
+which is exactly the fold-vs-branch discriminator the test needs
+(\f$\mathrm{sign}(f^TK_T^{-1}f)\f$) -- see \ref gsALMBase::foldTestFunction for the
+derivation.
+\note foldTestFunction() is an INSTRUMENT ONLY. Nothing in this library reads it for
+singular-point DETECTION -- that remains the tangent inertia count \a negatives(), read
+through the classification pipeline of \ref gsALMSolvers_SingularPoints. It returns NaN
+whenever no value is available (before the first stability evaluation, after a
+jacobian=false evaluation, or when the back-substitution itself fails); check with
+\c math::isnan before using it.
+
+Examples with the use of landscape exploration are
+- \ref example_BratuExploration.cpp
+- \ref example_ModifiedBratuExploration.cpp
+
+and \ref example_ShearExploration.cpp runs the equivalent loop by hand on a shell problem.
+
+\section gsALMSolvers_SingularPoints Singular points: localization, classification
+
+A crossing is never classified at the raw, coarse-grid point where it was detected.
+\ref gsALMExploration's per-sweep loop instead runs a LOCALIZE-FIRST pipeline, following
+pde2path's \c bifdetec.m shape: (1) DETECT an inertia flip between two consecutive accepted
+points (the tangent inertia, not the stability sign, so a \f$0\to1\f$ and a \f$1\to2\f$
+crossing are both caught); (2) BISECT the bracketed arc-length interval on that same
+inertia, capped by \c BisecMax bisection probes or terminated once the bracket width drops
+below \c BisecLengthFloor -- a FRACTION of the sweep's own base arc length (\c Length on a
+seed curve, \c SwitchLength on a branch curve), so the floor is relative, not absolute;
+whichever bound is hit first stops the bisection, and exhausting either is a NORMAL
+termination, not a failure (only a bracket no single probe ever refined counts as a failed
+localization); (3) CLASSIFY at the localized, pre-crossing-side point of the final bracket,
+with a FRESHLY assembled tangent (not the stale one from the coarse-grid point); (4) run the
+extended (bordered-Newton) singular-point solve from there. This ordering -- localize before
+classifying, with a fresh tangent -- follows both reference codes: pde2path bisects the
+detection interval to convergence before classifying, and AUTO-07p folds localization and
+classification into one convergence loop; the design this pipeline follows is closest to
+pde2path's.
+
+<b>The critical-mode tolerances, and why there are two.</b> Classifying a crossing needs
+the critical mode \f$\phi\f$ (or \f$V\f$) of the LOCALIZED tangent, obtained by up to
+\c SingularPointTestIt inverse-power sweeps (each
+sweep is cheap -- ONE back-substitution on the already-factorized tangent, so raising it
+costs little). \c SingularPointModeTol is the CONVERGENCE tolerance on that mode's own
+direction (the sweep stops once the direction changes by less than this, up to sign,
+between two sweeps), and it is DELIBERATELY DECOUPLED from \c SingularPointTestTol, the
+verdict threshold the classification itself is judged against: the verdict threshold must
+sit ABOVE the resolution at which the mode is computed, or the classification is read below
+its own noise floor. \c SingularPointModeTol's default is the sentinel \c -1, resolved (in
+\c getOptions()) to \c SingularPointTestTol*1e-2 whenever left at or below zero -- so
+raising or lowering \c SingularPointTestTol also moves \c SingularPointModeTol's derived
+target unless a caller pins the latter explicitly; a reader who changes one of the two
+should check the other. An achieved direction error is published through
+\c criticalModeError() and read against three bands: below \c SingularPointModeTol
+("resolved", classify normally); at or above it but below \c SingularPointTestTol
+("imprecise", classify normally, silently -- the verdict cannot change below its own
+threshold); at or above \c SingularPointTestTol ("unresolved" -- the classification REFUSES
+a verdict rather than certify one evaluated at or below the mode's own resolution).
+
+\c SingularPointTestTol itself is what the classification thresholds: the cosine
+\f$|\psi\cdot f|/\|f\|\f$ of the critical mode against the (frozen, per-step) forcing
+\f$f\f$. It is the LEFT null vector \f$\psi\f$ of the tangent (the
+right null vector of \f$K_T^{\mathsf T}\f$), which is the mathematically correct quantity
+under a follower (state-dependent) load, and is numerically identical to the RIGHT null
+vector \f$V\f$ on the symmetric default \c SimplicialLDLT solver path (no extra
+factorization is performed there). \c SingularPointTestTol has a SECOND consumer beyond
+classification: \a gsALMCrisfield's \c BorderedMode-driven degenerate-chart handling reads
+the same cosine (there called \c modeCos, from \a gsALMCrisfield::_chartSingularityProbe,
+the same limit-vs-branch statistic of Wriggers & Simo 1990) against this option to decide
+between a chart-artifact re-border and a genuine bifurcation report -- a path only reachable
+once \c BorderedMode makes the bordered chart runtime-selectable (see below). A caller
+tuning \c SingularPointTestTol for the classification above should be aware it also governs
+that second, bordered-chart-only decision.
+
+<b>Provisional: the \c SingularPointTestTol default.</b> The default (\c 1e-4) is calibrated
+BY MEASUREMENT (see \c tasks/11-testtol-table.md) against 2-DOF unit fixtures and 1-D Bratu
+continuation drivers ONLY. Its behaviour at PDE scale -- large 2-D/3-D shell or solid
+problems -- is UNEXAMINED: this is an open question, not a claim that the default is either
+known good or known bad there. A caller running such a problem should treat the default as
+provisional and cross-check any limit-vs-branch verdict against an independent signal, e.g.
+the tangent inertia count exposed by \c negatives() (the \c negatives column of the landscape
+CSV, described above).
+
+<b>The bordered-solve corrector (\c BorderedMode).</b> \ref gsALMCrisfield exposes, at
+runtime, which corrector chart \a gsALMCrisfield::step() uses: \c "Off" (default) never
+touches the bordered chart and is bit-neutral by construction; \c "Fallback" attempts the
+usual elimination chart first and retries once with the bordered chart on failure;
+\c "Primary" attempts the bordered chart FIRST -- the references' own practice, both AUTO
+and pde2path use the bordered (n+1) solve as the corrector rather than a fallback -- and
+retries once with the elimination. The retry gate is
+\c (status \c == \c NotConverged \c || \c status \c == \c SolverError): deliberately WIDER
+than \c NotConverged alone, because a failed factorization at a near-singular
+corrector-iterate tangent is exactly the case the bordered chart exists for. A failed retry
+leaves no trace: \c m_DeltaUold, \c m_DeltaLold, \c m_arcLength, \c m_arcLength_prev,
+\c m_stepTaken, \c m_stabilityPrev, \c m_phi, and the four stability-bookkeeping members
+\c m_negatives, \c m_indicator, \c m_stabilityVec and \c m_stability are all snapshotted
+before the retry and restored on failure -- the fourth member is required because
+stability is DERIVED from the indicator in the very call a failed retry also runs, so
+restoring the other three without it would leave the pair mutually inconsistent. The
+reported status is clamped to attempt 1's own status, so a retry can never be reported as
+WORSE than the attempt it replaces. The old switch \c BorderedFallback is a DEPRECATED
+ALIAS: left at its default \c false it does nothing; set \c true while \c BorderedMode is
+still at its own default \c "Off", it is mapped onto \c BorderedMode="Fallback" with a
+once-per-solver-object warning -- an explicitly non-\c "Off" \c BorderedMode always wins
+over the alias. \c BorderedSolver (default \c "LU") selects the sparse solver used for the
+bordered (n+1)x(n+1) system; it must pivot.
+
+\section gsALMSolvers_BranchSwitching Branch switching
+
+Two mechanisms exist for stepping onto an emanating branch at a detected branch point, and
+they are not peers: one is the primary mechanism, the other its fallback.
+
+<b>The mechanism: \a gsALMBase::computeBranchTangent().</b> This computes the TRUE
+emanating branch tangent \f$\tau_1\f$ at a simple (multiplicity-1) branch point, by the
+algebraic branching equation (ABE) of pde2path's \c swibra. Its signature is
+\code{.cpp}
+virtual typename branchTangent::type
+computeBranchTangent(const gsVector<T> & Ustar, const T & Lstar,
+                     const gsVector<T> & phi1,
+                     const gsVector<T> & tangentU0, const T & tangentL0,
+                     gsVector<T> & tau1U, T & tau1L);
+\endcode
+taking the branch point \f$(U^*,L^*)\f$, the right critical mode \f$\phi_1\f$ there
+(passed explicitly, e.g. \c solutionV(), so the contract carries no hidden ordering
+requirement), and the incoming pre-crossing tangent/secant, and writing the emanating
+tangent into \c tau1U/tau1L. It leaves \c m_U, \c m_L, \c m_V, \c m_jacMat and \c m_Vleft
+exactly as it found them and performs two fresh Jacobian assemblies (never through
+\c computeJacobian(), which would abort on the branch point's singular tangent). The
+outcome is one of \c branchTangent::type: \c Success (\f$\tau_1\f$ is the emanating
+tangent), \c TrivialBranch (\f$K_T\f$ does not vary along \f$\phi_1\f$ -- a linear problem
+-- so \f$\tau_1=[\phi_1;0]\f$), \c ModeUnresolved (no usable left mode, or the
+biorthogonalisation cosine \f$|\phi_1\cdot\psi_1|\f$ below \c BranchTangentTol),
+\c Degenerate (the ABE's own leading coefficient is \f$\approx0\f$, "no distinct branch",
+or the incoming tangent's load share vanishes), or \c AssemblyFailed. \c Success and
+\c TrivialBranch are routed IDENTICALLY downstream by the explorer's branch-job creation
+(both give a usable predictor tangent); a caller distinguishing them for diagnostic purposes
+only should read the \c Verbose line that names the outcome, since it is the only place the
+distinction survives.
+
+\c BranchTangentPerturbation (default \f$10^{-3}\f$, called \f$\mathrm{del}\f$ in the ABE
+literature) is the finite-difference perturbation used to difference \f$K_T\f$ along
+\f$\phi_1\f$; pde2path's own warning applies unchanged -- do not choose \c del too small,
+the two \f$K_T\f$ assemblies are differenced, and a \c del below the assembler's own noise
+floor returns noise, not signal. \c BranchTangentTol (default \f$10^{-2}\f$, i.e.
+\f$10\times\f$ \c BranchTangentPerturbation) is the RELATIVE floor below which an ABE
+quantity counts as zero, for the same reason \c SingularPointModeTol sits below
+\c SingularPointTestTol: the degeneracy verdict must sit ABOVE the \f$O(\mathrm{del})\f$
+resolution of the finite-differenced coefficients it judges, not at or below it. Two
+accuracy facts worth calibrating against honestly: the emanating tangent is a
+finite-difference construction, not an exact one, and is accurate only to the resolution
+that \c BranchTangentPerturbation sets; and, because \f$\phi_1\f$ is itself a null vector
+determined only up to an overall sign by the inverse-power iteration that produced it,
+\f$\tau_1\f$ inherits that same sign ambiguity -- a caller must not assume a particular
+sign of the returned tangent.
+
+<b>The fallback: \a gsALMBase::switchBranch() and \c Perturbation.</b> When
+\c computeBranchTangent() does not return \c Success or \c TrivialBranch -- i.e. whenever
+the true ABE emanating tangent cannot be resolved -- the explorer falls back to nudging the
+singular point along the unit critical mode, \f$U \leftarrow U^*+V/\tau\f$, where
+\f$\tau\f$ is the option \c Perturbation (default \f$10^3\f$). This fallback is NOT
+vestigial: it is a live, load-bearing path taken whenever the ABE tangent path does not
+resolve, which is a real and reachable outcome of \c computeBranchTangent(), not merely a
+theoretical one.
+
+\c Perturbation has THREE independent consumers, not two: (1) \a gsALMBase::switchBranch()
+itself, the canonical fallback nudge; (2) \a gsALMExploration's own branch-job construction,
+which -- for the FALLBACK-NUDGE path -- independently REPLICATES the \f$U^*+V/\tau\f$
+formula rather than calling \c switchBranch(), a duplication that is itself a maintenance
+hazard, since the replicated formula can silently diverge from \c switchBranch() if either
+is edited alone; and (3) \c BranchEscape's default resolution on the TANGENT path (below).
+\c BranchEscape (default \c -1, an explorer option) sets the Euler-predictor escape
+magnitude used to step off a resolved ABE tangent: \c -1 reuses the UNFLOORED fallback-nudge
+scale \f$1/\f$\c Perturbation directly from the solver's own options (consumer 3 above, and
+NOT the floored value \c RetraceBallFloor may have applied to the fallback path -- the two
+paths can therefore disagree in magnitude even at \c BranchEscape's default); any positive
+value is used directly instead, and the option is inert on the fallback-nudge path itself.
+\c BranchEscape exists because, near a pitchfork, the emanating branch leaves with
+\f$\dot\lambda=0\f$ and grows like \f$C\sqrt{s}\f$ in arc length \f$s\f$, so a numerically
+sound escape offset scales like \f$O(\sqrt{ds})\f$, not \f$O(ds)\f$ -- tying the escape
+magnitude to the arc length instead would drop the emanating branch entirely.
+
+\c RetraceBallFloor (default \c 0, disabled, so the shipped default is bit-identical to not
+having the option at all) floors the fallback-nudge branch job's absolute magnitude
+\f$1/\f$\c Perturbation against a multiple (margin) of the retrace-safety-net's own ball
+radius at the branch point. It exists because that ball radius scales with
+\f$\max(1,\|U^*\|)\f$ while the nudge magnitude \f$1/\f$\c Perturbation is ABSOLUTE: a
+magnitude tuned to clear the ball at a low-state-norm locus can lose that margin entirely at
+a high-state-norm one. There is no library-derived default -- \ref
+example_ModifiedBratuExploration.cpp sets it explicitly, to a value derived as an equality
+at that driver's own calibration locus (see its page for the value); this is a PER-DRIVER
+calibration, not a library-wide fix, and a caller with their own high-state-norm problem
+must derive and set their own margin.
+
+\section gsALMSolvers_Examples Examples
+
 Examples with the use of arc-length methods are
 - \ref benchmark_Balloon.cpp
 - \ref benchmark_Beam.cpp
@@ -23,9 +349,28 @@ Examples with the use of arc-length methods are
 - \ref gsThinShell_WrinklingFitting.cpp
 - \ref gsThinShell_WrinklingPerturbed.cpp
 
+\section gsALMSolvers_References References
 
 [1] de Borst, R., Crisfield, M. A., Remmers, J. J. C., & Verhoosel, C. V. (2012). Non-Linear Finite Element Analysis of Solids and Structures: Second Edition. In Non-Linear Finite Element Analysis of Solids and Structures: Second Edition. https://doi.org/10.1002/9781118375938
 
+The localize-first singular-point pipeline, the \c swibra emanating-tangent construction,
+the fold test function, and several of the design choices in
+\ref gsALMSolvers_SingularPoints and \ref gsALMSolvers_BranchSwitching above were checked
+against two continuation codes and adopted or adapted from them where noted in the text:
+
+[2] pde2path, algorithm naming per Engelnkemper et al. (2019), Section 2 -- the
+bisect-before-classify localization (\c bifdetec), the emanating-tangent construction
+(\c swibra), and the arc-length growth control (\c sscontrol) all follow this code's shape.
+
+[3] auto-07p -- the fold test function follows this code's AE toolbox
+(\c toolboxae.f90); its inline branch switch (a null-vector nudge, not a true emanating
+tangent) is the same family as this library's fallback nudge.
+
+[4] PyNCT -- an independent Python continuation code consulted during the same
+review.
+
+\note The design choices above were audited against auto-07p and pde2path, including
+divergences that were considered and NOT adopted.
+
 */
 }
-

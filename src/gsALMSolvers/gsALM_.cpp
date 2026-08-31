@@ -15,6 +15,12 @@
 #include <gsStructuralAnalysis/src/gsALMSolvers/gsALMConsistentCrisfield.h>
 #include <gsStructuralAnalysis/src/gsALMSolvers/gsALMConsistentCrisfield.hpp>
 
+#include <gsStructuralAnalysis/src/gsALMSolvers/gsALMLandscape.h>
+#include <gsStructuralAnalysis/src/gsALMSolvers/gsALMLandscape.hpp>
+
+#include <gsStructuralAnalysis/src/gsALMSolvers/gsALMExploration.h>
+#include <gsStructuralAnalysis/src/gsALMSolvers/gsALMExploration.hpp>
+
 namespace gismo
 {
 	
@@ -26,4 +32,6 @@ namespace gismo
 	CLASS_TEMPLATE_INST gsALMRiks<real_t>;
 	CLASS_TEMPLATE_INST gsALMCrisfield<real_t>;
 	CLASS_TEMPLATE_INST gsALMConsistentCrisfield<real_t>;
+	CLASS_TEMPLATE_INST gsALMLandscape<real_t>;
+	CLASS_TEMPLATE_INST gsALMExploration<real_t>;
 }
