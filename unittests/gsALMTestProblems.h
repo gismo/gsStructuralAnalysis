@@ -75,10 +75,11 @@
     fixture F, now in u2. Fold at u2* = 1, u1* = 1, lambda* = 1; det K = s^2*(2-2*u2)
     changes sign there exactly as in fixture F. At the fold K* = [[1,0],[-1,0]]:
       * RIGHT null vector phi = (0,1)  =>  |phi.f|/|f| = 0 EXACTLY
-        => the pre-task-01 (right-vector) test misclassifies this fold as a BRANCH
-        point at every tolerance;
+        => a classification test built on the RIGHT null vector misclassifies
+        this fold as a BRANCH point at every tolerance;
       * LEFT null vector psi = (1,1)/sqrt(2)  =>  |psi.f|/|f| = 1/sqrt(2) = 0.70710678...
-        => the task-01 (left-vector) test classifies it correctly as a LIMIT point
+        => the LEFT-null-vector test that gsALMBase implements classifies it
+        correctly as a LIMIT point
         (Fredholm: the branch has dlambda/ds = 0 iff psi.Force = -psi.R_lambda != 0).
     A non-symmetric tangent needs a non-symmetric solver ("LU"); BifurcationMethod
     must be "Nothing" (-1) since neither Determinant (needs SimplicialLDLT) nor
@@ -105,8 +106,8 @@
         u2* = +/- 1/sqrt(2) = +/-0.70710678118654752,  u1* = 1.0,  lambda* = 0.75.
     There K = [[1,-u2],[-u2,u2^2]], null vector V ~ (u2,1) = (0.7071,1),
     |V.f|/|f| = 0.57735... => classifies as a LIMIT point on the child curve, so
-    the task-03b deferred-flip detection takes the markBifurcation path with no
-    extended solve involved.
+    the deferred stability-flip detection in gsALMExploration<T>::traceCurve()
+    takes the markBifurcation path with no extended solve involved.
 
     This file is part of the G+Smo library.
 

@@ -26,110 +26,48 @@ void gsALMCrisfield<T>::defaultOptions()
     Base::defaultOptions();
     // THE DEFAULT IS Scaling = -1: the AUTOMATIC state-dependent phi, i.e. Lam & Morley 1992
     // eq. (11) A0 = p0'p0/lambda0^2, with their eq. (22) A0 = dq'dq at the origin exception --
-    // see predictor(). Both equations, and that p0 is a DISPLACEMENT (so A0 = |U|^2/Lambda^2
-    // here), were verified VERBATIM from the paper's page images; the paper's own section is
-    // titled "Solution Formulation at Origin". Note -1 is the ONLY value for which m_phi_user
-    // is false, so any other value is used verbatim as a fixed psi.
+    // see predictor(). p0 is a DISPLACEMENT, so A0 = |U|^2/Lambda^2 here. -1 is the ONLY
+    // value for which m_phi_user is false, so any other value is used verbatim as a fixed psi.
     //
     // Scaling = 0 gives the CYLINDRICAL constraint |DeltaU|^2 = ds^2, i.e. A0 = 0: the load
-    // term is dropped from the metric. It is a legitimate option, and most in-tree call sites
-    // pin it themselves. It was BRIEFLY the default on 2026-07-30 and was REVERTED the same
-    // day; see the block below before considering it again.
+    // term is dropped from the metric. It is a legitimate option and most in-tree call sites
+    // pin it themselves, but it is NOT the shipped default -- see the literature note below.
     //
-    // Scaling = -1 selects the AUTOMATIC state-dependent phi instead: Lam & Morley 1992
-    // eq. (11), with their eq. (22) at the exception -- see predictor(). Note that -1 is the
-    // ONLY value for which m_phi_user is false, so any other value is used verbatim as a
-    // fixed psi.
+    // THE FAILING CONFIGURATION is Scaling = 0 with BorderedFallback = false: fixture F's
+    // fundamental path (u2 == 0, A0 == 0) advances u1 by EXACTLY ds, so a step lands
+    // head-on on the fold at u1 = 1.0 (det K = 0), the elimination's discriminant cancels
+    // to exactly 0 (see (a) on the class doc), and crisfield_root_selection_never_retraces
+    // / crisfield_fold_rounding_is_scale_invariant fail. Two independent ways out: the
+    // shipped Scaling = -1 (the automatic phi avoids the head-on step), or
+    // BorderedFallback = true (the bordered chart rounds the fold). Turning
+    // BorderedFallback ON at the shipped Scaling = -1 reopens nothing. The Scaling = 0
+    // precondition here is a fixed (state-independent) metric: under Scaling = -1 phi is
+    // RECOMPUTED every step from the
+    // state (see predictor()), so the constraint metric itself changes step to step and the
+    // fixture's ds is only commensurate with the fold location under the fixed metric.
     //
-    // ! THE TWO DEFAULTS SET HERE ARE A PACKAGE. MEASURED with
-    // Scaling = 0 on its own: it turns crisfield_root_selection_never_retraces and
-    // crisfield_fold_rounding_is_scale_invariant red. Cause, diagnosed and measured: with
-    // A0 = 0 and u2 == 0 on fixture F's fundamental path the constraint |DeltaU| = ds
-    // advances u1 by EXACTLY ds, so ds = 0.05 from the seed u1 = 0 targets the fold at
-    // u1 = 1.0 -- where det K = 0 -- head-on at step 19, and there the elimination's
-    // discriminant cancels to exactly 0 (see (a) on the class). BorderedFallback = true is
-    // what rounds that fold: with BOTH defaults as set here the same fixtures are green at
-    // ds = 0.05 UNCHANGED (max u1 = 1.8, scale invariance exactly 0). Reverting either
-    // default alone reopens that failure. The fixtures' commensurate ds is deliberately NOT
-    // tuned away -- it is the gate that keeps this pairing honest.
-    //
-    // The claim above ("Reverting either default alone reopens that failure") holds for
-    // reverting BorderedFallback while leaving Scaling = 0. Reverting Scaling to -1 instead
-    // returns the fixtures to the automatic phi, which passes those tests on its own -- it
-    // does NOT reopen the failure.
-    //
-    // !! Scaling REVERTED to -1 on 2026-07-30 BY USER DECISION. KEEP IT AT -1.
-    //
-    // What the survey ACTUALLY recommends, verbatim under its heading
-    // "### 6.2 The definition to adopt":
-    //   "Primary (the M6 fix ...): keep Scaling = -1"
-    // and, closing its section 6.3 "Separate recommendation":
-    // "This is a recommendation only. It must not be implemented without the
-    // user saying so." The flip to 0 is offered there only as a SEPARATE, secondary option,
-    // with an explicit argument AGAINST it ("-1 is not unsupported ... a preference between
-    // two literature-backed options, not a correction"). The flip was presented one-sidedly.
-    //
-    // Two further corrections, both verified at source:
-    //  * "SEVEN SOURCES RECOMMEND ZERO" IS FALSE. THE NUMBER IS TWO: only Crisfield 1981 and
-    //    Bellini & Chulya 1987's conclusions genuinely recommend it. Per-source:
-    //      - Lam & Morley 1992 was cited BACKWARDS. p.173: "Many analysts set A0 = 0, BUT WE
-    //        TAKE A0 = p0'p0/lambda0^2." They are the source for Scaling = -1, i.e. for the
-    //        option the flip would have replaced.
-    //      - Crisfield 1983's conclusion asks for the OPPOSITE, p.1287: "a variable scaling
-    //        could be usefully developed for the load term in the constraint equation".
-    //      - Schweizerhof & Wriggers 1986, one sentence after the quoted scheme (ii), p.270:
-    //        "none of the above-mentioned schemes can be recommended as best ... The load term
-    //        HAS TO BE PRESENT if stiffening structures are analyzed. Advisable is beta > 1."
-    //      - Feng et al. 1995 is a bare taxonomy; Ramm 1981 is a permissive "may".
-    //      - Bellini & Chulya's "case 2 is the best performer" was truncated: the full sentence
-    //        begins "ALTHOUGH case 2 ... is the best performer" and sets up their own VARIABLE-a
-    //        algorithm. Their conclusions do endorse cylindrical, so they still count -- as one
-    //        of the two.
-    //  * AND THE MOST RECENT SOURCE ARGUES AGAINST CYLINDRICAL, which no summary reported:
-    //    Ritto-Correa & Camotim 2008 SECTION 5 benchmarks psi^2 = 0 directly. p.1366: "a
-    //    cylindrical constraint is NOT SUITABLE to compute this kind of 'unfolded' equilibrium
-    //    paths", concluding that mixed control (spherical predictor + cylindrical corrector)
-    //    "seems to be the best option". In their Table 2 the pure-cylindrical column succeeds
-    //    at exactly one step length.
-    //  * SCOPE THIS CORRECTLY: the above refutes 0-AS-DEFAULT. It does NOT endorse
-    //    -1-AS-DEFAULT. No surveyed source endorses eq. (11) as a shipped default, and the
-    //    two recommendations that ARE current -- Ritto-Correa's psi^2_P != psi^2_C, and
-    //    Bellini & Chulya's per-iteration variable a -- are NEITHER of the values this single
-    //    scalar option can express.
-    //    Crisfield's textbook VOLUME 2 -- the one he repeatedly defers bifurcation material
-    //    to -- has not been reviewed, so a revised psi statement there remains possible and
-    //    unchecked.
-    //  * The blast-radius census ("11 of 12 examples pin Scaling = 0") was wrong in METHOD: it
-    //    enumerated files containing the string "Scaling", not files constructing this class.
-    //    14 files construct it; tutorials/nonlinear_solid_arcLength.cpp and
-    //    tutorials/nonlinear_shell_arcLength.cpp pin NOTHING and appear nowhere in the project
-    //    record. And filedata/ ships 10 XMLs that explicitly request Scaling = -1 (vs 12
-    //    requesting 0). The automatic phi is DELIBERATELY SELECTED by shipped configurations;
-    //    it is not a vestigial default that can be changed quietly.
-    //
-    // Do NOT re-flip this to 0. It would need a fresh, two-sided case and the user's sign-off
-    // on the corrected census.
+    // Literature is split on cylindrical (Scaling = 0) vs. the automatic phi. Crisfield 1981
+    // and Bellini & Chulya 1987 recommend cylindrical; against it: Lam & Morley 1992 (p.173,
+    // "Many analysts set A0 = 0, BUT WE TAKE A0 = p0'p0/lambda0^2"), Crisfield 1983 ("a
+    // variable scaling could be usefully developed for the load term"), Schweizerhof &
+    // Wriggers 1986 ("none of the above-mentioned schemes can be recommended as best ... the
+    // load term HAS TO BE PRESENT if stiffening structures are analyzed"), and Ritto-Correa &
+    // Camotim 2008 (Sec. 5: "a cylindrical constraint is NOT SUITABLE to compute this kind of
+    // 'unfolded' equilibrium paths"). No surveyed source endorses eq. (11) as a shipped
+    // default either. Several in-tree drivers and XML configs pin Scaling explicitly (both
+    // -1 and 0), so the default has real blast radius: do not flip it without a fresh,
+    // two-sided literature case and the user's sign-off.
     m_options.addReal("Scaling","Set Scaling factor Phi (-1 = automatic, Lam & Morley 1992; 0 = cylindrical)",-1);
     m_options.addInt ("AngleMethod","Angle determination method: 0 = Previous step; 1 = Previous iteration",angmethod::Step);
-    // !! REVERTED TO OPT-IN (false) on 2026-07-30 BY USER DECISION. It was briefly ON as the
-    // package partner of Scaling = 0; both of those changes are now reverted.
+    // BorderedFallback defaults OFF (opt-in). The MECHANISM is sound and stays in the
+    // library, fully gated: the G-A test, and the adversarial re-derivation in
+    // MATH-VERIFICATION-adversarial.md, re-derive every bordered-chart identity on exact
+    // rationals. It is not the default because no in-tree driver pins it, so an ON default
+    // would reach every consumer of this class, the large majority never measured with it on.
+    // Turning it ON is a good choice for a caller that hits fold-step failures, but should
+    // remain an informed opt-in until the real consumer population has been measured.
     //
-    // The MECHANISM is sound and stays in the library, fully gated: the G-A test, and the
-    // adversarial re-derivation in MATH-VERIFICATION-adversarial.md, both stand (M-D and M-E
-    // re-derived every bordered-chart identity on exact rationals). What did NOT survive audit
-    // was the case for shipping it ON BY DEFAULT:
-    //  * The default-OFF/ON argument cited a "~28x arc-length halving" as a
-    //    Crisfield (-m 1) measurement, but that passage in fact describes "the default run" =
-    //    -m 0 = RIKS. A different method's measurement was used to size this option's blast radius.
-    //  * NO in-tree driver pins BorderedFallback, so an ON default reaches EVERY consumer of
-    //    this class (14 files construct it, incl. two tutorials absent from the project record).
-    //    Exactly two drivers were ever measured with it ON.
-    // Neither point touches whether the chart is correct; both touch whether ON is justified.
-    //
-    // ! Turning this ON is still a good idea for a caller that hits fold-step failures -- but it
-    // must be an informed opt-in until the real consumer population has been measured.
-    //
-    // !! DEPRECATED: superseded by the string option
+    // DEPRECATED: superseded by the string option
     // BorderedMode below, which can also select the bordered chart as the PRIMARY corrector
     // (the references' own practice) rather than only as a fallback. Kept registered and
     // functional -- removing it would break existing options().setSwitch("BorderedFallback",...)
@@ -1323,33 +1261,15 @@ gsStatus gsALMCrisfield<T>::step()
   this->m_stabilityVec   = stabilityVec_s;
   this->m_stability      = stability_s;
 
-  // Never report a status WORSE than attempt 1's. Generalized from the
-  // hard-coded gsStatus::NotConverged to attempt 1's OWN status `st`: under "Primary" this is
-  // load-bearing in a NEW direction -- attempt 2 (the elimination) CAN emit SolverError, while
-  // attempt 1 (the bordered chart) never does (class doc (e)) -- so clamping to `st` keeps
-  // that asymmetry invisible to the caller, exactly as it already did for the
-  // Fallback/NotConverged case.
-  //
-  // !! CORRECTED 2026-08-03. The justification that
-  // stood here -- "gsALMExploration::traceCurve() retries only on NotConverged ||
-  // AssemblyError; a SolverError falls through to its 'record the point' branch" -- is
-  // FALSIFIED. Re-verified at source 2026-08-03: traceCurve's retry predicate now
-  // reads `if (status != gsStatus::Success)`, so it retries on EVERY non-Success status. For
-  // gsALMExploration::traceCurve the downgrade below is therefore REDUNDANT.
-  //
-  // ! KEEP IT ANYWAY. A SECOND justification stood here until 2026-08-03 -- that the downgrade
-  // masked the unguarded `while (diverged)` spin-loop in gsAPALM::_initiation -- and that
-  // rationale was RETIRED when gsAPALM::_initiation and gsAPALM::_correction gained a real
-  // termination guard (catch-all on status != Success plus an arc-length floor). That rationale is therefore gone.
-  // The first justification above is NOT: it is self-contained. The gate above means control reaches
-  // this line only when attempt 1 returned a definitive NotConverged or SolverError, so
-  // downgrading attempt 2's status to attempt 1's own is exactly "never report worse than
-  // attempt 1's" and never depended on the masking. Redundant for one consumer is not the same
-  // as unnecessary -- do not remove this.
-  //
-  // !! EXTENDED 2026-08-14: the clamp target widened from the
-  // literal gsStatus::NotConverged to attempt 1's own `st`, so it also covers the Primary /
-  // SolverError case above; the reasoning is otherwise unchanged.
+  // Never report a status WORSE than attempt 1's: clamp to attempt 1's OWN status `st`
+  // rather than a literal gsStatus::NotConverged. Under "Primary" this is load-bearing in
+  // a direction the Fallback path never needed -- attempt 2 (the elimination) CAN emit
+  // SolverError, while attempt 1 (the bordered chart) never does (class doc (e)) -- so
+  // clamping to `st` keeps that asymmetry invisible to the caller. The clamp is
+  // self-contained: the gate above means control reaches this line only when attempt 1
+  // returned a definitive NotConverged or SolverError, so downgrading attempt 2's status
+  // to attempt 1's own is correct on its own terms, independent of how any particular
+  // caller (gsALMExploration, gsAPALM, ...) reacts to a non-Success status.
   return (this->m_status = st);
 }
 
@@ -1371,10 +1291,8 @@ void gsALMCrisfield<T>::initOutput()
   gsInfo<<std::setw(17)<<std::left<<"DL";
   gsInfo<<std::setw(17)<<std::left<<"|dU|";
   gsInfo<<std::setw(17)<<std::left<<"dL";
-  // "ds", not "ds²": the column below prints distance(DeltaU,DeltaL), a SQUARE ROOT.
-  // Pre-existing here (NOT introduced by the earlier fix that only made the sibling
-  // gsALMConsistentCrisfield print the same quantity); corrected together with it so the
-  // two classes' headers stay identical.
+  // "ds", not "ds²": the column below prints distance(DeltaU,DeltaL), a SQUARE ROOT --
+  // kept identical to gsALMConsistentCrisfield::initOutput()'s header.
   gsInfo<<std::setw(17)<<std::left<<"ds";
   gsInfo<<std::setw(17)<<std::left<<"|dU|²";
   gsInfo<<std::setw(17)<<std::left<<"dL²";

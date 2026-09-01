@@ -82,7 +82,7 @@ int main (int argc, char** argv)
     int quasiNewtonInt= -1;
     bool adaptive     = false;
     int step          = 10;
-    int method        = 2; // (0: Load control; 1: Riks' method; 2: Crisfield's method; 3: consistent crisfield method; 4: extended iterations)
+    int method        = 2; // (0: Load control; 1: Riks' method; 2: Crisfield's method) -- the factory below rejects anything else
     bool symmetry     = false;
     bool deformed     = false;
 
@@ -129,7 +129,9 @@ int main (int argc, char** argv)
     gsCmdLine cmd("Arc-length analysis for thin shells.");
     cmd.addString( "f", "file", "Input XML file for assembler options", assemberOptionsFile );
 
-    cmd.addInt("t", "testcase", "Test case: 0: clamped-clamped, 1: pinned-pinned, 2: clamped-free", testCase);
+    cmd.addInt("t", "testcase", "Test case (see the case comments below for each): 0,1 rectangular "
+               "beams; 2,3 clamped beam; 4,5 square-plate tension; 6,7 constrained tension; "
+               "8 balloon; 9,10 frustrum; 11 half cylinder; 12,13,14 Scordelis-Lo roof", testCase);
 
     cmd.addInt("r","hRefine", "Number of dyadic h-refinement (bisection) steps to perform before solving", numHref);
     cmd.addInt("e","degreeElevation", "Number of degree elevation steps to perform on the Geometry's basis before solving", numElevate);
@@ -143,7 +145,7 @@ int main (int argc, char** argv)
 
     cmd.addReal("S","spring", "Nondimensional Spring Stiffness (case 2 and 3 only!)", eta);
 
-    cmd.addInt("m","Method", "Arc length method; 1: Crisfield's method; 2: RIks' method.", method);
+    cmd.addInt("m","Method", "Arc length method: 0: Load control; 1: Riks' method; 2: Crisfield's method.", method);
     cmd.addReal("L","dLb", "arc length", dLb);
     cmd.addReal("l","dL", "arc length after bifurcation", dL);
     cmd.addReal("A","relaxation", "Relaxation factor for arc length method", relax);
@@ -314,14 +316,34 @@ int main (int argc, char** argv)
           mp.patch(0).uniformRefine();
     }
     /*
-      Case 9: Frustrum with constrained top boundary                          --- Validation settings: -L 1eX -l 1eX -M 14 -N 500 -r X -e X
-      Case 10: Frustrum with unconstrained top boundary                        --- Validation settings: -L 1eX -l 1eX -M 14 -N 500 -r X -e X
+      Case 9:  Frustrum with constrained top boundary
+      Case 10: Frustrum with unconstrained top boundary
+
+      UNVALIDATED against a published reference, though -M 1 does run: as measured on this tree,
+      -t 9 -M 1 completes 10 of 10 load steps both incompressible (-c 0) and compressible (-c 1),
+      at the corrector settings hardcoded at the top of this file. The validation settings proper
+      were never filled in: the template that stood here carried literal -L/-r/-e placeholders,
+      and its "-M 14" is not a material index at all (materials are 0-4, with a separate -I
+      implementation flag). -M 0 and -M 4 were reported to abort inside the material evaluation
+      itself with the default settings; that observation predates the fix to the dJacobian status
+      handling above and has not been re-checked since.
+
+      For a reference solution use benchmarks/benchmark_FrustrumALM.cpp, which drives the same
+      FrustrumDomain geometry and the same boundary conditions. Its corrector differs from this
+      file's: maxit=500 against 20, and tol/tolU looser (1e-3/1e-1 against 1e-6/1e-6) while tolF
+      is tighter (1e-6 against 1e-3). None of the four is exposed on this driver's command line.
+      That benchmark is hardwired incompressible, so it is not a reference for the -c 1 path.
     */
     else if (testCase == 9 || testCase == 10)
     {
         thickness = 0.1;
         real_t mu = 4.225;
-        PoissonRatio = 0.5;
+        // nu = 1/2 is the incompressible limit; the compressible bulk modulus K = E/(3-6*nu)
+        // is singular there (see _Cijkl3D_impl in gsKLShell/src/gsMaterialMatrixNonlinear.hpp).
+        if (!Compressibility)
+          PoissonRatio = 0.5;
+        else
+          PoissonRatio = 0.45;
         E_modulus = 2*mu*(1+PoissonRatio);
         // gsReadFile<>("quarter_frustrum.xml", mp);
 
@@ -988,11 +1010,11 @@ int main (int argc, char** argv)
       ThinShellAssemblerStatus status = ThinShellAssemblerStatus::AssemblyError;
       assembler->constructSolution(x,mp_def);
       if (MIP)
-        assembler->assembleMatrix(x,x-dx);
+        status = assembler->assembleMatrix(x,x-dx);
       else
       {
         assembler->constructSolution(x,mp_def);
-        assembler->assembleMatrix(mp_def);
+        status = assembler->assembleMatrix(mp_def);
       }
 
       m = assembler->matrix();
@@ -1094,10 +1116,11 @@ int main (int argc, char** argv)
         // equivalent of auto-07p's DSMIN / pde2path's p.nc.dsmin. NEGATED comparison on purpose:
         // it also fires on NaN (dLb0 == 0 gives dLb/dLb0 == NaN, and `NaN < ratio` is FALSE,
         // which would spin this retry loop forever).
-        // The ratio is commensurable here because this driver pins Scaling = 0.0 (see :1043),
-        // i.e. run-constant arc-length weights. A driver using Scaling = -1 has a state-dependent
-        // metric and reopens the caveat in
-        // .claude/plans/gsALMExploration/AUDIT-REFERENCE-CODES-2026-08-13.md:96-98.
+        // The ratio is commensurable here because this driver's ALM setup pins the Scaling
+        // option to 0.0, i.e. run-constant arc-length weights. A driver using
+        // Scaling = -1 has a state-dependent metric: the arc-length weighting moves from step to
+        // step, so this guard would compare |dLb/dLb0| as if the two lengths were commensurable
+        // when they are not. The reference codes (auto-07p, pde2path) keep run-constant weights.
         if (!(math::abs(dLb / dLb0) >= minLengthRatio))
         {
           gsInfo<<"Arc-length step-size floor reached at load step "<<k<<": |dLb/dLb0| = "

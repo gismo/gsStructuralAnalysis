@@ -83,39 +83,31 @@ namespace gismo
     assumes \c m_deltaLs[0] came from \c t[0].
 
     (e) THIS PATH NEVER EMITS \c SolverError. The step-fail retry in
-    \a gsALMExploration::traceCurve() retries only on \c NotConverged || \c AssemblyError, so
-    a \c SolverError falls through to its "record the point" branch. Every failure here -- LU failure, singular \a B, non-finite
+    \a gsALMExploration::traceCurve() keys on \c status \c != \c Success, so it would retry a
+    \c SolverError too; the guarantee here is that this path does not produce one in the first
+    place. Every failure here -- LU failure, singular \a B, non-finite
     \f$q_t\f$, a complex root -- warns and \c throw 1, and \a step() additionally clamps the
     reported status so attempt 2 can never be worse than attempt 1.
 
     (f) THE OPTION IS OPT-IN: \c BorderedMode DEFAULTS \c "Off", and \a defaultOptions() is
-    the authority on that literal -- read it there, not this sentence. It was briefly
-    defaulted to a bordered-first mode on 2026-07-30 as the package partner
-    of \c Scaling=0; BOTH of those default changes were reverted the same day, so the shipped
-    pair is \c Scaling=-1 with \c BorderedMode="Off". Turning it ON (\c "Fallback" or
-    \c "Primary") remains a good idea for a caller that hits fold-step failures.
-    \c "Fallback" attempts the elimination first and retries with the bordered chart only
-    after the elimination fails; \c "Primary" attempts the bordered chart FIRST and retries
-    with the elimination -- the references' own practice, see the class-doc heading. Under
-    \c "Primary" the retry (the elimination) CAN emit \c SolverError even though the bordered
-    chart itself never does (e); \a step() clamps the reported status to attempt 1's own
-    status either way, so this asymmetry is invisible to the caller.
+    the authority on that literal -- read it there, not this sentence. The shipped pair is
+    \c Scaling=-1 with \c BorderedMode="Off" (see \a defaultOptions() for the configuration
+    this guards against). Turning it ON (\c "Fallback" or \c "Primary") remains a good idea for a caller
+    that hits fold-step failures. \c "Fallback" attempts the elimination first and retries
+    with the bordered chart only after the elimination fails; \c "Primary" attempts the
+    bordered chart FIRST and retries with the elimination -- the references' own practice,
+    see the class-doc heading. Under \c "Primary" the retry (the elimination) CAN emit
+    \c SolverError even though the bordered chart itself never does (e); \a step() clamps the
+    reported status to attempt 1's own status either way, so this asymmetry is invisible to
+    the caller.
     The deprecated switch \c BorderedFallback remains registered and, when \c BorderedMode is
     left at \c "Off", is mapped onto \c "Fallback" with a once-per-object warning; an
     explicitly non-\c "Off" \c BorderedMode always wins over the alias (see \a getOptions()).
     The trigger for the ONE retry is a step-level failure -- \c NotConverged or
     \c SolverError, see \a step() -- so no new code runs on any path that succeeds under
     \c "Off". \c BorderedMode != "Off" is NOT bit-neutral on runs that DO fail steps, and
-    that is deliberate: an \c example_BratuExploration Crisfield run halves the arc length
-    ~28 times at the \f$\lambda\approx5.91\f$ barrier and every one of those halvings is a step that
-    returned \c NotConverged, so the retry fires dozens of times per run. MEASURED WITH THE
-    SWITCH ON, on the three Crisfield landscape CSVs: the \c -m 1 landscape loses exactly one
-    point -- a successful retry replacing a halving -- with \f$\lambda_{\max}=5.90762\f$
-    BIT-IDENTICAL, the \a gsALMConsistentCrisfield landscape is bit-identical (containment by
-    class), and no acceptance check changes verdict. Why the two go together: with
-    \c Scaling=0 and this switch OFF, the 2-DOF fold fixture F dies at step 19 with
-    \c NotConverged and \f$\max u_1 = 0.95\f$ (measured, at all three load scales); with both
-    on it rounds the fold to \f$\max u_1 = 1.8\f$ at \f$ds = 0.05\f$ unchanged.
+    that is deliberate: it replaces a halving with a successful retry wherever the bordered
+    chart resolves the failure the elimination could not (see (a)).
 
     (g) NOT COVERED. Branch points (\f$K\f$ singular AND \f$f\in\mathrm{range}(K)\f$): there
     the null space is 2-dimensional and \a B is singular for EVERY \a w; that case belongs to

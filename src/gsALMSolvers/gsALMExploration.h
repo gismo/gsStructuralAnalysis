@@ -85,9 +85,6 @@ namespace gismo
     problem quantity (a monotone load, say), never by "the first half". A curve
     swept in ONE direction only -- a pristine rest-state seed, or a job whose
     second sweep contributed nothing -- keeps plain trace order.
-    (This invariant belongs on gsALMLandscape<T>::Curve, which produces the
-    ordering's consumers; it is stated here because that file was outside the
-    scope of the task that measured it.)
 
     Points carry their own equilibrium PROVENANCE; the landscape is not uniformly
     certified. gsALMLandscape<T>::Point::equilibrium is true iff the row satisfies
@@ -123,9 +120,8 @@ namespace gismo
     expected to fire ~never, because the job's own FORWARD sweep already reaches
     the physical branch and its BACKWARD sweep is a short-lived excursion the
     corrector itself declines to continue past the singular point in the wrong
-    load direction; for \c gsALMLoadControl it fires ROUTINELY instead --
-    MEASURED 50% on \c example_ModifiedBratuExploration's own tangent-path
-    branch point -- because that corrector's BACKWARD sweep marches
+    load direction; for \c gsALMLoadControl it fires ROUTINELY instead, because
+    that corrector's BACKWARD sweep marches
     \f$\Lambda\f$ away from the branch by construction (see the ONE-JOB
     paragraph) and is exactly the "wrong-side" sweep this net exists to remove,
     just as on the fallback path. The retrace safety net (\c m_retraceTests /
@@ -160,9 +156,7 @@ namespace gismo
     the caveat immediately below for when that stops holding),
     while a sweep that has fallen back onto the parent can clear the threshold at
     \c StartSteps and still collapse under it a few steps later, once it reaches
-    the parent's own dense sampling -- MEASURED on the modified-Bratu benchmark's
-    A-C crossing (bare default flags): factor 2.35 at step 3, rising to 3.52 at
-    step 7, then 0.45 at step 8, staying below threshold at every step through 20.
+    the parent's own dense sampling.
     A single below-threshold reading no longer discards the sweep by
     itself past \c StartSteps: \c RetraceHits CONSECUTIVE below-threshold
     evaluations are required there, so that this widened window catches a
@@ -224,17 +218,24 @@ namespace gismo
 
     RETRYING A FAILED LOCALIZATION (\c LocalizeRetries). A failed localization
     (no single bisection probe converged) is permanent by default: the crossing is
-    marked unresolved on the landscape and abandoned. \c LocalizeRetries
-    (default 1) re-runs \a _localizeCrossing with \c BisecMax doubled and \c
-    BisecLengthFloor halved, FOR THAT CALL ONLY -- both knobs are restored to
-    their caller-set values immediately afterward. Relaxing both is required:
-    the two failure exits of \a _localizeCrossing are gated by different knobs
-    (exhausting \c BisecMax, and retreating below \c BisecLengthFloor), so
-    loosening only one leaves the other exit reachable. \c LocalizeRetries \c =
-    \c 0 disables retrying, reproducing the pre-retry behaviour bit-for-bit. If
-    every retry also fails, the honest unresolved marking stands unchanged; the
-    failed bracket (lambda bounds and total probe count) is recorded on the
-    landscape \c Point as a hook for a later resume, not consumed here.
+    marked unresolved on the landscape and abandoned. \a _localizeCrossing restarts
+    its bracket from scratch on every call and is otherwise deterministic, so a
+    repeated attempt at UNCHANGED knobs could never reach a different outcome.
+    \c LocalizeRetries (default 1) instead re-runs \a _localizeCrossing with
+    \c BisecMax and \c BisecLengthFloor escalated, COMPOUNDING across attempts --
+    attempt N runs at \c BisecMax doubled N times and \c BisecLengthFloor halved N
+    times relative to the caller-set values, saturating rather than
+    overflowing/underflowing once the ladder runs far enough. Both knobs are
+    restored to their caller-set values once, after the whole retry sequence ends
+    (including when an exception propagates out of it) -- no caller ever observes
+    an escalated value. Relaxing both is required: the two failure exits of
+    \a _localizeCrossing are gated by different knobs (exhausting \c BisecMax, and
+    retreating below \c BisecLengthFloor), so loosening only one leaves the other
+    exit reachable. \c LocalizeRetries \c = \c 0 disables retrying, reproducing the
+    pre-retry behaviour bit-for-bit. If every retry also fails, the honest
+    unresolved marking stands unchanged; the failed bracket (lambda bounds and
+    total probe count) is recorded on the landscape \c Point as a hook for a later
+    resume, not consumed here.
 
     \tparam T coefficient type
 

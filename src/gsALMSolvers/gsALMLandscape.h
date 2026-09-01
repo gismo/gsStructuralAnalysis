@@ -239,16 +239,27 @@ public:
     void writeParaview(const std::string & basename, index_t npts = 1000) const;
 
 #ifdef gsHDF5_ENABLED
+    /// @brief Schema version of the HDF5 checkpoint layout written by saveHDF5().
+    /// Stored as the integer attribute "gsALMLandscapeSchemaVersion" on the file's
+    /// root group. loadHDF5() rejects any file whose marker differs or is absent.
+    /// Bump this whenever a dataset in saveHDF5() is added, removed or renamed.
+    static index_t hdf5SchemaVersion() { return 1; }
+
     /// @brief Saves the FULL landscape (all curves/points, including a stored
     /// deformed gsMultiPatch for every point that has one) to an HDF5 file.
     /// Whole-file rewrite (H5F_ACC_TRUNC); intended as a cheap crash checkpoint.
-    /// Only available in gsHDF5-enabled builds. Lets gsHDF5 errors propagate.
+    /// A second, brief write phase reopens the file to stamp the root-group
+    /// attribute "gsALMLandscapeSchemaVersion" (see hdf5SchemaVersion()) once the
+    /// first phase's handle has closed. Only available in gsHDF5-enabled builds.
+    /// Lets gsHDF5 errors propagate.
     void saveHDF5(const std::string & fname) const;
 
     /// @brief Replaces the current contents with a landscape previously written
     /// by saveHDF5. After load the container compares equal to the saved one
     /// (curves, points, U/L/stability/isBifurcation, parent links, geometries).
-    /// Only available in gsHDF5-enabled builds.
+    /// Throws (GISMO_ENSURE) before any field is read if the file lacks the
+    /// "gsALMLandscapeSchemaVersion" root-group attribute or carries a value
+    /// other than hdf5SchemaVersion(). Only available in gsHDF5-enabled builds.
     void loadHDF5(const std::string & fname);
 #endif
 

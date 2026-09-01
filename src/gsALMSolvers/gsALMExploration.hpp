@@ -204,8 +204,11 @@ void gsALMExploration<T>::defaultOptions()
                                  "length (Length on seed curves, SwitchLength on branch curves)",1e-6);
     m_options.addInt ("LocalizeRetries","Singular-point localization: additional "
                                  "_localizeCrossing attempts after the first one fails to refine "
-                                 "the interval; each retry doubles BisecMax and halves "
-                                 "BisecLengthFloor for that call only. 0 disables retrying.",1);
+                                 "the interval; escalation COMPOUNDS across attempts (attempt N "
+                                 "runs at BisecMax doubled N times and BisecLengthFloor halved N "
+                                 "times, saturating rather than overflowing/underflowing), and "
+                                 "both knobs are restored to their caller-set values once the "
+                                 "retry sequence ends. 0 disables retrying.",1);
     m_options.addSwitch("Verbose","Verbose output",false);
     m_options.addString("OutputPrefix","When non-empty, writeCsv(prefix+\".csv\") after every completed curve","");
     // Iteration-count step GROWTH (pde2path sscontrol.m:37-43, "very good step ⇒
@@ -403,10 +406,6 @@ bool gsALMExploration<T>::traceCurve(const Job & job, std::queue<Job> & queue)
     // Thesis Alg. 8.1 lines 17-23 / PyNCT SolutionDiagram: one (branch point,
     // tangent) yields ONE curve, swept from the same start state with the negated
     // initial tangent, the first sweep's points reverted and the second appended.
-    // The historic code queued the two directions as two independent JOBS, so one
-    // seed became two curve objects that were halves of a single locus, and one
-    // branch mode became two curves of which the wrong-side one could only be
-    // recognised after the fact by a point-coincidence test.
     if (job.bothDirections)
     {
         const bool kept2 = traceSweep(job, cid, !job.backward, pending, pendingPt);
@@ -420,7 +419,7 @@ bool gsALMExploration<T>::traceCurve(const Job & job, std::queue<Job> & queue)
     // Reverting the first block makes the assembled curve read far -> start ->
     // far, i.e. one ordered polyline, which is what every consumer (CSV row order,
     // plots, connectivity) assumes. Only done when the second sweep actually
-    // contributed: otherwise the curve keeps exactly its historic point order.
+    // contributed: otherwise the curve keeps its original point order.
     if (m_landscape.curve(cid).points.size() > nFirst && nFirst > 1)
     {
         typename gsALMLandscape<T>::Curve & c = m_landscape.curve(cid);
@@ -719,11 +718,6 @@ bool gsALMExploration<T>::traceSweep(const Job & job, index_t cid, bool backward
     // arc-length-underflow breaks overwrite this before breaking.
     SweepTermination reason = SweepTermination::PointBudget;
 
-    // STORED landscape stability of consecutive ACCEPTED points (not
-    // solver-side corrector-iterate transients). 0 = no prior accepted point yet.
-    // This value drives the stored `stab` semantics only, NOT the detection trigger.
-    index_t stabPrevAccepted = 0;
-
     // Inertia-based singular-point detection: the trigger fires on a
     // change of the NEGATIVE-EIGENVALUE COUNT (tangent inertia) between consecutive
     // ACCEPTED points. This strictly generalizes the old min-eigenvalue sign flip (a
@@ -878,11 +872,6 @@ bool gsALMExploration<T>::traceSweep(const Job & job, index_t cid, bool backward
         if (m_solutionConstructor)
             haveGeometry = m_solutionConstructor(Ucur, deformed);
 
-        // /*equilibrium=*/true is a spelling change, not a semantic one: it
-        // reproduces the declaration's existing default, which this call was
-        // already getting. Appending a trailing negatives argument simply
-        // forces the intervening arguments to be spelled out; the VALUE here
-        // is untouched.
         m_landscape.addPoint(cid, Ucur, Lcur, stab, haveGeometry ? &deformed : nullptr,
                              /*isBifurcation=*/false, /*equilibrium=*/true,
                              /*negatives=*/negCur);
@@ -900,31 +889,23 @@ bool gsALMExploration<T>::traceSweep(const Job & job, index_t cid, bool backward
         // would give a 100%-or-undefined rate (isRetrace is only ever reached, hence only
         // ever counted, when it fires).
         //
-        // An earlier measurement identified the discriminator; the two-clause predicate
-        // below implements it. A SINGLE evaluation at stepsTaken == startSteps missed a phantom sweep that
-        // reads ABOVE threshold at StartSteps but falls back onto the parent branch a
-        // few steps later (MEASURED on the modified-Bratu A-C crossing at bare default
-        // flags, --sptestit 7: curve 3's surviving sweep reads factor 2.35 at step 3,
-        // rises to 2.44 (step 4) then 3.52 (step 7) mimicking a genuine branch, and only
-        // at step 8 collapses to factor 0.45 -- below threshold -- as it lands back on
-        // curve 1's own dense sampling; every step from 8 to 20 stays below 1). The
-        // GENUINE sweep (curve 2) was confirmed, over its own full sweep, to be safe
-        // against this widened window: its ratio/threshold factor is 2.32 at step 3 and
-        // rises, NEAR the branch point and OVER THE CONFIGURATIONS MEASURED, to 5.60 at
-        // step 20 -- see the caveat in gsALMExploration.h's class doxygen, RetraceTol
-        // comparison-scope paragraph, for the shape (closely approaching distinct
-        // branches) that would need RetraceTol revisited instead.
+        // A SINGLE evaluation at stepsTaken == startSteps misses a phantom sweep that
+        // reads ABOVE threshold at StartSteps but falls back onto a parent branch's dense
+        // sampling a few steps later: such a sweep can mimic a genuine branch for several
+        // steps before collapsing below threshold, whereas a genuine sweep's ratio keeps
+        // rising as it moves away from the branch point (see the caveat in
+        // gsALMExploration.h's class doxygen, RetraceTol comparison-scope paragraph, for
+        // the shape -- closely approaching distinct branches -- that would need RetraceTol
+        // revisited instead).
         //
-        // What was originally shipped from that measurement was WEAKER than the signal it
-        // found: "one hit anywhere >= StartSteps discards the sweep" -- any below-
-        // threshold reading, however isolated, deletes the whole sweep. The measurement
-        // itself identified PERSISTENCE as the discriminator: the phantom's kept sweep
-        // stays below threshold at EVERY step from its first hit (8) through the end of
-        // the sweep (20), whereas a genuine sweep that merely crosses another stored
-        // curve transversally is expected to produce a SINGLE below-threshold reading
-        // before resuming its climb (untested in this tree -- no oracle has that shape).
-        // A one-hit predicate cannot tell those two apart; a run-length
-        // predicate can.
+        // A one-hit predicate ("any below-threshold reading, however isolated, discards
+        // the whole sweep") cannot tell a phantom from a genuine transversal crossing
+        // apart; PERSISTENCE can: a phantom's kept sweep stays below threshold at every
+        // step from its first below-threshold hit through the end of the sweep, whereas a
+        // genuine sweep that merely crosses another stored curve transversally is expected
+        // to produce a single below-threshold reading before resuming its climb (untested
+        // in this tree -- no oracle has that shape). A run-length predicate distinguishes
+        // the two; a one-hit predicate does not.
         //
         // The shipped predicate is therefore TWO clauses (RetraceHits, see its own doc
         // in defaultOptions() for the <=0 / 1 / 2 regimes this one knob spans):
@@ -1121,18 +1102,42 @@ bool gsALMExploration<T>::traceSweep(const Job & job, index_t cid, bool backward
             // pde2path saves-or-discards on |Re mu|.
             const index_t nRetries = m_options.getInt("LocalizeRetries");
             index_t attemptsUsed = 0;
-            for (index_t attempt = 1; !localized && attempt <= nRetries; ++attempt)
+            if (!localized && nRetries > 0)
             {
-                attemptsUsed = attempt;
+                // Escalation must compound on the RUNNING values -- hence the single read
+                // here rather than one per attempt: _localizeCrossing restarts its bracket
+                // from scratch (slo=0, shi=dLb), so an attempt at unchanged knobs cannot
+                // reach a different outcome.
                 const index_t bisecMax0 = m_options.getInt ("BisecMax");
                 const T       floor0    = m_options.getReal("BisecLengthFloor");
-                m_options.setInt ("BisecMax",         bisecMax0 * 2);
-                m_options.setReal("BisecLengthFloor", floor0 / (T)2);
+                index_t       bisecMaxA = bisecMax0;
+                T             floorA    = floor0;
                 try
                 {
-                    localized = _localizeCrossing(Uold, Lold, negPrevAccepted,
-                                                  Ucur, Lcur, negCur, dLb, dLb0, cid,
-                                                  Uloc, Lloc, bracket, &probes);
+                    for (index_t attempt = 1; !localized && attempt <= nRetries; ++attempt)
+                    {
+                        attemptsUsed = attempt;
+                        // Compounding doubling/halving of the RUNNING value (not
+                        // pow(2,attempt)*base), saturating so an unbounded retry count
+                        // can neither overflow BisecMax nor flush BisecLengthFloor to
+                        // zero -- once saturated, further attempts simply repeat the
+                        // saturated values.
+                        if (bisecMaxA <= (std::numeric_limits<index_t>::max)() / 2)
+                            bisecMaxA *= 2;
+                        if (floorA / (T)2 > (T)0)
+                            floorA /= (T)2;
+                        m_options.setInt ("BisecMax",         bisecMaxA);
+                        m_options.setReal("BisecLengthFloor", floorA);
+                        localized = _localizeCrossing(Uold, Lold, negPrevAccepted,
+                                                      Ucur, Lcur, negCur, dLb, dLb0, cid,
+                                                      Uloc, Lloc, bracket, &probes);
+                        probesTotal += probes;
+                        if (verbose)
+                            gsInfo << "  [curve " << cid << "] localization retry " << attempt
+                                   << "/" << nRetries << " (BisecMax " << bisecMaxA
+                                   << ", BisecLengthFloor " << floorA << "): "
+                                   << (localized ? "localized." : "still not localized.") << "\n";
+                    }
                 }
                 catch (...)
                 {
@@ -1142,12 +1147,6 @@ bool gsALMExploration<T>::traceSweep(const Job & job, index_t cid, bool backward
                 }
                 m_options.setInt ("BisecMax",         bisecMax0);
                 m_options.setReal("BisecLengthFloor", floor0);
-                probesTotal += probes;
-                if (verbose)
-                    gsInfo << "  [curve " << cid << "] localization retry " << attempt
-                           << "/" << nRetries << " (BisecMax " << bisecMax0*2
-                           << ", BisecLengthFloor " << floor0/(T)2 << "): "
-                           << (localized ? "localized." : "still not localized.") << "\n";
             }
 
             if (!localized)
@@ -1688,7 +1687,6 @@ bool gsALMExploration<T>::traceSweep(const Job & job, index_t cid, bool backward
         // Advance the pre-crossing memory and restore the base arc length.
         Uold = Ucur;
         Lold = Lcur;
-        stabPrevAccepted = stab;    // track last accepted stored stability sign
         // Track last accepted tangent inertia -- but NOT while a flip is being
         // suppressed by the branch-curve guard: holding the
         // reference here is what lets a PERSISTING flip be caught at the first

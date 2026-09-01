@@ -685,11 +685,12 @@ struct BisectionRun
     bool             crossed;
 };
 
-inline BisectionRun runBracketedBisection(index_t maxIter, index_t bisIt, real_t tolB)
+inline BisectionRun runBracketedBisection(index_t maxIter, index_t bisIt, real_t tolB,
+                                          real_t ds = 0.05, real_t dLbFactor = 1.0)
 {
     AlmProblem prob = foldProblem();
     SingularPointProbe alm(prob.Jacobian, prob.ALResidual, prob.Force);
-    configure(alm, 0.05);
+    configure(alm, ds);
 
     alm.options().setInt ("MaxIter",maxIter);
     alm.options().setReal("SingularPointComputeTolB",tolB);   // bisection ON
@@ -713,6 +714,14 @@ inline BisectionRun runBracketedBisection(index_t maxIter, index_t bisIt, real_t
     out.Uarg = Uold;              out.Larg = Lold;
     out.Ucur = alm.solutionU();   out.Lcur = alm.solutionL();
 
+    // Disagree dLb (the bisection's own arc length, re-read from options at
+    // _bisectionSolve entry) with the ds that produced Ucur -- see the
+    // g3bContainC/g3bContainFloor doxygen for why this is the only lever that
+    // pushes the returned seed outside the bracket. Guarded so the default
+    // path (dLbFactor == 1.0) calls setLength nowhere, leaving G3b's and G4's
+    // call sites byte-identical to before this parameter existed.
+    if (dLbFactor != 1.0) alm.setLength(dLbFactor * ds);
+
     alm.stubExtendedSolve(true);
     alm.resetProbe();
     alm.computeSingularPoint(out.Uarg, out.Larg, /*switchBranch*/false,
@@ -724,6 +733,38 @@ inline BisectionRun runBracketedBisection(index_t maxIter, index_t bisIt, real_t
     out.seedL    = alm.extendedSeedL();
     return out;
 }
+
+/// Outward excursion of \a x beyond the closed interval [\a lo, \a hi]:
+/// positive when x lies outside, negative when strictly inside.
+inline real_t bracketSlack(real_t x, real_t lo, real_t hi)
+{ return math::max(lo - x, x - hi); }
+
+/// The absolute term of \ref containmentTol. The only mechanism that can move
+/// a CONVERGED bisection probe outside the bracket it was given is the arc-length
+/// corrector's own convergence slack (a converged exit returns the final probe --
+/// a Newton iterate at s in (0,dLb) measured from the near endpoint, not a
+/// reconstructed bracket edge, gsALMBase.h:1035-1041): the tightest possible
+/// containment is therefore bounded by the loosest corrector tolerance this
+/// suite pins in configure(), TolF = TolU = 1e-8, with a 100x margin. A sweep of
+/// tolB in {1e-14,1e-10,1e-6,1e-4,1e-2,1e-1,1,10} x Length in
+/// {0.02,0.05,0.10,0.20} (32 points) found every seed either exactly at the near
+/// endpoint (a non-converged budget exhaustion restores the entry point exactly,
+/// slack == 0) or strictly interior (converged, slack < 0) -- there is no
+/// positive slack to fit, consistent with sprobe never reaching dLb -- so this
+/// value is a first-principles bound on corrector slack, not a measured maximum.
+const real_t g3bContainFloor = 1e-6;
+
+/// The relative term of \ref containmentTol, chosen so it equals
+/// g3bContainFloor at the widest bracket the sweep above measured
+/// (W = 0.279406 at Length = 0.20) and takes over -- degrading gracefully
+/// rather than staying fixed -- on any wider one:
+/// g3bContainFloor / 0.279406 = 3.58e-6, rounded up to one significant digit.
+const real_t g3bContainC = 4e-6;
+
+/// Containment tolerance for the point _bisectionSolve leaves the solver at, on
+/// a bracket of width \a w: see g3bContainC / g3bContainFloor for the derivation.
+inline real_t containmentTol(real_t w)
+{ return math::max(g3bContainC * math::abs(w), g3bContainFloor); }
 
 // ===========================================================================
 // TEST (G3b) -- a genuine bracket is still bisected, and the seed it produces
@@ -748,16 +789,22 @@ TEST(bisection_with_a_bracket_localizes_the_crossing)
     // Containment: the seed lies inside the bracket it was given, to a tolerance rather
     // than exactly. The returned point is the probe at which the termination test was
     // evaluated -- a converged Newton iterate of the arc-length system, not an exact point
-    // on the path -- so containment holds only up to that re-linearization slack.
-    //
-    // FIXME: re-derive this tolerance. 1e-3 was chosen against the earlier return-point
-    // semantics, in which the converged exit reported the last certified pre-crossing point
-    // and the probe loop had a much smaller budget. Both changed, so the reachable
-    // tolerances and the observed slack differ from what justified 1e-3. Measure the slack
-    // at the returned point across tolB and Length, then tighten to the smallest bound that
-    // still clears it.
-    CHECK(r.seedU[0] >= math::min(r.Uarg[0], r.Ucur[0]) - 1e-3);
-    CHECK(r.seedU[0] <= math::max(r.Uarg[0], r.Ucur[0]) + 1e-3);
+    // on the path -- so containment holds only up to that re-linearization slack, bounded
+    // by containmentTol(W) = max(g3bContainC*W, g3bContainFloor). Over the full measured
+    // sweep (see the constants' doxygen), containmentTol(W) never exceeded 1.12e-6 -- three
+    // orders of magnitude tighter than the retired 1e-3.
+    const real_t lo   = math::min(r.Uarg[0], r.Ucur[0]);
+    const real_t hi   = math::max(r.Uarg[0], r.Ucur[0]);
+    const real_t tolC = containmentTol(hi - lo);
+
+    CHECK(bracketSlack(r.seedU[0], lo, hi) <= tolC);
+
+    // The gate is tight enough to see a drift the retired +-1e-3 accepted: a synthetic
+    // seed placed 10x the derived tolerance past the bracket is rejected by the same
+    // predicate, and that drift is itself still ten times smaller than 1e-3.
+    const real_t drifted = hi + 10.0 * tolC;
+    CHECK(!(bracketSlack(drifted, lo, hi) <= tolC));
+    CHECK(drifted - hi < 1e-3);
 
     // Localization: a genuine bisection halves the bracket every probe, so a
     // factor of two is the weakest thing it must beat.

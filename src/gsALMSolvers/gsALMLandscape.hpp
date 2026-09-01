@@ -242,85 +242,123 @@ inline std::string almPointMpName(index_t c, index_t p)
     std::snprintf(buf, sizeof(buf), "curve_%04d_point_%04d_mp", (int)c, (int)p);
     return std::string(buf);
 }
+/// Name of the root-group attribute holding the checkpoint schema version.
+const char * const almSchemaAttrName = "gsALMLandscapeSchemaVersion";
 } // anonymous namespace
 
 template <class T>
 void gsALMLandscape<T>::saveHDF5(const std::string & fname) const
 {
-    // Whole-file rewrite: gsHDF5Writer opens with H5F_ACC_TRUNC, there is no
-    // append. All top-level names are created at the file root (flat scheme).
-    gsHDF5Writer writer(fname);
-
-    const index_t nc = static_cast<index_t>(m_curves.size());
-
-    // structure: row c = [nPts_c, parentCurve_c, parentPointIdx_c]. Integer
-    // values are stored as T; the reader rounds them back with std::lround.
-    // An empty landscape is stored as a 0x3 matrix (verified accepted by the
-    // writer/HDF5 as a zero-extent dataspace; loadHDF5 reads it back as 0 rows).
-    gsMatrix<T> structure(nc, 3);
-    for (index_t c = 0; c != nc; ++c)
     {
-        structure(c,0) = static_cast<T>(m_curves[c].points.size());
-        structure(c,1) = static_cast<T>(m_curves[c].parentCurve);
-        structure(c,2) = static_cast<T>(m_curves[c].parentPointIdx);
-    }
-    writer.write("structure", structure);
+        // Whole-file rewrite: gsHDF5Writer opens with H5F_ACC_TRUNC, there is no
+        // append. All top-level names are created at the file root (flat scheme).
+        gsHDF5Writer writer(fname);
 
-    for (index_t c = 0; c != nc; ++c)
-    {
-        const Curve & cur = m_curves[c];
-        const index_t nPts = static_cast<index_t>(cur.points.size());
-        if (nPts == 0)
-            continue; // structure records nPts==0; nothing else to store
+        const index_t nc = static_cast<index_t>(m_curves.size());
 
-        // U: numDof x nPts, column j = point j's free-DOF vector.
-        const index_t numDof = cur.points[0].U.size();
-        gsMatrix<T> U(numDof, nPts);
-        gsMatrix<T> L(nPts, 1), stab(nPts, 1), neg(nPts, 1), bif(nPts, 1), hasgeom(nPts, 1), eq(nPts, 1), unres(nPts, 1);
-        gsMatrix<T> bLo(nPts, 1), bHi(nPts, 1), bProbes(nPts, 1), multRed(nPts, 1);
-        for (index_t p = 0; p != nPts; ++p)
+        // structure: row c = [nPts_c, parentCurve_c, parentPointIdx_c]. Integer
+        // values are stored as T; the reader rounds them back with std::lround.
+        // An empty landscape is stored as a 0x3 matrix (verified accepted by the
+        // writer/HDF5 as a zero-extent dataspace; loadHDF5 reads it back as 0 rows).
+        gsMatrix<T> structure(nc, 3);
+        for (index_t c = 0; c != nc; ++c)
         {
-            const Point & pt = cur.points[p];
-            if (pt.U.size() == numDof)
-                U.col(p) = pt.U;
-            else
-                U.col(p).setZero(); // defensive: ragged curve (should not occur)
-            L(p,0)       = pt.L;
-            stab(p,0)    = static_cast<T>(pt.stability);
-            neg(p,0)     = static_cast<T>(pt.negatives);
-            bif(p,0)     = pt.isBifurcation ? static_cast<T>(1) : static_cast<T>(0);
-            hasgeom(p,0) = (pt.deformed.nPatches() != 0) ? static_cast<T>(1)
-                                                         : static_cast<T>(0);
-            eq(p,0)      = pt.equilibrium ? static_cast<T>(1) : static_cast<T>(0);
-            unres(p,0)   = pt.unresolved  ? static_cast<T>(1) : static_cast<T>(0);
-            bLo(p,0)     = pt.bracketLo;
-            bHi(p,0)     = pt.bracketHi;
-            bProbes(p,0) = static_cast<T>(pt.bracketProbes);
-            multRed(p,0) = pt.multiplicityReduced ? static_cast<T>(1) : static_cast<T>(0);
+            structure(c,0) = static_cast<T>(m_curves[c].points.size());
+            structure(c,1) = static_cast<T>(m_curves[c].parentCurve);
+            structure(c,2) = static_cast<T>(m_curves[c].parentPointIdx);
         }
-        writer.write(almCurveName(c,"U"),         U);
-        writer.write(almCurveName(c,"L"),         L);
-        writer.write(almCurveName(c,"stability"), stab);
-        writer.write(almCurveName(c,"negatives"), neg);
-        writer.write(almCurveName(c,"bif"),       bif);
-        writer.write(almCurveName(c,"hasgeom"),   hasgeom);
-        writer.write(almCurveName(c,"equilibrium"), eq);
-        writer.write(almCurveName(c,"unresolved"),  unres);
-        writer.write(almCurveName(c,"bracketLo"),     bLo);
-        writer.write(almCurveName(c,"bracketHi"),     bHi);
-        writer.write(almCurveName(c,"bracketProbes"), bProbes);
-        writer.write(almCurveName(c,"multiplicityReduced"), multRed);
+        writer.write("structure", structure);
 
-        // One gsMultiPatch group per point that carries a stored geometry.
-        for (index_t p = 0; p != nPts; ++p)
-            if (cur.points[p].deformed.nPatches() != 0)
-                writer.write(almPointMpName(c,p), cur.points[p].deformed);
-    }
+        for (index_t c = 0; c != nc; ++c)
+        {
+            const Curve & cur = m_curves[c];
+            const index_t nPts = static_cast<index_t>(cur.points.size());
+            if (nPts == 0)
+                continue; // structure records nPts==0; nothing else to store
+
+            // U: numDof x nPts, column j = point j's free-DOF vector.
+            const index_t numDof = cur.points[0].U.size();
+            gsMatrix<T> U(numDof, nPts);
+            gsMatrix<T> L(nPts, 1), stab(nPts, 1), neg(nPts, 1), bif(nPts, 1), hasgeom(nPts, 1), eq(nPts, 1), unres(nPts, 1);
+            gsMatrix<T> bLo(nPts, 1), bHi(nPts, 1), bProbes(nPts, 1), multRed(nPts, 1);
+            for (index_t p = 0; p != nPts; ++p)
+            {
+                const Point & pt = cur.points[p];
+                if (pt.U.size() == numDof)
+                    U.col(p) = pt.U;
+                else
+                    U.col(p).setZero(); // defensive: ragged curve (should not occur)
+                L(p,0)       = pt.L;
+                stab(p,0)    = static_cast<T>(pt.stability);
+                neg(p,0)     = static_cast<T>(pt.negatives);
+                bif(p,0)     = pt.isBifurcation ? static_cast<T>(1) : static_cast<T>(0);
+                hasgeom(p,0) = (pt.deformed.nPatches() != 0) ? static_cast<T>(1)
+                                                             : static_cast<T>(0);
+                eq(p,0)      = pt.equilibrium ? static_cast<T>(1) : static_cast<T>(0);
+                unres(p,0)   = pt.unresolved  ? static_cast<T>(1) : static_cast<T>(0);
+                bLo(p,0)     = pt.bracketLo;
+                bHi(p,0)     = pt.bracketHi;
+                bProbes(p,0) = static_cast<T>(pt.bracketProbes);
+                multRed(p,0) = pt.multiplicityReduced ? static_cast<T>(1) : static_cast<T>(0);
+            }
+            writer.write(almCurveName(c,"U"),         U);
+            writer.write(almCurveName(c,"L"),         L);
+            writer.write(almCurveName(c,"stability"), stab);
+            writer.write(almCurveName(c,"negatives"), neg);
+            writer.write(almCurveName(c,"bif"),       bif);
+            writer.write(almCurveName(c,"hasgeom"),   hasgeom);
+            writer.write(almCurveName(c,"equilibrium"), eq);
+            writer.write(almCurveName(c,"unresolved"),  unres);
+            writer.write(almCurveName(c,"bracketLo"),     bLo);
+            writer.write(almCurveName(c,"bracketHi"),     bHi);
+            writer.write(almCurveName(c,"bracketProbes"), bProbes);
+            writer.write(almCurveName(c,"multiplicityReduced"), multRed);
+
+            // One gsMultiPatch group per point that carries a stored geometry.
+            for (index_t p = 0; p != nPts; ++p)
+                if (cur.points[p].deformed.nPatches() != 0)
+                    writer.write(almPointMpName(c,p), cur.points[p].deformed);
+        }
+    }   // writer's H5File closes here
+
+    // The schema marker is stamped in a second pass: gsHDF5Writer keeps its
+    // H5File private, so there is no way to attach a root attribute while it is
+    // open, and HDF5 refuses a second conflicting open on a file still held for
+    // writing. This is safe only because gsHDF5Writer's constructor opens with
+    // H5F_ACC_TRUNC, recreating the file empty on every save, so the reopened
+    // root group never already carries the attribute; if gsHDF5Writer ever
+    // gains an append mode, this write needs an attrExists() + removeAttr()
+    // guard first.
+    H5::H5File file(fname, H5F_ACC_RDWR);
+    H5::Group root = file.openGroup("/");
+    internal::h5WriteAttr(root, almSchemaAttrName, (int)hdf5SchemaVersion());
 }
 
 template <class T>
 void gsALMLandscape<T>::loadHDF5(const std::string & fname)
 {
+    {
+        // Probe the schema marker before touching m_curves or opening a
+        // gsHDF5Reader, so a rejected load leaves the landscape unchanged and
+        // fails before any dataset read that could throw an opaque
+        // H5::FileIException instead of an explicit message.
+        H5::H5File file(fname, H5F_ACC_RDONLY);
+        H5::Group root = file.openGroup("/");
+        GISMO_ENSURE(root.attrExists(almSchemaAttrName),
+            "gsALMLandscape::loadHDF5: \"" << fname << "\" has no "
+            "\"" << almSchemaAttrName << "\" attribute, so it predates HDF5 "
+            "checkpoint schema versioning and lacks the bracketLo, bracketHi, "
+            "bracketProbes and multiplicityReduced datasets this build's "
+            "loadHDF5 (schema version " << hdf5SchemaVersion() << ") requires. "
+            "Regenerate the checkpoint with this build.");
+        const int found = internal::h5ReadIntAttr(root, almSchemaAttrName);
+        GISMO_ENSURE(found == (int)hdf5SchemaVersion(),
+            "gsALMLandscape::loadHDF5: \"" << fname << "\" was written with "
+            "schema version " << found << ", but this build's loadHDF5 requires "
+            "version " << hdf5SchemaVersion() << ". Regenerate the checkpoint "
+            "with this build.");
+    }   // probe handle closes before the reader opens
+
     m_curves.clear();
 
     gsHDF5Reader reader(fname);
@@ -352,10 +390,10 @@ void gsALMLandscape<T>::loadHDF5(const std::string & fname)
         reader.read(almCurveName(c,"hasgeom"),   hasgeom);
         reader.read(almCurveName(c,"equilibrium"), eq);
         reader.read(almCurveName(c,"unresolved"),  unres);
-        // Unconditional read, following the equilibrium/unresolved precedent: a
-        // checkpoint written by a pre-this-change binary no longer loads (see the
-        // task report). gsHDF5Reader exposes no dataset-exists query to make this
-        // read tolerant instead.
+        // Unconditional, like every field above: loadHDF5 validated the schema
+        // version before reaching this point, so a file that lacks these datasets
+        // has already been rejected with an explicit message. Adding, removing or
+        // renaming any dataset here requires bumping hdf5SchemaVersion().
         reader.read(almCurveName(c,"bracketLo"),     bLo);
         reader.read(almCurveName(c,"bracketHi"),     bHi);
         reader.read(almCurveName(c,"bracketProbes"), bProbes);

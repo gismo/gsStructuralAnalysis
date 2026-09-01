@@ -62,6 +62,7 @@ int main(int argc, char *argv[])
     // Arc length method options
     real_t dL = 0; // General arc length
     real_t dLb = 0.1; // Ard length to find bifurcation
+    real_t minLengthRatio = 1e-6; // give-up floor on |dLb/dLb0|; see the loop below
     real_t tol = 1e-6;
     real_t tolU = 1e-6;
     real_t tolF = 1e-3;
@@ -118,6 +119,9 @@ int main(int argc, char *argv[])
     cmd.addReal("L","dLb", "arc length", dLb);
     cmd.addReal("l","dL", "arc length after bifurcation", dL);
     cmd.addReal("A","relaxation", "Relaxation factor for arc length method", relax);
+    cmd.addReal("","minLengthRatio","Give-up floor on the arc-length step reduction: stop when "
+                "|dLb/dLb0| falls below this ratio (auto-07p DSMIN / pde2path p.nc.dsmin analogue). "
+                "<= 0 restores the previous unbounded halving and is diagnostic only.", minLengthRatio);
 
     cmd.addReal("P","perturbation", "perturbation factor", tau);
 
@@ -423,6 +427,23 @@ int main(int argc, char *argv[])
     arcLength->applyOptions();
     arcLength->initialize();
 
+    // The --minLengthRatio floor below compares |dLb/dLb0| across steps, which is only
+    // meaningful under a run-constant arc-length metric. gsALMCrisfield (and
+    // gsALMConsistentCrisfield) register Scaling with a state-dependent default (-1, automatic
+    // Lam & Morley weighting); method==2 above overrides it to the cylindrical 0.0, which is
+    // what makes the ratio comparable. Read the value back through askReal (rather than trusting
+    // the override statically or keying the check on `method`) so the warning still fires if a
+    // future method branch registers a non-zero Scaling. askReal returns the given default
+    // (0.0) for gsALMLoadControl/gsALMRiks (method 0/1), which register no Scaling option at
+    // all, so no state-dependent weighting is in play there.
+    real_t effectiveScaling = arcLength->options().askReal("Scaling",0.0);
+    if (effectiveScaling != 0.0)
+        gsInfo<<"Warning: arc-length Scaling = "<<effectiveScaling
+              <<" != 0 (state-dependent arc-length weighting). The step-size ratio "
+              <<"|dLb/dLb0| used by --minLengthRatio is then measured in a metric that "
+              <<"moves between steps and is not comparable across them; the floor below "
+              <<"is advisory only.\n";
+
     std::string rootdir = gsFileManager::getCurrentPath() + "ArcLengthResults";
     std::string dirname = rootdir + "/snapping_2D_"+ std::to_string(Nx) + "x" + std::to_string(Ny+1) + "_al=" + std::to_string(al) + "-r" + std::to_string(numHref) + "-e" + std::to_string(numElevate) + "-L=" + std::to_string(dLb);
 
@@ -442,6 +463,8 @@ int main(int argc, char *argv[])
     real_t indicator = 0.0;
     arcLength->setIndicator(indicator); // RESET INDICATOR
     real_t dLb0 = dLb;
+    index_t nHalvings = 0;
+    index_t stepsCompleted = 0;
 
     if (write)
     {
@@ -468,6 +491,7 @@ int main(int argc, char *argv[])
     real_t sig = 0;
     real_t time = 0;
     int result = EXIT_SUCCESS;
+    const int EXIT_STEPSIZE_FLOOR = 3; // --minLengthRatio floor reached; distinct from EXIT_FAILURE (1)
     while (eps<=Emax && k < step)
     {
 
@@ -485,6 +509,26 @@ int main(int argc, char *argv[])
         {
             gsInfo<<"Error: Loop terminated, arc length method failed.\n";
             dLb = dLb / 2.;
+            ++nHalvings;
+            // Give-up floor on the arc-length step reduction (the in-tree equivalent of
+            // auto-07p's DSMIN / pde2path's p.nc.dsmin): without it, a failure whose cause
+            // is independent of the step size halves dLb forever without k ever advancing.
+            // Concretely, under --bifurcation without -l, dLb0 = dLb = dL = 0 above, so
+            // |dLb/dLb0| is NaN on every subsequent retry. The comparison below is written
+            // in the negated form so it still fires on that NaN: the direct form
+            // (ratio < minLengthRatio) evaluates NaN < x to false and would spin forever on
+            // exactly the input this guard exists to catch. The ratio is only comparable
+            // across steps because Scaling is pinned to 0.0 for method==2 above; see the
+            // warning printed before this loop for the other methods.
+            if (!(math::abs(dLb / dLb0) >= minLengthRatio))
+            {
+                gsInfo<<"Arc-length step-size floor reached at load step "<<k<<": |dLb/dLb0| = "
+                      <<math::abs(dLb/dLb0)<<" < "<<minLengthRatio<<" after "<<nHalvings
+                      <<" halving(s) (dLb = "<<dLb<<", dLb0 = "<<dLb0<<"). The continuation cannot "
+                      <<"advance past this point; giving up.\n";
+                result = EXIT_STEPSIZE_FLOOR;
+                break;
+            }
             arcLength->setLength(dLb);
             arcLength->setSolution(Uold,Lold);
 //            bisected = true;
@@ -560,10 +604,24 @@ int main(int argc, char *argv[])
 //        {
           dLb = dLb0;
           arcLength->setLength(dLb);
+          nHalvings = 0;
 //        }
 
 //        bisected = false;
         k++;
+        ++stepsCompleted;
+    }
+
+    {
+        std::string reason;
+        if      (result == EXIT_STEPSIZE_FLOOR) reason = "STEP-SIZE FLOOR";
+        else if (result == EXIT_FAILURE)        reason = "STATUS FAILURE";
+        else if (eps > Emax)                    reason = "STRAIN TARGET";
+        else                                     reason = "MAX STEPS";
+
+        gsInfo<<"[snapping_example_shell] finished: "<<stepsCompleted<<" of "<<step
+              <<" load steps completed; final eps = "<<eps<<", final dLb = "<<dLb
+              <<"; reason = "<<reason<<"; exit = "<<result<<"\n";
     }
 
     if (plot)

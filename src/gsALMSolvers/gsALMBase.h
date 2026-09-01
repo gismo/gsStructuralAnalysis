@@ -64,8 +64,11 @@ namespace gismo
     \par Provisional: the SingularPointTestTol default
 
     The \c SingularPointTestTol default (\c 1e-4) is calibrated BY MEASUREMENT
-    (see \c tasks/11-testtol-table.md) against 2-DOF unit fixtures and 1-D Bratu
-    continuation drivers ONLY. On the Modified-Bratu thesis benchmark, \c 1e-4 is
+    against the 2-DOF unit fixtures of \c unittests/gsALMSolvers_test.cpp
+    (\c TEST(singular_point_test_is_scale_invariant)) and the 1-D Bratu
+    continuation driver \c example_ModifiedBratuExploration ONLY, run with
+    \c OMP_NUM_THREADS=1 and every option set explicitly (never via the
+    library default). On the Modified-Bratu thesis benchmark, \c 1e-4 is
     the smallest of the four measured candidates
     \f$\{10^{-6},10^{-5},10^{-4},10^{-3}\}\f$ that classifies the curve-C branch
     point (measured cosine \c 5.293e-05, invariant across \c SingularPointTestIt
@@ -168,52 +171,34 @@ public:
         m_converged = false;
         // m_stability/m_stabilityPrev are otherwise written ONLY by _computeStability()
         // (through init(true)/computeStability()/setIndicator()) and by _step(). A caller
-        // that uses initialize(false), or that ignores the gsStatus initialize() now
-        // returns, reaches stabilityChange() -- which reads BOTH -- before either has been
-        // assigned. Seeding them EQUAL makes that read report "no change" instead of
-        // comparing indeterminate values. The value +1 is the stability() convention for
-        // STABLE, i.e. the natural default for the
-        // undeformed reference state this solver is seeded from.
+        // that uses initialize(false) reaches stabilityChange() -- which reads BOTH --
+        // before either has been assigned. Seeding them EQUAL makes that read report "no
+        // change" instead of comparing indeterminate values. +1 is the stability()
+        // convention for STABLE, the natural default for the undeformed reference state
+        // this solver is seeded from.
         m_stability = m_stabilityPrev = 1;
 
         // initialize errors
         m_basisResidualF = 0.0;
         m_basisResidualU = 0.0;
 
-        // m_Lprev (T m_L, m_Lprev; gsALMBase.h ~1178) has no in-class initializer, and
-        // gsALMCrisfield::initMethods() / gsALMLoadControl::initMethods() do not assign it
-        // (only gsALMRiks / gsALMConsistentCrisfield seed it, to 0.0, in their own
-        // initMethods()). Left unseeded it is indeterminate storage from construction until
-        // the first accepted step or an explicit setPrevious() call, and the public
-        // solutionLPrev() accessor -- read pre-seed by gsALMExploration.hpp's verbose alpha
-        // dump -- would report that indeterminate value. Seeding it here, before every
-        // derived initMethods() runs, closes the hole for all four current solvers (and any
-        // future subclass) without changing anything for Riks / ConsistentCrisfield, whose
-        // initMethods() re-assigns 0.0 moments later. Same precedent as m_basisResidualF/U
-        // above.
+        // m_Lprev has no in-class initializer, and gsALMCrisfield::initMethods() /
+        // gsALMLoadControl::initMethods() do not assign it (only gsALMRiks /
+        // gsALMConsistentCrisfield seed it, to 0.0, in their own initMethods()). Left
+        // unseeded it is indeterminate storage until the first accepted step or an
+        // explicit setPrevious() call, and the public solutionLPrev() accessor would
+        // report that indeterminate value. Seeded here, before any derived initMethods()
+        // runs, for all four current solvers (and any future subclass).
         m_Lprev = 0.0;
 
-        // m_indicator / m_negatives (T m_indicator; index_t m_negatives; gsALMBase.h
-        // ~1172-1173) are the same defect class as m_Lprev above, its two unseeded
-        // siblings: no in-class initializer, and -- like
-        // m_Lprev -- none of the four initMethods() (gsALMCrisfield.hpp:215-234,
-        // gsALMLoadControl.hpp:39-44, gsALMRiks.hpp, gsALMConsistentCrisfield.hpp) assign
-        // them; their sole write site before a caller-driven update is _computeStability
-        // (gsALMBase.hpp:1106-1107). Both have PUBLIC accessors -- indicator() (:321),
-        // negatives() (:334) -- and negatives() is read into gsALMExploration's landscape
-        // inertia column (gsALMExploration.hpp:857; indicator() four lines above at :853
-        // supplies the point's stability sign), the column the landscape's mode
-        // identification classifies from; the same pre-seed/post-seed verbose dumps that
-        // carried the Lprev= defect also print indicator=/negatives= (gsALMExploration.hpp:546-547,
-        // :662-663). Seeded 0/0 rather than left indeterminate: stability()
-        // (gsALMBase.hpp:1161, `(m_indicator < 0) ? -1 : 1`) then agrees with the
-        // m_stability = m_stabilityPrev = 1 (STABLE) seed two lines above -- any seed with
-        // m_indicator >= 0 does, a negative one would make the object self-contradictory
-        // from construction -- and 0 is exactly what _computeStability itself produces on
-        // the bifmethod::Nothing path (gsALMBase.hpp:1101, m_stabilityVec = Zero =>
-        // m_indicator = 0 => stable, per the doc at gsALMBase.hpp:1151), not an invented
-        // sentinel. m_negatives = 0 is the matching inertia ("no negative
-        // eigenvalues/pivots yet").
+        // m_indicator / m_negatives are the same defect class as m_Lprev above: no
+        // in-class initializer, none of the four initMethods() assign them, and both have
+        // public accessors (indicator(), negatives()) consumed by gsALMExploration's
+        // landscape inertia column. Seeded 0/0 rather than left indeterminate: stability()
+        // then agrees with the m_stability = m_stabilityPrev = 1 (STABLE) seed above, and 0
+        // is exactly what _computeStability itself produces on the bifmethod::Nothing path
+        // -- not an invented sentinel. m_negatives = 0 is the matching inertia ("no
+        // negative eigenvalues/pivots yet").
         m_indicator = 0.0;
         m_negatives = 0;
 
@@ -225,11 +210,10 @@ public:
 
         m_status = gsStatus::NotStarted;
         m_foldTF = std::numeric_limits<T>::quiet_NaN();
-        // Same precedent as m_converged (gsALMBase.h ~214-239 and
-        // gsALMBase.hpp ~538-548): an outcome flag must not survive a call that did not
-        // produce it. Seed NotTested / "no mode measured yet" so the very first
-        // classification cannot inherit a stale verdict or a stale (spuriously small)
-        // direction error.
+        // Same precedent as m_converged above: an outcome flag must not survive a call
+        // that did not produce it. Seed NotTested / "no mode measured yet" so the very
+        // first classification cannot inherit a stale verdict or a stale (spuriously
+        // small) direction error.
         m_SPverdict = SPverdict::NotTested;
         m_SPModeError = std::numeric_limits<T>::max();
     }
@@ -265,8 +249,8 @@ public:
         m_Lprev = 0.0;
 
         // See the Jacobian_t constructor: same m_indicator/m_negatives-seeding precedent
-        // uninitialized otherwise, publicly readable via indicator() /
-        // negatives(), and consumed by gsALMExploration.hpp:853/857 among others.
+        // -- uninitialized otherwise, publicly readable via indicator()/negatives(), and
+        // consumed by gsALMExploration's landscape columns.
         m_indicator = 0.0;
         m_negatives = 0;
 
@@ -299,10 +283,10 @@ public:
      *             configuration if \a stability is true.
      *
      * With \a stability the initial tangent is ASSEMBLED here, so a `false` from the user's
-     * Jacobian reaches this scope as the library-internal `throw 2`. Every other public
-     * entry point (\a step, \a computeSingularPoint, \a computeStability) maps those codes
-     * onto \a gsStatus; historically this one alone let a raw `int` escape to the caller.
-     * It is now mapped identically and reported through the return value (and \a status()).
+     * Jacobian reaches this scope as the library-internal `throw 2`, mapped onto
+     * \a gsStatus exactly as every other public entry point (\a step,
+     * \a computeSingularPoint, \a computeStability) maps it, and reported through the
+     * return value (and \a status()).
      *
      * @note \a m_initialized stays true even on a failure: \a initMethods() has already
      *       sized the state, only the (optional) stability assembly failed, and the caller
@@ -341,8 +325,8 @@ public:
      * maintained by _step() (and computeLength()) at the end of every accepted step.
      *
      * Before the first accepted step there is no secant yet, so \a m_arcLength_prev is
-     * seeded here exactly as before - this keeps the (frequent) use of setLength() for
-     * INITIAL configuration bit-identical to the historic behaviour.
+     * also seeded here, which is what makes setLength() usable directly to configure the
+     * INITIAL step length.
      */
     virtual void setLength(T length)
     {
@@ -382,20 +366,10 @@ public:
     ///  - \a step(), whose corrector sets the flag from \a iterationFinish() and clears
     ///    it at entry, so a step that hits the iteration limit reports \c false;
     ///  - \a computeSingularPoint(), which publishes the outcome of its extended-system
-    ///    stage (finding m17). Before that fix the flag survived a FAILED singular-point
-    ///    solve and still described the preceding ordinary step, so \a converged() could
-    ///    read \c true while the call returned \a gsStatus::NotConverged.
-    ///
-    /// Consequently \a converged() and the \a gsStatus returned by the same call never
-    /// contradict each other on these two paths.
-    ///
-    /// The `testPoint == true, test == false` branch of \a computeSingularPoint() (a limit
-    /// point) is covered too, and this is a CORRECTION of what this block claimed until
-    /// this block claimed: that branch does NOT return \a gsStatus::Success. It performs no solve at
-    /// all, throws code 1 and therefore returns \a gsStatus::NotConverged,
-    /// so leaving the flag as the previous solve set it would have been the very
-    /// contradiction described above. It now sets the flag to \c false before throwing, and
-    /// reports \a gsStatus::NotConverged together with `converged() == false`.
+    ///    stage. On the `testPoint == true` branch that classifies the point as a LIMIT
+    ///    point, no solve is attempted at all -- it throws code 1 -- and the flag is set to
+    ///    \c false before the throw, so \a converged() and the returned
+    ///    \a gsStatus::NotConverged never contradict each other on either path.
     ///
     /// One exception does remain, and it is a THROW path rather than a return path: when
     /// \a _testSingularPoint itself throws (a failing \a computeJacobian or forcing
@@ -515,7 +489,7 @@ public:
     /// Returns true if the current solution point is STABLE, i.e. if stability()
     /// is +1. (Whether a bifurcation point was passed is stabilityChange(), not
     /// this function.) m_stability is an index_t holding +1 or -1, so this MUST be
-    /// a sign test: returning it directly made isStable() always true (defect M14).
+    /// a sign test: returning it directly would make isStable() always true.
     virtual bool isStable() const {return m_stability > 0;}
 
     /// Diagnostic accessor (read-only): the STORED stability sign of the
@@ -1448,8 +1422,8 @@ protected:
     /// \a bisectionProbes(), which documents how to tell these apart.
     index_t m_SPBisProbes;
 
-    // Fix C (opt-in): also require the equilibrium residuals (TolF/TolU) at
-    // extended-solve termination. Default false ⇒ historic ||K.V||-only test.
+    // Opt-in (option SingularPointComposite): also require the equilibrium residuals
+    // (TolF/TolU) at extended-solve termination. Default false is the ||K.V||-only test.
     bool m_SPComposite;
 
     // Branch switch parameter

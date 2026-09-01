@@ -134,17 +134,14 @@ template <class T>
 void gsAPALM<T>::serialSolve(index_t Nsteps)
 {
 #ifdef GISMO_WITH_MPI
-  // (2026-08-04 follow-up) the two barriers below were guarded by the COMPILE-TIME
-  // #ifdef alone, with no runtime check. gsMpiComm::barrier() is an unconditional
-  // MPI_Barrier(m_comm), and this class's NO-COMMUNICATOR constructor builds its dummy from
-  // gsMpiComm's default constructor -- which sets rank_/size_ but leaves its MPI_Comm member
-  // uninitialized and never calls MPI_Init. So in an MPI-ENABLED build, ANY caller that
-  // constructed gsAPALM without a communicator and never called gsMpi::init() aborted here
-  // with "The MPI_Barrier() function was called before MPI_INIT was invoked".
-  // That is exactly what bin/unittests does: its UnitTest++ main never initializes MPI, so
-  // build_mpi/bin/unittests died in apalm_serial_solve_terminates_when_every_step_fails and
-  // FIVE tests never got a verdict -- i.e. the unit suite could not validate anything at all
-  // in an MPI build.
+  // The two barriers below must be guarded by a RUNTIME check, not just the compile-time
+  // #ifdef: gsMpiComm::barrier() is an unconditional MPI_Barrier(m_comm), and this class's
+  // NO-COMMUNICATOR constructor builds its dummy from gsMpiComm's default constructor --
+  // which sets rank_/size_ but leaves its MPI_Comm member uninitialized and never calls
+  // MPI_Init. So in an MPI-ENABLED build, any caller that constructs gsAPALM without a
+  // communicator and never calls gsMpi::init() would abort here with "The MPI_Barrier()
+  // function was called before MPI_INIT was invoked" -- exactly what an uninitialized
+  // UnitTest++ main hits.
   //
   // MPI_Initialized is the same idiom gsMpiComm(const MPI_Comm&) already uses, except that
   // its check is #ifndef NDEBUG and this build tree defines -DNDEBUG, so that one is absent.
@@ -1319,17 +1316,15 @@ gsStatus gsAPALM<T>::_correction( const std::tuple<index_t, T     , solution_t, 
     gsStatus status = m_ALM->step();
     // --- Step-fail retry: halve the sub-interval and re-seed from (Uold,Lold) ---
     //
-    // TERMINATION GUARD + PHANTOM-POINT FIX. Two distinct defects lived here:
-    //  * the predicate enumerated NotConverged || AssemblyError, so a SolverError or
-    //    OtherError FELL THROUGH to the recording block below. A failed step commits
-    //    nothing (see the rationale in gsAPALM<T>::_initiation), so stepSolutions.at(k)
-    //    and distances.at(k) were then filled with the UNCHANGED previous state -- a
-    //    phantom point submitted to gsAPALMData<T,solution_t>::submit as a converged
-    //    interval solution. Exactly the same defect already excluded from
-    //    gsALMExploration<T>::traceCurve. The catch-all below closes it, and the
-    //    recording block is now reachable ONLY on Success.
-    //  * `k -= 1; continue;` never advanced the loop counter and had no arc-length floor
-    //    and no cap, so a deterministic NotConverged halved towards denormal forever.
+    // The catch-all below fires on ANY non-Success status, not only NotConverged ||
+    // AssemblyError: a failed step commits nothing (see the rationale in
+    // gsAPALM<T>::_initiation), so a status that fell through would leave
+    // stepSolutions.at(k)/distances.at(k) filled with the UNCHANGED previous state -- a
+    // phantom point submitted to gsAPALMData<T,solution_t>::submit as a converged interval
+    // solution (the same defect gsALMExploration<T>::traceCurve excludes). The recording
+    // block below is reachable ONLY on Success, and the arc-length floor
+    // (|dL/dL0| < 1e-6) bounds the retry loop: without it a deterministic NotConverged
+    // would halve towards denormal forever.
     //
     // Same clause and same constant as gsALMExploration<T>::traceCurve: catch-all on
     // status != Success, break at |dL/dL0| < 1e-6. NOTE the asymmetry with _initiation:

@@ -62,6 +62,7 @@ int main(int argc, char *argv[])
 
     // Arc length method options
     real_t dL = 0; // General arc length
+    real_t minLengthRatio = 1e-6; // give-up floor on |dL/dL0|; see the loop below
     real_t tolU = 1e-6;
     real_t tolF = 1e-3;
     real_t relax = 1.0;
@@ -73,6 +74,9 @@ int main(int argc, char *argv[])
     bool adaptive = false;
     int step = 1000;
     index_t maxit = 50;
+
+    index_t Compressibility = 1;
+    index_t material = 1;
 
     std::string wn("data.csv");
 
@@ -115,6 +119,11 @@ int main(int argc, char *argv[])
 
     cmd.addInt("m","Method", "Arc length method; 1: Crisfield's method; 2: RIks' method.", method);
     cmd.addReal("L","dLb", "arc length", dL);
+    cmd.addReal("","minLengthRatio","Give-up floor on the displacement-increment reduction: stop "
+                "when |dL/dL0| falls below this ratio (auto-07p DSMIN / pde2path p.nc.dsmin analogue). "
+                "<= 0 restores the previous unbounded halving and is diagnostic only.", minLengthRatio);
+    cmd.addInt("c","Compressibility", "1: compressible, 0: incompressible", Compressibility);
+    cmd.addInt("M","Material", "Material model: (0): SvK | (1): NH | (2): NH_ext | (3): MR | (4): Ogden", material);
     cmd.addReal("A","relaxation", "Relaxation factor for arc length method", relax);
 
     cmd.addReal("P","perturbation", "perturbation factor", tau);
@@ -332,9 +341,9 @@ int main(int argc, char *argv[])
     gsFunctionExpr<> rho(std::to_string(1.0),2);
     parameters[0] = &E;
     parameters[1] = &nu;
-    options.addInt("Material","Material model: (0): SvK | (1): NH | (2): NH_ext | (3): MR | (4): Ogden",1);
+    options.addInt("Material","Material model: (0): SvK | (1): NH | (2): NH_ext | (3): MR | (4): Ogden",material);
     options.addInt("Implementation","Implementation: (0): Composites | (1): Analytical | (2): Generalized | (3): Spectral",1);
-    options.addSwitch("Compressibility","Compressibility",true);
+    options.addSwitch("Compressibility","Compressibility",Compressibility != 0);
     materialMatrix = getMaterialMatrix<2,real_t>(mp,t,parameters,rho,options);
 
     gsThinShellAssembler<2, real_t, false> assembler(mp,dbasis,bc,force,materialMatrix);
@@ -420,6 +429,8 @@ int main(int argc, char *argv[])
     }
 
     real_t dL0 = dL;
+    index_t nHalvings = 0;
+    index_t stepsCompleted = 0;
     gsMultiPatch<> mp_def0 = mp_def;
     real_t indicator;
 
@@ -430,6 +441,7 @@ int main(int argc, char *argv[])
     gsMatrix<> solVector;
     real_t time = 0;
     int result = EXIT_SUCCESS;
+    const int EXIT_STEPSIZE_FLOOR = 4; // --minLengthRatio floor reached; distinct from EXIT_FAILURE (1)
     while (eps<=Emax && k < step)
     {
         gsInfo<<"Load step "<<k<<"; D = "<<D<<"; dL = "<<dL<<"eps = "<<eps<<"\n";
@@ -440,6 +452,25 @@ int main(int argc, char *argv[])
         if (status==gsStatus::NotConverged || status==gsStatus::AssemblyError)
         {
             dL = dL/2;
+            ++nHalvings;
+            // Give-up floor on the displacement-increment reduction (the in-tree equivalent of
+            // auto-07p's DSMIN / pde2path's p.nc.dsmin): without it, a failure whose cause is
+            // independent of the increment size (e.g. an extreme geometry making assembly fail
+            // regardless of dL) halves dL forever without k ever advancing. The comparison below
+            // is written in the negated form so it also fires if dL0 were ever 0 (ratio NaN): the
+            // direct form (ratio < minLengthRatio) evaluates NaN < x to false and would spin
+            // forever on exactly the input this guard exists to catch. There is no arc-length
+            // metric here - dL is a plain displacement increment and dL0 is fixed once above and
+            // never reassigned - so the ratio is run-constant and comparable by construction.
+            if (!(math::abs(dL / dL0) >= minLengthRatio))
+            {
+                gsInfo<<"Displacement-increment step-size floor reached at load step "<<k<<": "
+                      <<"|dL/dL0| = "<<math::abs(dL/dL0)<<" < "<<minLengthRatio<<" after "<<nHalvings
+                      <<" halving(s) (dL = "<<dL<<", dL0 = "<<dL0<<"). The continuation cannot "
+                      <<"advance past this point; giving up.\n";
+                result = EXIT_STEPSIZE_FLOOR;
+                break;
+            }
             displ.setValue(D+dL,2);
             mp_def = mp_def0;
             gsInfo<<"Iterations did not converge\n";
@@ -500,12 +531,26 @@ int main(int argc, char *argv[])
 
 
         dL = dL0;
+        nHalvings = 0;
 
         mp_def0 = mp_def;
         D += dL;
         k++;
+        ++stepsCompleted;
 
         gsInfo<<"--------------------------------------------------------------------------------------------------------------\n";
+    }
+
+    {
+        std::string reason;
+        if      (result == EXIT_STEPSIZE_FLOOR) reason = "STEP-SIZE FLOOR";
+        else if (result == EXIT_FAILURE)        reason = "STATUS FAILURE";
+        else if (eps > Emax)                    reason = "STRAIN TARGET";
+        else                                     reason = "MAX STEPS";
+
+        gsInfo<<"[snapping_example_shell_DC] finished: "<<stepsCompleted<<" of "<<step
+              <<" load steps completed; final eps = "<<eps<<", final dL = "<<dL
+              <<"; reason = "<<reason<<"; exit = "<<result<<"\n";
     }
 
     if (plot)

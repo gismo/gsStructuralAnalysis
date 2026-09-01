@@ -27,23 +27,18 @@ void gsALMRiks<T>::initMethods()
   m_DeltaL = m_L = 0.0;
 
   // Convex constraint weight (see gsALMRiks::m_convexWeight). Both predictor() and
-  // predictorGuess() re-assign it every step with exactly this branch; the assignment here
-  // exists because distance() is PUBLIC, so a caller may read the weight BEFORE the first
-  // step, which previously read an uninitialized member. Value-neutral for every in-tree
-  // consumer: they all run after a step, which overwrites this with the same expression.
+  // predictorGuess() re-assign it every step with exactly this branch; it is also seeded
+  // here because distance() is PUBLIC and may be read before the first step.
   //
-  // The test is `<= 1`, not `== 1`. gsALMBase's constructor copies Force into
-  // m_forcing WITHOUT a size check, so an empty Force reaches here with m_numDof == 0 and
-  // the `else` arm evaluated 1./0 -> +inf. Harmless under default IEEE, but this is the
-  // ONE site of the three carrying this branch that runs AT CONSTRUCTION, so it is the only
-  // one where the division happens before any caller can intervene -- and under
-  // feenableexcept merely constructing the object then traps. (Second instance of the
-  // divide-before-guard class recorded in HANDOVER-2026-08-03 §5.7.)
+  // The test is `<= 1`, not `== 1`: gsALMBase's constructor copies Force into m_forcing
+  // WITHOUT a size check, so an empty Force reaches here with m_numDof == 0, and the
+  // `else` arm would evaluate 1./0 -> +inf. Harmless under default IEEE, but this runs AT
+  // CONSTRUCTION, before any caller can intervene, so under feenableexcept merely
+  // constructing the object would trap.
   //
-  // Widened rather than thrown ON PURPOSE: every m_numDof >= 1 value is bit-identical to
-  // before, whereas a GISMO_ENSURE(m_numDof > 0) would newly reject a construction that
-  // gsALMBase, gsALMCrisfield and gsALMLoadControl all still accept -- a behaviour change on
-  // a path with no test and no caller.
+  // Widened rather than thrown ON PURPOSE: every m_numDof >= 1 value stays bit-identical,
+  // whereas a GISMO_ENSURE(m_numDof > 0) would newly reject a construction that
+  // gsALMBase, gsALMCrisfield and gsALMLoadControl all still accept.
   if (m_numDof <= 1)
     m_convexWeight = 0.99999999999;
   else
@@ -167,14 +162,11 @@ void gsALMRiks<T>::predictorGuess()
 {
   GISMO_ASSERT(m_Uguess.rows()!=0 && m_Uguess.cols()!=0,"Guess is empty");
 
-  // Define the convex constraint weight, exactly as gsALMRiks::predictor() does.
-  // This assignment was MISSING here, and it is the only place
-  // the weight is ever written. gsALMBase::_step() dispatches to predictorGuess() INSTEAD
-  // of predictor(), so a guess-seeded FIRST step used to enter iteration()/distance()/
-  // stepOutput() reading an uninitialized member. (predictorGuess() itself is a dormant
-  // path - no in-tree caller sets a guess - so this removes undefined behaviour rather
-  // than changing any observed result; see the postcondition pin
-  // riks_predictor_guess_initialises_the_convex_weight in gsALMSolvers_test.cpp.)
+  // Define the convex constraint weight, exactly as gsALMRiks::predictor() does: this is
+  // the only place predictorGuess() writes it, and gsALMBase::_step() dispatches to
+  // predictorGuess() INSTEAD of predictor() on a guess-seeded first step, so without this
+  // assignment iteration()/distance()/stepOutput() would read an uninitialized member.
+  // predictorGuess() itself is a dormant path -- no in-tree caller sets a guess.
   // Deliberately still `== 1`, unlike initMethods() -- see the note in predictor().
   if (m_numDof ==1)
     m_convexWeight = 0.99999999999;

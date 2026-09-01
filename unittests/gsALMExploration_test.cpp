@@ -36,6 +36,8 @@
 #include <cstdio> // std::remove
 #include <algorithm> // std::count
 #include <set>
+#include <sstream>
+#include <stdexcept>
 #include <string> // std::to_string
 #include <utility> // std::pair
 
@@ -46,6 +48,10 @@
 #include <gsStructuralAnalysis/src/gsALMSolvers/gsALMLandscape.h>
 
 #include "gsALMTestProblems.h"
+
+#ifdef gsHDF5_ENABLED
+#include <gsHDF5/gsHDF5.h>
+#endif
 
 SUITE(gsALMExploration_test)   // suite name == file basename
 {
@@ -770,6 +776,177 @@ TEST(hdf5_curve_checkpoint)
     // Clean up both the .h5 and its .csv twin.
     std::remove(h5.c_str());
     std::remove(csv.c_str());
+}
+
+// ---------------------------------------------------------------------------
+// TEST 9: the root-group schema-version marker is written on saveHDF5, and a
+// round trip with the marker in place still reproduces the landscape.
+// ---------------------------------------------------------------------------
+TEST(hdf5_schema_version_attribute_is_written_and_roundtrip_survives)
+{
+    const gsALMLandscape<real_t> ls =
+        runToyExploration(/*tau*/10, /*maxCurves*/4, /*branchPoints*/2,
+                          /*length*/0.05, /*verbose*/false);
+    CHECK(ls.nCurves() >= 2);
+
+    const std::string f = "gsALMExploration_test_schema_ok.h5";
+    ls.saveHDF5(f);
+
+    int storedVersion = -1;
+    bool hasAttr = false;
+    {   // scoped: the probe handle must close before loadHDF5 reopens the file
+        H5::H5File h(f, H5F_ACC_RDONLY);
+        H5::Group root = h.openGroup("/");          // non-const: h5ReadIntAttr takes H5Object&
+        hasAttr = root.attrExists("gsALMLandscapeSchemaVersion");
+        if (hasAttr)
+            storedVersion = gismo::internal::h5ReadIntAttr(root, "gsALMLandscapeSchemaVersion");
+    }
+    CHECK(hasAttr);
+    CHECK_EQUAL((int)gsALMLandscape<real_t>::hdf5SchemaVersion(), storedVersion);
+    // Pins the format version deliberately: a future schema bump must come with
+    // a deliberate test update, not slip through.
+    CHECK_EQUAL(1, (int)gsALMLandscape<real_t>::hdf5SchemaVersion());
+
+    gsALMLandscape<real_t> ls2;
+    ls2.loadHDF5(f);
+
+    CHECK_EQUAL(ls.nCurves(), ls2.nCurves());
+    CHECK_EQUAL(ls.nPoints(), ls2.nPoints());
+
+    real_t maxUdiff = 0.0;
+    index_t comparedPoints = 0;
+    for (index_t c = 0; c != static_cast<index_t>(ls.nCurves()); ++c)
+    {
+        const gsALMLandscape<real_t>::Curve & a = ls.curve(c);
+        const gsALMLandscape<real_t>::Curve & b = ls2.curve(c);
+        CHECK_EQUAL(a.points.size(), b.points.size());
+        for (size_t p = 0; p != a.points.size(); ++p)
+        {
+            const gsALMLandscape<real_t>::Point & pa = a.points[p];
+            const gsALMLandscape<real_t>::Point & pb = b.points[p];
+            CHECK_EQUAL(0.0, math::abs(pa.L - pb.L));
+            const real_t ud = (pa.U - pb.U).norm();
+            maxUdiff = math::max(maxUdiff, ud);
+            CHECK(ud < 1e-14);
+            ++comparedPoints;
+        }
+    }
+    // Discrimination guard: a comparison loop that never executes must not pass
+    // silently (see hdf5_roundtrip's discrimination-guard history in this file).
+    CHECK_EQUAL(static_cast<index_t>(ls.nPoints()), comparedPoints);
+
+    gsInfo << "  [hdf5_schema_version] version=" << storedVersion
+           << " nCurves=" << ls.nCurves()
+           << " nPoints=" << ls.nPoints()
+           << " maxUdiff=" << maxUdiff << "\n";
+
+    std::remove(f.c_str());
+}
+
+// ---------------------------------------------------------------------------
+// TEST 10: a checkpoint whose schema-version attribute is absent (as an older
+// binary would have written it) is rejected with an actionable message, and
+// the target landscape is left untouched by the rejected load.
+// ---------------------------------------------------------------------------
+TEST(hdf5_legacy_file_without_schema_attribute_is_rejected)
+{
+    const gsALMLandscape<real_t> ls =
+        runToyExploration(/*tau*/10, /*maxCurves*/4, /*branchPoints*/2,
+                          /*length*/0.05, /*verbose*/false);
+    CHECK(ls.nCurves() >= 2);
+
+    const std::string fRef    = "gsALMExploration_test_schema_ref.h5";
+    const std::string fLegacy = "gsALMExploration_test_schema_legacy.h5";
+    ls.saveHDF5(fRef);
+    ls.saveHDF5(fLegacy);
+    {   // scoped: HDF5 refuses a conflicting open while this handle lives
+        H5::H5File h(fLegacy, H5F_ACC_RDWR);
+        H5::Group root = h.openGroup("/");
+        root.removeAttr("gsALMLandscapeSchemaVersion");   // now indistinguishable
+    }                                                     // from a pre-versioning file
+
+    // Load the intact file first, so the rejection below has something to damage.
+    gsALMLandscape<real_t> ls2;
+    ls2.loadHDF5(fRef);
+    const size_t nBefore = ls2.nCurves();
+    CHECK(nBefore >= 2);
+
+    std::ostringstream captured;
+    std::streambuf * const oldBuf = std::cerr.rdbuf(captured.rdbuf());
+    bool threw = false;
+    try                                  { ls2.loadHDF5(fLegacy); }
+    catch (const std::runtime_error &)   { threw = true; }
+    catch (...)                          { std::cerr.rdbuf(oldBuf); throw; }
+    std::cerr.rdbuf(oldBuf);             // restored on every path
+
+    CHECK(threw);
+    // Load-bearing: distinguishes "detected and reported" from "failed somewhere
+    // inside the read" -- a rejection before m_curves.clear() must not touch ls2.
+    CHECK_EQUAL(nBefore, ls2.nCurves());
+
+    // Literal tokens from gsALMLandscape.hpp:347-359 only -- prose gets reworded.
+    CHECK(captured.str().find("gsALMLandscapeSchemaVersion") != std::string::npos);
+    CHECK(captured.str().find("bracketProbes")              != std::string::npos);
+
+    gsInfo << "  [hdf5_legacy_rejected] nBefore=" << nBefore
+           << " threw=" << (threw ? "yes" : "no")
+           << " capturedLen=" << captured.str().size() << "\n";
+
+    std::remove(fRef.c_str());
+    std::remove(fLegacy.c_str());
+}
+
+// ---------------------------------------------------------------------------
+// TEST 11: a checkpoint whose schema-version attribute carries a different
+// value is likewise rejected, with the mismatch reported and the target
+// landscape left untouched.
+// ---------------------------------------------------------------------------
+TEST(hdf5_schema_version_mismatch_is_rejected)
+{
+    const gsALMLandscape<real_t> ls =
+        runToyExploration(/*tau*/10, /*maxCurves*/4, /*branchPoints*/2,
+                          /*length*/0.05, /*verbose*/false);
+    CHECK(ls.nCurves() >= 2);
+
+    const std::string fRef   = "gsALMExploration_test_schema_ref2.h5";
+    const std::string fBogus = "gsALMExploration_test_schema_bogus.h5";
+    ls.saveHDF5(fRef);
+    ls.saveHDF5(fBogus);
+    {   // scoped: see hdf5_legacy_file_without_schema_attribute_is_rejected above
+        H5::H5File h(fBogus, H5F_ACC_RDWR);
+        H5::Group root = h.openGroup("/");
+        H5::Attribute a = root.openAttribute("gsALMLandscapeSchemaVersion");
+        int bogus = 999;
+        a.write(H5::PredType::NATIVE_INT, &bogus);
+    }
+
+    gsALMLandscape<real_t> ls2;
+    ls2.loadHDF5(fRef);
+    const size_t nBefore = ls2.nCurves();
+    CHECK(nBefore >= 2);
+
+    std::ostringstream captured;
+    std::streambuf * const oldBuf = std::cerr.rdbuf(captured.rdbuf());
+    bool threw = false;
+    try                                  { ls2.loadHDF5(fBogus); }
+    catch (const std::runtime_error &)   { threw = true; }
+    catch (...)                          { std::cerr.rdbuf(oldBuf); throw; }
+    std::cerr.rdbuf(oldBuf);             // restored on every path
+
+    CHECK(threw);
+    CHECK_EQUAL(nBefore, ls2.nCurves());
+
+    // "schema version" occurs in BOTH messages (gsALMLandscape.hpp:352 and :356),
+    // so it cannot discriminate the mismatch path from the absent-attribute path.
+    // "was written with" is unique to the mismatch message (:356).
+    CHECK(captured.str().find("999")             != std::string::npos);
+    CHECK(captured.str().find("was written with") != std::string::npos);
+
+    gsInfo << "  [hdf5_version_mismatch] injected=999"
+           << " threw=" << (threw ? "yes" : "no") << "\n";
+
+    std::remove(fRef.c_str());
+    std::remove(fBogus.c_str());
 }
 
 #endif // gsHDF5_ENABLED
@@ -1578,6 +1755,137 @@ TEST(localization_failure_is_recovered_by_the_retry)
     // the branch lets BranchPoints=2 emanate a child curve that arm A, with the
     // crossing left unresolved, never gets to try.
     CHECK(lsB.nCurves() > lsA.nCurves());
+}
+
+// Same fixture/options as runToyExplorationLocalizeRetries, additionally
+// pinning BisecLengthFloor so every _localizeCrossing attempt (first call and
+// every retry) can be made to fail regardless of BisecMax: with BisecMax=10
+// (the option default) never the binding exit, the probe spend at each
+// attempt is attributable to the floor escalation alone, which is what lets
+// LocalizeRetries>=2 be discriminated from 0 and 1 by probesTotal.
+gsALMLandscape<real_t> runToyExplorationLocalizeFloor(index_t bisecMax,
+                                                       index_t localizeRetries,
+                                                       real_t floorFrac,
+                                                       bool verbose)
+{
+    AlmProblem prob = pitchforkProblem();
+
+    gsALMLoadControl<real_t> solver(prob.Jacobian, prob.ALResidual, prob.Force);
+    solver.options().setString("Solver","SimplicialLDLT");
+    solver.options().setInt   ("BifurcationMethod",0);
+    solver.options().setReal  ("Length",0.4);
+    solver.options().setReal  ("Perturbation",10);
+    solver.options().setReal  ("SingularPointComputeTolE",1e-8);
+    solver.options().setReal  ("SingularPointComputeTolB",1e-6);
+    solver.options().setReal  ("SingularPointTestTol",1e-6);
+    solver.options().setReal  ("Tol",1e-10);
+    solver.options().setInt   ("MaxIter",50);
+    solver.options().setSwitch("Verbose",false);
+    solver.applyOptions();
+    solver.initialize();
+
+    gsALMExploration<real_t> expl(&solver);
+    expl.options().setInt   ("MaxCurves",4);
+    expl.options().setInt   ("MaxPointsPerCurve",40);
+    expl.options().setReal  ("Length",0.4);
+    expl.options().setReal  ("SwitchLength",0.4);
+    expl.options().setInt   ("BranchPoints",2);
+    expl.options().setReal  ("DedupTol",1e-4);
+    expl.options().setInt   ("StartSteps",3);
+    expl.options().setInt   ("BisecMax",bisecMax);
+    expl.options().setInt   ("LocalizeRetries",localizeRetries);
+    expl.options().setReal  ("BisecLengthFloor", floorFrac);
+    expl.options().setSwitch("Verbose",verbose);
+
+    gsVector<real_t> U0 = gsVector<real_t>::Zero(2);
+    expl.solve(U0, 0.0);
+
+    return expl.landscape();
+}
+
+// ===========================================================================
+// T4c -- LocalizeRetries: the SECOND retry must be observable at runtime.
+// The escalation compounds across attempts (attempt N runs at the running
+// pair doubled/halved once per attempt, from a base read once before the
+// loop), so retry 2 runs at a floor halved twice. A flat per-attempt reset
+// would halve only once, making retries 1 and 2 indistinguishable -- which
+// is why this test is the only one that can see the second retry. [T4b]
+// above only exercises LocalizeRetries 0 and 1, for which compounding vs. a
+// flat per-attempt reset are provably identical (a single halving either
+// way). Here BisecLengthFloor is tuned so EVERY attempt fails to localize
+// (the fixture never recovers the branch), which keeps bracketProbes -- the
+// only field markUnresolvedSingular() writes -- as the discriminator: retry
+// 2's floor only drops enough to buy a second (still non-converging-to-
+// refined) probe once the halving compounds, so probesTotal at
+// LocalizeRetries=2 exceeds LocalizeRetries=0/1 when the escalation
+// compounds and equals them when it does not.
+// ===========================================================================
+TEST(second_localization_retry_buys_a_measurably_different_probe_budget)
+{
+    // BisecLengthFloor as a FRACTION of |dLb0|=0.4 (the fixture's arc-length
+    // increment; see _localizeCrossing's floor = BisecLengthFloor*|dLb0|):
+    // F0=3.0 is chosen from the measured r = (first attempt's printed
+    // "bracket width") / 0.4 -- r=1 here, since the first probe always lands
+    // at the exactly-singular midpoint lambda=1 and no halving precedes that
+    // step -- so that F0 in [2r,4r) puts only the twice-compounded floor
+    // (F0/4) inside the 1-probe band, while the once-halved floor (F0/2,
+    // which retries 1 and 2 would share if the escalation did not compound)
+    // stays in the 0-probe band. A floor fraction above 1 (i.e. above the
+    // base arc length) is a legal option value: BisecLengthFloor is read,
+    // never validated or clamped.
+    const real_t floorFrac = 3.0;
+
+    const gsALMLandscape<real_t> ls0 =
+        runToyExplorationLocalizeFloor(/*bisecMax*/10, /*localizeRetries*/0, floorFrac, /*verbose*/true);
+    const gsALMLandscape<real_t> ls1 =
+        runToyExplorationLocalizeFloor(/*bisecMax*/10, /*localizeRetries*/1, floorFrac, /*verbose*/true);
+    const gsALMLandscape<real_t> ls2 =
+        runToyExplorationLocalizeFloor(/*bisecMax*/10, /*localizeRetries*/2, floorFrac, /*verbose*/true);
+
+    const std::vector<index_t> bifs0 = ls0.bifurcationIndices(0);
+    const std::vector<index_t> bifs1 = ls1.bifurcationIndices(0);
+    const std::vector<index_t> bifs2 = ls2.bifurcationIndices(0);
+    CHECK(!bifs0.empty());
+    CHECK(!bifs1.empty());
+    CHECK(!bifs2.empty());
+    if (bifs0.empty() || bifs1.empty() || bifs2.empty())
+        return;
+
+    const gsALMLandscape<real_t>::Point & bp0 = ls0.curve(0).points[bifs0.front()];
+    const gsALMLandscape<real_t>::Point & bp1 = ls1.curve(0).points[bifs1.front()];
+    const gsALMLandscape<real_t>::Point & bp2 = ls2.curve(0).points[bifs2.front()];
+
+    // Guards 1-3, checked on EVERY arm before the discriminator: without
+    // these, a mistuned floor that lets localization SUCCEED would also make
+    // CHECK 5 below RED, but by the opposite (and indistinguishable) failure
+    // mode -- bracketProbes reverting to the -1 "not recorded" sentinel
+    // rather than the compounding regressing.
+    CHECK(bp0.unresolved);
+    CHECK(bp1.unresolved);
+    CHECK(bp2.unresolved);
+    CHECK(bp0.bracketProbes >= 0);
+    CHECK(bp1.bracketProbes >= 0);
+    CHECK(bp2.bracketProbes >= 0);
+    CHECK_CLOSE(0.8, bp0.bracketLo, 1e-6);
+    CHECK_CLOSE(1.2, bp0.bracketHi, 1e-6);
+    CHECK_CLOSE(0.8, bp1.bracketLo, 1e-6);
+    CHECK_CLOSE(1.2, bp1.bracketHi, 1e-6);
+    CHECK_CLOSE(0.8, bp2.bracketLo, 1e-6);
+    CHECK_CLOSE(1.2, bp2.bracketHi, 1e-6);
+
+    gsInfo<<"  [T4c] BisecLengthFloor="<<floorFrac<<" probes(retries=0,1,2) = "
+          <<bp0.bracketProbes<<", "<<bp1.bracketProbes<<", "<<bp2.bracketProbes<<"\n";
+
+    // Guard 4: one retry buys nothing at this floor -- the "0 and 1
+    // unchanged" half of the claim, identical whether or not the escalation
+    // compounds.
+    CHECK_EQUAL(bp0.bracketProbes, bp1.bracketProbes);
+    // CHECK 5, the discriminator this test exists for: the SECOND retry must
+    // spend strictly more probes than the first; it does so only if the
+    // halving compounds. A flat per-attempt reset (a single 2x/0.5x step
+    // applied to the caller's values on every attempt, instead of to the
+    // running pair) turns this CHECK RED.
+    CHECK(bp2.bracketProbes > bp1.bracketProbes);
 }
 
 // ===========================================================================

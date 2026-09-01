@@ -270,12 +270,12 @@ void gsALMConsistentCrisfield<T>::stepOutput()
   // A0 = phi^2*|f|^2. Same three columns, same functional form, as
   // gsALMCrisfield::stepOutput().
   //
-  // ⚠ these three columns
-  // used to print gsALMRiks's CONVEX form phi*|DeltaU|^2 + (1-phi)*DeltaLambda^2. That form
-  // belongs to a different constraint and to a different meaning of phi -- here phi is the
-  // metric scaling psi of the Scaling option, not a convex weight in (0,1) -- so at any
-  // psi > 1 the printed "dL^2" column went NEGATIVE and the "ds^2" column bore no relation to
-  // the constraint this class actually enforces.
+  // @warning Do not substitute gsALMRiks's CONVEX form
+  // phi*|DeltaU|^2 + (1-phi)*DeltaLambda^2 here: that form belongs to a different
+  // constraint and a different meaning of phi -- here phi is the metric scaling psi of
+  // the Scaling option, not a convex weight in (0,1) -- so at any psi > 1 the "dL^2"
+  // column would go NEGATIVE and "ds^2" would bear no relation to the constraint this
+  // class actually enforces.
   T A0 = math::pow(m_phi,2)*this->stepForcing().dot(this->stepForcing());
 
   gsInfo<<"\t";
