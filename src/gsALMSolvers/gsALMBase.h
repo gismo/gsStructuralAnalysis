@@ -1017,13 +1017,18 @@ protected:
     /// from \c m_V without recomputing it.
     ///
     /// \note \c dLb is inferred as \c m_arcLength at entry, not passed by the caller (unlike
-    /// \a gsALMExploration::_localizeCrossing, which owns the sweep length). This is
-    /// one-sided: a \c dLb too LARGE is harmless (a probe past the crossing carries the far
-    /// endpoint's inertia and pulls the bracket down); a \c dLb too SMALL silently breaks the
-    /// contract, because \c s = dLb then does not reach the incumbent and the far endpoint's
-    /// inertia is attributed to a position no probe can reach. \a m_arcLength can be the
-    /// too-small one under \c AdaptiveLength=true (\a computeLength() may halve it after an
-    /// accepted step); \a m_arcLength_prev is the documented alternative but is not used here.
+    /// \a gsALMExploration::_localizeCrossing, which owns the sweep length). A \c dLb too SMALL
+    /// silently breaks the contract, because \c s = dLb then does not reach the incumbent and
+    /// the far endpoint's inertia is attributed to a position no probe can reach. A \c dLb too
+    /// LARGE also breaks containment: the first probe sits at \c s = dLb/2, already past the
+    /// incumbent, and when the indicator tolerance is loose enough to certify convergence off
+    /// that single probe the loop never bisects back -- measured slack \c 0.0708 at an
+    /// inflation factor of 4 and \c 0.455 at 16, on a bracket of width \c 0.0706 (a factor of 2
+    /// was not itself observed to break containment). \a m_arcLength can be the too-large one
+    /// under \c AdaptiveLength=true: \a computeLength() rescales it by a factor clamped to
+    /// [0.5, 2.0] after every accepted step, so the entry \c dLb can be up to 2x the length
+    /// that actually produced the incumbent. \a m_arcLength_prev is the length that produced
+    /// the bracket -- i.e. the correct \c dLb -- but is not used here.
     virtual bool _bisectionSolve(const gsVector<T> & U, const T L, const T tol,
                                   const gsVector<T> & Ufar, const T Lfar);
 

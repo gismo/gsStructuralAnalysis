@@ -994,16 +994,6 @@ int main (int argc, char** argv)
     gsVector<> Force = assembler->rhs();
 
     // Function for the Jacobian
-    gsStructuralAnalysisOps<real_t>::Jacobian_t Jacobian = [&time,&stopwatch,&assembler,&mp_def](gsVector<real_t> const &x, gsSparseMatrix<real_t> & m)
-    {
-      stopwatch.restart();
-      ThinShellAssemblerStatus status;
-      assembler->constructSolution(x,mp_def);
-      status = assembler->assembleMatrix(mp_def);
-      m = assembler->matrix();
-      time += stopwatch.stop();
-      return status == ThinShellAssemblerStatus::Success;
-    };
     gsStructuralAnalysisOps<real_t>::dJacobian_t dJacobian = [&time,&stopwatch,&assembler,&mp_def,&MIP](gsVector<real_t> const &x, gsVector<real_t> const &dx, gsSparseMatrix<real_t> & m)
     {
       stopwatch.restart();

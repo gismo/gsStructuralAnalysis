@@ -743,15 +743,22 @@ inline real_t bracketSlack(real_t x, real_t lo, real_t hi)
 /// a CONVERGED bisection probe outside the bracket it was given is the arc-length
 /// corrector's own convergence slack (a converged exit returns the final probe --
 /// a Newton iterate at s in (0,dLb) measured from the near endpoint, not a
-/// reconstructed bracket edge, gsALMBase.h:1035-1041): the tightest possible
-/// containment is therefore bounded by the loosest corrector tolerance this
-/// suite pins in configure(), TolF = TolU = 1e-8, with a 100x margin. A sweep of
-/// tolB in {1e-14,1e-10,1e-6,1e-4,1e-2,1e-1,1,10} x Length in
-/// {0.02,0.05,0.10,0.20} (32 points) found every seed either exactly at the near
+/// reconstructed bracket edge -- see the converged-exit paragraph of
+/// \a gsALMBase<T>::_bisectionSolve's doxygen). A sweep of tolB in
+/// {1e-14,1e-10,1e-6,1e-4,1e-2,1e-1,1,10} x Length in {0.02,0.05,0.10,0.20}
+/// (32 in-contract points) found every seed either exactly at the near
 /// endpoint (a non-converged budget exhaustion restores the entry point exactly,
-/// slack == 0) or strictly interior (converged, slack < 0) -- there is no
-/// positive slack to fit, consistent with sprobe never reaching dLb -- so this
-/// value is a first-principles bound on corrector slack, not a measured maximum.
+/// slack == 0) or strictly interior (converged, slack < 0): the maximum signed
+/// slack over all 32 rows is 0, consistent with sprobe never reaching dLb --
+/// there is no positive slack to fit. \c 1e-6 is therefore a non-zero FLOOR, not
+/// a fit and not a measured maximum: chosen far above double-precision round-off
+/// on coordinates of order 1, and ~2.8e4x below the narrowest bracket the sweep
+/// measured (W = 0.0282822; the widest is Wmax = 0.279406, see g3bContainC
+/// below). A zero tolerance is inadmissible even though Smax &lt;= 0 formally
+/// permits it -- it would be flaky on the first untested configuration, since
+/// the sweep only bounds the slack at the points it visited. (For context,
+/// this suite's configure() pins the loosest corrector tolerances it uses,
+/// Tol = 1e-10, TolF = TolU = 1e-8; the floor is not derived from them.)
 const real_t g3bContainFloor = 1e-6;
 
 /// The relative term of \ref containmentTol, chosen so it equals

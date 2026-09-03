@@ -1121,8 +1121,11 @@ bool gsALMExploration<T>::traceSweep(const Job & job, index_t cid, bool backward
                         // pow(2,attempt)*base), saturating so an unbounded retry count
                         // can neither overflow BisecMax nor flush BisecLengthFloor to
                         // zero -- once saturated, further attempts simply repeat the
-                        // saturated values.
-                        if (bisecMaxA <= (std::numeric_limits<index_t>::max)() / 2)
+                        // saturated values. The lower bound matters too: BisecMax is a
+                        // public option that admits non-positive values, and a negative
+                        // entry would otherwise double away from zero toward overflow.
+                        if (bisecMaxA >= (std::numeric_limits<index_t>::min)() / 2 &&
+                            bisecMaxA <= (std::numeric_limits<index_t>::max)() / 2)
                             bisecMaxA *= 2;
                         if (floorA / (T)2 > (T)0)
                             floorA /= (T)2;
