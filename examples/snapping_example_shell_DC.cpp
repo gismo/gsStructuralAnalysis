@@ -429,6 +429,9 @@ int main(int argc, char *argv[])
     }
 
     real_t dL0 = dL;
+    // Upper bound on how fast dL may grow between successive successful steps, mirroring
+    // the [0.5, 2.0] adaptation clamp in gsALMBase<T>::computeLength() (gsALMSolvers/gsALMBase.hpp).
+    const real_t dLGrowth = 2.0;
     index_t nHalvings = 0;
     index_t stepsCompleted = 0;
     gsMultiPatch<> mp_def0 = mp_def;
@@ -444,7 +447,7 @@ int main(int argc, char *argv[])
     const int EXIT_STEPSIZE_FLOOR = 4; // --minLengthRatio floor reached; distinct from EXIT_FAILURE (1)
     while (eps<=Emax && k < step)
     {
-        gsInfo<<"Load step "<<k<<"; D = "<<D<<"; dL = "<<dL<<"eps = "<<eps<<"\n";
+        gsInfo<<"Load step "<<k<<"; D = "<<D<<"; dL = "<<dL<<"; eps = "<<eps<<"\n";
 
 	    gsStopwatch timer;
         gsStatus status = control.step(dL);
@@ -530,11 +533,16 @@ int main(int argc, char *argv[])
         }
 
 
-        dL = dL0;
-        nHalvings = 0;
-
+        // D mirrors control.solutionL(): it must advance by the increment that just
+        // converged. The next step's first attempt then grows dL by at most a factor
+        // dLGrowth (capped at dL0) rather than snapping back to dL0 directly, so a
+        // step that only converged after several halvings hands the following step a
+        // bounded increment instead of the full original one; growth compounds over
+        // consecutive successful steps until dL0 is reached again.
         mp_def0 = mp_def;
         D += dL;
+        dL = math::min(dL0, dLGrowth*dL);
+        nHalvings = 0;
         k++;
         ++stepsCompleted;
 
