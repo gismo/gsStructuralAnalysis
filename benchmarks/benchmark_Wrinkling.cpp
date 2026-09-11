@@ -803,7 +803,7 @@ int main (int argc, char** argv)
             gsInfo<<"Plotting in Paraview...\n";
             gsMatrix<> modeShape;
             std::string output = "modes";
-            gsParaviewCollection mode_collection(dirname + "/" + output);
+            gsParaviewCollection<> mode_collection(dirname + "/" + output);
 
             int N = nmodes;
             //    N = vectors.cols();
@@ -914,8 +914,8 @@ int main (int argc, char** argv)
     arcLength->applyOptions();
     arcLength->initialize();
 
-    gsParaviewCollection collection(dirname + "/" + output);
-    gsParaviewCollection TensionFields(dirname + "/" + "tensionfield");
+    gsParaviewCollection<> collection(dirname + "/" + output);
+    gsParaviewCollection<> TensionFields(dirname + "/" + "tensionfield");
     gsMultiPatch<> deformation = mp;
 
     // Make objects for previous solutions

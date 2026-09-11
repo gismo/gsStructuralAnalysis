@@ -446,7 +446,7 @@ int main (int argc, char** argv)
           times     = apalm.getFlatTimes(b);
           levels    = apalm.getFlatLevels(b);
 
-          gsParaviewCollection dataCollection(dirname + "/" + "data_branch"+std::to_string(b));
+          gsParaviewCollection<> dataCollection(dirname + "/" + "data_branch"+std::to_string(b));
           gsStructuralAnalysisOutput<real_t> data(dirname + "/data_branch"+std::to_string(b)+".csv",refPoints);
           if (write)
               data.init(pointheaders,otherheaders);
@@ -517,7 +517,7 @@ int main (int argc, char** argv)
           times     = apalm.getFlatTimes(b);
           levels    = apalm.getFlatLevels(b);
 
-          gsParaviewCollection dataCollection(dirname + "/" + "data_serial_branch"+std::to_string(b));
+          gsParaviewCollection<> dataCollection(dirname + "/" + "data_serial_branch"+std::to_string(b));
           gsStructuralAnalysisOutput<real_t> data(dirname + "/data_serial_branch"+std::to_string(b)+".csv",refPoints);
           if (write)
               data.init(pointheaders,otherheaders);
@@ -589,7 +589,7 @@ int main (int argc, char** argv)
           times     = apalm.getFlatTimes(b);
           levels    = apalm.getFlatLevels(b);
 
-          gsParaviewCollection dataCollection(dirname + "/" + "data_parallel_branch"+std::to_string(b));
+          gsParaviewCollection<> dataCollection(dirname + "/" + "data_parallel_branch"+std::to_string(b));
           gsStructuralAnalysisOutput<real_t> data(dirname + "/data_parallel_branch"+std::to_string(b)+".csv",refPoints);
           if (write)
               data.init(pointheaders,otherheaders);

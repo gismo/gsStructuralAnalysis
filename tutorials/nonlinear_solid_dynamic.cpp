@@ -151,7 +151,7 @@ for (index_t c=0; c!=3; c++)
 
     //! [Solve nonlinear problem]
     index_t step = 50;
-    gsParaviewCollection collection("Deformation");
+    gsParaviewCollection<> collection("Deformation");
     gsMultiPatch<> displ, def;
 
     real_t time = 0;

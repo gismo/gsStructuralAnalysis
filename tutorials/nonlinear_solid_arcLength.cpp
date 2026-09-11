@@ -130,7 +130,7 @@ int main(int argc, char *argv[])
 
     //! [Solve nonlinear problem]
     index_t step = 50;
-    gsParaviewCollection collection("Deformation");
+    gsParaviewCollection<> collection("Deformation");
     gsVector<> solVector;
     gsMultiPatch<> displ, def;
     for (index_t k=0; k<step; k++)

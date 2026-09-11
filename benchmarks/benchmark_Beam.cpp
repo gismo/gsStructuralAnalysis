@@ -314,7 +314,7 @@ int main (int argc, char** argv)
     arcLength->initialize();
 
 
-    gsParaviewCollection collection(dirname + "/" + output);
+    gsParaviewCollection<> collection(dirname + "/" + output);
     gsMultiPatch<> deformation = mp;
 
     // Make objects for previous solutions
