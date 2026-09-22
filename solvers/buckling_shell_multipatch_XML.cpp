@@ -432,7 +432,7 @@ int main (int argc, char** argv)
     {
         gsInfo<<"Plotting in Paraview...\n";
         gsMatrix<> modeShape;
-        gsParaviewCollection collection(dirname + sep + "modes");
+        gsParaviewCollection<> collection(dirname + sep + "modes");
 
         int N = 1;
         // if (!first)

@@ -113,7 +113,7 @@ int main(int argc, char *argv[])
 
   gsInfo<<"Writing...\n";
 
-  gsParaviewCollection collection(path + output);
+  gsParaviewCollection<> collection(path + output);
 
   k = 0;
 

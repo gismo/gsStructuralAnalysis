@@ -528,7 +528,7 @@ int main(int argc, char *argv[])
     dirname = gsFileManager::getCurrentPath() + dirname;
     GISMO_ENSURE(gsFileManager::mkdir(dirname),"Failed to create directory " + dirname);
     // Made directory
-    gsParaviewCollection collection(dirname + "/" + output);
+    gsParaviewCollection<> collection(dirname + "/" + output);
 
     gsAPALMSnapping<real_t> apalm(comm,arcLength,apalmData,&assembler,dirname,writePoints,writePatches,Nx,Ny,l,h,b);
     apalm.options().setSwitch("Verbose",(verbose>0));

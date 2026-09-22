@@ -273,8 +273,8 @@ int main (int argc, char** argv)
     arcLength->applyOptions();
     arcLength->initialize();
 
-    gsParaviewCollection collection(dirname + sep + output);
-    gsParaviewCollection TensionFields(dirname + sep + "tensionfield");
+    gsParaviewCollection<> collection(dirname + sep + output);
+    gsParaviewCollection<> TensionFields(dirname + sep + "tensionfield");
     gsMultiPatch<> deformation = mp;
 
     // Make objects for previous solutions

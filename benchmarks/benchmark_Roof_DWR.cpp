@@ -51,10 +51,10 @@ void PlotResults(   index_t k,
                     const gsMultiPatch<T> & mp, const gsMultiPatch<T> & mp_def,
                     bool plot, bool stress, bool write, bool mesh, bool deformed,
                     const std::string dirname, const std::string output,
-                    gsParaviewCollection & collection,
-                    gsParaviewCollection & Smembrane,
-                    gsParaviewCollection & Sflexural,
-                    gsParaviewCollection & Smembrane_p);
+                    gsParaviewCollection<> & collection,
+                    gsParaviewCollection<> & Smembrane,
+                    gsParaviewCollection<> & Sflexural,
+                    gsParaviewCollection<> & Smembrane_p);
 
 
 int main (int argc, char** argv)
@@ -437,10 +437,10 @@ int main (int argc, char** argv)
     assembler->assembleL();
     gsVector<> Force = assembler->primalL();
 
-    gsParaviewCollection collection(dirname + "/" + output);
-    gsParaviewCollection Smembrane(dirname + "/" + "membrane");
-    gsParaviewCollection Sflexural(dirname + "/" + "flexural");
-    gsParaviewCollection Smembrane_p(dirname + "/" + "membrane_p");
+    gsParaviewCollection<> collection(dirname + "/" + output);
+    gsParaviewCollection<> Smembrane(dirname + "/" + "membrane");
+    gsParaviewCollection<> Sflexural(dirname + "/" + "flexural");
+    gsParaviewCollection<> Smembrane_p(dirname + "/" + "membrane_p");
 
 // Make objects for previous solutions
     real_t Lold = 0, deltaLold = 0;
@@ -526,7 +526,7 @@ int main (int argc, char** argv)
     real_t Umidmin = -30;
     index_t k = 0;
 
-    gsParaviewCollection errors(dirname + "/" + "errors");
+    gsParaviewCollection<> errors(dirname + "/" + "errors");
     std::vector<real_t> elErrors;
     GISMO_ENSURE(refTol >= crsTol,"Refinement tolerance should be bigger than the coarsen tolerance");
     while (Umid < Umidmax && Umid > Umidmin && k < maxSteps)
@@ -869,10 +869,10 @@ void PlotResults(   index_t k,
                     const gsMultiPatch<T> & mp, const gsMultiPatch<T> & mp_def,
                     bool plot, bool stress, bool /* write */, bool mesh, bool deformed,
                     const std::string dirname, const std::string output,
-                    gsParaviewCollection & collection,
-                    gsParaviewCollection & Smembrane,
-                    gsParaviewCollection & Sflexural,
-                    gsParaviewCollection & Smembrane_p)
+                    gsParaviewCollection<> & collection,
+                    gsParaviewCollection<> & Smembrane,
+                    gsParaviewCollection<> & Sflexural,
+                    gsParaviewCollection<> & Smembrane_p)
 {
     /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

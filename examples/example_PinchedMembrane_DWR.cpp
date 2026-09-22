@@ -288,8 +288,8 @@ int main(int argc, char *argv[])
 
     gsFileManager::mkdir(dirname);
 
-    gsParaviewCollection collection(dirname + "/" + "solution");
-    gsParaviewCollection errors(dirname + "/" + "error_elem_ref");
+    gsParaviewCollection<> collection(dirname + "/" + "solution");
+    gsParaviewCollection<> errors(dirname + "/" + "error_elem_ref");
 
     std::vector<real_t> elErrors;
 

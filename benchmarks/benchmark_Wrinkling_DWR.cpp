@@ -49,10 +49,10 @@ void PlotResults(   index_t k,
                     const gsMultiPatch<T> & mp, const gsMultiPatch<T> & mp_def,
                     bool plot, bool stress, bool write, bool mesh, bool deformed,
                     const std::string dirname, const std::string output,
-                    gsParaviewCollection & collection,
-                    gsParaviewCollection & Smembrane,
-                    gsParaviewCollection & Sflexural,
-                    gsParaviewCollection & Smembrane_p);
+                    gsParaviewCollection<> & collection,
+                    gsParaviewCollection<> & Smembrane,
+                    gsParaviewCollection<> & Sflexural,
+                    gsParaviewCollection<> & Smembrane_p);
 
 int main (int argc, char** argv)
 {
@@ -458,11 +458,11 @@ int main (int argc, char** argv)
         return status == ThinShellAssemblerStatus::Success;
     };
 
-    gsParaviewCollection collection(dirname + "/" + output);
-    gsParaviewCollection Smembrane(dirname + "/" + "membrane");
-    gsParaviewCollection Sflexural(dirname + "/" + "flexural");
-    gsParaviewCollection Smembrane_p(dirname + "/" + "membrane_p");
-    gsParaviewCollection errors(dirname + "/" + "errors");
+    gsParaviewCollection<> collection(dirname + "/" + output);
+    gsParaviewCollection<> Smembrane(dirname + "/" + "membrane");
+    gsParaviewCollection<> Sflexural(dirname + "/" + "flexural");
+    gsParaviewCollection<> Smembrane_p(dirname + "/" + "membrane_p");
+    gsParaviewCollection<> errors(dirname + "/" + "errors");
     std::vector<real_t> elErrors;
 
     // Make objects for previous solutions
@@ -1204,10 +1204,10 @@ void PlotResults(   index_t k,
                     const gsMultiPatch<T> & mp, const gsMultiPatch<T> & mp_def,
                     bool plot, bool stress, bool /* write */, bool mesh, bool deformed,
                     const std::string dirname, const std::string output,
-                    gsParaviewCollection & collection,
-                    gsParaviewCollection & Smembrane,
-                    gsParaviewCollection & Sflexural,
-                    gsParaviewCollection & Smembrane_p)
+                    gsParaviewCollection<> & collection,
+                    gsParaviewCollection<> & Smembrane,
+                    gsParaviewCollection<> & Sflexural,
+                    gsParaviewCollection<> & Smembrane_p)
 {
     /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

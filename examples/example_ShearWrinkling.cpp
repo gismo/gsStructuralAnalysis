@@ -373,7 +373,7 @@ int main (int argc, char** argv)
 
     gsControlDisplacement<real_t> controlDC(&solver);
 
-    gsParaviewCollection collection(dirname + "/" + output);
+    gsParaviewCollection<> collection(dirname + "/" + output);
     gsMultiPatch<> deformation = mp;
 
     gsMatrix<> solVector;

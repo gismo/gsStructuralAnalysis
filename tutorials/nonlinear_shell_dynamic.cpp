@@ -169,7 +169,7 @@ int main(int argc, char *argv[])
 
     //! [Solve nonlinear problem]
     index_t step = 50;
-    gsParaviewCollection collection("Deformation");
+    gsParaviewCollection<> collection("Deformation");
     gsMultiPatch<> displ, def;
 
     real_t time = 0;

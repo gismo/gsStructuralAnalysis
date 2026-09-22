@@ -479,7 +479,7 @@ int main (int argc, char** argv)
         std::vector<std::string> pointheaders = {"u_x","u_y","u_z"};
         std::vector<std::string> otherheaders = {"U-norm","lambda","time","level"};
 
-        gsParaviewCollection dataCollection(dirname + "/" + "data");
+        gsParaviewCollection<> dataCollection(dirname + "/" + "data");
         gsStructuralAnalysisOutput<real_t> data(dirname + "/data.csv",refPoints);
         if (write)
             data.init(pointheaders,otherheaders);
@@ -548,7 +548,7 @@ int main (int argc, char** argv)
         std::vector<std::string> pointheaders = {"u_x","u_y","u_z"};
         std::vector<std::string> otherheaders = {"U-norm","lambda","time","level"};
 
-        gsParaviewCollection dataCollection(dirname + "/" + "data_serial");
+        gsParaviewCollection<> dataCollection(dirname + "/" + "data_serial");
         gsStructuralAnalysisOutput<real_t> data(dirname + "/data_serial.csv",refPoints);
         if (write)
             data.init(pointheaders,otherheaders);
@@ -624,7 +624,7 @@ int main (int argc, char** argv)
         std::vector<std::string> pointheaders = {"u_x","u_y","u_z"};
         std::vector<std::string> otherheaders = {"U-norm","lambda","time","level"};
 
-        gsParaviewCollection dataCollection2(dirname + "/" + "data_parallel");
+        gsParaviewCollection<> dataCollection2(dirname + "/" + "data_parallel");
         gsStructuralAnalysisOutput<real_t> data2(dirname + "/data_parallel.csv",refPoints);
         if (write)
             data2.init(pointheaders,otherheaders);

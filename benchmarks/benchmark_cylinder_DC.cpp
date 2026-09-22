@@ -300,8 +300,8 @@ int main (int argc, char** argv)
 
     };
 
-    gsParaviewCollection collection(dirname + "/" + output);
-    gsParaviewCollection collectionTF(dirname + "/" + "tensionfield");
+    gsParaviewCollection<> collection(dirname + "/" + output);
+    gsParaviewCollection<> collectionTF(dirname + "/" + "tensionfield");
     gsMultiPatch<> deformation = mp;
 
     // Define solvers
