@@ -288,19 +288,19 @@ int main(int argc, char *argv[])
 
     gsFileManager::mkdir(dirname);
 
-    gsParaviewCollection collection(dirname + "/" + "solution");
-    gsParaviewCollection errors(dirname + "/" + "error_elem_ref");
+    gsParaviewCollection<> collection(dirname + "/" + "solution");
+    gsParaviewCollection<> errors(dirname + "/" + "error_elem_ref");
 
     std::vector<real_t> elErrors;
 
-    gsAdaptiveMeshing<real_t> mesher;
+    gsAdaptiveMeshing<2,real_t> mesher;
     if (adaptivity!=0)
     {
         gsFileData<> fd_mesher(mesherOptionsFile);
         gsOptionList mesherOpts;
         fd_mesher.getFirst<gsOptionList>(mesherOpts);
 
-        mesher = gsAdaptiveMeshing<real_t>(mp);
+        mesher = gsAdaptiveMeshing<2,real_t>(mp);
         mesher.options() = mesherOpts;
         mesher.getOptions();
     }

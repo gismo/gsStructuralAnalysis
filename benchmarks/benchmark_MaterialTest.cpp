@@ -449,12 +449,12 @@ int main (int argc, char** argv)
   arcLength->applyOptions();
   arcLength->initialize();
 
-  gsParaviewCollection collection(dirname + "/" + output);
-  gsParaviewCollection PStretch(dirname + "/" + "stretch");
-  gsParaviewCollection PStretch1dir(dirname + "/" + "stretch1dir");
-  gsParaviewCollection PStretch2dir(dirname + "/" + "stretch2dir");
-  gsParaviewCollection Smembrane(dirname + "/" + "membrane");
-  gsParaviewCollection Smembrane_p(dirname + "/" + "membrane_p");
+  gsParaviewCollection<> collection(dirname + "/" + output);
+  gsParaviewCollection<> PStretch(dirname + "/" + "stretch");
+  gsParaviewCollection<> PStretch1dir(dirname + "/" + "stretch1dir");
+  gsParaviewCollection<> PStretch2dir(dirname + "/" + "stretch2dir");
+  gsParaviewCollection<> Smembrane(dirname + "/" + "membrane");
+  gsParaviewCollection<> Smembrane_p(dirname + "/" + "membrane_p");
   gsMultiPatch<> deformation = mp;
 
   gsMatrix<> solVector;

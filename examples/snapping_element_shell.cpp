@@ -310,7 +310,7 @@ int main(int argc, char *argv[])
     writePoints.col(0)<<supp.col(1);
 
     std::string dirname = "ArcLengthResults/snapping_element_2D_al=" + std::to_string(al);
-    gsParaviewCollection collection(dirname + "/" + output);
+    gsParaviewCollection<> collection(dirname + "/" + output);
     deformation = mp;
 
     // Make objects for previous solutions

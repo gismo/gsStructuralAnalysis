@@ -396,7 +396,7 @@ int main(int argc, char *argv[])
     GISMO_ENSURE(gsFileManager::mkdir(dirname),"Failed to create directory " + dirname);
     // Made directory
 
-    gsParaviewCollection collection(dirname + "/" + output);
+    gsParaviewCollection<> collection(dirname + "/" + output);
     deformation = mp;
 
     if (write)

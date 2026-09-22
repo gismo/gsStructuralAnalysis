@@ -226,7 +226,7 @@ int main (int argc, char** argv)
       gsFileManager::mkdir("ModalResults");
       gsMatrix<> modeShape;
       gsMultiPatch<> displacement;
-      gsParaviewCollection collection("ModalResults/modes_solid");
+      gsParaviewCollection<> collection("ModalResults/modes_solid");
 
       int N = 1;
       if (!first)

@@ -251,7 +251,7 @@ int main (int argc, char** argv)
 //------------------------------------------------------------------------------
 // Nonlinear time integration
 //------------------------------------------------------------------------------
-gsParaviewCollection collection(dirname + "/solution");
+gsParaviewCollection<> collection(dirname + "/solution");
 
 // Compute mass matrix (since it is constant over time)
 assembler->assembleMass();

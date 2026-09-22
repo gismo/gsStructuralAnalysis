@@ -240,8 +240,8 @@ gsFileManager::mkdir(dirname);
 
 std::string wn = dirname + "/output.csv";
 
-gsParaviewCollection collection("DynamicBeamResults/solution");
-gsParaviewCollection collection_an("DynamicBeamResults/analytical");
+gsParaviewCollection<> collection("DynamicBeamResults/solution");
+gsParaviewCollection<> collection_an("DynamicBeamResults/analytical");
 
 // Function for the Jacobian
 gsStructuralAnalysisOps<real_t>::Jacobian_t Jacobian = [&assembler,&mp_def](gsMatrix<real_t> const &x, gsSparseMatrix<real_t> & m)

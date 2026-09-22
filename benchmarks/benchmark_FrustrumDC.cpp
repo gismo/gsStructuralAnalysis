@@ -276,7 +276,7 @@ int main (int argc, char** argv)
         materialMatrix = getMaterialMatrix<3,real_t>(mp,t,parameters,rho,options);
     }
 
-    gsParaviewCollection collection(dirname + "/" + output);
+    gsParaviewCollection<> collection(dirname + "/" + output);
     gsMultiPatch<> deformation = mp;
 
     gsMatrix<> solVector;

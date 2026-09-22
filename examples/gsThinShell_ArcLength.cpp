@@ -1052,10 +1052,10 @@ int main (int argc, char** argv)
     arcLength->initialize();
 
 
-    gsParaviewCollection collection(dirname + "/" + output);
-    gsParaviewCollection Smembrane(dirname + "/" + "membrane");
-    gsParaviewCollection Sflexural(dirname + "/" + "flexural");
-    gsParaviewCollection Smembrane_p(dirname + "/" + "membrane_p");
+    gsParaviewCollection<> collection(dirname + "/" + output);
+    gsParaviewCollection<> Smembrane(dirname + "/" + "membrane");
+    gsParaviewCollection<> Sflexural(dirname + "/" + "flexural");
+    gsParaviewCollection<> Smembrane_p(dirname + "/" + "membrane_p");
     gsMultiPatch<> deformation = mp;
 
     // Make objects for previous solutions

@@ -14,12 +14,20 @@ if (GISMO_BUILD_PCH)
   add_precompiled_header(gsPrecompiledHeader misc/gsPrecompiledHeader.h)
 endif()
 
+if (GISMO_WITH_PYBIND11)
   ## Add module
   add_library(gsStructuralAnalysis_pybind OBJECT
     gsStructuralAnalysis_.cpp
     )
+
+  set_target_properties(gsStructuralAnalysis_pybind PROPERTIES
+    POSITION_INDEPENDENT_CODE ON
+    FOLDER "G+Smo modules"
+    )
+
   set(gismo_MODULES ${gismo_MODULES} $<TARGET_OBJECTS:gsStructuralAnalysis_pybind>
     CACHE INTERNAL "G+Smo modules" )
+endif()
 
 FOREACH(subdir ${SUBDIRS})
 

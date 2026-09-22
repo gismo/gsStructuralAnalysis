@@ -301,8 +301,8 @@ int main (int argc, char** argv)
     writePoints.col(1)<<0,0;
     writePoints.col(2)<<0,1;
 
-    gsParaviewCollection TFcollection(dirname + "/" + "tensionfield");
-    gsParaviewCollection solcollection(dirname + "/" + "solution");
+    gsParaviewCollection<> TFcollection(dirname + "/" + "tensionfield");
+    gsParaviewCollection<> solcollection(dirname + "/" + "solution");
 
     gsStructuralAnalysisOutput<real_t> writer(dirname + "/" + wn,writePoints);
     std::vector<std::string> pointheaders = {"x","y","z"};

@@ -396,7 +396,7 @@ else
 
     std::string dirname = "ArcLengthResults/snapping_3D_al=" + std::to_string(al);
 
-    gsParaviewCollection collection(dirname + "/" + output);
+    gsParaviewCollection<> collection(dirname + "/" + output);
     deformation = mp;
 
     // Make objects for previous solutions

@@ -31,7 +31,7 @@
 #include <gsUnstructuredSplines/src/gsDPatch.h>
 #endif
 
-#include <gsUtils/gsL2Projection.h>
+#include <gsUtils/gsProjection.h>
 
 using namespace gismo;
 
@@ -428,7 +428,7 @@ int main (int argc, char** argv)
       mapper.finalize();
       gsMatrix<> coefs;
       gsMultiPatch<> geom_def = geom;
-      gsInfo<<"L2-Projection error of mspline on dbasis = "<<gsL2Projection<real_t>::projectFunction(dbasis,mspline,geom,coefs)<<"\n";
+      gsInfo<<"L2-Projection error of mspline on dbasis = "<<gsL2Projection<real_t>::project(dbasis,geom,mspline,coefs)<<"\n";
       coefs.resize(coefs.rows()/geom.geoDim(),geom.geoDim());
 
       index_t offset = 0;

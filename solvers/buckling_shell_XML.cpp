@@ -257,7 +257,7 @@ int main (int argc, char** argv)
         gsInfo<<"Plotting in Paraview...\n";
         gsMultiPatch<> deformation = mp;
         gsMatrix<> modeShape;
-        gsParaviewCollection collection(dirname + sep + output);
+        gsParaviewCollection<> collection(dirname + sep + output);
 
         index_t N = nmodes;
         for (index_t m=0; m<N; m++)

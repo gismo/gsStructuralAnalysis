@@ -546,7 +546,7 @@ int main (int argc, char** argv)
 
         gsMultiPatch<> deformation = solution;
         gsMatrix<> modeShape;
-        gsParaviewCollection collection("ModalResults/modes");
+        gsParaviewCollection<> collection("ModalResults/modes");
 
         int N = 1;
         if (!first)

@@ -211,7 +211,7 @@ int main (int argc, char** argv)
 //------------------------------------------------------------------------------
 // Nonlinear time integration
 //------------------------------------------------------------------------------
-gsParaviewCollection collection(dirname + "/solution");
+gsParaviewCollection<> collection(dirname + "/solution");
 
 // Function for the Jacobian
 gsStructuralAnalysisOps<real_t>::Jacobian_t Jacobian = [&assembler,&mp_def](gsMatrix<real_t> const &x, gsSparseMatrix<real_t> & m)
