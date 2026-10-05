@@ -88,6 +88,21 @@ public:
     GISMO_ASSERT(refPatches.size()==1,"Only one point will be used");
   }
 
+  /// Opens \a file and writes the header of the per-step trajectory CSV
+  /// (step,lambda,unorm,status,iterations); serialStepOutput appends one row per accepted serial step.
+  void setCSV(const std::string & file)
+  {
+    m_csv.open(file.c_str(),std::ofstream::out);
+    m_csv << std::setprecision(17) << "step,lambda,unorm,status,iterations" << std::endl;
+  }
+
+  void serialStepOutput(const std::pair<gsVector<T>,T> & pair, const T & /*time*/, index_t step)
+  {
+    if (m_csv.is_open())
+      m_csv << step << "," << pair.second << "," << pair.first.norm() << ","
+            << static_cast<int>(this->m_ALM->status()) << "," << this->m_ALM->numIterations() << std::endl;
+  }
+
   void parallelIntervalOutput(const std::vector<std::pair<gsVector<T>,T>> & stepSolutions, const std::vector<T> & stepTimes, index_t level, index_t ID)
   {
     GISMO_ASSERT(stepSolutions.size()==stepTimes.size(),"Solutions and times must have same size, but solutions.size() = "<<stepSolutions.size()<<" and times.size() = "<<stepTimes.size());
@@ -130,6 +145,8 @@ protected:
   const T m_l;
   const T m_h;
   const T m_b;
+
+  std::ofstream m_csv;
 };
 
 
@@ -160,6 +177,8 @@ int main(int argc, char *argv[])
     index_t verbose = 0;
 
     std::string wn("data.csv");
+    std::string csvFile; // empty: no trajectory CSV
+    real_t tolScale = 1.0;
 
     std::string output = "solutionElasticity";
 
@@ -209,6 +228,8 @@ int main(int argc, char *argv[])
 
     cmd.addInt("q","QuasiNewtonInt","Use the Quasi Newton method every INT iterations",quasiNewtonInt);
     cmd.addInt("N", "maxsteps", "Maximum number of steps", step);
+    cmd.addString("", "csv", "Write one CSV row per accepted step (step,lambda,unorm,status,iterations) to this file", csvFile);
+    cmd.addReal("", "tolscale", "Multiply the ALM tolerances TolF and TolU by this factor", tolScale);
     cmd.addInt("n", "SubIntervals", "Number of steps in subintervals", SubIntervals);
 
     cmd.addInt("v", "verbose", "verbose", verbose);
@@ -470,8 +491,8 @@ int main(int argc, char *argv[])
       arcLength->options().setInt("AdaptiveIterations",5);
       arcLength->options().setReal("Perturbation",tau);
       arcLength->options().setReal("Tol",tol);
-      arcLength->options().setReal("TolU",tolU);
-      arcLength->options().setReal("TolF",tolF);
+      arcLength->options().setReal("TolU",tolU*tolScale);
+      arcLength->options().setReal("TolF",tolF*tolScale);
       arcLength->options().setInt("MaxIter",maxit);
       arcLength->options().setSwitch("Verbose",verbose);
       arcLength->options().setReal("Relaxation",relax);
@@ -534,6 +555,8 @@ int main(int argc, char *argv[])
     apalm.options().setSwitch("Verbose",(verbose>0));
     apalm.options().setInt("SubIntervals",SubIntervals);
     apalm.options().setInt("MaxIt",10000);
+    if (!csvFile.empty())
+        apalm.setCSV(csvFile);
     apalm.initialize();
 
     real_t serialTime = 0, parallelTime = 0;

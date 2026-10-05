@@ -66,11 +66,11 @@ struct gsStructuralAnalysisOps
     /// Time-dependent force
     typedef std::function < bool ( const T,  gsVector<T> & )>     TForce_t;
 
-    /// Residual, Fint-Fext
+    /// Residual, Fext - Fint
     typedef std::function < bool ( gsVector<T> const &,     gsVector<T> & )>    Residual_t;
-    /// Arc-Length Residual, Fint-lambda*Fext
+    /// Arc-length residual; sign per consumer: gsALM* expect Fint - lambda*Fext, gsStaticNewton/DR expect lambda*Fext - Fint
     typedef std::function < bool ( gsVector<T> const &, const T,  gsVector<T> & )>    ALResidual_t;
-    /// Time-dependent Residual Fint(t)-Fext(t)
+    /// Time-dependent residual, Fext(t) - Fint(t)
     typedef std::function < bool ( gsVector<T> const &, const T,  gsVector<T> & )>    TResidual_t;
     
     /// Mass matrix

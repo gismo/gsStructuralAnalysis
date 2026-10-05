@@ -42,6 +42,7 @@ int main (int argc, char** argv)
     int numHref     = 1;
     bool plot       = false;
     bool nonlinear  = false;
+    bool linear     = false;
 
     real_t thickness     = 1.0;
     real_t width = 1; // Width of the strip is equal to 1.
@@ -57,7 +58,7 @@ int main (int argc, char** argv)
     real_t EA = E_modulus*Area;
     real_t EI = 1.0/12.0*(width*math::pow(thickness*2,3))*E_modulus;
 
-    int method = 2; // 1: Explicit Euler, 2: Implicit Euler, 3: Implicit Euler (gsBlockOp)
+    int method = 2; // 1: Explicit Euler, 2: Implicit Euler, 3: Newmark, 4: Bathe, 5: Wilson, 6: RK4
 
     int result = 0;
     std::string fn("planar/strip.xml");
@@ -72,7 +73,7 @@ int main (int argc, char** argv)
                "Number of dyadic h-refinement (bisection) steps to perform before solving",
                numHref);
     cmd.addInt("m", "method",
-               "1: Explicit Euler, 2: Implicit Euler, 3: Implicit Euler (gsBlockOp)",
+               "1: Explicit Euler, 2: Implicit Euler, 3: Newmark, 4: Bathe, 5: Wilson, 6: RK4",
               method);
     cmd.addInt("s", "steps",
                "Number of time steps",
@@ -84,11 +85,15 @@ int main (int argc, char** argv)
     cmd.addInt("e","degreeElevation",
                "Number of degree elevation steps to perform on the Geometry's basis before solving",
                numElevate);
-    cmd.addSwitch("nl", "Nonlinear elasticity (otherwise linear)", nonlinear);
+    cmd.addSwitch("nl", "Nonlinear elasticity (default; kept for compatibility)", nonlinear);
+    cmd.addSwitch("linear", "Linear elasticity with <real_t,false> integrators (default: nonlinear)", linear);
     cmd.addSwitch("plot", "Plot result in ParaView format", plot);
     cmd.addSwitch("write", "Write convergence data to file", write);
 
     try { cmd.getValues(argc,argv); } catch (int rv) { return rv; }
+
+    if (linear && nonlinear)
+        gsInfo<<"Both --linear and --nl given: using linear elasticity.\n";
 
     real_t omega = math::pow((3.1415926535/length),2)*math::pow(EI/(Density*Area),0.5); // vibration frequency (man. solution)
 
@@ -217,10 +222,12 @@ int main (int argc, char** argv)
     gsField<> inifield(mp,deformationIni);
     gsInfo<<"Initial error:\t"<<inifield.distanceL2(initialShape)<<"\n";
 
-    gsWriteParaview<>( inifield, "Beam_Numerical", 1000);
-
     gsField<> u_anfield(mp,initialShape);
-    gsWriteParaview( u_anfield, "Beam_Analytical", 1000);
+    if (plot)
+    {
+        gsWriteParaview<>( inifield, "Beam_Numerical", 1000);
+        gsWriteParaview( u_anfield, "Beam_Analytical", 1000);
+    }
 
 //------------------------------------------------------------------------------
 // Initiate mass and stiffness matrices
@@ -236,12 +243,33 @@ int main (int argc, char** argv)
 // Nonlinear time integration
 //------------------------------------------------------------------------------
 std::string dirname = "DynamicBeamResults";
-gsFileManager::mkdir(dirname);
+if (plot || write)
+  gsFileManager::mkdir(dirname);
 
 std::string wn = dirname + "/output.csv";
 
-gsParaviewCollection<> collection("DynamicBeamResults/solution");
-gsParaviewCollection<> collection_an("DynamicBeamResults/analytical");
+std::unique_ptr<gsParaviewCollection<> > collection, collection_an;
+if (plot)
+{
+  collection.reset(new gsParaviewCollection<>(dirname + "/solution"));
+  collection_an.reset(new gsParaviewCollection<>(dirname + "/analytical"));
+}
+
+// Manufactured forcing (traction, 0, pressure) at time t
+auto makeForce = [&EA,&load,&omega,&length,&EI,&Density,&Area](real_t time)
+{
+  char buffer_traction[200];
+  sprintf(buffer_traction,"%e*%e^2*cos(%e*pi*%e)^2*(%e^3-6*%e*x^2+4*x^3)*x*(%e-x)/(48*%e^2)",EA,load,omega,time,length,length,length,EI);
+  std::string traction = buffer_traction;
+
+  char buffer_pressure[400];
+
+  sprintf(buffer_pressure,"-%e*(-(1/32)*%e*%e^2*x*(%e-x)*(%e-2*x)^2*(%e^2+2*%e*x-2*x^2)^2*cos(%e*pi*%e)^2+%e^2*(%e*%e^3*pi^2*%e^2*x-2*%e*%e*pi^2*%e^2*x^3+%e*pi^2*%e^2*x^4-24*%e))*cos(%e*pi*%e)/(24*%e^3)"
+  ,load,EA,load,length,length,length,length,omega,time,EI,Density*Area,length,omega,Density*Area,length,omega,Density*Area,omega,EI,omega,time,EI);
+  std::string pressure = buffer_pressure;
+
+  return gsFunctionExpr<>(traction,"0",pressure,3);
+};
 
 // Function for the Jacobian
 gsStructuralAnalysisOps<real_t>::Jacobian_t Jacobian = [&assembler,&mp_def](gsMatrix<real_t> const &x, gsSparseMatrix<real_t> & m)
@@ -255,21 +283,11 @@ gsStructuralAnalysisOps<real_t>::Jacobian_t Jacobian = [&assembler,&mp_def](gsMa
 };
 
 // Function for the Residual (TEST TO CHANGE FUNCTION!)
-gsStructuralAnalysisOps<real_t>::TResidual_t Residual = [&EA,&load,&omega,&length,&EI,&force,&Density,&Area,&assembler,&mp_def](gsMatrix<real_t> const &x, real_t time, gsVector<real_t> & result)
+gsStructuralAnalysisOps<real_t>::TResidual_t Residual = [&makeForce,&force,&assembler,&mp_def](gsMatrix<real_t> const &x, real_t time, gsVector<real_t> & result)
 {
   /// Make time dependent forcing
   ThinShellAssemblerStatus status;
-  char buffer_traction[200];
-  sprintf(buffer_traction,"%e*%e^2*cos(%e*pi*%e)^2*(%e^3-6*%e*x^2+4*x^3)*x*(%e-x)/(48*%e^2)",EA,load,omega,time,length,length,length,EI);
-  std::string traction = buffer_traction;
-
-  char buffer_pressure[400];
-
-  sprintf(buffer_pressure,"-%e*(-(1/32)*%e*%e^2*x*(%e-x)*(%e-2*x)^2*(%e^2+2*%e*x-2*x^2)^2*cos(%e*pi*%e)^2+%e^2*(%e*%e^3*pi^2*%e^2*x-2*%e*%e*pi^2*%e^2*x^3+%e*pi^2*%e^2*x^4-24*%e))*cos(%e*pi*%e)/(24*%e^3)"
-  ,load,EA,load,length,length,length,length,omega,time,EI,Density*Area,length,omega,Density*Area,length,omega,Density*Area,omega,EI,omega,time,EI);
-  std::string pressure = buffer_pressure;
-
-  gsFunctionExpr<> surfForceTemp(traction,"0",pressure,3);
+  gsFunctionExpr<> surfForceTemp = makeForce(time);
   force.swap(surfForceTemp);
   assembler->constructSolution(x,mp_def);
   status = assembler->assembleVector(mp_def);
@@ -282,12 +300,26 @@ assembler->assembleMass();
 M = assembler->matrix();
 // pre-assemble system
 assembler->assemble();
+K = assembler->matrix();
 
 gsSparseMatrix<> C = gsSparseMatrix<>(assembler->numDofs(),assembler->numDofs());
 gsStructuralAnalysisOps<real_t>::Damping_t Damping = [&C](const gsVector<real_t> &, gsSparseMatrix<real_t> & m) { m = C; return true; };
 gsStructuralAnalysisOps<real_t>::Mass_t    Mass    = [&M](                          gsSparseMatrix<real_t> & m) { m = M; return true; };
 
+// Linear ops: constant stiffness and external force only (R = F - K U)
+gsStructuralAnalysisOps<real_t>::Stiffness_t Stiffness = [&K](gsSparseMatrix<real_t> & m) { m = K; return true; };
+gsStructuralAnalysisOps<real_t>::TForce_t    TForce    = [&makeForce,&force,&assembler](real_t time, gsVector<real_t> & result)
+{
+  gsFunctionExpr<> surfForceTemp = makeForce(time);
+  force.swap(surfForceTemp);
+  ThinShellAssemblerStatus status = assembler->assemble();
+  result = assembler->rhs();
+  return status == ThinShellAssemblerStatus::Success;
+};
+
 gsDynamicBase<real_t> * timeIntegrator;
+if (!linear)
+{
 if (method==1)
     timeIntegrator = new gsDynamicExplicitEuler<real_t,true>(Mass,Damping,Jacobian,Residual);
 else if (method==2)
@@ -305,6 +337,27 @@ else if (method==6)
     timeIntegrator = new gsDynamicRK4<real_t,true>(Mass,Damping,Jacobian,Residual);
 else
     GISMO_ERROR("Method "<<method<<" not known");
+}
+else
+{
+if (method==1)
+    timeIntegrator = new gsDynamicExplicitEuler<real_t,false>(Mass,Damping,Stiffness,TForce);
+else if (method==2)
+    timeIntegrator = new gsDynamicImplicitEuler<real_t,false>(Mass,Damping,Stiffness,TForce);
+else if (method==3)
+    timeIntegrator = new gsDynamicNewmark<real_t,false>(Mass,Damping,Stiffness,TForce);
+else if (method==4)
+    timeIntegrator = new gsDynamicBathe<real_t,false>(Mass,Damping,Stiffness,TForce);
+else if (method==5)
+{
+    timeIntegrator = new gsDynamicWilson<real_t,false>(Mass,Damping,Stiffness,TForce);
+    timeIntegrator->options().setReal("gamma",1.4);
+}
+else if (method==6)
+    timeIntegrator = new gsDynamicRK4<real_t,false>(Mass,Damping,Stiffness,TForce);
+else
+    GISMO_ERROR("Method "<<method<<" not known");
+}
 
 timeIntegrator->options().setReal("DT",dt);
 timeIntegrator->options().setReal("TolU",1e-3);
@@ -320,10 +373,16 @@ timeIntegrator->setA(A);
 for (index_t i=0; i<steps; i++)
 {
   gsStatus status = timeIntegrator->step(time,dt,U,V,A);
-  GISMO_ASSERT(status == gsStatus::Success,"Time integrator did not succeed");
+  if (status != gsStatus::Success)
+  {
+    gsWarn<<"Time integrator did not succeed at step "<<i<<" (t = "<<time<<")\n";
+    delete timeIntegrator;
+    delete assembler;
+    return EXIT_FAILURE;
+  }
 
-  assembler->constructSolution(U,mp_def);
-  time = timeIntegrator->time();
+  time += dt;
+  gsInfo<<"t = "<<time<<"\n";
 
   // Define manufactured solution
   char buffer_w_an[200];
@@ -335,16 +394,19 @@ for (index_t i=0; i<steps; i++)
   assembler->constructSolution(U,mp_def);
   mp_def.patch(0).coefs() -= mp.patch(0).coefs();// assuming 1 patch here
   gsField<> solField(mp,mp_def);
-  std::string fileName = dirname + "/solution" + util::to_string(i);
-  gsWriteParaview<>(solField, fileName, 500);
-  fileName = "solution" + util::to_string(i) + "0";
-  collection.addPart(fileName + ".vts",i);
+  if (plot)
+  {
+    std::string fileName = dirname + "/solution" + util::to_string(i);
+    gsWriteParaview<>(solField, fileName, 500);
+    fileName = "solution" + util::to_string(i) + "0";
+    collection->addPart(fileName + ".vts",i);
 
-  gsField<> anField(mp,analytical);
-  fileName = dirname + "/analytical" + util::to_string(i);
-  gsWriteParaview<>(anField, fileName, 500);
-  fileName = "analytical" + util::to_string(i) + "0";
-  collection_an.addPart(fileName + ".vts",i);
+    gsField<> anField(mp,analytical);
+    fileName = dirname + "/analytical" + util::to_string(i);
+    gsWriteParaview<>(anField, fileName, 500);
+    fileName = "analytical" + util::to_string(i) + "0";
+    collection_an->addPart(fileName + ".vts",i);
+  }
 
   if (write)
   {
@@ -364,7 +426,7 @@ for (index_t i=0; i<steps; i++)
   {
     // Compute Error
     gsField<> anField(mp,analytical);
-    gsInfo<<"Error at t = "<<t<<":\t"<<solField.distanceL2(anField)<<"\n";
+    gsInfo<<"Error at t = "<<time<<":\t"<<solField.distanceL2(anField)<<"\n";
     gsMatrix<> u(3,1);
     u << 5,0.5,0;
     gsMatrix<> v(2,1);
@@ -376,9 +438,9 @@ for (index_t i=0; i<steps; i++)
     mp_def.patch(0).eval_into(v,res2);
     // gsInfo<<"Numerical: "<<res2<<"\n";
 
-    gsInfo<<"Mid-point error at t = "<<t<<":\t"<<math::abs(res1(2,0)-res2(2,0))<<"\n";
+    gsInfo<<"Mid-point error at t = "<<time<<":\t"<<math::abs(res1(2,0)-res2(2,0))<<"\n";
 
-    gsInfo<<"L2-norm error at t = "<<t<<":\t"<<solField.distanceL2(anField)<<"\n";
+    gsInfo<<"L2-norm error at t = "<<time<<":\t"<<solField.distanceL2(anField)<<"\n";
     //gsInfo <<"Deformation norm       : "<< deformation.patch(0).coefs().norm() <<".\n";
     gsInfo <<"Maximum deformation coef: "
            << mp_def.patch(0).coefs().colwise().maxCoeff() <<".\n";
@@ -390,9 +452,13 @@ for (index_t i=0; i<steps; i++)
 
   // gsInfo<<displacements.transpose()<<"\n";
 }
-collection.save();
-collection_an.save();
+if (plot)
+{
+  collection->save();
+  collection_an->save();
+}
 
+delete timeIntegrator;
 delete assembler;
 
 return result;

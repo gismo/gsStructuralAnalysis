@@ -105,8 +105,12 @@ void gsALMBase<T>::init(bool stability)
 template <class T>
 void gsALMBase<T>::computeLength()
 {
-  // m_desiredIterations := optimal number of iterations
-  T fac = m_desiredIterations / m_numIterations;
+  // Adaptive arc length: dl_{n+1} = dl_n * clamp(N_desired / N_n, 1/2, 2), N_n the
+  // corrector iterations of the last converged step. N_n == 0 (no step yet, e.g.
+  // resetLength() on a fresh solver) carries no information: keep the length.
+  T fac = (m_numIterations > 0)
+        ? static_cast<T>(m_desiredIterations) / static_cast<T>(m_numIterations)
+        : T(1);
   if (fac < 0.5)
     fac = 0.5;
   else if (fac > 2.0)
@@ -611,13 +615,13 @@ void gsALMBase<T>::_computeStability(const gsVector<T> & x, bool jacobian, T shi
 
   m_negatives = countNegatives(m_stabilityVec);
   m_indicator = m_stabilityVec.colwise().minCoeff()[0]; // This is required since D does not necessarily have one column.
-  m_stability = (m_indicator < 0) ? 1 : -1;
+  m_stability = (m_indicator < 0) ? -1 : 1;
 }
 
 template <class T>
 index_t gsALMBase<T>::stability() const
 {
-  return (m_indicator < 0) ? 1 : -1;
+  return (m_indicator < 0) ? -1 : 1;
 }
 
 template <class T>

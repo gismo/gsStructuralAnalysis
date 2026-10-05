@@ -122,6 +122,8 @@ int main (int argc, char** argv)
     real_t tolF       = 1e-3;
 
     std::string wn("data.csv");
+    std::string csvFile; // empty: no trajectory CSV
+    real_t tolScale = 1.0;
 
     std::string assemberOptionsFile("options/solver_options.xml");
 
@@ -150,6 +152,8 @@ int main (int argc, char** argv)
     cmd.addReal("F","factor", "factor for bifurcation perturbation", tau);
     cmd.addInt("q","QuasiNewtonInt","Use the Quasi Newton method every INT iterations",quasiNewtonInt);
     cmd.addInt("N", "maxsteps", "Maximum number of steps", step);
+    cmd.addString("", "csv", "Write one CSV row per accepted step (step,lambda,unorm,status,iterations) to this file", csvFile);
+    cmd.addReal("", "tolscale", "Multiply the ALM tolerances TolF and TolU by this factor", tolScale);
 
     cmd.addSwitch("adaptive", "Adaptive length ", adaptive);
     cmd.addSwitch("bifurcation", "Compute singular points and bifurcation paths", SingularPoint);
@@ -982,11 +986,11 @@ int main (int argc, char** argv)
       ThinShellAssemblerStatus status = ThinShellAssemblerStatus::AssemblyError;
       assembler->constructSolution(x,mp_def);
       if (MIP)
-        assembler->assembleMatrix(x,x-dx);
+        status = assembler->assembleMatrix(x,x-dx);
       else
       {
         assembler->constructSolution(x,mp_def);
-        assembler->assembleMatrix(mp_def);
+        status = assembler->assembleMatrix(mp_def);
       }
 
       m = assembler->matrix();
@@ -1027,14 +1031,17 @@ int main (int argc, char** argv)
     }
 
     arcLength->options().setReal("Length",dLb);
-    arcLength->options().setInt("AngleMethod",0); // 0: step, 1: iteration
+    if (method==2) // only gsALMCrisfield defines these options
+    {
+      arcLength->options().setInt("AngleMethod",0); // 0: step, 1: iteration
+      arcLength->options().setReal("Scaling",0.0);
+    }
     arcLength->options().setSwitch("AdaptiveLength",adaptive);
     arcLength->options().setInt("AdaptiveIterations",5);
     arcLength->options().setReal("Perturbation",tau);
-    arcLength->options().setReal("Scaling",0.0);
     arcLength->options().setReal("Tol",tol);
-    arcLength->options().setReal("TolU",tolU);
-    arcLength->options().setReal("TolF",tolF);
+    arcLength->options().setReal("TolU",tolU*tolScale);
+    arcLength->options().setReal("TolF",tolF*tolScale);
     arcLength->options().setInt("MaxIter",maxit);
     arcLength->options().setSwitch("Verbose",true);
     arcLength->options().setReal("Relaxation",relax);
@@ -1066,6 +1073,13 @@ int main (int argc, char** argv)
     gsMatrix<> solVector;
     real_t indicator = 0.0;
     arcLength->setIndicator(indicator); // RESET INDICATOR
+    std::ofstream csvStream;
+    if (!csvFile.empty())
+    {
+        csvStream.open(csvFile.c_str(),std::ofstream::out);
+        csvStream << std::setprecision(17) << "step,lambda,unorm,status,iterations" << std::endl;
+    }
+
     bool bisected = false;
     real_t dLb0 = dLb;
     for (index_t k=0; k<step; k++)
@@ -1073,6 +1087,7 @@ int main (int argc, char** argv)
       gsInfo<<"Load step "<< k<<"\n";
       // assembler->constructSolution(solVector,solution);
       gsStatus status = arcLength->step();
+      index_t csvIts = arcLength->numIterations();
 
       // gsInfo<<"m_U = "<<arcLength->solutionU()<<"\n";
 
@@ -1121,6 +1136,8 @@ int main (int argc, char** argv)
       solVector = arcLength->solutionU();
       Uold = solVector;
       Lold = arcLength->solutionL();
+      if (csvStream.is_open())
+        csvStream << k << "," << Lold << "," << Uold.norm() << "," << static_cast<int>(status) << "," << csvIts << std::endl;
       assembler->constructSolution(solVector,mp_def);
 
       if (testCase==4 || testCase==8 || testCase==9)
