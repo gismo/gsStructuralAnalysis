@@ -97,6 +97,8 @@ protected:
     void predictorGuess();
     /// See gsALMBase
     void iteration();
+    /// See gsALMBase
+    T constraintResidual() const;
 
     /// See gsALMBase
     void initOutput();
@@ -181,6 +183,8 @@ protected:
     using Base::m_jacMat;
     using Base::m_detKT;
 
+    /// Load increment prescribed by the predictor
+    T m_DeltaLtarget;
 };
 
 

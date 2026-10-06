@@ -100,6 +100,14 @@ void gsALMCrisfield<T>::iteration()
 }
 
 template <class T>
+T gsALMCrisfield<T>::constraintResidual() const
+{
+  // Spherical constraint |DeltaU|^2 + phi^2*DeltaL^2*|F|^2 = s^2, relative to s^2
+  const T s2 = m_arcLength*m_arcLength;
+  return math::abs(m_DeltaU.dot(m_DeltaU) + m_phi*m_phi*m_forcing.dot(m_forcing)*m_DeltaL*m_DeltaL - s2) / s2;
+}
+
+template <class T>
 void gsALMCrisfield<T>::initiateStep()
 {
   m_DeltaU = m_deltaUbar = m_deltaUt = gsVector<T>::Zero(m_numDof);

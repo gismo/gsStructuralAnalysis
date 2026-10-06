@@ -99,6 +99,8 @@ protected:
     void predictorGuess();
     /// See gsALMBase
     void iteration();
+    /// See gsALMBase
+    T constraintResidual() const;
 
     /// See gsALMBase
     void initOutput();
@@ -109,6 +111,16 @@ protected:
     void defaultOptions();
     /// See gsALMBase
     void getOptions();
+
+    /// Sets the scaling \a m_phi of the load term in the constraint. Without a
+    /// user-set "Scaling", it is the frozen scaling \a m_phi0 of the run.
+    /// A run starts at initialize(); \a m_phi0 is taken from
+    /// \a m_deltaUt = K^{-1} F (K factorized at the present point) at the first
+    /// step of the run and never changed afterwards. \a utSolved states that
+    /// \a m_deltaUt was just solved at the present point; otherwise it is
+    /// solved here when needed. A run restarted exactly at a limit point, where
+    /// K is singular, freezes a huge scaling.
+    void setAutoScaling(const bool utSolved);
 
 protected:
 
@@ -192,6 +204,11 @@ protected:
     /// Scaling parameter
     T m_phi;
     bool m_phi_user;
+
+    /// Automatic scaling |u_t|/|F| of the run, frozen at its start point
+    T m_phi0;
+    /// True once \a m_phi0 is known for the present run
+    bool m_phi0Set;
 };
 
 

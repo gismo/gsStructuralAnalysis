@@ -22,10 +22,11 @@ namespace gismo
 template <class T>
 void gsALMBase<T>::defaultOptions()
 {
-    m_options.addInt ("MaxIter","Maximum iterations",100);
+    m_options.addInt ("MaxIter","Maximum number of corrector iterations per step",100);
     m_options.addReal("Tol","Tolerance",1e-6);
     m_options.addReal("TolF","Tolerance",1e-3);
     m_options.addReal("TolU","Tolerance",1e-6);
+    m_options.addReal("ConstraintTol","Tolerance on the normalised path-constraint residual at acceptance (|g|/s^2; load control: |DL - DL_target|/|DL_target|)",1e-6);
     m_options.addReal("Perturbation","Set Perturbation factor Tau",1e3);
 
     m_options.addReal("Length","Arclength",1e-2);
@@ -60,6 +61,7 @@ void gsALMBase<T>::getOptions()
     m_tolerance           = m_options.getReal("Tol");
     m_toleranceF          = m_options.getReal("TolF");
     m_toleranceU          = m_options.getReal("TolU");
+    m_toleranceC          = m_options.getReal("ConstraintTol");
 
     m_tau                 = m_options.getReal("Perturbation");
 
@@ -383,7 +385,7 @@ void gsALMBase<T>::_step()
   }
 
   m_stabilityPrev = m_stability;
-  for (m_numIterations = 1; m_numIterations < m_maxIterations; ++m_numIterations)
+  for (m_numIterations = 1; m_numIterations <= m_maxIterations; ++m_numIterations)
   {
     if ( (!m_quasiNewton) || ( ( m_quasiNewtonInterval>0 ) && ( m_numIterations % m_quasiNewtonInterval) < 1e-10 ) )
     {
@@ -398,7 +400,7 @@ void gsALMBase<T>::_step()
     if (m_verbose)
        stepOutput();
 
-    if ( m_residueF < m_toleranceF && m_residueU < m_toleranceU )
+    if ( m_residueF < m_toleranceF && m_residueU < m_toleranceU && this->constraintResidual() < m_toleranceC )
     {
       iterationFinish();
       // Change arc length
@@ -409,7 +411,7 @@ void gsALMBase<T>::_step()
 
       break;
     }
-    else if (m_numIterations == m_maxIterations-1)
+    else if (m_numIterations == m_maxIterations)
     {
       gsInfo<<"maximum iterations reached. Solution did not converge\n";
       throw 1;

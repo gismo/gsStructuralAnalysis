@@ -44,6 +44,45 @@ void gsALMConsistentCrisfield<T>::initMethods()
 
   m_Uprev = gsVector<T>::Zero(m_numDof);
   m_Lprev = 0.0;
+
+  m_phi0    = 0;
+  m_phi0Set = false;
+}
+
+// Constraint |DeltaU|^2 + phi^2 DeltaL^2 |F|^2 = s^2 (see iteration()).
+//
+// With automatic scaling, phi is one constant per run, phi0 = |u_t,0| / |F|
+// with u_t,0 = K^{-1} F at the start point of the run. The load term
+// phi |F| DeltaL = |u_t,0| DeltaL is the displacement of the initial tangent
+// for the load increment DeltaL, so both terms of the constraint have the units
+// of a displacement, and the weight psi = phi^2 |F|^2 of the load term is the
+// same at every step.
+//
+// A scaling that follows the path changes the metric of the constraint from
+// step to step. The tangent ratio |u_t|/|F| is unbounded at a limit point,
+// where K is singular. The secant ratio |U| / (|lambda| |F|) is unbounded as
+// lambda -> 0 at a regular point, which bounds |DeltaL| <= s |lambda| / |U|, so
+// that lambda = 0 is approached only geometrically. A constant phi has neither
+// singularity.
+//
+// A run starts at initialize(). Its phi0 is taken from u_t at the first step of
+// the run, wherever that step starts (the origin, or a restart through
+// setSolution), and is not changed by later steps, option calls or by putting
+// the solver back at an earlier converged point.
+template <class T>
+void gsALMConsistentCrisfield<T>::setAutoScaling(const bool utSolved)
+{
+  if (m_phi_user)
+    return;
+
+  if (!m_phi0Set)
+  {
+    if (!utSolved)
+      m_deltaUt = this->solveSystem(m_forcing);
+    m_phi0    = math::pow( m_deltaUt.dot(m_deltaUt) / m_forcing.dot(m_forcing),0.5);
+    m_phi0Set = true;
+  }
+  m_phi = m_phi0;
 }
 
 // ------------------------------------------------------------------------------------------------------------
@@ -87,6 +126,14 @@ void gsALMConsistentCrisfield<T>::iteration() // see Carrera1994 eqs 20 and 21
 }
 
 template <class T>
+T gsALMConsistentCrisfield<T>::constraintResidual() const
+{
+  // Spherical constraint |DeltaU|^2 + phi^2*DeltaL^2*|F|^2 = s^2, relative to s^2
+  const T s2 = m_arcLength*m_arcLength;
+  return math::abs(m_DeltaU.dot(m_DeltaU) + m_phi*m_phi*m_DeltaL*m_DeltaL*m_forcing.dot(m_forcing) - s2) / s2;
+}
+
+template <class T>
 void gsALMConsistentCrisfield<T>::initiateStep()
 {
   // (m_U,m_L) is the present solution (iteratively updated)
@@ -116,16 +163,16 @@ void gsALMConsistentCrisfield<T>::predictor()
     m_deltaU = m_deltaUt / math::sqrt( m_deltaUt.dot(m_deltaUt) + m_DeltaL*DL );
     m_deltaL = DL / math::sqrt( m_deltaUt.dot(m_deltaUt) + m_DeltaL*DL );
 
-    if (!m_phi_user)
-      m_phi = math::pow( m_deltaUt.dot(m_deltaUt) / m_forcing.dot(m_forcing),0.5);
+    // Automatic scaling phi: constant per run, see setAutoScaling()
+    this->setAutoScaling(true);
   }
   else
   {
     m_deltaL = 1./m_arcLength_prev*(m_L - m_Lprev);
     m_deltaU = 1./m_arcLength_prev*(m_U - m_Uprev);
 
-    if (!m_phi_user)
-      m_phi = math::pow( m_deltaUt.dot(m_deltaUt) / m_forcing.dot(m_forcing),0.5);
+    // Automatic scaling phi: constant per run, see setAutoScaling()
+    this->setAutoScaling(false);
   }
 
   // Update iterative step
@@ -155,8 +202,8 @@ void gsALMConsistentCrisfield<T>::predictorGuess()
     m_deltaU = m_deltaUt / math::sqrt( m_deltaUt.dot(m_deltaUt) + m_DeltaL*DL );
     m_deltaL = DL / math::sqrt( m_deltaUt.dot(m_deltaUt) + m_DeltaL*DL );
 
-    if (!m_phi_user)
-      m_phi = math::pow( m_deltaUt.dot(m_deltaUt) / m_forcing.dot(m_forcing),0.5);
+    // Automatic scaling phi: constant per run, see setAutoScaling()
+    this->setAutoScaling(true);
   }
 
   else
@@ -164,8 +211,8 @@ void gsALMConsistentCrisfield<T>::predictorGuess()
     m_deltaL = 1./m_arcLength_prev*(m_Lguess - m_L);
     m_deltaU = 1./m_arcLength_prev*(m_Uguess - m_U);
 
-    if (!m_phi_user)
-      m_phi = math::pow( m_deltaUt.dot(m_deltaUt) / m_forcing.dot(m_forcing),0.5);
+    // Automatic scaling phi: constant per run, see setAutoScaling()
+    this->setAutoScaling(false);
   }
 
   // Update iterative step

@@ -102,6 +102,8 @@ protected:
     void predictorGuess();
     /// See gsALMBase
     void iteration();
+    /// See gsALMBase
+    T constraintResidual() const;
 
     /// See gsALMBase
     void initOutput();

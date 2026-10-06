@@ -84,6 +84,14 @@ void gsALMRiks<T>::iteration()
 }
 
 template <class T>
+T gsALMRiks<T>::constraintResidual() const
+{
+  // Spherical constraint phi*|DeltaU|^2 + (1-phi)*DeltaL^2 = s^2, relative to s^2
+  const T s2 = m_arcLength*m_arcLength;
+  return math::abs(m_phi*m_DeltaU.dot(m_DeltaU) + (1-m_phi)*m_DeltaL*m_DeltaL - s2) / s2;
+}
+
+template <class T>
 void gsALMRiks<T>::initiateStep()
 {
   // (m_U,m_L) is the present solution (iteratively updated)
@@ -110,13 +118,21 @@ void gsALMRiks<T>::predictor()
   // Then compute predictor of the method
   T tol = 1e-10;
 
+  // First step: the predictor is the load tangent (ut, 1), ut = K^{-1}F, scaled
+  // onto the Riks constraint phi |DeltaU|^2 + (1-phi) DeltaL^2 = s^2, i.e.
+  //   DeltaL = s / sqrt( phi ut.ut + (1-phi) ),  DeltaU = DeltaL ut.
+  // The corrector is Newton's method on that quadratic constraint. Started at
+  // DeltaL_pred/DeltaL* = kappa >> 1 it only halves DeltaL per iteration and needs
+  // about log2(kappa) iterations, independent of s. Normalising by |ut| alone gives
+  // kappa ~ 1/|ut|, which is large for stiff problems (|ut| << 1).
   if ( ((m_U-m_Uprev).norm() < tol) && ((m_L - m_Lprev) * (m_L - m_Lprev) < tol ) )
   {
     m_note+= "predictor\t";
     T DL = 1.;
     m_deltaUt = this->solveSystem(m_forcing);
-    m_deltaU = m_deltaUt / math::sqrt( m_deltaUt.dot(m_deltaUt) + m_DeltaL*DL );
-    m_deltaL = DL / math::sqrt( m_deltaUt.dot(m_deltaUt) + m_DeltaL*DL );
+    const T nrm = math::sqrt( m_phi * m_deltaUt.dot(m_deltaUt) + (1.0 - m_phi) * DL * DL );
+    m_deltaL = DL / nrm;
+    m_deltaU = m_deltaUt * (DL / nrm);
   }
   else
   {
@@ -143,15 +159,23 @@ void gsALMRiks<T>::predictorGuess()
 
   m_deltaUt = this->solveSystem(m_forcing);
 
+  // Scaling of the Riks constraint, as in predictor()
+  if (m_numDof ==1)
+    m_phi = 0.99999999999;
+  else
+    m_phi = 1./m_numDof;
+
   T tol = 1e-10;
 
+  // Same first-step predictor as predictor()
   if ( ((m_Uguess-m_U).norm() < tol) && ((m_Lguess - m_L) * (m_Lguess - m_L) < tol ) )
   {
     m_note+= "predictor\t";
     T DL = 1.;
     m_deltaUt = this->solveSystem(m_forcing);
-    m_deltaU = m_deltaUt / math::sqrt( m_deltaUt.dot(m_deltaUt) + m_DeltaL*DL );
-    m_deltaL = DL / math::sqrt( m_deltaUt.dot(m_deltaUt) + m_DeltaL*DL );
+    const T nrm = math::sqrt( m_phi * m_deltaUt.dot(m_deltaUt) + (1.0 - m_phi) * DL * DL );
+    m_deltaL = DL / nrm;
+    m_deltaU = m_deltaUt * (DL / nrm);
   }
   else
   {

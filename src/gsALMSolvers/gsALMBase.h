@@ -361,6 +361,10 @@ protected:
     virtual void predictorGuess() = 0;
     /// A single iteration
     virtual void iteration() = 0;
+    /// Normalised residual of the path constraint at the current increment
+    /// (m_DeltaU, m_DeltaL) for the arc length s = m_arcLength; dimensionless,
+    /// non-negative. The step is accepted only if it is below ConstraintTol.
+    virtual T constraintResidual() const = 0;
 
     /// Initialize the output
     virtual void initOutput() = 0;
@@ -437,6 +441,11 @@ public:
 
     /// Tolerance value to decide convergence - Displacement criterion
     T m_toleranceU;
+
+    /// Tolerance on the normalised path-constraint residual (constraintResidual())
+    /// that an iterate must satisfy, in addition to the force and displacement
+    /// criteria, to be accepted
+    T m_toleranceC;
 
     bool m_verbose;
     bool m_initialized;

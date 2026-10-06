@@ -41,6 +41,7 @@ void gsALMLoadControl<T>::initMethods()
   m_numDof = m_forcing.size();
   m_DeltaU = m_U = gsVector<T>::Zero(m_numDof);
   m_DeltaL = m_L = 0.0;
+  m_DeltaLtarget = 0.0;
 }
 
 // ------------------------------------------------------------------------------------------------------------
@@ -55,6 +56,14 @@ void gsALMLoadControl<T>::iteration()
   // Compute next solution
   m_deltaU = m_deltaUbar;
   m_DeltaU += m_deltaU;
+}
+
+template <class T>
+T gsALMLoadControl<T>::constraintResidual() const
+{
+  // The constraint is DeltaL = DeltaLtarget, relative to the target unless it is zero
+  const T d = math::abs(m_DeltaL - m_DeltaLtarget);
+  return (m_DeltaLtarget == 0) ? d : d / math::abs(m_DeltaLtarget);
 }
 
 template <class T>
@@ -75,6 +84,7 @@ void gsALMLoadControl<T>::predictor()
   this->factorizeMatrix(m_jacMat);
 
   m_DeltaL = m_deltaL = m_arcLength;
+  m_DeltaLtarget = m_DeltaL;
   m_deltaUt = this->solveSystem(m_forcing);
   m_DeltaU = m_deltaL*m_deltaUt;
 
@@ -89,6 +99,7 @@ void gsALMLoadControl<T>::predictorGuess()
   this->factorizeMatrix(m_jacMat);
 
   m_DeltaL = m_deltaL = m_Lguess - m_L;
+  m_DeltaLtarget = m_DeltaL;
   m_deltaUt = this->solveSystem(m_forcing);
   m_DeltaU = m_deltaL*m_deltaUt;
 
