@@ -20,7 +20,7 @@ namespace gismo
 
 template<class T>
 gsContinuationDriver<T>::gsContinuationDriver(gsContinuationProblem<T> & P, gsStateSpace<T> & S)
-: m_P(&P), m_S(&S), m_Kstamp(0), m_secant(false), m_secantOK(false), m_setup(false)
+: m_P(&P), m_S(&S), m_Kstamp(0), m_committedK(0), m_secant(false), m_secantOK(false), m_setup(false)
 { }
 
 template<class T>
@@ -72,7 +72,27 @@ bool gsContinuationDriver<T>::setup()
     m_ctx.DeltaU = gsVector<T>::Zero(n);
     m_ctx.deltaU = gsVector<T>::Zero(n);
     m_ctx.dRdl = m_ctx.F;
+    m_committedK = 0;
     m_setup = true;
+    return true;
+}
+
+template<class T>
+bool gsContinuationDriver<T>::assembleCommittedTangent()
+{
+    m_committedK = 0;
+    if (!m_setup || !m_S->rollback())
+        return false;
+
+    // The predictor of the next step sees deltaU = 0 (resetStep()); the
+    // operators may read it, so it is zeroed for the evaluation and restored.
+    m_deltaUsave = m_ctx.deltaU;
+    m_ctx.deltaU.setZero(m_S->tangentSize());
+    const gsDriverOp op = _tangent(m_ctx, m_ctx.lambda);
+    m_ctx.deltaU = m_deltaUsave;
+    if (op != gsDriverOp::None)
+        return false;
+    m_committedK = m_ctx.Kversion;
     return true;
 }
 
@@ -88,6 +108,7 @@ void gsContinuationDriver<T>::resetHistory()
 {
     m_ctx.prev.reset();
     m_secantOK = false;
+    m_committedK = 0;
 }
 
 template<class T>
@@ -210,9 +231,16 @@ gsStatus gsContinuationDriver<T>::_attempt(gsStepContext<T> & ctx, T s, bool use
     }
     else if (m_constraint->predictorNeedsTangent(ctx))
     {
-        const gsDriverOp op = _tangent(ctx, ctx.lambda);
-        if (op != gsDriverOp::None)
-            return _fail(ctx, _statusOf(op), op, "");
+        // The factorization left by assembleCommittedTangent() is that of the
+        // matrix assembled here: same state, lambda and deltaU = 0.
+        const bool reuse = m_committedK != 0 && ctx.Kversion == m_committedK
+                           && m_lin.factorized() && m_lin.version() == m_committedK;
+        if (!reuse)
+        {
+            const gsDriverOp op = _tangent(ctx, ctx.lambda);
+            if (op != gsDriverOp::None)
+                return _fail(ctx, _statusOf(op), op, "");
+        }
         if (!m_lin.solve(ctx.dRdl, m_dUt))
             return _fail(ctx, gsStatus::SolverError, gsDriverOp::Solve, "");
         dUt = &m_dUt;
@@ -273,6 +301,8 @@ gsStatus gsContinuationDriver<T>::_attempt(gsStepContext<T> & ctx, T s, bool use
     // Converged: the last residual was evaluated in Accept mode at this point.
     if (!m_S->commit())
         return _fail(ctx, gsStatus::OtherError, gsDriverOp::Commit, "commit failed");
+    // The committed point moves on, whatever the solver still holds.
+    m_committedK = 0;
     ctx.lambda += ctx.DeltaL;
     ctx.prev.DeltaU     = ctx.DeltaU;
     ctx.prev.DeltaL     = ctx.DeltaL;
@@ -419,6 +449,7 @@ gsStatus gsContinuationDriver<T>::step(const gsPathPoint<T> & from, const gsStep
 {
     gsSolverReport rep;
     gsStatus st;
+    m_committedK = 0; // the space and the tangent solver are about to move to @a from
     if (!m_setup)
     {
         rep.status = gsStatus::OtherError;

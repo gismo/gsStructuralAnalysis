@@ -55,6 +55,9 @@
 #include <gsStructuralAnalysis/src/gsSolverDriver/gsStepController.h>
 #include <gsStructuralAnalysis/src/gsSolverDriver/gsNewtonCorrector.h>
 #include <gsStructuralAnalysis/src/gsSolverDriver/gsContinuationDriver.h>
+#include <gsStructuralAnalysis/src/gsSolverDriver/gsStabilityAnalysis.h>
+#include <gsStructuralAnalysis/src/gsALMSolvers/gsALMRiks.h>
+#include <gsStructuralAnalysis/src/gsStaticSolvers/gsStaticNewton.h>
 #include "gsStage0Truss.h"
 #include "gsStage0TrussReferences.h"
 
@@ -1575,9 +1578,7 @@ SUITE(gsSolverDriver_test)
     /// with w increasing (no reversal), also for the five steps after the
     /// crossing. The scaling of consistent Crisfield is frozen at its first
     /// step to |u_t|/|F| at U = 0 (0.4370973689763234, from the first-step
-    /// tangent K(0)^{-1}F of the truss, logged in
-    /// .claude/plans/gssa-redesign/tasks/logs/792-B00b2a-cells.log:350) and
-    /// stays bitwise constant.
+    /// tangent K(0)^{-1}F of the truss) and stays bitwise constant.
     TEST(CC_crosses_zero_load_forward)
     {
         UNITTEST_TIME_CONSTRAINT(1000);
@@ -1760,5 +1761,227 @@ SUITE(gsSolverDriver_test)
                 CHECK_EQUAL(rows[i].expect[k-1] == 'T',
                             gsNewtonCorrector<real_t>::refactorizeAt(k, rows[i].quasi, rows[i].interval));
         CHECK(gsNewtonCorrector<real_t>::refactorizeAt(0, true, -1));
+    }
+
+    // ------------------------------------------------------------------
+    // gsStabilityAnalysis
+    // ------------------------------------------------------------------
+
+    /// [[1,2],[2,1]] + [[5,1],[1,5]] (block diagonal): eigenvalues {-1,3,4,6}
+    gsSparseMatrix<real_t> stabilityKind()
+    {
+        gsSparseMatrix<real_t> K(4,4);
+        K.insert(0,0) = 1; K.insert(0,1) = 2; K.insert(1,0) = 2; K.insert(1,1) = 1;
+        K.insert(2,2) = 5; K.insert(2,3) = 1; K.insert(3,2) = 1; K.insert(3,3) = 5;
+        K.makeCompressed();
+        return K;
+    }
+
+    /// [[3,1],[1,3]] + [[5,1],[1,5]] (block diagonal): eigenvalues {2,4,4,6}
+    gsSparseMatrix<real_t> stabilitySpd()
+    {
+        gsSparseMatrix<real_t> K(4,4);
+        K.insert(0,0) = 3; K.insert(0,1) = 1; K.insert(1,0) = 1; K.insert(1,1) = 3;
+        K.insert(2,2) = 5; K.insert(2,3) = 1; K.insert(3,2) = 1; K.insert(3,3) = 5;
+        K.makeCompressed();
+        return K;
+    }
+
+    TEST(StabilityAnalysis_Eigenvalue)
+    {
+        const gsSparseMatrix<real_t> Kind = stabilityKind(), Kspd = stabilitySpd();
+        gsStabilityAnalysis<real_t> sa(gsStabilityAnalysis<real_t>::method::Eigenvalue);
+        gsVector<real_t> values;
+
+        CHECK(sa.compute(Kind, -1e2, values));
+        const gsMatrix<real_t> Kdense = Kind.toDense();
+        gsEigen::SelfAdjointEigenSolver<gsMatrix<real_t>> es(Kdense);
+        CHECK_EQUAL(4, values.size());
+        for (index_t i = 0; i!=values.size(); ++i)
+            CHECK_EQUAL(es.eigenvalues()[i], values[i]);
+        CHECK_CLOSE(-1, sa.indicator(), 1e-12);
+        CHECK_EQUAL(1, sa.negatives());
+        CHECK_EQUAL(-1, sa.stability());
+
+        CHECK(sa.compute(Kspd, -1e2, values));
+        CHECK_CLOSE(2, sa.indicator(), 1e-12);
+        CHECK_EQUAL(0, sa.negatives());
+        CHECK_EQUAL(1, sa.stability());
+    }
+
+    TEST(StabilityAnalysis_Determinant)
+    {
+        const gsSparseMatrix<real_t> Kind = stabilityKind(), Kspd = stabilitySpd();
+        gsStabilityAnalysis<real_t> sa(gsStabilityAnalysis<real_t>::method::Determinant);
+        gsVector<real_t> values;
+
+        CHECK(sa.compute(Kind, 0, values));
+        gsSparseSolver<real_t>::SimplicialLDLT ldlt;
+        ldlt.compute(Kind);
+        const gsVector<real_t> D = ldlt.vectorD();
+        CHECK_EQUAL(D.size(), values.size());
+        for (index_t i = 0; i!=values.size(); ++i)
+            CHECK_EQUAL(D[i], values[i]);
+        CHECK_EQUAL(1, sa.negatives());   // Sylvester: as many as negative eigenvalues
+        CHECK_EQUAL(-1, sa.stability());
+
+        CHECK(sa.compute(Kspd, 0, values));
+        CHECK_EQUAL(0, sa.negatives());
+        CHECK_EQUAL(1, sa.stability());
+    }
+
+    TEST(StabilityAnalysis_NothingAndGuards)
+    {
+        const gsSparseMatrix<real_t> Kind = stabilityKind();
+        gsStabilityAnalysis<real_t> sa(gsStabilityAnalysis<real_t>::method::Nothing);
+        gsVector<real_t> values;
+
+        CHECK(sa.compute(Kind, 0, values));
+        CHECK_EQUAL(4, values.size());
+        CHECK_EQUAL(0, values.norm());
+        CHECK_EQUAL(0, sa.indicator());
+        CHECK_EQUAL(1, sa.stability());
+
+        const gsVector<real_t> before = values;
+        sa.setMethod(7);
+        CHECK_EQUAL(7, sa.getMethod());
+        CHECK(!sa.compute(Kind, 0, values));
+        CHECK_EQUAL(0, (values - before).norm());
+        CHECK_EQUAL(0, sa.indicator());
+
+        sa.setMethod(gsStabilityAnalysis<real_t>::method::Eigenvalue);
+        CHECK(!sa.compute(gsSparseMatrix<real_t>(0,0), 0, values));
+        CHECK(!sa.classify(gsVector<real_t>()));
+
+        gsVector<real_t> v(3);
+        v << 2, -3, 0.5;
+        CHECK(sa.classify(v));
+        CHECK_EQUAL(-3, sa.indicator());
+        CHECK_EQUAL(1, sa.negatives());
+        CHECK_EQUAL(-1, sa.stability());
+    }
+
+    TEST(StabilityAnalysis_StaticFacade)
+    {
+        const gsSparseMatrix<real_t> Kind = stabilityKind();
+        gsVector<real_t> F = gsVector<real_t>::Ones(4);
+
+        auto negatives = [](const gsVector<real_t> & v)
+        {
+            index_t n = 0;
+            for (index_t i = 0; i!=v.size(); ++i)
+                n += (v[i] < 0);
+            return n;
+        };
+
+        {   // (a) no initialize(): no solver yet
+            gsStaticNewton<real_t> nwt(Kind, F);
+            CHECK(nwt.indicator(Kind) < 0);
+            CHECK_EQUAL(1, negatives(nwt.stabilityVec(Kind)));
+        }
+        {   // (b) eigenvalues
+            gsStaticNewton<real_t> nwt(Kind, F);
+            gsOptionList opts = nwt.options();
+            opts.setInt("BifurcationMethod", 1);
+            nwt.setOptions(opts);
+            nwt.initialize();
+            CHECK_CLOSE(-1, nwt.indicator(Kind), 1e-12);
+        }
+        {   // (c) pivots of the LDLT solver
+            gsStaticNewton<real_t> nwt(Kind, F);
+            gsOptionList opts = nwt.options();
+            opts.setInt("BifurcationMethod", 0);
+            opts.setString("Solver", "SimplicialLDLT");
+            nwt.setOptions(opts);
+            nwt.initialize();
+            const gsVector<real_t> v = nwt.stabilityVec(Kind);
+            gsSparseSolver<real_t>::SimplicialLDLT ldlt;
+            ldlt.compute(Kind);
+            const gsVector<real_t> D = ldlt.vectorD();
+            CHECK_EQUAL(D.size(), v.size());
+            for (index_t i = 0; i!=v.size(); ++i)
+                CHECK_EQUAL(D[i], v[i]);
+        }
+        {   // (d) pivots with a solver that has none
+            gsStaticNewton<real_t> nwt(Kind, F);
+            gsOptionList opts = nwt.options();
+            opts.setInt("BifurcationMethod", 0);
+            opts.setString("Solver", "CGDiagonal");
+            nwt.setOptions(opts);
+            nwt.initialize();
+            CHECK_EQUAL(1, negatives(nwt.stabilityVec(Kind)));
+        }
+    }
+
+    /// Unknown BifurcationMethod is rejected when the options are applied; the statics
+    /// know only 0 and 1 (the ALM also accepts -1)
+    TEST(StabilityAnalysis_UnknownMethodRejected)
+    {
+        typedef gsStructuralAnalysisOps<real_t>::Jacobian_t   Jacobian_t;
+        typedef gsStructuralAnalysisOps<real_t>::ALResidual_t ALResidual_t;
+
+        gsStage0Truss<real_t> truss;
+        Jacobian_t   J = truss.jacobian();
+        ALResidual_t R = truss.alResidual();
+        gsVector<real_t> F = truss.force();
+        {
+            gsALMRiks<real_t> alm(J, R, F);
+            gsOptionList opts = alm.options();
+            opts.setInt("BifurcationMethod", 7);
+            CHECK_THROW(alm.setOptions(opts), std::runtime_error);
+        }
+        {
+            gsALMRiks<real_t> alm(J, R, F);
+            gsOptionList opts = alm.options();
+            opts.setInt("BifurcationMethod", -1);
+            alm.setOptions(opts);
+            alm.initialize();
+            CHECK_EQUAL(1, alm.stability());
+        }
+
+        const gsSparseMatrix<real_t> Kind = stabilityKind();
+        gsVector<real_t> G = gsVector<real_t>::Ones(4);
+        const index_t unknown[] = {-1, 2, 7};
+        for (index_t k = 0; k!=3; ++k)
+        {
+            const index_t method = unknown[k];
+            gsStaticNewton<real_t> nwt(Kind, G);
+            gsOptionList opts = nwt.options();
+            opts.setInt("BifurcationMethod", method);
+            nwt.setOptions(opts);
+            CHECK_THROW(nwt.initialize(), std::runtime_error);
+        }
+    }
+
+    /// isStable() is true iff the stability is +1; unknown stability is not stable
+    TEST(StabilityAnalysis_ALMIsStable)
+    {
+        typedef gsStructuralAnalysisOps<real_t>::Jacobian_t   Jacobian_t;
+        typedef gsStructuralAnalysisOps<real_t>::ALResidual_t ALResidual_t;
+
+        gsStage0Truss<real_t> truss;
+        Jacobian_t   J = truss.jacobian();
+        ALResidual_t R = truss.alResidual();
+        gsVector<real_t> F = truss.force();
+
+        {
+            gsALMRiks<real_t> alm(J, R, F);
+            alm.initialize();
+            CHECK_EQUAL(1, alm.stability());
+            CHECK(alm.isStable());
+
+            alm.setIndicator(-1.0);
+            CHECK_EQUAL(-1, alm.stability());
+            CHECK(!alm.isStable());
+
+            alm.setIndicator(1.0);
+            CHECK(alm.isStable());
+        }
+        {
+            gsALMRiks<real_t> alm(J, R, F);
+            alm.initialize(false);
+            CHECK(!alm.isStable());
+            CHECK(!alm.stabilityChange());
+        }
     }
 }

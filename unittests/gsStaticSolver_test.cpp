@@ -47,6 +47,7 @@
 
 #include <gsStructuralAnalysis/src/gsStaticSolvers/gsStaticDR.h>
 #include <gsStructuralAnalysis/src/gsStaticSolvers/gsStaticNewton.h>
+#include <gsStructuralAnalysis/src/gsStaticSolvers/gsControlDisplacement.h>
 #include <gsStructuralAnalysis/src/gsStaticSolvers/gsStaticOpt.h>
 #include <gsStructuralAnalysis/src/gsStaticSolvers/gsStaticComposite.h>
 
@@ -415,5 +416,400 @@ SUITE(gsStaticSolver_test)                 // The suite should have the same nam
         CHECK_CLOSE(std::abs(Lnum-Lana)/Lana,0,1e-7);
     }
 #endif
+
+    // Decoupled cubic springs: R(x) = f - k x - c x^3, K(x) = diag(k + 3 c x^2).
+    // A solve that exhausts maxIt must leave solution() untouched, and the DR
+    // maxIt = N must give N iterations and iterations() == N.
+    TEST(StaticSolver_MaxIt_NoCommit)
+    {
+        const index_t n = 3;
+        gsVector<> k(n), f(n), M(n);
+        k << 1.0, 2.0, 4.0;
+        f << 3.0, 2.0, 1.0;
+        M.setConstant(1.0);
+        const real_t c = 10.0;
+
+        index_t nRes = 0;
+        gsStructuralAnalysisOps<real_t>::Residual_t Residual = [&](const gsVector<> & x, gsVector<> & R)
+        {
+            ++nRes;
+            R = f - k.cwiseProduct(x) - c * x.array().cube().matrix();
+            return true;
+        };
+        gsStructuralAnalysisOps<real_t>::Jacobian_t Jacobian = [&](const gsVector<> & x, gsSparseMatrix<> & K)
+        {
+            K.resize(n,n);
+            for (index_t i = 0; i != n; ++i)
+                K.insert(i,i) = k(i) + 3 * c * x(i) * x(i);
+            K.makeCompressed();
+            return true;
+        };
+
+        // Dynamic relaxation: N iterations, N+1 residual evaluations (the start and one per iteration)
+        {
+            const index_t N = 3;
+            gsStaticDR<real_t> DRM(M,f,Residual);
+            gsOptionList opt = DRM.options();
+            opt.setReal("damping",1.0);
+            opt.setReal("alpha",2.0);
+            opt.setInt("maxIt",N);
+            opt.setReal("tolF",1e-14);
+            opt.setReal("tolU",1e-14);
+            opt.setReal("tolE",1e-14);
+            opt.setInt("verbose",0);
+            DRM.setOptions(opt);
+            DRM.initialize();
+            nRes = 0;
+            gsStatus status = DRM.solve();
+            CHECK(status == gsStatus::NotConverged);
+            CHECK_EQUAL(N, DRM.iterations());
+            CHECK_EQUAL(N+1, nRes);
+            CHECK_EQUAL(0.0, DRM.solution().norm());
+        }
+
+        // Newton: N updates, N+1 residual evaluations; the last iterate is not committed
+        {
+            const index_t N = 2;
+            gsSparseMatrix<> K0(n,n);
+            gsStaticNewton<real_t> NWT(K0,f,Jacobian,Residual);
+            gsOptionList opt = NWT.options();
+            opt.setInt("maxIt",N);
+            opt.setReal("tolF",1e-14);
+            opt.setReal("tolU",1e-14);
+            opt.setInt("verbose",0);
+            NWT.setOptions(opt);
+            NWT.initialize();
+            nRes = 0;
+            gsStatus status = NWT.solve();
+            CHECK(status == gsStatus::NotConverged);
+            CHECK_EQUAL(N-1, NWT.iterations());
+            CHECK_EQUAL(N+1, nRes);
+            CHECK_EQUAL(0.0, NWT.solution().norm());
+
+            // With enough iterations the same solver converges and commits
+            opt.setInt("maxIt",20);
+            opt.setReal("tolF",1e-10);
+            opt.setReal("tolU",1e-8);
+            NWT.setOptions(opt);
+            NWT.initialize();
+            status = NWT.solve();
+            CHECK(status == gsStatus::Success);
+            gsVector<> R;
+            Residual(NWT.solution(),R);
+            CHECK(R.norm() < 1e-8);
+        }
+    }
+
+    // A throwing residual after the linear-predictor branch leaves the displacements as they were
+    TEST(StaticSolver_Newton_ThrowNoCommit)
+    {
+        const index_t n = 3;
+        gsSparseMatrix<> K0(n,n);
+        for (index_t i = 0; i != n; ++i)
+            K0.insert(i,i) = 1.0;
+        gsVector<> f(n);
+        f << 1.0, 2.0, 3.0;
+        index_t nRes = 0;
+        gsStructuralAnalysisOps<real_t>::Residual_t Residual = [&](const gsVector<> & x, gsVector<> & R)
+        {
+            if (++nRes == 2)
+                GISMO_ERROR("residual failure");
+            R = f - x;
+            return true;
+        };
+        gsStructuralAnalysisOps<real_t>::Jacobian_t Jacobian = [&](const gsVector<> &, gsSparseMatrix<> & K)
+        {
+            K = K0;
+            return true;
+        };
+        gsStaticNewton<real_t> NWT(K0,f,Jacobian,Residual);
+        NWT.initialize();
+        gsVector<> U0(n);
+        U0 << 0.1, 0.2, 0.3;
+        NWT.setDisplacement(U0);
+        NWT.setUpdate(gsVector<>());
+        gsStatus status = NWT.solve();
+        CHECK(status == gsStatus::OtherError);
+        CHECK_EQUAL(0.0, (NWT.solution() - U0).norm());
+    }
+
+    // Coupled linear Dirichlet ramp through the Load-constraint preset: one update per step
+    TEST(StaticSolver_ControlDisplacement_LoadRamp)
+    {
+        const index_t n = 20;
+        gsSparseMatrix<> Kl(n,n);
+        for (index_t i = 0; i != n; ++i)
+        {
+            Kl.insert(i,i) = 2.3 + 0.01 * i;
+            if (i > 0)
+            {
+                Kl.insert(i,i-1) = -1.1;
+                Kl.insert(i-1,i) = -1.1;
+            }
+        }
+        Kl.makeCompressed();
+        gsVector<> g(n);
+        for (index_t i = 0; i != n; ++i)
+            g(i) = 1.7 * math::sin(1.0 + i);
+
+        const real_t steps[3] = {0.5, 1e-2, 1e-6};
+        for (index_t s = 0; s != 3; ++s)
+        {
+            const real_t dL = steps[s];
+            gsVectorStateSpace<real_t> S(gsVector<>::Zero(n));
+            gsContinuationProblem<real_t> P;
+            P.residual = [&](real_t lam, gsVector<> & R, gsEvalMode)
+            { R = lam * g - Kl * S.working(); return true; };
+            P.jacobian = [&](real_t, gsSparseMatrix<> & K) { K = Kl; return true; };
+            P.loadDirection = [&](real_t, gsVector<> & d) { d = g; return true; };
+            P.F = gsVector<>::Zero(n);
+
+            gsControlDisplacement<real_t> CD(P,S);
+            gsStatus status = CD.step(dL);
+            CHECK(status == gsStatus::Success);
+            CHECK_EQUAL(1, CD.driver().numIterations());
+            CHECK_CLOSE(dL, CD.solutionL(), 1e-14);
+            const gsVector<> r = Kl * CD.solutionU() - dL * g;
+            CHECK(r.norm() / (dL * g.norm()) < 1e-12);
+
+            // A second step continues from the committed state
+            status = CD.step(dL);
+            CHECK(status == gsStatus::Success);
+            CHECK_CLOSE(2*dL, CD.solutionL(), 1e-14);
+            const gsVector<> r2 = Kl * CD.solutionU() - 2 * dL * g;
+            CHECK(r2.norm() / (2 * dL * g.norm()) < 1e-12);
+        }
+    }
+
+    // Decoupled cubic springs R(x) = f - k x - c x^3 and their tangent
+    struct StaticFacadeSprings
+    {
+        gsVector<> k, f, M;
+        real_t c;
+        gsStructuralAnalysisOps<real_t>::Residual_t Residual;
+        gsStructuralAnalysisOps<real_t>::Jacobian_t Jacobian;
+
+        StaticFacadeSprings() : k(3), f(3), M(gsVector<>::Ones(3)), c(10.0)
+        {
+            k << 1.0, 2.0, 4.0;
+            f << 3.0, 2.0, 1.0;
+            Residual = [this](const gsVector<> & x, gsVector<> & R)
+            {
+                R = f - k.cwiseProduct(x) - c * x.array().cube().matrix();
+                return true;
+            };
+            Jacobian = [this](const gsVector<> & x, gsSparseMatrix<> & K)
+            {
+                K.resize(3,3);
+                for (index_t i = 0; i != 3; ++i)
+                    K.insert(i,i) = k(i) + 3 * c * x(i) * x(i);
+                K.makeCompressed();
+                return true;
+            };
+        }
+    private:
+        StaticFacadeSprings(const StaticFacadeSprings &);
+        StaticFacadeSprings & operator=(const StaticFacadeSprings &);
+    };
+
+    // A solve that exhausts maxIt from a non-zero displacement leaves solution()
+    // at that displacement while the discarded update is not zero, so a commit
+    // on failure would be visible. The same solver then converges and commits.
+    template<class S>
+    void staticFacadeNewtonNoCommit()
+    {
+        StaticFacadeSprings sp;
+        gsVector<> U0(3);
+        U0 << 0.3, -0.2, 0.1;
+        gsSparseMatrix<> K0(3,3);
+        for (index_t i = 0; i != 3; ++i)
+            K0.insert(i,i) = sp.k(i);
+        S NWT(K0, sp.f, sp.Jacobian, sp.Residual);
+        gsOptionList opt = NWT.options();
+        opt.setInt("maxIt",2);
+        opt.setReal("tolF",1e-14);
+        opt.setReal("tolU",1e-14);
+        opt.setInt("verbose",0);
+        NWT.setOptions(opt);
+        NWT.initialize();
+        NWT.setDisplacement(U0);
+        CHECK(NWT.solve() == gsStatus::NotConverged);
+        CHECK_EQUAL(1, NWT.iterations());
+        CHECK(NWT.update().norm() > 0);
+        CHECK_EQUAL(U0.size(), NWT.solution().size());
+        CHECK((NWT.solution() - U0).norm() == 0);
+
+        const real_t discarded = NWT.update().norm();
+
+        opt.setInt("maxIt",20);
+        opt.setReal("tolF",1e-10);
+        opt.setReal("tolU",1e-8);
+        NWT.setOptions(opt);
+        CHECK(NWT.solve() == gsStatus::Success);
+        gsVector<> R;
+        sp.Residual(NWT.solution(), R);
+        CHECK(R.norm() < 1e-8);
+        gsInfo << "StaticFacade Newton: discarded update " << discarded << "\n";
+    }
+
+    template<class S>
+    void staticFacadeDRNoCommit()
+    {
+        StaticFacadeSprings sp;
+        gsVector<> U0(3);
+        U0 << 0.3, -0.2, 0.1;
+        S DRM(sp.M, sp.f, sp.Residual);
+        gsOptionList opt = DRM.options();
+        opt.setReal("damping",1.0);
+        opt.setReal("alpha",2.0);
+        opt.setInt("maxIt",3);
+        opt.setReal("tolF",1e-14);
+        opt.setReal("tolU",1e-14);
+        opt.setReal("tolE",1e-14);
+        opt.setInt("verbose",0);
+        DRM.setOptions(opt);
+        DRM.initialize();
+        DRM.setDisplacement(U0);
+        CHECK(DRM.solve() == gsStatus::NotConverged);
+        CHECK_EQUAL(3, DRM.iterations());
+        CHECK(DRM.update().norm() > 0);
+        CHECK_EQUAL(U0.size(), DRM.solution().size());
+        CHECK((DRM.solution() - U0).norm() == 0);
+        gsInfo << "StaticFacade DR: discarded update " << DRM.update().norm() << "\n";
+    }
+
+    TEST(StaticFacade_NoCommit_nonzero_state)
+    {
+        staticFacadeNewtonNoCommit<gsStaticNewton<real_t> >();
+        staticFacadeDRNoCommit<gsStaticDR<real_t> >();
+    }
+
+    // Chain of three springs s_i(e) = k_i e + c e^3 between a fixed node 0 and a
+    // node 3 displaced by lambda; the nodes 1 and 2 are free. A nonlinear
+    // Dirichlet ramp: the load direction dR/dlambda depends on the state.
+    struct StaticFacadeChain
+    {
+        gsVectorStateSpace<real_t> space;
+        gsContinuationProblem<real_t> P;
+
+        static real_t kk(index_t i) { return i == 0 ? 1.0 : (i == 1 ? 2.0 : 4.0); }
+        static real_t cc() { return 20.0; }
+        static real_t s (index_t i, real_t e) { return kk(i) * e + cc() * e * e * e; }
+        static real_t ds(index_t i, real_t e) { return kk(i) + 3 * cc() * e * e; }
+
+        StaticFacadeChain() : space(2)
+        {
+            P.F = gsVector<real_t>::Zero(2);
+            P.residual = [this](real_t lam, gsVector<real_t> & R, gsEvalMode) -> bool
+            {
+                const gsVector<real_t> & x = space.working();
+                R.resize(2);
+                R << s(1, x[1] - x[0]) - s(0, x[0]), s(2, lam - x[1]) - s(1, x[1] - x[0]);
+                return true;
+            };
+            P.jacobian = [this](real_t lam, gsSparseMatrix<real_t> & K) -> bool
+            {
+                const gsVector<real_t> & x = space.working();
+                const real_t a = ds(0, x[0]), b = ds(1, x[1] - x[0]), d = ds(2, lam - x[1]);
+                K.resize(2,2);
+                K.insert(0,0) = a + b;  K.insert(0,1) = -b;
+                K.insert(1,0) = -b;     K.insert(1,1) = b + d;
+                K.makeCompressed();
+                return true;
+            };
+            P.loadDirection = [this](real_t lam, gsVector<real_t> & d) -> bool
+            {
+                const gsVector<real_t> & x = space.working();
+                d.resize(2);
+                d << 0.0, ds(2, lam - x[1]);
+                return true;
+            };
+        }
+    private:
+        StaticFacadeChain(const StaticFacadeChain &);
+        StaticFacadeChain & operator=(const StaticFacadeChain &);
+    };
+
+    // The acceptance gate of gsControlDisplacement: at least one update,
+    // relative residual and relative update below 1e-6, at most 25 updates
+    static memory::shared_ptr< gsConvergenceTest<real_t> > staticFacadeGate(const memory::shared_ptr< gsStaticResidualTest<real_t> > & rt,
+                                                                            const real_t tol, const index_t maxIt)
+    {
+        typedef gsConvergenceTest<real_t>::Ptr TestPtr;
+        memory::shared_ptr< gsAllTest<real_t> > all(new gsAllTest<real_t>());
+        all->add(TestPtr(new gsMinIterTest<real_t>(1))).add(rt).add(TestPtr(new gsStaticUpdateTest<real_t>(tol)));
+        memory::shared_ptr< gsAnyTest<real_t> > any(new gsAnyTest<real_t>());
+        any->add(all).add(TestPtr(new gsMaxIterTest<real_t>(maxIt)));
+        return any;
+    }
+
+    // gsControlDisplacement on a problem is a gsContinuationDriver with a load
+    // constraint, the gate above and the residual basis floored by |dL||dR/dlambda|.
+    // \a beforeStep may change the object before each of its steps.
+    static void staticFacadeControlDisplacement(const std::function<void(gsControlDisplacement<real_t> &)> & beforeStep
+                                                = std::function<void(gsControlDisplacement<real_t> &)>())
+    {
+        StaticFacadeChain rigA, rigB;
+        gsControlDisplacement<real_t> cd(rigA.P, rigA.space);
+
+        gsContinuationDriver<real_t> drv(rigB.P, rigB.space);
+        drv.setConstraint(gsPathConstraint<real_t>::Ptr(new gsLoadConstraint<real_t>()));
+        memory::shared_ptr< gsStaticResidualTest<real_t> > rt(new gsStaticResidualTest<real_t>(1e-6));
+        drv.setTest(staticFacadeGate(rt, 1e-6, 25));
+        drv.setup();
+
+        const real_t dL = 0.1;
+        index_t maxIt = 0;
+        for (index_t step = 0; step < 3; ++step)
+        {
+            if (beforeStep)
+                beforeStep(cd);
+            gsVector<real_t> d;
+            CHECK(rigB.P.loadDirection(drv.lambda() + dL, d));
+            rt->setBasisFloor(math::abs(dL) * d.norm());
+            drv.controller().setLength(dL);
+            const gsStatus sd = drv.step();
+            const gsStatus sc = cd.step(dL);
+            // the floor binds: without it the basis would be the residual at the predicted point
+            CHECK(rt->basis() > rt->predictedResidual());
+
+            CHECK(sc == gsStatus::Success);
+            CHECK(sd == gsStatus::Success);
+            CHECK_EQUAL(drv.lambda(), cd.solutionL());
+            CHECK_EQUAL(drv.numIterations(), cd.driver().numIterations());
+            CHECK_EQUAL(rigB.space.committed().size(), cd.solutionU().size());
+            CHECK((cd.solutionU() - rigB.space.committed()).norm() == 0);
+            maxIt = math::max(maxIt, cd.driver().numIterations());
+        }
+        CHECK(maxIt >= 2);
+
+        // after three steps the springs carry one force
+        const gsVector<real_t> & x = cd.solutionU();
+        CHECK_CLOSE(0.3, cd.solutionL(), 1e-14);
+        CHECK(x.norm() > 0);
+        const real_t f1 = StaticFacadeChain::s(0, x[0]);
+        const real_t f2 = StaticFacadeChain::s(1, x[1] - x[0]);
+        const real_t f3 = StaticFacadeChain::s(2, cd.solutionL() - x[1]);
+        CHECK(math::abs(f1 - f3) <= 1e-6 * math::abs(f3));
+        CHECK(math::abs(f2 - f3) <= 1e-6 * math::abs(f3));
+
+        // a step that does not converge leaves the load and the displacements as they were
+        const gsVector<real_t> U3 = cd.solutionU();
+        const real_t L3 = cd.solutionL();
+        memory::shared_ptr< gsStaticResidualTest<real_t> > strict(new gsStaticResidualTest<real_t>(1e-14));
+        cd.driver().setTest(staticFacadeGate(strict, 1e-14, 1));
+        cd.driver().setup();
+        CHECK(cd.step(dL) == gsStatus::NotConverged);
+        CHECK(cd.driver().context().DeltaU.norm() > 0);
+        CHECK_EQUAL(U3.size(), cd.solutionU().size());
+        CHECK((cd.solutionU() - U3).norm() == 0);
+        CHECK(cd.solutionL() == L3);
+        gsInfo << "StaticFacade ControlDisplacement: up to " << maxIt << " updates per step, lambda " << L3 << "\n";
+    }
+
+    TEST(StaticFacade_ControlDisplacement_matches_driver)
+    {
+        staticFacadeControlDisplacement();
+    }
 
 }

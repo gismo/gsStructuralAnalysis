@@ -14,12 +14,24 @@
 #pragma once
 
 #include <gsStructuralAnalysis/src/gsALMSolvers/gsALMBase.h>
+#include <gsStructuralAnalysis/src/gsSolverDriver/gsPathConstraint.h>
 
 namespace gismo
 {
 
 /**
     @brief Performs the Riks arc length method to solve a nonlinear equation system.
+
+    The path constraint is gsRiksConstraint: the quadratic constraint
+    \f$\varphi\|\Delta U\|^2+(1-\varphi)\Delta\lambda^2=s^2\f$ with the
+    constant weight \f$\varphi=1/n\f$ (\f$n\f$ the number of unknowns), solved
+    by Newton's method.
+
+    Options: those of gsALMBase.
+
+    An initial guess (see setInitialGuess) replaces the previous increment of
+    the secant predictor by \f$(U_{guess}-U,\ \lambda_{guess}-\lambda)\f$ and is
+    cleared by the step that uses it.
 
     \tparam T coefficient type
 
@@ -51,6 +63,9 @@ protected:
     using Base::computeStability;
     using Base::computeLength;
 
+    /// The Riks constraint installed on the driver (same object as constraint())
+    memory::shared_ptr<gsRiksConstraint<T> > m_riks;
+
 public:
 
     /// Constructor
@@ -59,10 +74,7 @@ public:
                 const gsVector<T> &Force )
     : Base(Jacobian,ALResidual,Force)
     {
-        defaultOptions();
-        getOptions();
-
-        initMethods();
+        this->_install();
     }
 
     /// Constructor using the jacobian that takes the solution and the solution step
@@ -71,126 +83,27 @@ public:
                 const gsVector<T> &Force )
     : Base(dJacobian,ALResidual,Force)
     {
-        defaultOptions();
-        getOptions();
-
-        initMethods();
+        this->_install();
     }
 
-public:
-    T distance(const gsVector<T>& DeltaU, const T DeltaL) const
+    /// Constructor on a caller's problem (driver convention
+    /// \f$R=\lambda F-F_{int}\f$, nothing is negated) and state space; both must outlive the solver
+    gsALMRiks(  gsContinuationProblem<T> & problem,
+                gsStateSpace<T>          & space )
+    : Base(problem,space)
     {
-        return math::pow(m_phi * math::pow(DeltaU.norm(),2.0) + (1.0-m_phi) * math::pow(DeltaL,2.0),0.5);
+        this->_install();
     }
 
 protected:
 
-    /// See gsALMBase
-    void initMethods();
-    /// See gsALMBase
-    void initiateStep();
-    /// See gsALMBase
-    void iterationFinish();
+    /// See gsALMBase; the guess is cleared once it is used
+    virtual void applyInitialGuess(const gsVector<T> & Uguess, T Lguess);
 
-    /// See gsALMBase
-    void quasiNewtonPredictor();
-    /// See gsALMBase
-    void quasiNewtonIteration();
+private:
 
-    /// See gsALMBase
-    void predictor();
-    void predictorGuess();
-    /// See gsALMBase
-    void iteration();
-    /// See gsALMBase
-    T constraintResidual() const;
-
-    /// See gsALMBase
-    void initOutput();
-    /// See gsALMBase
-    void stepOutput();
-
-protected:
-
-    // Number of degrees of freedom
-    using Base::m_numDof;
-
-    using Base::m_jacobian;
-    using Base::m_djacobian;
-    using Base::m_residualFun;
-    using Base::m_forcing;
-
-    /// Solver options
-    using Base::m_options;
-
-    /// Number of Arc Length iterations performed
-    using Base::m_numIterations;
-
-    /// Maximum number of Arc Length iterations allowed
-    using Base::m_maxIterations;
-
-    /// Length of the step in the u,f plane
-    using Base::m_arcLength;
-    using Base::m_arcLength_prev;
-
-    /// Output verbosity
-    using Base::m_verbose;
-
-    /// Note
-    using Base::m_note;
-
-    /// Convergence result
-    using Base::m_converged;
-
-    /// Force residuum
-    using Base::m_residueF;
-
-    /// Displacement residuum
-    using Base::m_residueU;
-
-    /// Load residuum
-    using Base::m_residueL;
-
-    /// Indicator for bifurcation
-    using Base::m_indicator;
-    using Base::m_negatives;
-
-    /// Relaxation factor
-    using Base::m_relax;
-
-    // Previous update
-    using Base::m_DeltaUold;
-    using Base::m_DeltaLold;
-    /// Displacement vector (present, at previously converged point)
-    using Base::m_U;
-    using Base::m_Uprev;
-    using Base::m_Uguess;
-    /// Update of displacement vector
-    using Base::m_DeltaU;
-    /// u_bar
-    using Base::m_deltaUbar;
-    /// u_t
-    using Base::m_deltaUt;
-    /// Update of update of displacement vector
-    using Base::m_deltaU;
-
-    /// Lambda (present, at previously converged point)
-    using Base::m_L;
-    using Base::m_Lprev;
-    using Base::m_Lguess;
-    /// Update of lambdaGeneralizedSelfAdjointEigenSolver
-    using Base::m_DeltaL;
-    /// Update of update of lambda
-    using Base::m_deltaL;
-    /// Vector with lambda updates
-    using Base::m_deltaLs;
-
-    /// Jacobian matrix
-    using Base::m_jacMat;
-    using Base::m_detKT;
-
-    /// Scaling parameter
-    T m_phi;
+    /// Installs the Riks constraint and reads the options
+    void _install();
 };
 
 } // namespace gismo

@@ -61,7 +61,9 @@ namespace gismo
    -# rollback() the state to the committed point, reset the step context;
    -# optional pre-step hook (may resize the step of this attempt);
    -# predictor: when the constraint needs the load tangent, assemble
-      \f$K\f$ at the committed point, factorize, solve
+      \f$K\f$ at the committed point and factorize it (or reuse the
+      factorization left by assembleCommittedTangent() at this committed
+      point), solve
       \f$K u_t = \partial R/\partial\lambda\f$; the constraint writes
       \f$(\Delta U,\Delta\lambda)\f$ and the driver applies \f$\Delta U\f$
       with scale 1;
@@ -142,12 +144,31 @@ namespace gismo
    and stateful steps on one space resynchronise with setLambda() and
    setHistory().
 
+   <b>Tangent at the committed point.</b> assembleCommittedTangent() assembles
+   and factorizes \f$K\f$ at the committed point \f$(U,\lambda)\f$ of the
+   stateful path. A caller that needs the stability of an accepted point (the
+   LDL^T pivots of the factorization, or \f$K\f$ itself) calls it once after
+   the step; the next stateful predictor then reuses that factorization
+   instead of assembling the same matrix again, as pde2path does with the
+   Jacobian of the last converged point (<tt>cont.m:77</tt>). The reuse is
+   bitwise neutral: the reused factor is that of the matrix the predictor
+   would assemble (same state, same \f$\lambda\f$, \f$\delta U = 0\f$ in the
+   context). It is dropped, and hasCommittedTangent() turns false, whenever
+   something that enters \f$K\f$ may have changed: setLambda(), setup(),
+   resetHistory(), invalidateCommittedTangent(), a pure step, every commit
+   (the committed point moves on), a change of the tangent solver's options, and
+   any refactorization of the corrector. setHistory() leaves it alone: the
+   history is secant data, not an input of \f$K\f$. A driver whose owner never
+   calls assembleCommittedTangent() performs exactly the same operations as
+   without the feature.
+
    <b>Complexity.</b> Per corrector update: one residual assembly, at most one
    Jacobian assembly and one factorization (per the refactorization
    schedule), two triangular solves, O(n) vector work and one
    gsStateSpace::apply(). The predictor costs one Jacobian assembly,
    factorization and solve when the constraint needs the tangent, nothing in
-   secant mode.
+   secant mode, and only the solve when it reuses the factorization of
+   assembleCommittedTangent().
 
    <b>Thread safety.</b> The work vectors and the tangent solver are mutable
    members: a driver is used by one thread at a time, also through the pure
@@ -278,8 +299,9 @@ public:
 
     /// Committed load factor. O(1).
     T lambda() const { return m_ctx.lambda; }
-    /// Sets the committed load factor (the state is not touched). O(1).
-    void setLambda(T lambda) { m_ctx.lambda = lambda; }
+    /// Sets the committed load factor (the state is not touched) and drops the
+    /// tangent at the committed point, see invalidateCommittedTangent(). O(1).
+    void setLambda(T lambda) { m_ctx.lambda = lambda; m_committedK = 0; }
 
     /// History of the last accepted step. O(1).
     const gsStepHistory<T> & history() const { return m_ctx.prev; }
@@ -287,6 +309,46 @@ public:
     void setHistory(const gsStepHistory<T> & h);
     /// Clears the step history and disarms the Load secant predictor. O(1).
     void resetHistory();
+
+    /**
+       @brief Assembles and factorizes the tangent at the committed point.
+
+       Evaluates the problem's jacobian (and load direction, when it has one)
+       at the committed state and \f$\lambda\f$ and factorizes \f$K\f$ with
+       the driver's tangent solver. The problem sees the context of a predictor:
+       <tt>deltaU = 0</tt>, while <tt>DeltaU</tt> and <tt>DeltaL</tt> keep the
+       values of the last accepted step and the step history is untouched. On
+       success, context().K is the tangent at the committed point,
+       linearSolver() holds its factorization (so its LDL^T pivots are those of
+       that point) and hasCommittedTangent() is true; the next stateful
+       predictor that needs the load tangent then skips the assembly and the
+       factorization. The reuse ends as listed in the class doc
+       ("Tangent at the committed point").
+
+       Returns false, with hasCommittedTangent() false, when setup() was not
+       called, the state space cannot roll back, or the jacobian, the
+       factorization or the load direction fails; context().K and the
+       load direction may then be partly overwritten. The report, lambda,
+       history, step counter, controller and observers are not touched. Does
+       not catch exceptions of the problem operators; they propagate as from
+       step().
+
+       Cost: one Jacobian assembly, one factorization, O(n) for the save and
+       restore of the context's deltaU.
+    */
+    bool assembleCommittedTangent();
+
+    /// Whether context().K is the tangent at the committed point and
+    /// linearSolver() holds its factorization, as left by
+    /// assembleCommittedTangent() and not invalidated since. O(1).
+    bool hasCommittedTangent() const
+    { return m_committedK != 0 && m_ctx.Kversion == m_committedK
+             && m_lin.factorized() && m_lin.version() == m_committedK; }
+
+    /// Drops the tangent at the committed point. Call it after changing the
+    /// state space or the problem behind the driver's back; setLambda() already
+    /// does. O(1).
+    void invalidateCommittedTangent() { m_committedK = 0; }
 
     /// Corrector updates of the last attempt (N after an iteration-limit failure). O(1).
     index_t numIterations() const { return m_ctx.iteration; }
@@ -321,6 +383,10 @@ private:
     /// tangent solver a version it already holds and reuse a stale factorization.
     mutable index_t m_Kstamp;
     mutable gsVector<T> m_dUt, m_dUbar;
+    /// Version stamp of the factorization of K at the committed point of the
+    /// stateful path, 0 when there is none
+    mutable index_t m_committedK;
+    gsVector<T> m_deltaUsave; ///< scratch of assembleCommittedTangent()
     gsVector<T> m_none; ///< empty vector passed as u_t when the predictor needs none
     bool m_secant, m_secantOK, m_setup;
     std::vector<Observer_t> m_observers;

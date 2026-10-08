@@ -112,7 +112,7 @@ public:
 
     /// Automatic scaling, angle method Step, relaxation 1. O(1).
     gsCrisfieldConstraint()
-    : m_phi(-1), m_phiUser(false), m_angle(angle::Step), m_relax(1),
+    : m_phi(-1), m_phiUser(false), m_tangentScalingNext(false), m_angle(angle::Step), m_relax(1),
       m_FF(std::numeric_limits<T>::quiet_NaN()), m_DeltaLpred(0), m_last(Root::None),
       m_numModified(0), m_numSimplified(0), m_numRelaxed(0)
     { }
@@ -123,6 +123,15 @@ public:
     /// The user value, or -1 before the first automatic predict(), then the
     /// last computed value. O(1).
     T scaling() const { return m_phi; }
+
+    /// Caches \f$F\cdot F\f$ so that distance() is defined before the first
+    /// predict(); predict() refreshes it from ctx.F. O(n).
+    void setForce(const gsVector<T> & F) { m_FF = F.dot(F); }
+
+    /// The next predict() with automatic scaling takes
+    /// \f$\varphi=\|u_t\|/\|F\|\f$ instead of the secant ratio (an initial
+    /// guess); consumed by that predict(). O(1).
+    void requestTangentScaling() { m_tangentScalingNext = true; }
 
     /// 0 = Step, 1 = Iteration, 2 = Predictor (GISMO_ENSURE on any other value). O(1).
     void setAngleMethod(index_t m);
@@ -173,7 +182,8 @@ public:
     T residual(const gsStepContext<T> & ctx) const;
 
     /// \f$\sqrt{\Delta U\!\cdot\!\Delta U+\varphi^2\|F\|^2\Delta\lambda^2}\f$
-    /// with the \f$\|F\|^2\f$ of the last predict(); NaN before the first. O(n).
+    /// with the \f$\|F\|^2\f$ of the last predict(), or of setForce() before
+    /// the first one (NaN if neither happened). O(n).
     T distance(const gsVector<T> & DeltaU, T DeltaL) const;
 
     /// False: ctx.stepSize is an arc length.
@@ -190,9 +200,10 @@ private:
 private:
     T m_phi;                    ///< scaling \f$\varphi\f$
     bool m_phiUser;             ///< true iff \f$\varphi\f$ was set by the user
+    bool m_tangentScalingNext;  ///< the next automatic predict() takes the tangent ratio
     index_t m_angle;            ///< angle method
     T m_relax;                  ///< relaxation factor
-    T m_FF;                     ///< \f$F\!\cdot\!F\f$ of the last predict()
+    T m_FF;                     ///< \f$F\!\cdot\!F\f$ of setForce() or of the last predict()
     gsVector<T> m_DeltaUpred;   ///< displacement increment of the last predictor
     T m_DeltaLpred;             ///< load increment of the last predictor
     Root m_last;                ///< branch of the last correct()
@@ -251,12 +262,37 @@ public:
       m_FF(std::numeric_limits<T>::quiet_NaN())
     { }
 
-    /// Fixed scaling @a phi; -1 selects the automatic scaling. Does not touch
-    /// the frozen \f$\varphi_0\f$. O(1).
-    void setScaling(T phi) { m_phi = phi; m_phiUser = (phi != -1); }
+    /// Fixed scaling @a phi; -1 selects the automatic scaling, which keeps a
+    /// frozen \f$\varphi_0\f$ if there is one. Does not touch the frozen
+    /// \f$\varphi_0\f$. O(1).
+    void setScaling(T phi)
+    {
+        m_phiUser = (phi != -1);
+        m_phi = (!m_phiUser && m_phi0Set) ? m_phi0 : phi;
+    }
 
-    /// The user value; with automatic scaling -1 until the first predict(), then the frozen \f$\varphi_0\f$. O(1).
+    /// The user value; with automatic scaling -1 while no \f$\varphi_0\f$ is
+    /// frozen, then the frozen \f$\varphi_0\f$ (after resetFrozenScaling() the
+    /// last value until the next predict()). O(1).
     T scaling() const { return m_phi; }
+
+    /// Caches \f$F\cdot F\f$ so that distance() is defined before the first
+    /// predict(); predict() refreshes it from ctx.F. O(n).
+    void setForce(const gsVector<T> & F) { m_FF = F.dot(F); }
+
+    /// Freezes \f$\varphi_0\f$ to @a phi0, which must be positive and finite
+    /// (GISMO_ENSURE; NaN is rejected). The automatic scaling then uses it
+    /// instead of freezing its own at the first predict(); a user scaling is
+    /// not affected. O(1).
+    void setFrozenScaling(T phi0)
+    {
+        GISMO_ENSURE(phi0 > 0 && phi0 < std::numeric_limits<T>::infinity(),
+                     "gsConsistentCrisfieldConstraint::setFrozenScaling: the scaling must be positive and finite, got " << phi0);
+        m_phi0 = phi0;
+        m_phi0Set = true;
+        if (!m_phiUser)
+            m_phi = phi0;
+    }
 
     /// Forget the frozen \f$\varphi_0\f$: the next automatic first step freezes a new one. O(1).
     void resetFrozenScaling() { m_phi0 = 0; m_phi0Set = false; }
@@ -289,7 +325,8 @@ public:
     T residual(const gsStepContext<T> & ctx) const;
 
     /// \f$\sqrt{\Delta U\!\cdot\!\Delta U+\varphi^2\|F\|^2\Delta\lambda^2}\f$
-    /// with the \f$\|F\|^2\f$ of the last predict(); NaN before the first. O(n).
+    /// with the \f$\|F\|^2\f$ of the last predict(), or of setForce() before
+    /// the first one (NaN if neither happened). O(n).
     T distance(const gsVector<T> & DeltaU, T DeltaL) const;
 
     /// False: ctx.stepSize is an arc length.
@@ -307,7 +344,7 @@ private:
     bool m_phiUser; ///< true iff \f$\varphi\f$ was set by the user
     T m_phi0;       ///< frozen \f$\varphi_0\f$
     bool m_phi0Set; ///< true iff \f$\varphi_0\f$ is frozen
-    T m_FF;         ///< \f$F\!\cdot\!F\f$ of the last predict()
+    T m_FF;         ///< \f$F\!\cdot\!F\f$ of setForce() or of the last predict()
 };
 
 } // namespace gismo

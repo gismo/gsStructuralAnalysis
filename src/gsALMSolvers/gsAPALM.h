@@ -107,6 +107,11 @@ public:
   /**
    * @brief      Solves with the APALM
    *
+   * Under MPI, the master never steps. Methods with a frozen arc-length scaling (see
+   * gsALMBase::frozenScaling) adopt the scaling of the worker that runs the first
+   * (initiation) job and ship it with every later job, so that all subintervals use one
+   * arc metric.
+   *
    * @param[in]  Nsteps  The number of steps to perform
    */
   virtual void solve(index_t Nsteps = 10);
@@ -118,6 +123,10 @@ public:
   virtual void serialSolve(index_t Nsteps = 10);
   /**
    * @brief      Solves parallel
+   *
+   * Every job carries the frozen arc-length scaling (gsALMBase::frozenScaling) of the master's
+   * ALM, if it has one: after serialSolve() it is the scaling frozen by the serial steps.
+   * Without a preceding serialSolve() the master has none, and each worker freezes its own.
    */
   virtual void parallelSolve();
 
@@ -297,12 +306,13 @@ protected:
                           const index_t &   jobID,
                           const index_t &   dataLevel);
 
-  // For data
+  // For data; also sends the frozen scaling of the master's ALM
   void _sendMainToWorker( const index_t &         workerID,
                           const std::tuple<index_t, T     , solution_t, solution_t> & dataEntry,
                           const std::pair<T,T> &  dataInterval,
                           const solution_t &      dataReference );
 
+  // For the start (initiation) data; also sends the frozen scaling of the master's ALM
   void _sendMainToWorker( const index_t &         workerID,
                           const std::tuple<index_t, T     , solution_t, solution_t> & dataEntry,
                           const T       &         startTime);
@@ -317,12 +327,13 @@ protected:
                                 index_t &   jobID,
                                 index_t &   dataLevel);
 
-  // For data
+  // For data; also imposes the received frozen scaling on the ALM
   void _recvMainToWorker( const index_t &         sourceID,
                                 std::tuple<index_t, T     , solution_t, solution_t> & dataEntry,
                                 std::pair<T,T> &  dataInterval,
                                 solution_t &      dataReference);
 
+  // For the start (initiation) data; also imposes the received frozen scaling on the ALM
   void _recvMainToWorker( const index_t &   sourceID,
                                 std::tuple<index_t, T     , solution_t, solution_t> & dataEntry,
                                 T &               startTime);
@@ -346,6 +357,7 @@ protected:
                           const T &                         upperDistance,
                           const T &                         lowerDistance );
 
+  // Initiation reply; also sends the frozen scaling of the worker's ALM
   void _sendWorkerToMain( const index_t &                   mainID,
                           const T &                         distance,
                           const std::vector<solution_t> &   solutions,
@@ -358,6 +370,7 @@ protected:
                           T &                         upperDistance,
                           T &                         lowerDistance);
 
+  // Initiation reply; also adopts the received frozen scaling if the ALM has none
   void _recvWorkerToMain( index_t &                   sourceID, // source ID will change to MPI
                           T &                         distance,
                           std::vector<solution_t> &   stepSolutions,

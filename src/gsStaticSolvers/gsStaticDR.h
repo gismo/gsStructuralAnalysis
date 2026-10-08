@@ -82,7 +82,19 @@ public:
 
 /// gsStaticBase base functions
 public:
-    /// See \ref gsStaticBase
+    /**
+        @brief Dynamic relaxation until convergence, see \ref gsStaticBase.
+
+        Applies at most <tt>maxIt</tt> iterations, after the initial
+        half step; iterations() is the number of iterations performed, so it
+        equals <tt>maxIt</tt> after a failure to converge. Convergence is
+        \f$\|R\|/\|R_0\| < \texttt{tolF}\f$, \f$E_k/E_{k,0} < \texttt{tolE}\f$ and
+        \f$\|\delta U\|/\|\Delta U\| < \texttt{tolU}\f$.
+
+        On Success, solution() is advanced by update(). On any other status
+        (NotConverged after <tt>maxIt</tt> iterations, AssemblyError,
+        SolverError, OtherError), solution() is unchanged.
+    */
     gsStatus solve() override;
 
     /// See \ref gsStaticBase
@@ -128,7 +140,9 @@ protected:
     gsVector<T> _computeResidual(const gsVector<T> & U);
 
 public:
-    //// Perform a step back
+    /// Undoes the last converged solve (\a m_U -= update()). After a solve that
+    /// did not converge, solution() was not advanced, so calling this subtracts
+    /// an increment that was never added.
     void _stepBack()
     {
         m_U -= m_DeltaU;

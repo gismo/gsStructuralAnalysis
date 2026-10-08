@@ -499,7 +499,7 @@ SUITE(gsALMSolver_test)
     {
     public:
         using gsALMConsistentCrisfield<real_t>::gsALMConsistentCrisfield;
-        real_t phi() const { return this->m_phi; }
+        real_t phi() const { return this->m_cc->scaling(); }
     };
 
     /// Steps a fresh non-adaptive solver of type S with arc length ds for N
@@ -1179,5 +1179,851 @@ SUITE(gsALMSolver_test)
     TEST(StabilitySign_ChangeOnce_Riks_Determinant)
     {
         stabChangeCheck(gsALMBase<real_t>::bifmethod::Determinant);
+    }
+
+    /// Runs \a n steps through the base interface; (lambda, |U|) after every
+    /// successful step is appended to \a rec
+    template<class S>
+    void frozenScalingRun(T1Setup<S> & setup, index_t n, std::vector<std::pair<real_t,real_t> > & rec)
+    {
+        gsALMBase<real_t> & b = setup.solver;
+        for (index_t k = 0; k < n; ++k)
+        {
+            if (b.step() != gsStatus::Success)
+                break;
+            rec.push_back(std::make_pair(b.solutionL(), b.solutionU().norm()));
+        }
+    }
+
+    /// frozenScaling, hasFrozenScaling and setFrozenScaling are virtual on
+    /// gsALMBase: consistent Crisfield overrides them, the other presets ignore them
+    TEST(ALMFrozenScaling_base_hook)
+    {
+        UNITTEST_TIME_CONSTRAINT(1000);
+
+        // Automatic scaling: frozen by the first step
+        real_t p = 0;
+        {
+            T1Setup<gsALMConsistentCrisfield<real_t> > A(0.05, false, false, 1);
+            gsALMBase<real_t> & b = A.solver;
+            CHECK(!b.hasFrozenScaling());
+            CHECK_EQUAL(real_t(0), b.frozenScaling());
+            CHECK(b.step() == gsStatus::Success);
+            p = b.frozenScaling();
+            CHECK(b.hasFrozenScaling());
+            CHECK(p > 0);
+            CHECK_EQUAL(p, A.solver.frozenScaling());
+        }
+
+        // Imposed through the base interface: kept by the first step
+        {
+            T1Setup<gsALMConsistentCrisfield<real_t> > B(0.05, false, false, 1);
+            gsALMBase<real_t> & b = B.solver;
+            b.setFrozenScaling(real_t(1.5)*p);
+            CHECK(B.solver.hasFrozenScaling());
+            CHECK_EQUAL(real_t(1.5)*p, B.solver.frozenScaling());
+            CHECK(b.step() == gsStatus::Success);
+            CHECK_EQUAL(real_t(1.5)*p, b.frozenScaling());
+        }
+
+        // User scaling: never frozen, so nothing is exchanged
+        {
+            typedef gsStructuralAnalysisOps<real_t>::Jacobian_t   Jacobian_t;
+            typedef gsStructuralAnalysisOps<real_t>::ALResidual_t ALResidual_t;
+            gsStage0Truss<real_t> truss;
+            Jacobian_t       J = truss.jacobian();
+            ALResidual_t     R = truss.alResidual();
+            gsVector<real_t> F = truss.force();
+            gsALMConsistentCrisfield<real_t> solver(J, R, F);
+            gsOptionList opts = solver.options();
+            opts.setReal("Length", 0.05);
+            opts.setSwitch("AdaptiveLength", false);
+            opts.setInt("AdaptiveIterations", 4);
+            opts.setSwitch("Quasi", false);
+            opts.setReal("TolF", T1_tol);
+            opts.setReal("TolU", T1_tol);
+            opts.setReal("Scaling", 0.5);
+            solver.setOptions(opts);
+            solver.initialize();
+            gsALMBase<real_t> & b = solver;
+            for (index_t k = 0; k < 3; ++k)
+                CHECK(b.step() == gsStatus::Success);
+            CHECK(!b.hasFrozenScaling());
+            CHECK_EQUAL(real_t(0), b.frozenScaling());
+        }
+
+        // Presets without a frozen scaling ignore the setter
+        {
+            T1Setup<gsALMRiks<real_t> >      Rx(0.05, false, false, 1), Ry(0.05, false, false, 1);
+            T1Setup<gsALMCrisfield<real_t> > Cx(0.05, false, false, 1), Cy(0.05, false, false, 1);
+            std::vector<std::pair<real_t,real_t> > rx, ry, cx, cy;
+            gsALMBase<real_t> & bRx = Rx.solver;
+            gsALMBase<real_t> & bCx = Cx.solver;
+            CHECK(!bRx.hasFrozenScaling());
+            CHECK_EQUAL(real_t(0), bRx.frozenScaling());
+            CHECK(!bCx.hasFrozenScaling());
+            CHECK_EQUAL(real_t(0), bCx.frozenScaling());
+            bRx.setFrozenScaling(1.0);
+            bCx.setFrozenScaling(1.0);
+            frozenScalingRun(Rx, 5, rx);
+            frozenScalingRun(Ry, 5, ry);
+            frozenScalingRun(Cx, 5, cx);
+            frozenScalingRun(Cy, 5, cy);
+            CHECK(!rx.empty());
+            CHECK(!cx.empty());
+            CHECK_EQUAL(ry.size(), rx.size());
+            CHECK_EQUAL(cy.size(), cx.size());
+            for (size_t k = 0; k < rx.size() && k < ry.size(); ++k)
+            {
+                CHECK_EQUAL(ry[k].first,  rx[k].first);
+                CHECK_EQUAL(ry[k].second, rx[k].second);
+            }
+            for (size_t k = 0; k < cx.size() && k < cy.size(); ++k)
+            {
+                CHECK_EQUAL(cy[k].first,  cx[k].first);
+                CHECK_EQUAL(cy[k].second, cx[k].second);
+            }
+            CHECK(!bRx.hasFrozenScaling());
+            CHECK(!bCx.hasFrozenScaling());
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // Gates of the presets on the continuation driver.
+    // ------------------------------------------------------------------
+
+    /// The truss in the driver convention (R = lambda F - F_int, K = dF_int/dU)
+    /// on a caller's problem and state space. Every tangent assembly records
+    /// its load factor and the working state it sees.
+    struct FacadeTrussRig
+    {
+        gsStage0Truss<real_t> truss;
+        gsStructuralAnalysisOps<real_t>::Jacobian_t   jac;
+        gsStructuralAnalysisOps<real_t>::ALResidual_t alres;
+        gsVectorStateSpace<real_t> space;
+        gsContinuationProblem<real_t> P;
+        gsVector<real_t> Ralm;
+        std::vector<real_t> jacLambda;
+        std::vector<gsVector<real_t> > jacState;
+
+        FacadeTrussRig() : truss(), jac(truss.jacobian()), alres(truss.alResidual()), space(2)
+        {
+            P.F = truss.force();
+            P.residual = [this](real_t l, gsVector<real_t> & R, gsEvalMode) -> bool
+            {
+                if (!alres(space.working(), l, Ralm))
+                    return false;
+                R = -Ralm;
+                return true;
+            };
+            P.jacobian = [this](real_t l, gsSparseMatrix<real_t> & K) -> bool
+            {
+                jacLambda.push_back(l);
+                jacState.push_back(space.working());
+                return jac(space.working(), K);
+            };
+        }
+    private:
+        FacadeTrussRig(const FacadeTrussRig &);
+        FacadeTrussRig & operator=(const FacadeTrussRig &);
+    };
+
+    /// Truss, a Jacobian operator that counts its calls, and a non-adaptive
+    /// solver of type S (arc length \a ds, TolF = TolU = \a tol, the given
+    /// BifurcationMethod). \a tweak may change further options before they are applied.
+    template<class S>
+    struct FacadeSetup
+    {
+        typedef typename gsStructuralAnalysisOps<real_t>::Jacobian_t   Jacobian_t;
+        typedef typename gsStructuralAnalysisOps<real_t>::ALResidual_t ALResidual_t;
+        typedef std::function<void(gsOptionList &)> Tweak;
+
+        gsStage0Truss<real_t> truss;
+        index_t               count;   ///< Jacobian assemblies so far
+        Jacobian_t            J;
+        ALResidual_t          R;
+        gsVector<real_t>      F;
+        S                     solver;
+
+        FacadeSetup(real_t ds, bool quasi, index_t bifMethod, real_t tol = T1_tol, const Tweak & tweak = Tweak())
+        : truss(), count(0),
+          J([this](gsVector<real_t> const & U, gsSparseMatrix<real_t> & K) -> bool
+            { ++count; return truss.jacobianMatrix(U, K); }),
+          R(truss.alResidual()), F(truss.force()), solver(J, R, F)
+        {
+            gsOptionList opts = solver.options();
+            opts.setReal("Length", ds);
+            opts.setSwitch("AdaptiveLength", false);
+            opts.setInt("AdaptiveIterations", 4);
+            opts.setSwitch("Quasi", quasi);
+            opts.setReal("TolF", tol);
+            opts.setReal("TolU", tol);
+            opts.setInt("BifurcationMethod", bifMethod);
+            if (tweak)
+                tweak(opts);
+            solver.setOptions(opts);
+            solver.initialize();
+        }
+    private:
+        FacadeSetup(const FacadeSetup &);
+        FacadeSetup & operator=(const FacadeSetup &);
+    };
+
+    /// The row gate of the T1 recordings: status exact, lambda and |U| to
+    /// 1e-8 (relative to max(|ref|,1)), iterations exact unless the row is a boundary step
+    static void facadeGateRow(const T1Step & ref, const T1Meta & meta,
+                              const gsStatus st, const real_t L, const real_t normU, const index_t it)
+    {
+        CHECK(st == ref.status);
+        CHECK_CLOSE(ref.L,     L,     1e-8*math::max(math::abs(ref.L), real_t(1)));
+        CHECK_CLOSE(ref.normU, normU, 1e-8*math::max(math::abs(ref.normU), real_t(1)));
+        if (meta.gateIterations && !ref.boundary)
+            CHECK_EQUAL(ref.iterations, it);
+    }
+
+    // ---- distance -------------------------------------------------------
+
+    /// After three accepted steps the distance of the accepted increment is
+    /// its arc length: |d^2 - s^2| <= ConstraintTol s^2 by the acceptance gate
+    /// (load control: |DL| = s). gsAPALM relies on this to compare the pieces of one path.
+    template<class S>
+    void facadeDistanceAfterSteps(T1Setup<S> & s, const bool loadControl, real_t & worst)
+    {
+        gsALMBase<real_t> & b = s.solver;
+        for (index_t k = 0; k < 3; ++k)
+        {
+            CHECK(b.step() == gsStatus::Success);
+            const real_t len = b.getLength();
+            const real_t d = b.distance(b.solutionDU(), b.solutionDL());
+            CHECK((d - d) == 0);
+            CHECK(b.solutionDL() != 0);
+            CHECK(b.solutionDU().norm() > 0);
+            const real_t err = loadControl ? math::abs(d - len)/len : math::abs(d*d - len*len)/(len*len);
+            CHECK(err <= 1e-6);
+            worst = math::max(worst, err);
+        }
+    }
+
+    /// distance() is defined before the first step and has the closed form of the
+    /// constraint: |DL| (load control), sqrt(phi |U|^2 + (1-phi) DL^2) with phi = 1/n
+    /// (Riks), sqrt(|U|^2 + phi^2 |F|^2 DL^2) with the sentinel phi = -1 of the
+    /// automatic scaling (Crisfield, consistent Crisfield)
+    template<class S>
+    void facadeDistance(const T1Preset preset)
+    {
+        const T1Params p = t1Params(preset, false, false);
+        T1Setup<S> s(p.ds, false, false, 1);
+        gsALMBase<real_t> & b = s.solver;
+        const gsVector<real_t> v = s.F/s.F.norm()*0.1;
+        const real_t DL = 0.2, FF = s.F.dot(s.F);
+        real_t ref = 0;
+        if (preset == LoadControl)
+            ref = DL;
+        else if (preset == Riks)
+            ref = math::sqrt(0.5*v.dot(v) + 0.5*DL*DL);
+        else
+            ref = math::sqrt(v.dot(v) + FF*DL*DL);
+        const real_t d = b.distance(v, DL);
+        CHECK((d - d) == 0);
+        CHECK(d > 0);
+        CHECK_CLOSE(ref, d, 1e-14*ref);
+        real_t worst = 0;
+        facadeDistanceAfterSteps(s, preset == LoadControl, worst);
+        gsInfo << "Facade distance preset " << int(preset) << ": before the first step " << d << " (closed form "
+               << ref << "), max |d^2 - s^2|/s^2 over 3 accepted steps " << worst << "\n";
+    }
+
+    /// A frozen scaling set before the first step enters the distance
+    template<class S>
+    void facadeDistanceFrozenScaling()
+    {
+        T1Setup<S> s(0.05, false, false, 1);
+        gsALMBase<real_t> & b = s.solver;
+        const gsVector<real_t> v = s.F/s.F.norm()*0.1;
+        const real_t DL = 0.2, p = 0.37;
+        b.setFrozenScaling(p);
+        const real_t ref = math::sqrt(v.dot(v) + p*p*s.F.dot(s.F)*DL*DL);
+        const real_t d = b.distance(v, DL);
+        CHECK((d - d) == 0);
+        CHECK_CLOSE(ref, d, 1e-14*ref);
+    }
+
+    /// A user "Scaling" enters the distance before the first step
+    template<class S>
+    void facadeDistanceUserScaling()
+    {
+        GateSetup<S> s(0.05, T1_tol, 100, 0.5);
+        const gsVector<real_t> v = s.F/s.F.norm()*0.1;
+        const real_t DL = 0.2;
+        const real_t ref = math::sqrt(v.dot(v) + 0.25*s.F.dot(s.F)*DL*DL);
+        const real_t d = s.solver.distance(v, DL);
+        CHECK((d - d) == 0);
+        CHECK_CLOSE(ref, d, 1e-14*ref);
+    }
+
+    TEST(Facade_distance_all_presets)
+    {
+        UNITTEST_TIME_CONSTRAINT(1000);
+        facadeDistance<gsALMLoadControl<real_t> >(LoadControl);
+        facadeDistance<gsALMRiks<real_t> >(Riks);
+        facadeDistance<gsALMCrisfield<real_t> >(Crisfield);
+        facadeDistance<gsALMConsistentCrisfield<real_t> >(ConsistentCrisfield);
+        facadeDistanceFrozenScaling<gsALMConsistentCrisfield<real_t> >();
+        facadeDistanceUserScaling<gsALMCrisfield<real_t> >();
+    }
+
+    // ---- restarting a path piece (APALM) --------------------------------
+
+    /// A fresh solver started with setLength, setSolution, setPrevious (and the
+    /// frozen scaling of the run that produced the point) continues a path
+    /// exactly like the run that produced it: rows k+1 and k+2 of the recording
+    /// \a ref. With \a pastLimit the window lies behind the limit point, where
+    /// a solver that lost its history takes the first-step predictor, which
+    /// points toward increasing lambda and lands on another point.
+    template<class S>
+    void facadeApalm(const T1Preset preset, const std::vector<T1Step> & ref, const T1Meta & meta,
+                     const index_t k, const bool pastLimit)
+    {
+        const T1Params p = t1Params(preset, false, false);
+        CHECK(ref.size() > static_cast<size_t>(k + 2));
+        if (pastLimit)
+        {
+            CHECK(ref[k].L < ref[k-1].L);
+            CHECK(ref[k+1].L < ref[k].L);
+            CHECK(ref[k+2].L < ref[k+1].L);
+        }
+
+        gsVector<real_t> Uk, Ukm1;
+        real_t Lk = 0, Lkm1 = 0, phi = 0;
+        bool frozen = false;
+        {
+            T1Setup<S> A(p.ds, false, false, 1);
+            for (index_t i = 0; i <= k; ++i)
+            {
+                CHECK(A.solver.step() == gsStatus::Success);
+                if (i == k - 1)
+                {
+                    Ukm1 = A.solver.solutionU();
+                    Lkm1 = A.solver.solutionL();
+                }
+            }
+            Uk = A.solver.solutionU();
+            Lk = A.solver.solutionL();
+            CHECK_CLOSE(ref[k].L, Lk, 1e-8*math::max(math::abs(ref[k].L), real_t(1)));
+            const gsALMBase<real_t> & a = A.solver;
+            frozen = a.hasFrozenScaling();
+            phi = a.frozenScaling();
+            if (frozen)
+                CHECK(phi > 0);
+        }
+        CHECK_EQUAL(2, Uk.size());
+        CHECK_EQUAL(2, Ukm1.size());
+
+        T1Setup<S> B(p.ds, false, false, 1);
+        gsALMBase<real_t> & b = B.solver;
+        b.setLength(p.ds);
+        b.setSolution(Uk, Lk);
+        b.setPrevious(Ukm1, Lkm1);
+        if (frozen)
+            b.setFrozenScaling(phi);
+        real_t dL = 0;
+        for (index_t j = 1; j <= 2; ++j)
+        {
+            const gsStatus st = b.step();
+            facadeGateRow(ref[k + j], meta, st, b.solutionL(), b.solutionU().norm(), b.numIterations());
+            dL = math::max(dL, math::abs(b.solutionL() - ref[k + j].L));
+        }
+        if (frozen)
+            CHECK_EQUAL(phi, b.frozenScaling());
+
+        // Without the frozen scaling the restarted run freezes its own, taken at the
+        // restart point, which differs from that of the run it continues
+        real_t dLfree = 0;
+        if (frozen)
+        {
+            T1Setup<S> C(p.ds, false, false, 1);
+            gsALMBase<real_t> & c = C.solver;
+            c.setLength(p.ds);
+            c.setSolution(Uk, Lk);
+            c.setPrevious(Ukm1, Lkm1);
+            CHECK(c.step() == gsStatus::Success);
+            CHECK(c.hasFrozenScaling());
+            const real_t own = t1TangentPhi(C.truss, C.F, Uk);
+            CHECK_CLOSE(own, c.frozenScaling(), 1e-10*own);
+            CHECK(c.frozenScaling() != phi);
+            dLfree = math::abs(c.solutionL() - ref[k + 1].L);
+        }
+        gsInfo << "Facade apalm preset " << int(preset) << " window " << k << ": max |lambda - reference| over 2 steps " << dL;
+        if (frozen)
+            gsInfo << ", first step without the frozen scaling " << dLfree;
+        gsInfo << "\n";
+    }
+
+    TEST(Facade_apalm_sequence)
+    {
+        UNITTEST_TIME_CONSTRAINT(1000);
+        facadeApalm<gsALMLoadControl<real_t> >(LoadControl, T1_LoadControl_A0_Q0, T1_LoadControl_A0_Q0_meta, 4, false);
+        facadeApalm<gsALMRiks<real_t> >(Riks, T1_Riks_A0_Q0, T1_Riks_A0_Q0_meta, 22, true);
+        facadeApalm<gsALMCrisfield<real_t> >(Crisfield, T1_Crisfield_A0_Q0, T1_Crisfield_A0_Q0_meta, 22, true);
+        facadeApalm<gsALMConsistentCrisfield<real_t> >(ConsistentCrisfield, T1_ConsistentCrisfield_A0_Q0,
+                                                       T1_ConsistentCrisfield_A0_Q0_meta, 22, true);
+    }
+
+    // ---- one factorization per Jacobian ---------------------------------
+
+    /// A preset that exposes its driver
+    template<class P>
+    class FacadeProbe : public P
+    {
+    public:
+        template<class A, class B, class V>
+        FacadeProbe(A & J, B & R, V & F) : P(J, R, F) { }
+        using P::driver;
+    };
+
+    /// On the preset path every Jacobian assembly is followed by exactly one
+    /// factorization of the driver's tangent solver, also when the stability
+    /// is evaluated, in full Newton and in Quasi mode. Only this solver is
+    /// counted: a refactorization by another solver (the one behind
+    /// computeStability(false) when no committed tangent is held) is not visible here.
+    template<class S>
+    void facadeFactorizations(const T1Preset preset, const index_t bif, const bool quasi)
+    {
+        const T1Params p = t1Params(preset, false, quasi);
+        FacadeSetup<S> s(p.ds, quasi, bif);
+        const index_t jac0 = s.count;
+        const index_t fact0 = s.solver.driver().linearSolver().numFactorizations();
+        index_t ok = 0;
+        for (index_t k = 0; k < p.N; ++k)
+        {
+            if (s.solver.step() != gsStatus::Success)
+                break;
+            ++ok;
+        }
+        const index_t jac  = s.count - jac0;
+        const index_t fact = s.solver.driver().linearSolver().numFactorizations() - fact0;
+        CHECK(jac > 0);
+        CHECK(ok >= 3);
+        CHECK_EQUAL(jac, fact);
+        gsInfo << "Facade factorizations preset " << int(preset) << (bif == 0 ? " Determinant" : " Eigenvalue")
+               << (quasi ? " Quasi" : "") << ": " << ok << " steps, " << jac << " Jacobians, " << fact << " factorizations\n";
+    }
+
+    template<template<class> class W>
+    void facadeFactorizationsAll()
+    {
+        for (index_t bif = 0; bif < 2; ++bif)
+            for (index_t q = 0; q < 2; ++q)
+            {
+                facadeFactorizations<W<gsALMLoadControl<real_t> > >(LoadControl, bif, q == 1);
+                facadeFactorizations<W<gsALMRiks<real_t> > >(Riks, bif, q == 1);
+                facadeFactorizations<W<gsALMCrisfield<real_t> > >(Crisfield, bif, q == 1);
+                facadeFactorizations<W<gsALMConsistentCrisfield<real_t> > >(ConsistentCrisfield, bif, q == 1);
+            }
+    }
+
+    TEST(Facade_one_factorization_per_jacobian)
+    {
+        UNITTEST_TIME_CONSTRAINT(1000);
+        facadeFactorizationsAll<FacadeProbe>();
+    }
+
+    // ---- stability at the committed point -------------------------------
+
+    /// After every accepted step the stored indicator and sign equal those of a
+    /// fresh evaluation at the committed point, exactly. The stability of the
+    /// last Newton iterate's tangent differs from it by ~1e-11 in full Newton
+    /// and ~1e-2 in Quasi mode, so a tolerance would miss the first.
+    template<class S>
+    void facadeStoredFresh(const index_t bif, const bool quasi)
+    {
+        FacadeSetup<S> s(0.05, quasi, bif);
+        gsALMBase<real_t> & base = s.solver;
+        index_t ok = 0, nStable = 0, nUnstable = 0;
+        real_t worst = 0;
+        for (index_t k = 0; k < 40; ++k)
+        {
+            const gsStatus st = base.step();
+            CHECK(st == gsStatus::Success);
+            if (st != gsStatus::Success)
+                break;
+            ++ok;
+            const real_t ind = base.indicator();
+            const bool stable = base.isStable();
+            CHECK(base.computeStability(true) == gsStatus::Success);
+            CHECK_EQUAL(ind, base.indicator());
+            CHECK_EQUAL(stable, base.isStable());
+            worst = math::max(worst, math::abs(ind - base.indicator()));
+            (stable ? nStable : nUnstable)++;
+        }
+        CHECK(ok >= 30);
+        CHECK(nStable >= 3);
+        CHECK(nUnstable >= 3);
+        gsInfo << "Facade stored vs fresh" << (bif == 0 ? " Determinant" : " Eigenvalue") << (quasi ? " Quasi" : "")
+               << ": " << ok << " steps, " << nStable << " stable, " << nUnstable << " unstable, max |stored - fresh| "
+               << worst << "\n";
+    }
+
+    /// The tangent of an explicit stability or bifurcation evaluation is assembled
+    /// at the committed point, load factor solutionL() and state solutionU(), not
+    /// at the load factor of a trial increment. The legacy operators ignore the
+    /// load factor, so this runs on a caller's problem that records it.
+    template<class S>
+    void facadeTangentLoadFactor()
+    {
+        FacadeTrussRig rig;
+        S solver(rig.P, rig.space);
+        gsOptionList opts = solver.options();
+        opts.setReal("Length", 0.05);
+        opts.setSwitch("AdaptiveLength", false);
+        opts.setReal("TolF", T1_tol);
+        opts.setReal("TolU", T1_tol);
+        solver.setOptions(opts);
+        solver.initialize();
+        gsALMBase<real_t> & base = solver;
+
+        real_t Lmax = 0;
+        index_t evaluations = 0;
+        for (index_t k = 0; k < 25; ++k)
+        {
+            CHECK(base.step() == gsStatus::Success);
+            CHECK(base.solutionDL() != 0);
+            Lmax = math::max(Lmax, base.solutionL());
+            for (index_t pass = 0; pass < 2; ++pass)
+            {
+                rig.jacLambda.clear();
+                rig.jacState.clear();
+                if (pass == 0)
+                    base.computeStability(true);
+                else
+                    base.isBifurcation(true);
+                CHECK(!rig.jacLambda.empty());
+                CHECK_EQUAL(rig.jacLambda.size(), rig.jacState.size());
+                for (size_t i = 0; i < rig.jacLambda.size() && i < rig.jacState.size(); ++i)
+                {
+                    CHECK(rig.jacLambda[i] == base.solutionL());
+                    CHECK_EQUAL(base.solutionU().size(), rig.jacState[i].size());
+                    CHECK((rig.jacState[i] - base.solutionU()).norm() == 0);
+                    ++evaluations;
+                }
+            }
+        }
+        CHECK(base.solutionL() < Lmax);
+        gsInfo << "Facade tangent load factor: " << evaluations << " tangents at the committed point, lambda "
+               << base.solutionL() << " behind the limit load " << Lmax << "\n";
+    }
+
+    TEST(Facade_stability_at_committed_point)
+    {
+        UNITTEST_TIME_CONSTRAINT(1000);
+        for (index_t bif = 0; bif < 2; ++bif)
+            for (index_t q = 0; q < 2; ++q)
+            {
+                facadeStoredFresh<gsALMRiks<real_t> >(bif, q == 1);
+                facadeStoredFresh<gsALMCrisfield<real_t> >(bif, q == 1);
+            }
+        facadeTangentLoadFactor<gsALMRiks<real_t> >();
+    }
+
+    // ---- stability after switchBranch and setSolution --------------------
+
+    /// After a branch switch the stored stability is unknown: no change is
+    /// reported right after the switch, nor by the first step after it, whose
+    /// accepted value only seeds the stored one. The premises that make both
+    /// checks able to fail are asserted: the step that finds the change leaves a
+    /// stored pair (unstable, stable); the point of the switch is stable, so a
+    /// previous stability taken from it would report a change; the first step
+    /// after the switch ends unstable.
+    template<class S>
+    void facadeSwitchBranch(const index_t bif)
+    {
+        FacadeSetup<S> s(0.05, false, bif);
+        gsALMBase<real_t> & base = s.solver;
+
+        gsVector<real_t> Uold;
+        real_t Lold = 0;
+        bool found = false;
+        for (index_t k = 0; k < 40 && !found; ++k)
+        {
+            Uold = base.solutionU();
+            Lold = base.solutionL();
+            const gsStatus st = base.step();
+            CHECK(st == gsStatus::Success);
+            if (st != gsStatus::Success)
+                break;
+            found = base.stabilityChange();
+        }
+        CHECK(found);
+        // the step that found the change ended unstable, after a stable step
+        CHECK(base.stabilityChange());
+        CHECK(!base.isStable());
+
+        // the branch switch needs the eigenvector estimate that isBifurcation(true) stores;
+        // storing it leaves the reported change in place
+        base.isBifurcation(true);
+        CHECK(base.stabilityChange());
+
+        base.computeSingularPoint(Uold, Lold, true, false, false);
+        CHECK(!base.stabilityChange());
+        CHECK(!base.isStable());
+
+        // the point of the switch itself is stable: a previous stability taken from it
+        // would report a change in the first step after the switch
+        {
+            FacadeSetup<S> f(0.05, false, bif);
+            f.solver.setSolution(base.solutionU(), base.solutionL());
+            CHECK(f.solver.isStable());
+        }
+
+        CHECK(base.step() == gsStatus::Success);
+        // the first step after the switch ends unstable, so a change would be reported
+        // if the previous stability were known
+        CHECK(!base.isStable());
+        CHECK(!base.stabilityChange());
+        gsInfo << "Facade switchBranch" << (bif == 0 ? " Determinant" : " Eigenvalue")
+               << ": premises hold, no change reported after the switch or in the first step after it\n";
+    }
+
+    /// setSolution on an initialized solver evaluates the stability once at
+    /// the set point (one Jacobian assembly), stored as the previous stability of
+    /// the next step: a job set to just before a stability change reports the
+    /// change in its first step, also when the solver was beyond it before.
+    template<class S>
+    void facadeSetSolution(const index_t bif)
+    {
+        FacadeSetup<S> A(0.05, false, bif);
+        gsALMBase<real_t> & a = A.solver;
+        std::vector<gsVector<real_t> > Us;
+        std::vector<real_t> Ls;
+        Us.push_back(a.solutionU());
+        Ls.push_back(a.solutionL());
+        index_t j = -1;
+        for (index_t k = 0; k < 40 && j < 0; ++k)
+        {
+            CHECK(a.step() == gsStatus::Success);
+            Us.push_back(a.solutionU());
+            Ls.push_back(a.solutionL());
+            if (a.stabilityChange())
+                j = k + 1;
+        }
+        CHECK(j >= 2);
+        if (j < 2)
+            return;
+        for (index_t k = 0; k < 3; ++k)
+        {
+            CHECK(a.step() == gsStatus::Success);
+            Us.push_back(a.solutionU());
+            Ls.push_back(a.solutionL());
+        }
+
+        // (a) stored == fresh, with a single assembly
+        {
+            FacadeSetup<S> B(0.05, false, bif);
+            gsALMBase<real_t> & b = B.solver;
+            CHECK(b.isStable());
+            const index_t c0 = B.count;
+            b.setSolution(Us[j + 3], Ls[j + 3]);
+            CHECK_EQUAL(1, B.count - c0);
+            CHECK(!b.isStable());
+            CHECK(!b.stabilityChange());
+            const real_t ind = b.indicator();
+            b.computeStability(true);
+            CHECK_EQUAL(ind, b.indicator());
+        }
+
+        // (b) a solver beyond the change, set back to just before it
+        CHECK(!a.isStable());
+        a.setSolution(Us[j - 1], Ls[j - 1]);
+        a.setPrevious(Us[j - 2], Ls[j - 2]);
+        CHECK(a.isStable());
+        CHECK(a.step() == gsStatus::Success);
+        CHECK(a.stabilityChange());
+        CHECK(!a.isStable());
+        gsInfo << "Facade setSolution" << (bif == 0 ? " Determinant" : " Eigenvalue")
+               << ": change found at step " << j << ", reported again by the first step of the restarted job\n";
+    }
+
+    TEST(Facade_no_change_after_switchBranch)
+    {
+        UNITTEST_TIME_CONSTRAINT(1000);
+        facadeSwitchBranch<gsALMRiks<real_t> >(0);
+        facadeSwitchBranch<gsALMRiks<real_t> >(1);
+    }
+
+    TEST(Facade_setSolution_evaluates_stability)
+    {
+        UNITTEST_TIME_CONSTRAINT(1000);
+        facadeSetSolution<gsALMRiks<real_t> >(0);
+        facadeSetSolution<gsALMRiks<real_t> >(1);
+    }
+
+    // ---- frozen scaling of consistent Crisfield --------------------------
+
+    /// initialize() starts a new run and forgets a frozen scaling, also one set
+    /// before it, so the run freezes its own at its first step; the setter
+    /// rejects values that are not positive and finite
+    template<class S>
+    void facadeFrozenScalingReset()
+    {
+        T1Setup<S> A(0.05, false, false, 1);
+        gsALMBase<real_t> & b = A.solver;
+        const real_t phi0 = t1TangentPhi(A.truss, A.F, gsVector<real_t>::Zero(2));
+        const real_t q = real_t(1.5)*phi0;
+        b.setFrozenScaling(q);
+        b.applyOptions();
+        CHECK(b.hasFrozenScaling());
+        CHECK_EQUAL(q, b.frozenScaling());
+        b.initialize();
+        CHECK(!b.hasFrozenScaling());
+        CHECK_EQUAL(real_t(0), b.frozenScaling());
+        CHECK(b.step() == gsStatus::Success);
+        CHECK_CLOSE(phi0, b.frozenScaling(), 1e-10*phi0);
+
+        T1Setup<S> B(0.05, false, false, 1);
+        gsALMBase<real_t> & c = B.solver;
+        c.setFrozenScaling(q);
+        c.initialize();
+        CHECK(!c.hasFrozenScaling());
+
+        CHECK_THROW(c.setFrozenScaling(0), std::runtime_error);
+        CHECK_THROW(c.setFrozenScaling(-1), std::runtime_error);
+        CHECK_THROW(c.setFrozenScaling(std::numeric_limits<real_t>::quiet_NaN()), std::runtime_error);
+        CHECK_THROW(c.setFrozenScaling(std::numeric_limits<real_t>::infinity()), std::runtime_error);
+        CHECK(!c.hasFrozenScaling());
+    }
+
+    TEST(Facade_CC_frozen_scaling_reset_and_guards)
+    {
+        UNITTEST_TIME_CONSTRAINT(1000);
+        facadeFrozenScalingReset<gsALMConsistentCrisfield<real_t> >();
+    }
+
+    // ---- fallback roots of the Crisfield constraint ----------------------
+
+    /// Crisfield preset that exposes the root counters of its constraint
+    class FacadeCris : public gsALMCrisfield<real_t>
+    {
+    public:
+        template<class A, class B, class V>
+        FacadeCris(A & J, B & R, V & F) : gsALMCrisfield<real_t>(J, R, F) { }
+        index_t numModified()   const { return this->m_cris->numModifiedRoots(); }
+        index_t numSimplified() const { return this->m_cris->numSimplifiedRoots(); }
+        gsCrisfieldConstraint<real_t>::Root lastRoot() const { return this->m_cris->lastRoot(); }
+    };
+
+    /// The Crisfield constraint on the driver directly, with the acceptance gate
+    /// and the settings the preset maps its options to
+    struct FacadeDirectCris
+    {
+        FacadeTrussRig rig;
+        memory::shared_ptr<gsCrisfieldConstraint<real_t> > cris;
+        gsContinuationDriver<real_t> drv;
+
+        FacadeDirectCris(real_t ds, real_t scaling, real_t tol)
+        : rig(), cris(new gsCrisfieldConstraint<real_t>()), drv(rig.P, rig.space)
+        {
+            cris->setScaling(scaling);
+            cris->setAngleMethod(0);
+            cris->setRelaxation(1);
+            drv.setConstraint(cris);
+            drv.setTest(gsConvergenceTest<real_t>::makeArcLengthGate(tol, tol, 1e-6, 100));
+            drv.controller().setLength(ds);
+            drv.controller().setAdaptive(false, 4);
+            drv.corrector().setQuasi(false, -1);
+            drv.corrector().setRelaxation(1);
+            drv.linearSolver().setSolver("SimplicialLDLT");
+            drv.setup();
+        }
+    };
+
+    /// |g|/s^2 of the accepted increment of the last step
+    static real_t facadeConstraintResidual(gsALMBase<real_t> & b)
+    {
+        const real_t s = b.getLength();
+        const real_t d = b.distance(b.solutionDU(), b.solutionDL());
+        return math::abs(d*d - s*s)/(s*s);
+    }
+
+    /// Steps the preset and the constraint run directly on the driver in
+    /// parallel, at most \a n steps, until the preset has taken the fallback root
+    /// \a modified (modified eta) or simplified for the first time; their trajectories,
+    /// iteration counts and root counters agree bitwise. Returns the index of that
+    /// step (-1 if none), with the preset left on it.
+    template<class S>
+    index_t facadeCrisfieldRoots(S & solver, FacadeDirectCris & direct, const index_t n, const bool modified)
+    {
+        index_t first = -1;
+        for (index_t k = 0; k < n && first < 0; ++k)
+        {
+            const index_t before = modified ? solver.numModified() : solver.numSimplified();
+            const gsStatus st = solver.step();
+            const gsStatus sd = direct.drv.step();
+            CHECK(st == gsStatus::Success);
+            CHECK(sd == st);
+            CHECK_EQUAL(direct.drv.numIterations(), solver.numIterations());
+            CHECK_EQUAL(direct.drv.lambda(), solver.solutionL());
+            CHECK_EQUAL(solver.solutionU().size(), direct.rig.space.committed().size());
+            CHECK((solver.solutionU() - direct.rig.space.committed()).norm() == 0);
+            CHECK_EQUAL(direct.cris->numModifiedRoots(), solver.numModified());
+            CHECK_EQUAL(direct.cris->numSimplifiedRoots(), solver.numSimplified());
+            if ((modified ? solver.numModified() : solver.numSimplified()) > before)
+                first = k;
+        }
+        return first;
+    }
+
+    /// Scaling 2 with a long first step makes the discriminant of the corrector
+    /// quadratic negative, and the modified-eta double root (Lam and Morley) is
+    /// taken; the step still converges onto the arc.
+    template<class S>
+    void facadeCrisfieldModifiedRoot()
+    {
+        const real_t ds = 1.2;
+        FacadeSetup<S> s(ds, false, 1, T1_tol, [](gsOptionList & o) { o.setReal("Scaling", 2); });
+        FacadeDirectCris direct(ds, 2, T1_tol);
+        const index_t step = facadeCrisfieldRoots(s.solver, direct, 1, true);
+        CHECK_EQUAL(0, step);
+        CHECK(s.solver.numModified() > 0);
+        CHECK_EQUAL(0, s.solver.numSimplified());
+        CHECK(s.solver.numIterations() > 1);
+        const real_t g = facadeConstraintResidual(s.solver);
+        CHECK(g <= 1e-6);
+        gsInfo << "Facade Crisfield modified root: " << s.solver.numModified() << " modified root(s) in "
+               << s.solver.numIterations() << " iterations, |g|/s^2 of the end point " << g << "\n";
+    }
+
+    /// Automatic scaling, a step of 1.6 and acceptance tolerances of 10: the
+    /// step is accepted after the first corrector update, whose negative
+    /// discriminant (no modified eta exists) makes the simplified rescaling of
+    /// the Newton point onto the arc the last correction, so the end point lies
+    /// on the arc to round-off.
+    template<class S>
+    void facadeCrisfieldSimplifiedRoot()
+    {
+        const real_t ds = 1.6;
+        FacadeSetup<S> s(ds, false, 1, 10);
+        FacadeDirectCris direct(ds, -1, 10);
+        const index_t step = facadeCrisfieldRoots(s.solver, direct, 8, false);
+        CHECK(step >= 0);
+        CHECK_EQUAL(1, s.solver.numSimplified());
+        CHECK_EQUAL(0, s.solver.numModified());
+        CHECK_EQUAL(1, s.solver.numIterations());
+        CHECK(s.solver.lastRoot() == gsCrisfieldConstraint<real_t>::Root::Simplified);
+        const real_t g = facadeConstraintResidual(s.solver);
+        CHECK(g <= 1e-12);
+        gsInfo << "Facade Crisfield simplified root: step " << step << ", " << s.solver.numSimplified()
+               << " simplified root(s), |g|/s^2 of the end point " << g << "\n";
+    }
+
+    TEST(Facade_Crisfield_modified_root)
+    {
+        UNITTEST_TIME_CONSTRAINT(1000);
+        facadeCrisfieldModifiedRoot<FacadeCris>();
+    }
+
+    TEST(Facade_Crisfield_simplified_root)
+    {
+        UNITTEST_TIME_CONSTRAINT(1000);
+        facadeCrisfieldSimplifiedRoot<FacadeCris>();
     }
 }

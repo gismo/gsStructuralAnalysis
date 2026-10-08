@@ -19,12 +19,46 @@
 #pragma once
 
 #include <gsStructuralAnalysis/src/gsALMSolvers/gsALMBase.h>
+#include <gsStructuralAnalysis/src/gsSolverDriver/gsPathConstraintCrisfield.h>
 
 namespace gismo
 {
 
 /**
     @brief Performs the Consistent Crisfield arc length method to solve a nonlinear equation system.
+
+    The path constraint is gsConsistentCrisfieldConstraint: the spherical
+    constraint \f$\Delta U\cdot\Delta U+\varphi^2\|F\|^2\Delta\lambda^2=s^2\f$
+    with the consistently linearised corrector of Schweizerhof and Wriggers.
+
+    <b>Scaling.</b> With automatic scaling, \f$\varphi\f$ is one constant per run,
+    \f$\varphi_0=\|u_{t,0}\|/\|F\|\f$ with \f$u_{t,0}=K^{-1}F\f$ at the start
+    point of the run. The load term \f$\varphi\|F\|\Delta\lambda=\|u_{t,0}\|
+    \Delta\lambda\f$ is then the displacement of the initial tangent for the
+    load increment \f$\Delta\lambda\f$, so both terms of the constraint have the
+    units of a displacement and the weight of the load term is the same at every
+    step. A scaling that follows the path changes the metric of the constraint
+    from step to step: the tangent ratio \f$\|u_t\|/\|F\|\f$ is unbounded at a
+    limit point, where \f$K\f$ is singular, and the secant ratio
+    \f$\|U\|/(|\lambda|\|F\|)\f$ is unbounded as \f$\lambda\to0\f$ at a regular
+    point, which bounds \f$|\Delta\lambda|\le s\,|\lambda|/\|U\|\f$, so that
+    \f$\lambda=0\f$ is approached only geometrically. A constant \f$\varphi\f$
+    has neither singularity.
+
+    A run starts at initialize(). Its \f$\varphi_0\f$ is taken from \f$u_t\f$ at
+    the first step of the run, wherever that step starts (the origin, or a
+    restart through setSolution), and is not changed by later steps, by
+    applyOptions() or by putting the solver back at an earlier converged
+    point. A run restarted exactly at a limit point, where \f$K\f$ is singular,
+    freezes a huge scaling.
+
+    Options, in addition to those of gsALMBase: "Scaling" (-1), the scaling
+    \f$\varphi\f$; -1 selects the automatic scaling.
+
+    An initial guess (see setInitialGuess) is applied as the previous increment
+    \f$(U_{guess}-U,\ \lambda_{guess}-\lambda)\f$ of the secant predictor and is
+    not cleared: it is applied again at every step while it differs from the
+    present point.
 
     \tparam T coefficient type
 
@@ -54,6 +88,9 @@ protected:
     using Base::computeStability;
     using Base::computeLength;
 
+    /// The consistent Crisfield constraint installed on the driver (same object as constraint())
+    memory::shared_ptr<gsConsistentCrisfieldConstraint<T> > m_cc;
+
 public:
 
     /// Constructor
@@ -62,10 +99,7 @@ public:
                                 const gsVector<T> &Force )
     : Base(Jacobian,ALResidual,Force)
     {
-        defaultOptions();
-        getOptions();
-
-        initMethods();
+        this->_install();
     }
 
     /// Constructor using the jacobian that takes the solution and the solution step
@@ -74,141 +108,46 @@ public:
                                 const gsVector<T> &Force )
     : Base(dJacobian,ALResidual,Force)
     {
-        defaultOptions();
-        getOptions();
-
-        initMethods();
+        this->_install();
     }
 
-protected:
+    /// Constructor on a caller's problem (driver convention
+    /// \f$R=\lambda F-F_{int}\f$, nothing is negated) and state space; both must outlive the solver
+    gsALMConsistentCrisfield(   gsContinuationProblem<T> & problem,
+                                gsStateSpace<T>          & space )
+    : Base(problem,space)
+    {
+        this->_install();
+    }
 
-    /// See gsALMBase
-    void initMethods();
-    /// See gsALMBase
-    void initiateStep();
-    /// See gsALMBase
-    void iterationFinish();
+public:
 
-    /// See gsALMBase
-    void quasiNewtonPredictor();
-    /// See gsALMBase
-    void quasiNewtonIteration();
+    /// The frozen scaling \f$\varphi_0=\|u_{t,0}\|/\|F\|\f$ of the run; 0 while none is frozen.
+    T frozenScaling() const override { return m_cc->frozenScaling(); }
 
-    /// See gsALMBase
-    void predictor();
-    void predictorGuess();
-    /// See gsALMBase
-    void iteration();
-    /// See gsALMBase
-    T constraintResidual() const;
+    /// True iff \f$\varphi_0\f$ is frozen (by the first step of the run or by setFrozenScaling()).
+    bool hasFrozenScaling() const override { return m_cc->hasFrozenScaling(); }
 
-    /// See gsALMBase
-    void initOutput();
-    /// See gsALMBase
-    void stepOutput();
-
-    /// See gsALMBase
-    void defaultOptions();
-    /// See gsALMBase
-    void getOptions();
-
-    /// Sets the scaling \a m_phi of the load term in the constraint. Without a
-    /// user-set "Scaling", it is the frozen scaling \a m_phi0 of the run.
-    /// A run starts at initialize(); \a m_phi0 is taken from
-    /// \a m_deltaUt = K^{-1} F (K factorized at the present point) at the first
-    /// step of the run and never changed afterwards. \a utSolved states that
-    /// \a m_deltaUt was just solved at the present point; otherwise it is
-    /// solved here when needed. A run restarted exactly at a limit point, where
-    /// K is singular, freezes a huge scaling.
-    void setAutoScaling(const bool utSolved);
+    /// Freezes \f$\varphi_0\f$ to @a phi0 (> 0, finite; GISMO_ENSURE): the run uses it instead of
+    /// freezing its own at its first step, so secant steps skip the tangent solve that freezing needs.
+    /// Call it after initialize(), which resets \f$\varphi_0\f$; applyOptions() keeps it. Ignored
+    /// while a user "Scaling" (not -1) is set. Used to give several solvers one arc metric.
+    void setFrozenScaling(T phi0) override { m_cc->setFrozenScaling(phi0); }
 
 protected:
 
-    // Number of degrees of freedom
-    using Base::m_numDof;
+    /// Forgets the frozen scaling: initialize() starts a new run
+    virtual void initMethods();
 
-    using Base::m_jacobian;
-    using Base::m_djacobian;
-    using Base::m_residualFun;
-    using Base::m_forcing;
+    /// See gsALMBase; adds "Scaling"
+    virtual void defaultOptions();
+    /// See gsALMBase; maps "Scaling" to the constraint without touching the frozen scaling
+    virtual void getOptions();
 
-    /// Solver options
-    using Base::m_options;
+private:
 
-    /// Number of Arc Length iterations performed
-    using Base::m_numIterations;
-
-    /// Maximum number of Arc Length iterations allowed
-    using Base::m_maxIterations;
-
-    /// Length of the step in the u,f plane
-    using Base::m_arcLength;
-    using Base::m_arcLength_prev;
-
-    /// Output verbosity
-    using Base::m_verbose;
-
-    /// Note
-    using Base::m_note;
-
-    /// Convergence result
-    using Base::m_converged;
-
-    /// Force residuum
-    using Base::m_residueF;
-
-    /// Displacement residuum
-    using Base::m_residueU;
-
-    /// Load residuum
-    using Base::m_residueL;
-
-    /// Indicator for bifurcation
-    using Base::m_indicator;
-    using Base::m_negatives;
-
-    /// Relaxation factor
-    using Base::m_relax;
-
-    // Previous update
-    using Base::m_DeltaUold;
-    using Base::m_DeltaLold;
-    /// Displacement vector (present, at previously converged point)
-    using Base::m_U;
-    using Base::m_Uprev;
-    using Base::m_Uguess;
-    /// Update of displacement vector
-    using Base::m_DeltaU;
-    /// u_bar
-    using Base::m_deltaUbar;
-    /// u_t
-    using Base::m_deltaUt;
-    /// Update of update of displacement vector
-    using Base::m_deltaU;
-
-    /// Lambda (present, at previously converged point)
-    using Base::m_L;
-    using Base::m_Lprev;
-    using Base::m_Lguess;
-    /// Update of lambdaGeneralizedSelfAdjointEigenSolver
-    using Base::m_DeltaL;
-    /// Update of update of lambda
-    using Base::m_deltaL;
-    /// Vector with lambda updates
-    using Base::m_deltaLs;
-
-    /// Jacobian matrix
-    using Base::m_jacMat;
-    using Base::m_detKT;
-
-    /// Scaling parameter
-    T m_phi;
-    bool m_phi_user;
-
-    /// Automatic scaling |u_t|/|F| of the run, frozen at its start point
-    T m_phi0;
-    /// True once \a m_phi0 is known for the present run
-    bool m_phi0Set;
+    /// Installs the constraint and reads the options
+    void _install();
 };
 
 

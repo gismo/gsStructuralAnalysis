@@ -19,6 +19,7 @@
 #endif
 #include <gsIO/gsOptionList.h>
 #include <gsStructuralAnalysis/src/gsStructuralAnalysisTools/gsStructuralAnalysisTypes.h>
+#include <gsStructuralAnalysis/src/gsSolverDriver/gsStabilityAnalysis.h>
 
 #pragma once
 
@@ -47,7 +48,7 @@ public:
 
     virtual ~gsStaticBase() {};
 
-    /// Solve
+    /// Solve. On any status other than Success, solution() is unchanged.
     virtual gsStatus solve() = 0;
 
     /// See \ref gsStaticBase
@@ -82,6 +83,8 @@ public:
         m_maxIterations = m_options.getInt("maxIt");
         m_verbose = m_options.getInt("verbose");
         m_stabilityMethod     = m_options.getInt ("BifurcationMethod");
+        if (m_stabilityMethod!=stabmethod::Determinant && m_stabilityMethod!=stabmethod::Eigenvalue)
+            GISMO_ERROR("Unknown BifurcationMethod "<<m_stabilityMethod<<"; use 0 (determinant) or 1 (eigenvalue).");
         m_solver = gsSparseSolver<T>::get( m_options.askString("Solver","SimplicialLDLT") );
     }
 
@@ -92,7 +95,7 @@ public:
     virtual const gsOptionList & options() const {return m_options;}
     virtual       gsOptionList & options()       {return m_options;}
 
-    /// Access the solution
+    /// Access the solution; it is advanced only by a solve() that returns Success
     virtual gsVector<T> solution() const {return m_U;}
 
     /// Access the update
@@ -158,64 +161,40 @@ public:
     }
 
 protected:
-    /// Computes the stability vector using the determinant of the Jacobian
+    /// Computes the stability vector using the determinant of the Jacobian.
+    /// If \a m_solver is a SimplicialLDLT, it is factorized and its pivots are used;
+    /// otherwise the pivots of a local factorization are used.
     virtual bool _computeStabilityDet(const gsSparseMatrix<T> & jacMat)
     {
-        m_solver->compute(jacMat);
-        // If 1: matrix is not SPD
-        if (m_solver->info()!=gsEigen::ComputationInfo::Success)
+        if ( auto * s = dynamic_cast<typename gsSparseSolver<T>::SimplicialLDLT*>(m_solver.get()) )
         {
-            gsInfo<<"Solver error with code "<<m_solver->info()<<". See Eigen documentation on ComputationInfo \n"
-                     <<gsEigen::ComputationInfo::Success<<": Success"<<"\n"
-                     <<gsEigen::ComputationInfo::NumericalIssue<<": NumericalIssue"<<"\n"
-                     <<gsEigen::ComputationInfo::NoConvergence<<": NoConvergence"<<"\n"
-                     <<gsEigen::ComputationInfo::InvalidInput<<": InvalidInput"<<"\n";
-            return false;
+            m_solver->compute(jacMat);
+            // If 1: matrix is not SPD
+            if (m_solver->info()!=gsEigen::ComputationInfo::Success)
+            {
+                gsInfo<<"Solver error with code "<<m_solver->info()<<". See Eigen documentation on ComputationInfo \n"
+                         <<gsEigen::ComputationInfo::Success<<": Success"<<"\n"
+                         <<gsEigen::ComputationInfo::NumericalIssue<<": NumericalIssue"<<"\n"
+                         <<gsEigen::ComputationInfo::NoConvergence<<": NoConvergence"<<"\n"
+                         <<gsEigen::ComputationInfo::InvalidInput<<": InvalidInput"<<"\n";
+                return false;
+            }
+            m_stabilityVec = s->vectorD();
+            return m_stabilityAnalysis.classify(m_stabilityVec);
         }
 
-        if ( auto * s = dynamic_cast<typename gsSparseSolver<T>::SimplicialLDLT*>(m_solver.get()) )
-            m_stabilityVec = s->vectorD();
-        return true;
+        m_stabilityAnalysis.setMethod(stabmethod::Determinant);
+        return m_stabilityAnalysis.compute(jacMat, T(0), m_stabilityVec);
     }
 
     /// Computes the stability vector using the eigenvalues of the Jacobian, optionally applying a shift
     virtual bool _computeStabilityEig(const gsSparseMatrix<T> & jacMat, T shift)
     {
-#ifdef gsSpectra_ENABLED
-        index_t number = std::min(static_cast<index_t>(std::floor(jacMat.cols()/5.)),10);
-        /*
-        // Without shift!
-        // This one can sometimes not converge, because spectra is better at finding large values.
-          gsSpectraSymSolver<gsSparseMatrix<T>> es(jacMat,number,5*number);
-          es.init();
-          es.compute(Spectra::SortRule::SmallestAlge,1000,1e-6,Spectra::SortRule::SmallestAlge);
-          GISMO_ASSERT(es.info()==Spectra::CompInfo::Successful,"Spectra did not converge!"); // Reason for not converging can be due to the value of ncv (last input in the class member), which is too low.
-        */
-
-        // With shift!
-        // This one converges easier. However, a shift must be provided!
-        gsSpectraSymShiftSolver<gsSparseMatrix<T>> es(jacMat,number,5*number,shift);
-        es.init();
-        es.compute(Spectra::SortRule::LargestAlge,1000,1e-6,Spectra::SortRule::SmallestAlge);
-        if (es.info()!=Spectra::CompInfo::Successful)
-        {
-            gsWarn<<"Spectra did not converge!\n";
-            return false;
-        }
-
-        // if (es.info()==Spectra::CompInfo::NotComputed)
-        // if (es.info()==Spectra::CompInfo::NotConverging)
-        // if (es.info()==Spectra::CompInfo::NumericalIssue)
-        // gsEigen::SelfAdjointEigenSolver< gsMatrix<T> > es(jacMat);
-        m_stabilityVec = es.eigenvalues();
-#else
-        GISMO_UNUSED(shift);
-        gsEigen::SelfAdjointEigenSolver<gsMatrix<T>> es2(jacMat);
-        m_stabilityVec = es2.eigenvalues();
-#endif
-
-        m_indicator = m_stabilityVec.colwise().minCoeff()[0]; // This is required since D does not necessarily have one column.
-        return true;
+        m_stabilityAnalysis.setMethod(stabmethod::Eigenvalue);
+        bool ok = m_stabilityAnalysis.compute(jacMat, shift, m_stabilityVec);
+        if (ok)
+            m_indicator = m_stabilityAnalysis.indicator();
+        return ok;
     }
 
     /// Computes the stability of the Jacobian, optionally applying a shift (if provided)
@@ -230,7 +209,7 @@ protected:
           gsInfo<<"bifurcation method unknown!";
 
         if (success)
-            m_indicator = m_stabilityVec.colwise().minCoeff()[0]; // This is required since D does not necessarily have one column
+            m_indicator = m_stabilityAnalysis.indicator();
         return success;
     }
 
@@ -256,6 +235,8 @@ protected:
     T m_indicator;
 
     gsVector<T> m_stabilityVec;
+
+    gsStabilityAnalysis<T> m_stabilityAnalysis;
 
     mutable typename gsSparseSolver<T>::uPtr  m_solver;   // Cholesky by default
 

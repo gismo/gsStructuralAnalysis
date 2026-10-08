@@ -27,6 +27,8 @@
 #include <gsStructuralAnalysis/src/gsSolverDriver/gsNewtonCorrector.h>
 #include <gsStructuralAnalysis/src/gsSolverDriver/gsContinuationDriver.h>
 #include <gsStructuralAnalysis/src/gsSolverDriver/gsContinuationDriver.hpp>
+#include <gsStructuralAnalysis/src/gsSolverDriver/gsStabilityAnalysis.h>
+#include <gsStructuralAnalysis/src/gsSolverDriver/gsStabilityAnalysis.hpp>
 
 namespace gismo
 {
@@ -59,4 +61,5 @@ namespace gismo
     CLASS_TEMPLATE_INST gsStepController<real_t>;
     CLASS_TEMPLATE_INST gsNewtonCorrector<real_t>;
     CLASS_TEMPLATE_INST gsContinuationDriver<real_t>;
+    CLASS_TEMPLATE_INST gsStabilityAnalysis<real_t>;
 }

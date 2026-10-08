@@ -1210,8 +1210,11 @@ void gsAPALM<T>::_sendMainToWorker( const index_t &         workerID,
   std::tie(refU,refL) = dataReference;
   refSize   = refU.size();
 
+  // The frozen scaling of the master's ALM (0 = none) makes all workers use one arc metric
+  T phi0 = m_ALM->hasFrozenScaling() ? m_ALM->frozenScaling() : T(0);
+
   // Put all data 0-14 in a struct and send a single struct
-  MPI_Request req[10];
+  MPI_Request req[11];
   m_comm.isend(&ID        ,1,workerID,&req[0] ,0 );
   m_comm.isend(&dL0       ,1,workerID,&req[1] ,1 );
   m_comm.isend(&tstart    ,1,workerID,&req[2] ,2 );
@@ -1225,8 +1228,10 @@ void gsAPALM<T>::_sendMainToWorker( const index_t &         workerID,
 
   m_comm.isend(&refSize   ,1,workerID,&req[8] ,8 );
   m_comm.isend(&refL      ,1,workerID,&req[9] ,9 );
+  // tag 13: frozen arc-length scaling phi0 (0 = none)
+  m_comm.isend(&phi0      ,1,workerID,&req[10],13);
 
-  MPI_Waitall( 10, req     , MPI_STATUSES_IGNORE );
+  MPI_Waitall( 11, req     , MPI_STATUSES_IGNORE );
   MPI_Request req_data[3];
   m_comm.isend(startU.data(), startSize,workerID,&req_data[0],10);
   m_comm.isend(prevU.data(),  prevSize, workerID,&req_data[1],11);
@@ -1259,8 +1264,11 @@ void gsAPALM<T>::_sendMainToWorker( const index_t &         workerID,
   std::tie(prevU,prevL) = prev;
   prevSize  = prevU.size();
 
+  // The frozen scaling of the master's ALM (0 = none) makes all workers use one arc metric
+  T phi0 = m_ALM->hasFrozenScaling() ? m_ALM->frozenScaling() : T(0);
+
   // Put all data 0-10 in a struct and send a single struct
-  MPI_Request req[7];
+  MPI_Request req[8];
   m_comm.isend(&ID        ,1,workerID,&req[0] ,0 );
   m_comm.isend(&dL0       ,1,workerID,&req[1] ,1 );
   m_comm.isend(&tstart    ,1,workerID,&req[2] ,2 );
@@ -1270,7 +1278,9 @@ void gsAPALM<T>::_sendMainToWorker( const index_t &         workerID,
 
   m_comm.isend(&prevSize  ,1,workerID,&req[5] ,5 );
   m_comm.isend(&prevL     ,1,workerID,&req[6] ,6 );
-  MPI_Waitall( 7, req     , MPI_STATUSES_IGNORE );
+  // tag 13: frozen arc-length scaling phi0 (0 = none)
+  m_comm.isend(&phi0      ,1,workerID,&req[7] ,13);
+  MPI_Waitall( 8, req     , MPI_STATUSES_IGNORE );
 
   MPI_Request req_data[2];
   m_comm.isend(startU.data(), startSize,workerID,&req_data[0],7);
@@ -1327,9 +1337,10 @@ void gsAPALM<T>::_recvMainToWorker( const index_t &         sourceID,
   T           startL,   prevL,    refL;
 
   T           tstart, tend;
+  T           phi0 = 0;
 
   // Put all data 0-14 in a struct and recv a single struct
-  MPI_Request req[10];
+  MPI_Request req[11];
   m_comm.irecv(&ID        ,1,sourceID,&req[0] ,0 );
   m_comm.irecv(&dL0       ,1,sourceID,&req[1] ,1 );
   m_comm.irecv(&tstart    ,1,sourceID,&req[2] ,2 );
@@ -1343,8 +1354,12 @@ void gsAPALM<T>::_recvMainToWorker( const index_t &         sourceID,
 
   m_comm.irecv(&refSize   ,1,sourceID,&req[8] ,8 );
   m_comm.irecv(&refL      ,1,sourceID,&req[9] ,9 );
+  // tag 13: frozen arc-length scaling phi0 (0 = none)
+  m_comm.irecv(&phi0      ,1,sourceID,&req[10],13);
 
-  MPI_Waitall( 10, req, MPI_STATUSES_IGNORE );
+  MPI_Waitall( 11, req, MPI_STATUSES_IGNORE );
+  if (phi0 > 0 && phi0 < std::numeric_limits<T>::infinity())
+    m_ALM->setFrozenScaling(phi0);
   dataInterval = std::make_pair(tstart,tend);
 
   startU.resize(startSize);
@@ -1378,9 +1393,10 @@ void gsAPALM<T>::_recvMainToWorker( const index_t &   sourceID,
   gsVector<T> startU,   prevU;
   index_t     startSize,prevSize;
   T           startL,   prevL;
+  T           phi0 = 0;
 
   // Put all data 0-14 in a struct and recv a single struct
-  MPI_Request req[7];
+  MPI_Request req[8];
   m_comm.irecv(&ID        ,1,sourceID,&req[0] ,0 );
   m_comm.irecv(&dL0       ,1,sourceID,&req[1] ,1 );
   m_comm.irecv(&startTime ,1,sourceID,&req[2] ,2 );
@@ -1390,8 +1406,12 @@ void gsAPALM<T>::_recvMainToWorker( const index_t &   sourceID,
 
   m_comm.irecv(&prevSize  ,1,sourceID,&req[5] ,5 );
   m_comm.irecv(&prevL     ,1,sourceID,&req[6] ,6 );
+  // tag 13: frozen arc-length scaling phi0 (0 = none)
+  m_comm.irecv(&phi0      ,1,sourceID,&req[7] ,13);
 
-  MPI_Waitall( 7, req, MPI_STATUSES_IGNORE );
+  MPI_Waitall( 8, req, MPI_STATUSES_IGNORE );
+  if (phi0 > 0 && phi0 < std::numeric_limits<T>::infinity())
+    m_ALM->setFrozenScaling(phi0);
 
   startU.resize(startSize);
   prevU .resize(prevSize);
@@ -1534,11 +1554,18 @@ void gsAPALM<T>::_sendWorkerToMain( const index_t &                   mainID,
     m_comm.isend( solutions.at(k).first.data(),
                   solutions.at(k).first.size(), mainID, &req_data[k], tag++);
 
+  // Last message of the reply: the frozen scaling of this worker's ALM (0 = none), which the
+  // master adopts so that its own ALM and all later jobs share the arc metric of the first job
+  T phi0 = m_ALM->hasFrozenScaling() ? m_ALM->frozenScaling() : T(0);
+  MPI_Request req_phi;
+  m_comm.isend(&phi0, 1, mainID, &req_phi, tag++);
+
   MPI_Wait(&req_solSize,MPI_STATUS_IGNORE);
   MPI_Waitall( size, req_vecSizes, MPI_STATUSES_IGNORE );
   MPI_Waitall( size, req_data, MPI_STATUSES_IGNORE );
   MPI_Waitall( size, req_loads, MPI_STATUSES_IGNORE );
   MPI_Waitall( 2, req_meta, MPI_STATUSES_IGNORE );
+  MPI_Wait(&req_phi,MPI_STATUS_IGNORE);
 }
 
 template <class T>
@@ -1661,6 +1688,11 @@ void gsAPALM<T>::_recvWorkerToMain( index_t &                 sourceID,
   for (index_t k=0; k!=size; k++)
     m_comm.irecv(Us.at(k).data()    ,vectorSizes.at(k)  , sourceID, &req_data[k], tag++);
 
+  // Frozen scaling of the sending worker's ALM (0 = none)
+  T phi0 = 0;
+  MPI_Request req_phi;
+  m_comm.irecv(&phi0, 1, sourceID, &req_phi, tag++);
+
   // When the solution data and the loads are collected, put them in the solutions container.
   MPI_Waitall( size, req_data, MPI_STATUSES_IGNORE );
   MPI_Waitall( size, req_loads, MPI_STATUSES_IGNORE );
@@ -1669,6 +1701,11 @@ void gsAPALM<T>::_recvWorkerToMain( index_t &                 sourceID,
 
   // Wait for the meta data to finish
   MPI_Waitall( 2, req_meta, MPI_STATUSES_IGNORE );
+  MPI_Wait(&req_phi,MPI_STATUS_IGNORE);
+
+  // The first reply of a run fixes the arc metric of the master's ALM
+  if (!m_ALM->hasFrozenScaling() && phi0 > 0 && phi0 < std::numeric_limits<T>::infinity())
+    m_ALM->setFrozenScaling(phi0);
 }
 
 

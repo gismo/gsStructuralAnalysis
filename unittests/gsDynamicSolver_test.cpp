@@ -127,10 +127,8 @@ void printArray(const char * type, const char * name, const V & v, const char * 
 // (alpha 0.25, delta 0.5, TolF = TolU = 1e-10, SimplicialLDLT, dt 0.02, N 50 steps).
 // Oscillator: m1 = m2 = 1, k = 1, k3 = 10, c = 0.05, F0 = 1, omega = 2; U0 = (0.5, 1), V0 = 0,
 // A0 = initialAcceleration(U0, V0, 0). Boundary flags come from runs with both tolerances scaled by 0.7 and 1.4.
-// Generated on 2026-10-03 with gsStructuralAnalysis at commit b5ec853 plus an uncommitted diff of md5 7f68ae91d06f1974ae6cbec15e286807
-// (git -C optional/gsStructuralAnalysis diff | md5sum), by
-//   env GSSA_STAGE0_PRINT=1 OMP_NUM_THREADS=1 bash run_unittests.sh gsDynamicSolver_test
-// Generator log: .claude/plans/gssa-redesign/tasks/logs/088-02-generate.log (md5 eeaa9555017720dcedc9f19ee0e4b618).
+// Generated on 2026-10-03 (gsStructuralAnalysis b5ec853) by
+//   GSSA_STAGE0_PRINT=1 OMP_NUM_THREADS=1 bin/unittests gsDynamicSolver_test
 static const double refT[] = {
 0.02, 0.040000000000000001, 0.059999999999999998, 0.080000000000000002, 0.10000000000000001,
 0.12000000000000001, 0.14000000000000001, 0.16, 0.17999999999999999, 0.19999999999999998,

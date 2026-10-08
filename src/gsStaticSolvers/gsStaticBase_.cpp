@@ -28,6 +28,8 @@ namespace gismo
 		CLASS_TEMPLATE_INST gsStaticBase<real_t>;
 		CLASS_TEMPLATE_INST gsStaticDR<real_t>;
 		CLASS_TEMPLATE_INST gsStaticNewton<real_t>;
+		CLASS_TEMPLATE_INST gsStaticResidualTest<real_t>;
+		CLASS_TEMPLATE_INST gsStaticUpdateTest<real_t>;
 		CLASS_TEMPLATE_INST gsStaticComposite<real_t>;
 
 		CLASS_TEMPLATE_INST gsOptProblemStatic<real_t>;

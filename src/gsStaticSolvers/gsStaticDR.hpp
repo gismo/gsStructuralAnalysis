@@ -71,26 +71,26 @@ void gsStaticDR<T>::stepOutput(index_t k)
 template <class T>
 gsStatus gsStaticDR<T>::solve()
 {
-    // try
-    // {
+    try
+    {
         _solve();
         m_status = gsStatus::Success;
-    // }
-    // catch (int errorCode)
-    // {
-    //     if      (errorCode==1)
-    //         m_status = gsStatus::NotConverged;
-    //     else if (errorCode==2)
-    //         m_status = gsStatus::AssemblyError;
-    //     else if (errorCode==3)
-    //         m_status = gsStatus::SolverError;
-    //     else
-    //         m_status = gsStatus::OtherError;
-    // }
-    // catch (...)
-    // {
-    //     m_status = gsStatus::OtherError;
-    // }
+    }
+    catch (int errorCode)
+    {
+        if      (errorCode==1)
+            m_status = gsStatus::NotConverged;
+        else if (errorCode==2)
+            m_status = gsStatus::AssemblyError;
+        else if (errorCode==3)
+            m_status = gsStatus::SolverError;
+        else
+            m_status = gsStatus::OtherError;
+    }
+    catch (...)
+    {
+        m_status = gsStatus::OtherError;
+    }
     return m_status;
 }
 
@@ -109,7 +109,8 @@ void gsStaticDR<T>::_solve()
 
     if (m_verbose != 0) stepOutput(0);
     index_t resetIt = 0;
-    for (m_numIterations=1; m_numIterations!=m_maxIterations; m_numIterations++, resetIt++)
+    bool converged = false;
+    for (m_numIterations=1; m_numIterations<=m_maxIterations; m_numIterations++, resetIt++)
     {
         _iteration();
         if ((m_c==0 && m_Ek_prev > m_Ek) || resetIt==m_resetIterations)// || (m_Ek/m_Ek_prev > 1/m_tolE && m_Ek_prev!=0))
@@ -132,14 +133,15 @@ void gsStaticDR<T>::_solve()
             gsDebug <<"\t |R|/|R0| = "<<m_residual/m_residualIni<<" < tolF = "<<m_tolF<<"\n";
             gsDebug <<"\t |E|/|E0| = "<<m_Ek/m_Ek0              <<" < tolE = "<<m_tolE<<"\n";
             gsDebug <<"\t |U|/|U0| = "<<m_deltaU.norm()/m_DeltaU.norm()<<" < tolF = "<<m_tolU<<"\n";
+            converged = true;
             break;
         }
-        if (m_numIterations==m_maxIterations-1)
-        {
-            m_U += m_DeltaU;
-            gsInfo<<"Maximum iterations reached. Solution did not converge\n";
-            throw 1;
-        }
+    }
+    if (!converged)
+    {
+        m_numIterations = math::max(m_maxIterations,index_t(0));
+        gsInfo<<"Maximum iterations reached. Solution did not converge\n";
+        throw 1;
     }
     gsInfo<<"\n";
 };

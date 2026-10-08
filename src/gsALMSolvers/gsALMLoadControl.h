@@ -14,12 +14,26 @@
 #pragma once
 
 #include <gsStructuralAnalysis/src/gsALMSolvers/gsALMBase.h>
+#include <gsStructuralAnalysis/src/gsSolverDriver/gsPathConstraint.h>
 
 namespace gismo
 {
 
 /**
     @brief Performs the load-controlled arc length method to solve a nonlinear equation system.
+
+    The path constraint is gsLoadConstraint: every step prescribes the load
+    increment \f$\Delta\lambda=s\f$, the length \f$s\f$ of the step controller.
+    The method cannot pass a limit point of the load.
+
+    Options: those of gsALMBase; "ConstraintTol" is relative to the load
+    increment.
+
+    An initial guess (see setInitialGuess) is used for one load step to
+    \a Lguess: the step is made with \f$\Delta\lambda=\lambda_{guess}-\lambda\f$
+    and the guess is cleared once that step succeeds. The step length is that of
+    the controller before the guess step and adapts to the iterations of the
+    guess step as to those of a regular step.
 
     \tparam T coefficient type
 
@@ -51,140 +65,56 @@ protected:
     using Base::computeStability;
     using Base::computeLength;
 
+    /// The load constraint installed on the driver (same object as constraint())
+    memory::shared_ptr<gsLoadConstraint<T> > m_load;
+
 public:
 
     /// Constructor
     gsALMLoadControl(   Jacobian_t  &Jacobian,
                         ALResidual_t&ALResidual,
                         gsVector<T> &Force )
-    : Base(Jacobian,ALResidual,Force)
+    : Base(Jacobian,ALResidual,Force), m_guessStep(false)
     {
-        defaultOptions();
-        getOptions();
-
-        initMethods();
+        this->_install();
     }
 
     /// Constructor using the jacobian that takes the solution and the solution step
     gsALMLoadControl(   dJacobian_t &dJacobian,
                         ALResidual_t&ALResidual,
                         gsVector<T> &Force )
-    : Base(dJacobian,ALResidual,Force)
+    : Base(dJacobian,ALResidual,Force), m_guessStep(false)
     {
-        defaultOptions();
-        getOptions();
-
-        initMethods();
+        this->_install();
     }
 
+    /// Constructor on a caller's problem (driver convention
+    /// \f$R=\lambda F-F_{int}\f$, nothing is negated) and state space; both must outlive the solver
+    gsALMLoadControl(   gsContinuationProblem<T> & problem,
+                        gsStateSpace<T>          & space )
+    : Base(problem,space), m_guessStep(false)
+    {
+        this->_install();
+    }
+
+    /// See gsALMBase. An initial guess makes one load step to \a Lguess; it is cleared once that step succeeds.
+    virtual gsStatus step();
 
 protected:
 
-    /// See gsALMBase
-    void initMethods();
-    /// See gsALMBase
-    void initiateStep();
-    /// See gsALMBase
-    void iterationFinish();
+    /// Uses \a Lguess as the load increment of the next step: the step length
+    /// of the controller is replaced by \f$\lambda_{guess}-\lambda\f$ until the step is over
+    virtual void applyInitialGuess(const gsVector<T> & Uguess, T Lguess);
 
-    /// See gsALMBase
-    void quasiNewtonPredictor();
-    /// See gsALMBase
-    void quasiNewtonIteration();
+private:
 
-    /// See gsALMBase
-    void predictor();
-    void predictorGuess();
-    /// See gsALMBase
-    void iteration();
-    /// See gsALMBase
-    T constraintResidual() const;
+    /// Installs the load constraint and reads the options
+    void _install();
 
-    /// See gsALMBase
-    void initOutput();
-    /// See gsALMBase
-    void stepOutput();
-
-protected:
-
-    // Number of degrees of freedom
-    using Base::m_numDof;
-
-    using Base::m_jacobian;
-    using Base::m_djacobian;
-    using Base::m_residualFun;
-    using Base::m_forcing;
-
-    /// Solver options
-    using Base::m_options;
-
-    /// Number of Arc Length iterations performed
-    using Base::m_numIterations;
-
-    /// Maximum number of Arc Length iterations allowed
-    using Base::m_maxIterations;
-
-    /// Length of the step in the u,f plane
-    using Base::m_arcLength;
-
-    /// Output verbosity
-    using Base::m_verbose;
-
-    /// Note
-    using Base::m_note;
-
-    /// Convergence result
-    using Base::m_converged;
-
-    /// Force residuum
-    using Base::m_residueF;
-
-    /// Displacement residuum
-    using Base::m_residueU;
-
-    /// Load residuum
-    using Base::m_residueL;
-
-    /// Indicator for bifurcation
-    using Base::m_indicator;
-    using Base::m_negatives;
-
-    /// Relaxation factor
-    using Base::m_relax;
-
-    // Previous update
-    using Base::m_DeltaUold;
-    using Base::m_DeltaLold;
-    /// Displacement vector (present, at previously converged point)
-    using Base::m_U;
-    using Base::m_Uprev;
-    using Base::m_Uguess;
-    /// Update of displacement vector
-    using Base::m_DeltaU;
-    /// u_bar
-    using Base::m_deltaUbar;
-    /// u_t
-    using Base::m_deltaUt;
-    /// Update of update of displacement vector
-    using Base::m_deltaU;
-
-    /// Lambda (present, at previously converged point)
-    using Base::m_L;
-    using Base::m_Lprev;
-    using Base::m_Lguess;
-    /// Update of lambdaGeneralizedSelfAdjointEigenSolver
-    using Base::m_DeltaL;
-    /// Update of update of lambda
-    using Base::m_deltaL;
-    /// Vector with lambda updates
-    using Base::m_deltaLs;
-
-    /// Jacobian matrix
-    using Base::m_jacMat;
-    using Base::m_detKT;
-
-    /// Load increment prescribed by the predictor
-    T m_DeltaLtarget;
+    /// True while the next step is made with the load increment of an initial guess
+    bool m_guessStep;
+    /// The controller before the guess step
+    gsStepController<T> m_savedController;
 };
 
 

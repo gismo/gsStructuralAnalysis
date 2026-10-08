@@ -72,6 +72,8 @@ void gsALMBase<T>::getOptions()
     m_quasiNewtonInterval = m_options.getInt ("QuasiIterations");
 
     m_bifurcationMethod   = m_options.getInt ("BifurcationMethod");
+    if (m_bifurcationMethod!=bifmethod::Nothing && m_bifurcationMethod!=bifmethod::Determinant && m_bifurcationMethod!=bifmethod::Eigenvalue)
+        GISMO_ERROR("Unknown BifurcationMethod "<<m_bifurcationMethod<<"; use -1 (nothing), 0 (determinant) or 1 (eigenvalue).");
     m_solver = gsSparseSolver<T>::get( m_options.getString("Solver") );
     if  (!dynamic_cast<typename gsSparseSolver<T>::SimplicialLDLT*>(m_solver.get()) && m_bifurcationMethod==bifmethod::Determinant)
     {
@@ -91,17 +93,25 @@ void gsALMBase<T>::getOptions()
     m_SPCompTolE = m_options.getReal("SingularPointComputeTolE");
     m_SPCompTolB = m_options.getReal("SingularPointComputeTolB");
 
-
+    this->_configureDriver();
 }
 
 template <class T>
 void gsALMBase<T>::init(bool stability)
 {
-  if (stability)
+  if (stability && !m_constraint)
+  {
+    gsWarn<<"gsALMBase::initialize: no path constraint is installed; the stability is not computed.\n";
+    m_stability = m_stabilityPrev = 0;
+  }
+  else if (stability)
   {
     this->_computeStability(m_U);
     m_stability = this->stability(); // requires Jabobian!!
+    m_stabilityPrev = m_stability;
   }
+  else
+    m_stability = m_stabilityPrev = 0;
 }
 
 template <class T>
@@ -126,6 +136,9 @@ template <class T>
 T gsALMBase<T>::reduceLength(T fac)
 {
   m_arcLength *= fac;
+  m_driver->controller().reduceLength(fac);
+  if (m_constraint)
+    m_arcLength = m_driver->controller().length();
   return m_arcLength;
 }
 
@@ -135,14 +148,68 @@ T gsALMBase<T>::resetLength()
   m_arcLength = m_arcLength_prev = m_arcLength_ori;
   if (m_adaptiveLength)
     computeLength();
+  m_driver->controller().resetLength(m_numIterations);
+  if (m_constraint)
+  {
+    m_arcLength      = m_driver->controller().length();
+    m_arcLength_prev = m_driver->controller().previousLength();
+    this->_syncHistoryStep();
+  }
   return m_arcLength;
+}
+
+template <class T>
+T gsALMBase<T>::getLength()
+{
+  return m_constraint ? m_driver->controller().length() : m_arcLength;
+}
+
+template <class T>
+void gsALMBase<T>::setLength(T length)
+{
+  m_options.setReal("Length",length);
+  m_arcLength = m_arcLength_prev = m_arcLength_ori = m_options.getReal("Length");
+  m_driver->controller().setLength(m_arcLength);
+  this->_syncHistoryStep();
+}
+
+template <class T>
+void gsALMBase<T>::setLength(T length, bool adaptive)
+{
+  this->setLength(length);
+  m_adaptiveLength = adaptive;
+  m_desiredIterations = 10; // number of desired iterations defaults to 10
+  m_driver->controller().setAdaptive(m_adaptiveLength, m_desiredIterations);
+}
+
+template <class T>
+void gsALMBase<T>::setLength(T length, bool adaptive, index_t iterations)
+{
+  this->setLength(length);
+  m_adaptiveLength = adaptive;
+  m_desiredIterations = iterations;
+  m_driver->controller().setAdaptive(m_adaptiveLength, m_desiredIterations);
+}
+
+template <class T>
+void gsALMBase<T>::setLength(T length, index_t iterations)
+{
+  this->setLength(length);
+  m_adaptiveLength = true;
+  m_desiredIterations = iterations;
+  m_driver->controller().setAdaptive(m_adaptiveLength, m_desiredIterations);
 }
 
 template <class T>
 gsVector<T> gsALMBase<T>::computeResidual(const gsVector<T> & U, const T & L)
 {
   gsVector<T> resVec;
-  if (!m_residualFun(U, L, resVec))
+  if (m_residualFun)
+  {
+    if (!m_residualFun(U, L, resVec))
+      throw 2;
+  }
+  else if (!this->_evaluateAt(U, L, &resVec, NULL))
     throw 2;
   return resVec;
 }
@@ -219,10 +286,18 @@ gsVector<T> gsALMBase<T>::solveSystem(const gsVector<T> & F)
 template <class T>
 gsSparseMatrix<T> gsALMBase<T>::_computeJacobian(const gsVector<T> & U, const gsVector<T> & deltaU)
 {
+  return this->_computeJacobianAt(U, deltaU, m_L + m_DeltaL);
+}
+
+template <class T>
+gsSparseMatrix<T> gsALMBase<T>::_computeJacobianAt(const gsVector<T> & U, const gsVector<T> & deltaU, T L)
+{
   // Compute Jacobian
   gsSparseMatrix<T> m;
   m_note += "J";
-  if (!m_djacobian(U,deltaU,m))
+  const bool ok = m_djacobian ? m_djacobian(U,deltaU,m)
+                              : this->_evaluateAt(U, L, NULL, &m);
+  if (!ok)
     throw 2;
   this->factorizeMatrix(m);
   return m;
@@ -263,161 +338,530 @@ void gsALMBase<T>::computeUt()
   m_deltaUt = this->solveSystem(m_forcing);
 }
 
-// template <class T>
-// void gsALMBase<T>::initiateStep()
-// {
-//   m_converged = false;
-//   m_numIterations = 0;
-//   if (m_method == method::Riks)
-//     initiateStepRiks();
-//   else if (m_method == method::ConsistentCrisfield)
-//     initiateStepConsistentCrisfield();
-//   else if (m_method == method::ExplicitIterations)
-//     initiateStepExplicitIterations();
-//   else if (m_method == method::Crisfield)
-//     initiateStepCrisfield();
-//   else if (m_method == method::LoadControl)
-//     initiateStepLC();
-//   else
-//   {
-//     gsInfo<<"Error: Method unknown...\n Terminating process...\n";
-//     std::terminate();
-//   }
-// }
-
-// template <class T>
-// void gsALMBase<T>::predictor()
-// {
-//   if (m_method == method::Riks)
-//     predictorRiks();
-//   else if (m_method == method::ConsistentCrisfield)
-//     predictorConsistentCrisfield();
-//   else if (m_method == method::ExplicitIterations)
-//     predictorExplicitIterations();
-//   else if (m_method == method::Crisfield)
-//     predictorCrisfield();
-//   else if (m_method == method::LoadControl)
-//     predictorLC();
-//   else
-//   {
-//     gsInfo<<"Error: Method unknown...\n Terminating process...\n";
-//     std::terminate();
-//   }
-// }
-
-// template <class T>
-// void gsALMBase<T>::iterationFinish()
-// {
-//   if (m_method == method::Riks)
-//     iterationFinishRiks();
-//   else if (m_method == method::ConsistentCrisfield)
-//     iterationFinishConsistentCrisfield();
-//   else if (m_method == method::ExplicitIterations)
-//     iterationFinishExplicitIterations();
-//   else if (m_method == method::Crisfield)
-//     iterationFinishCrisfield();
-//   else if (m_method == method::LoadControl)
-//     iterationFinishLC();
-//   else
-//   {
-//     gsInfo<<"Error: Method unknown...\n Terminating process...\n";
-//     std::terminate();
-//   }
-// }
-
-
-// HV:
-// to do: make a stand-alone (static? const?) Unew,Lnew = step(Uold,Lold) function, which can be used in the bisection functions without problems
-// Some ideas: just make a (static) step function inside the classes and get rid of virtual sub-functions
-//
 template <class T>
 gsStatus gsALMBase<T>::step()
 {
-  try
+  return this->_stepDriver();
+}
+
+// ------------------------------------------------------------------------------------------------------------
+// ---------------------------------------Driver mode----------------------------------------------------------
+// ------------------------------------------------------------------------------------------------------------
+
+template <class T>
+void gsALMBase<T>::_constructOwned(const gsVector<T> & Force)
+{
+  m_ownSpace.reset(new gsVectorStateSpace<T>(Force.size()));
+  m_ownProblem.F = Force;
+
+  // The legacy ALResidual_t is F_int - lambda*F; the driver needs
+  // R = lambda*F - F_int = -ALResidual. The negation is exact.
+  m_ownProblem.residual = [this](T l, gsVector<T> & R, gsEvalMode /*mode*/) -> bool
   {
-    _step();
-    m_status = gsStatus::Success;
-  }
-  catch (int errorCode)
+    if (!m_residualFun(m_ownSpace->working(), l, R))
+      return false;
+    R = -R;
+    return true;
+  };
+
+  // The tangent is passed through. The step dx handed to the legacy
+  // dJacobian_t is the latest applied corrector update (zero right after the
+  // predictor).
+  m_ownProblem.jacobian = [this](T /*lambda*/, gsSparseMatrix<T> & K) -> bool
   {
-    if      (errorCode==1)
-      m_status = gsStatus::NotConverged;
-    else if (errorCode==2)
-      m_status = gsStatus::AssemblyError;
-    else if (errorCode==3)
-      m_status = gsStatus::SolverError;
-    else
-      m_status = gsStatus::OtherError;
-  }
-  catch (...)
-  {
-    m_status = gsStatus::OtherError;
-  }
-  return m_status;
+    return m_djacobian(m_ownSpace->working(), m_driver->context().deltaU, K);
+  };
+
+  m_problem = &m_ownProblem;
+  m_space   = m_ownSpace.get();
 }
 
 template <class T>
-void gsALMBase<T>::_step()
+void gsALMBase<T>::_initMembers(bool readOptions)
 {
-  GISMO_ASSERT(m_initialized,"Arc-Length Method is not initialized! Call initialize()");
+  m_driver.reset(new gsContinuationDriver<T>(*m_problem, *m_space));
+  m_driver->addObserver([this](const gsStepEvent<T> & ev) { this->_observe(ev); });
 
-  if (m_verbose)
-    initOutput();
+  m_constraint.reset();
+  m_driverDirty = true;
+  m_inBisection = false;
+  m_prevKnown   = false;
+  m_numAccepted = 0;
+  m_initialized = false;
+  m_verbose     = false;
+  m_numDof      = m_space->tangentSize();
 
-  m_converged = false;
+  // initialize variables
   m_numIterations = 0;
-  initiateStep();
+  this->defaultOptions();
+  if (readOptions)
+    gsALMBase<T>::getOptions();
+  this->setLength(1e-2);
+  m_converged = false;
+  m_indicator = 0;
+  m_negatives = 0;
+  m_stability = 0;
+  m_stabilityPrev = 0;
 
-  if (m_Uguess.rows()!=0 && m_Uguess.cols()!=0 && (m_Uguess-m_U).norm()!=0 && (m_Lguess-m_L)!=0)
-    predictorGuess();
-  else
-    predictor();
+  // initialize errors
+  m_basisResidualF = 0.0;
+  m_basisResidualU = 0.0;
 
-  computeResidual();
-  computeResidualNorms();
+  m_status = gsStatus::NotStarted;
 
-  if (m_verbose)
-     stepOutput();
+  // zero state, so that every accessor is defined before initialize()
+  this->_refreshMirror();
+  m_L = m_Lprev = m_DeltaL = m_deltaL = 0;
+  m_Uprev = m_U;
+  m_DeltaU = m_deltaU = gsVector<T>::Zero(m_numDof);
+  m_DeltaUold = gsVector<T>::Zero(m_numDof);
+  m_DeltaLold = 0;
+}
 
-  if (m_quasiNewton)
+template <class T>
+void gsALMBase<T>::_configureDriver()
+{
+  m_driver->setTest(gsConvergenceTest<T>::makeArcLengthGate(m_toleranceF, m_toleranceU, m_toleranceC, m_maxIterations));
+  m_driver->controller().setLength(m_arcLength);
+  m_driver->controller().setAdaptive(m_adaptiveLength, m_desiredIterations);
+  m_driver->corrector().setQuasi(m_quasiNewton, m_quasiNewtonInterval);
+  m_driver->corrector().setRelaxation(T(1));
+  m_driver->linearSolver().setSolver(m_options.getString("Solver"));
+  m_driverDirty = true;
+  this->_syncHistoryStep();
+}
+
+template <class T>
+void gsALMBase<T>::setConstraint(const typename gsPathConstraint<T>::Ptr & c)
+{
+  GISMO_ENSURE(c, "gsALMBase::setConstraint: null constraint");
+  m_constraint = c;
+  m_driver->setConstraint(c);
+  m_driverDirty = true;
+}
+
+template <class T>
+void gsALMBase<T>::initialize(bool stability)
+{
+  m_initialized = true;
+  this->initMethods();
+  m_numAccepted = 0;
+  if (m_constraint)
+    this->_initializeDriver();
+  this->init(stability);
+}
+
+template <class T>
+void gsALMBase<T>::_initializeDriver()
+{
+  m_numDof = m_space->tangentSize();
+  if (m_ownSpace)
+    m_ownSpace->importCommitted(gsVector<T>::Zero(m_numDof));
+  m_driver->setLambda(T(0));
+  m_driver->resetHistory();
+  m_prevKnown = false;
+
+  this->_refreshMirror();
+  m_L     = 0;
+  m_Uprev = m_U;
+  m_Lprev = 0;
+  m_DeltaU = gsVector<T>::Zero(m_numDof);
+  m_deltaU = gsVector<T>::Zero(m_numDof);
+  m_DeltaL = 0;
+}
+
+// Cost: one O(n) export per accepted step (a copy for a vector space).
+template <class T>
+void gsALMBase<T>::_refreshMirror()
+{
+  if (!(m_space->copyable() && m_space->exportWorking(m_U)))
+    m_U.resize(0);
+}
+
+template <class T>
+bool gsALMBase<T>::_vectorLike() const
+{
+  if (!m_space->copyable())
+    return false;
+  gsVector<T> u;
+  return m_space->exportWorking(u) && u.size() == m_space->tangentSize();
+}
+
+template <class T>
+bool gsALMBase<T>::_importMirror()
+{
+  if (!m_space->importCommitted(m_U))
+    return false;
+  m_driver->setLambda(m_L);
+  this->_setHistoryFromMirror();
+  return true;
+}
+
+template <class T>
+void gsALMBase<T>::_setHistory(const gsVector<T> & DU, T DL)
+{
+  gsStepHistory<T> h;
+  h.DeltaU     = DU;
+  h.DeltaL     = DL;
+  h.stepSize   = m_driver->controller().previousLength();
+  h.iterations = 0;
+  h.valid      = true;
+  m_driver->setHistory(h);
+}
+
+template <class T>
+void gsALMBase<T>::_setHistoryFromMirror()
+{
+  if (m_prevKnown && m_U.size() != 0 && m_U.size() == m_Uprev.size())
   {
-    quasiNewtonPredictor();
+    const gsVector<T> DU = m_U - m_Uprev;
+    this->_setHistory(DU, m_L - m_Lprev);
+  }
+  else
+    m_driver->resetHistory();
+}
+
+template <class T>
+void gsALMBase<T>::_syncHistoryStep()
+{
+  if (m_driver->history().valid)
+  {
+    gsStepHistory<T> h = m_driver->history();
+    h.stepSize = m_driver->controller().previousLength();
+    m_driver->setHistory(h);
+  }
+}
+
+template <class T>
+void gsALMBase<T>::setSolution(const gsVector<T> & U, const T & L)
+{
+  if (!m_constraint)
+  {
+    m_L = L; m_U = U;
+    return;
+  }
+
+  const bool vectorLike = this->_vectorLike() && U.size() == m_space->tangentSize();
+  GISMO_ENSURE(vectorLike, "gsALMBase::setSolution needs a copyable state space and a vector of the tangent size.");
+  const bool imported = m_space->importCommitted(U);
+  GISMO_ENSURE(imported, "gsALMBase::setSolution: the state space rejected the solution.");
+  m_driver->setLambda(L);
+  m_U = U;
+  m_L = L;
+  this->_setHistoryFromMirror();
+
+  if (m_initialized && !m_inBisection)
+    this->_stabilityAtSolution();
+}
+
+/*
+  One stability evaluation at the committed point (tangent at m_L), made when
+  the solution is set from outside. The stored stability of a step is that of
+  the point it starts from, so a bifurcation in the first step after the
+  external set is detected. If the evaluation fails the stability is unknown (0).
+  The tangent is the driver's, assembled and factorized once by
+  _stabilityAtCommitted(); the predictor of the next step reuses it when its
+  constraint needs the load tangent. Cost: that of _stabilityAtCommitted().
+*/
+template <class T>
+void gsALMBase<T>::_stabilityAtSolution()
+{
+  const gsStatus status = m_status;
+  bool ok = true;
+  try
+  {
+    if (m_driverDirty)
+    {
+      m_driver->setup();
+      m_driverDirty = false;
+    }
+  }
+  catch (...)
+  {
+    ok = false;
+  }
+  if (ok)
+    ok = this->_stabilityAtCommitted();
+
+  if (ok)
+    m_stabilityPrev = m_stability;
+  else
+    m_stability = m_stabilityPrev = 0;
+  m_status = status;
+}
+
+template <class T>
+void gsALMBase<T>::setPrevious(const gsVector<T> & Uprev, const T & Lprev)
+{
+  m_Uprev = Uprev;
+  m_Lprev = Lprev;
+  if (!m_constraint || m_U.size() == m_Uprev.size())
+  {
+    m_DeltaUold = m_U - m_Uprev;
+    m_DeltaLold = m_L - m_Lprev;
+  }
+  if (m_constraint)
+  {
+    m_prevKnown = true;
+    this->_setHistoryFromMirror();
+  }
+}
+
+template <class T>
+void gsALMBase<T>::setSolutionStep(const gsVector<T> & DU, const T & DL)
+{
+  m_DeltaUold = DU;
+  m_DeltaLold = DL;
+  if (m_constraint)
+    this->_setHistory(DU, DL);
+}
+
+template <class T>
+void gsALMBase<T>::resetStep()
+{
+  m_DeltaUold.setZero();
+  m_DeltaLold = 0;
+  if (m_constraint)
+    m_driver->resetHistory();
+}
+
+template <class T>
+void gsALMBase<T>::applyInitialGuess(const gsVector<T> & Uguess, T Lguess)
+{
+  if (Uguess.size() != m_U.size())
+    return;
+  const gsVector<T> DU = Uguess - m_U;
+  this->_setHistory(DU, Lguess - m_L);
+}
+
+template <class T>
+T gsALMBase<T>::distance(const gsVector<T> & DeltaU, const T DeltaL) const
+{
+  if (m_constraint)
+    return m_constraint->distance(DeltaU, DeltaL);
+  GISMO_NO_IMPLEMENTATION;
+}
+
+/*
+  Evaluates the residual (with the sign of the legacy ALResidual_t, i.e. the
+  negative of the driver residual) or the tangent at the state U through the
+  state space: the working state is saved, replaced by U, restored afterwards.
+  Cost: three O(n) vector copies plus the evaluation. Used off the step path
+  only (stability, singular points) and only if the solver was built on a
+  caller's problem; the legacy operators are evaluated directly otherwise.
+  A state space that is not copyable cannot be set to U: the tangent is then
+  evaluated at the committed state and the residual is unavailable.
+*/
+template <class T>
+bool gsALMBase<T>::_evaluateAt(const gsVector<T> & U, T L, gsVector<T> * R, gsSparseMatrix<T> * K)
+{
+  if (!m_space->rollback())
+    return false;
+  const bool copyable = m_space->copyable();
+  if (R && !copyable)
+    return false;
+
+  gsVector<T> saved;
+  bool ok = true;
+  if (copyable)
+    ok = m_space->exportWorking(saved) && m_space->importCommitted(U);
+
+  if (ok)
+  {
+    if (R)
+    {
+      ok = m_problem->residual(L, *R, gsEvalMode::Probe) && R->size() == m_space->tangentSize();
+      if (ok)
+        *R = -*R;
+    }
+    else
+      ok = m_problem->jacobian(L, *K);
+  }
+
+  if (copyable && saved.size() != 0)
+    m_space->importCommitted(saved);
+  m_driver->invalidateCommittedTangent();
+  return ok;
+}
+
+template <class T>
+gsStatus gsALMBase<T>::_stepDriver()
+{
+  if (!m_initialized)
+  {
+    m_note = "Arc-Length Method is not initialized! Call initialize()";
+    m_status = gsStatus::OtherError;
+    return m_status;
   }
 
   m_stabilityPrev = m_stability;
-  for (m_numIterations = 1; m_numIterations <= m_maxIterations; ++m_numIterations)
+  if (!m_constraint)
   {
-    if ( (!m_quasiNewton) || ( ( m_quasiNewtonInterval>0 ) && ( m_numIterations % m_quasiNewtonInterval) < 1e-10 ) )
+    m_note = "No path constraint is installed";
+    m_status = gsStatus::OtherError;
+    return m_status;
+  }
+  m_note.clear();
+
+  gsStatus st = gsStatus::OtherError;
+  bool failedByException = false;
+  try
+  {
+    if (m_driverDirty)
     {
-      quasiNewtonIteration();
+      m_driver->setup();
+      m_driverDirty = false;
     }
 
-    iteration();
-    computeStability(false);
+    if (m_Uguess.rows()!=0 && m_Uguess.cols()!=0 && m_Uguess.size()==m_U.size()
+        && (m_Uguess-m_U).norm()!=0 && (m_Lguess-m_L)!=0)
+      this->applyInitialGuess(m_Uguess, m_Lguess);
 
-    computeResidual();
-    computeResidualNorms();
-    if (m_verbose)
-       stepOutput();
+    st = m_driver->step();
+  }
+  catch (...)
+  {
+    st = gsStatus::OtherError;
+    failedByException = true;
+    m_note = "exception in the problem operators or in the driver setup";
+  }
 
-    if ( m_residueF < m_toleranceF && m_residueU < m_toleranceU && this->constraintResidual() < m_toleranceC )
+  const gsStepContext<T> & ctx = m_driver->context();
+  m_numIterations = m_driver->numIterations();
+  m_DeltaU = ctx.DeltaU;
+  m_DeltaL = ctx.DeltaL;
+  m_deltaU = ctx.deltaU;
+  m_converged = (st == gsStatus::Success);
+  // The tangent of the last attempt, which is the failed-step tangent when the
+  // step failed; after an accepted step the stability evaluation replaces it by
+  // the tangent at the committed point (with the method Nothing it stays the
+  // last assembled tangent). Cost: one O(nnz) copy per step.
+  if (ctx.K.rows() == m_numDof)
+    m_jacMat = ctx.K;
+  if (!failedByException && st != gsStatus::Success)
+    m_note = m_driver->report().note;
+
+  if (st == gsStatus::Success)
+  {
+    m_Uprev = m_U;
+    m_Lprev = m_L;
+    this->_refreshMirror();
+    m_L = m_driver->lambda();
+
+    m_arcLength      = m_driver->controller().length();
+    m_arcLength_prev = m_driver->controller().previousLength();
+    m_prevKnown = true;
+
+    // The stability is evaluated once per accepted step, on the tangent at the
+    // committed point; the cost is one Jacobian assembly and factorization plus
+    // one stability analysis (O(n^3) for a dense eigenvalue solve).
+    this->_stabilityAfterStep();
+
+    if (!m_inBisection)
     {
-      iterationFinish();
-      // Change arc length
-      if (m_adaptiveLength)
-        computeLength();
-      else
-        m_arcLength_prev = m_arcLength;
+      if (m_onAccepted)
+        m_onAccepted(m_numAccepted, m_L);
+      ++m_numAccepted;
+    }
+  }
 
+  m_status = st;
+  return m_status;
+}
+
+/*
+  The stability of an accepted point is that of the tangent there, as in
+  pde2path (cont.m:77) and BifurcationKit: the driver assembles and factorizes K
+  at the committed point (gsContinuationDriver::assembleCommittedTangent), the
+  tangent is copied to m_jacMat for the singular-point tests, and the Determinant
+  method classifies the LDL^T pivots of that very factorization, so it needs no
+  second one. The Eigenvalue method (and a Determinant method without pivots)
+  classifies m_jacMat through computeStability(false). Cost: one Jacobian
+  assembly, one factorization, plus the analysis; the next predictor reuses the
+  factorization when its constraint needs the load tangent.
+*/
+template <class T>
+bool gsALMBase<T>::_stabilityAtCommitted()
+{
+  bool ok;
+  try
+  {
+    ok = m_driver->assembleCommittedTangent();
+  }
+  catch (...)
+  {
+    ok = false;
+  }
+  if (!ok)
+    return false;
+
+  m_jacMat = m_driver->context().K;
+
+  if (m_bifurcationMethod == bifmethod::Determinant && m_driver->hasCommittedTangent()
+      && m_driver->linearSolver().pivots(m_stabilityVec))
+  {
+    m_stabilityAnalysis.setMethod(m_bifurcationMethod);
+    if (m_stabilityAnalysis.classify(m_stabilityVec))
+    {
+      m_negatives = m_stabilityAnalysis.negatives();
+      m_indicator = m_stabilityAnalysis.indicator();
+      m_stability = m_stabilityAnalysis.stability();
+      return true;
+    }
+  }
+
+  return this->computeStability(false) == gsStatus::Success;
+}
+
+template <class T>
+void gsALMBase<T>::_stabilityAfterStep()
+{
+  const bool ok = (m_bifurcationMethod == bifmethod::Nothing)
+                ? this->computeStability(false) == gsStatus::Success
+                : this->_stabilityAtCommitted();
+  if (!ok)
+    m_note = "stability evaluation failed; stability() keeps its previous value";
+}
+
+template <class T>
+void gsALMBase<T>::_observe(const gsStepEvent<T> & ev) const
+{
+  if (!m_verbose)
+    return;
+
+  const gsStepContext<T> & c = ev.ctx;
+  switch (ev.kind)
+  {
+    case gsStepEvent<T>::StepStarted:
+      gsInfo<<"\t";
+      gsInfo<<std::setw(4)<<std::left<<"It.";
+      gsInfo<<std::setw(17)<<std::left<<"|R|";
+      gsInfo<<std::setw(17)<<std::left<<"|dU|";
+      gsInfo<<std::setw(17)<<std::left<<"|DU|";
+      gsInfo<<std::setw(17)<<std::left<<"dL";
+      gsInfo<<std::setw(17)<<std::left<<"DL";
+      gsInfo<<std::setw(17)<<std::left<<"L+DL";
+      gsInfo<<std::setw(17)<<std::left<<"g/s^2";
+      gsInfo<<"\n";
       break;
-    }
-    else if (m_numIterations == m_maxIterations)
-    {
-      gsInfo<<"maximum iterations reached. Solution did not converge\n";
-      throw 1;
-    }
-
-      // GISMO_ERROR("maximum iterations reached. Solution did not converge");
+    case gsStepEvent<T>::IterationDone:
+      gsInfo<<"\t";
+      gsInfo<<std::setw(4)<<std::left<<c.iteration;
+      gsInfo<<std::setw(17)<<std::left<<c.R.norm();
+      gsInfo<<std::setw(17)<<std::left<<c.deltaU.norm();
+      gsInfo<<std::setw(17)<<std::left<<c.DeltaU.norm();
+      gsInfo<<std::setw(17)<<std::left<<c.deltaL;
+      gsInfo<<std::setw(17)<<std::left<<c.DeltaL;
+      gsInfo<<std::setw(17)<<std::left<<(c.lambda + c.DeltaL);
+      gsInfo<<std::setw(17)<<std::left<<(c.constraintResidual / (c.stepSize*c.stepSize));
+      gsInfo<<"\n";
+      break;
+    case gsStepEvent<T>::StepAccepted:
+      gsInfo<<"\t step accepted after "<<c.iteration<<" iterations; lambda = "<<c.lambda<<"\n";
+      break;
+    case gsStepEvent<T>::StepRejected:
+      gsInfo<<"\t step rejected after "<<c.iteration<<" iterations\n";
+      break;
   }
 }
 
@@ -442,11 +886,13 @@ void gsALMBase<T>::_computeSingularPoint(const gsVector<T> & U, const T & L, boo
     converged = this->_extendedSystemSolve(m_U, m_L, m_SPCompTolE);
 
     if (switchBranch && (converged || m_SPfail==1))
-      this->switchBranch();
+    {
+      this->switchBranch(); // leaves the stability unknown
+      return;
+    }
 
-    // here we assume that the stability of the singular point is
-    // equal to the one of the previous point...
-    // to avoid the algorithm to find a singular point again
+    // The stability of the singular point is taken equal to the one of the
+    // previous point, so that the singular point is not detected again.
     m_stability = m_stabilityPrev;
   }
 }
@@ -455,6 +901,13 @@ void gsALMBase<T>::_computeSingularPoint(const gsVector<T> & U, const T & L, boo
 template <class T>
 gsStatus gsALMBase<T>::computeSingularPoint(const gsVector<T> & U, const T & L, bool switchBranch, bool jacobian, bool testPoint)
 {
+  if (m_constraint && !this->_vectorLike())
+  {
+    gsWarn<<"computeSingularPoint needs a copyable state space that exports a vector of the tangent size.\n";
+    m_status = gsStatus::OtherError;
+    return m_status;
+  }
+
   try
   {
     this->_computeSingularPoint(U,L,switchBranch,jacobian, testPoint);
@@ -474,6 +927,9 @@ gsStatus gsALMBase<T>::computeSingularPoint(const gsVector<T> & U, const T & L, 
   {
     m_status = gsStatus::OtherError;
   }
+
+  if (m_constraint && !this->_importMirror())
+    m_status = gsStatus::OtherError;
   return m_status;
 }
 
@@ -485,7 +941,7 @@ bool gsALMBase<T>::_testSingularPoint(bool jacobian)
 
   if (jacobian)
   {
-    m_jacMat = this->computeJacobian(m_U,m_deltaU);
+    m_jacMat = this->_computeJacobianAt(m_U, m_deltaU, m_L);
     this->factorizeMatrix(m_jacMat);
   }
 
@@ -519,6 +975,11 @@ bool gsALMBase<T>::_testSingularPoint(bool jacobian)
 template <class T>
 bool gsALMBase<T>::isBifurcation(bool jacobian)
 {
+  if (m_constraint && !this->_vectorLike())
+  {
+    gsWarn<<"isBifurcation needs a copyable state space that exports a vector of the tangent size.\n";
+    return false;
+  }
   // Controls the singular point test with the first two arguments
   return this->_testSingularPoint(jacobian);
 }
@@ -555,17 +1016,20 @@ void gsALMBase<T>::_computeStability(const gsVector<T> & x, bool jacobian, T shi
   if (jacobian)
   {
     gsVector<T> dx = gsVector<T>::Zero(x.size());
-    m_jacMat = this->computeJacobian(x,dx);
+    m_jacMat = this->_computeJacobianAt(x, dx, m_L);
     this->factorizeMatrix(m_jacMat);
-  } // otherwise the jacobian is already computed (on m_U+m_DeltaU)
+  } // otherwise m_jacMat holds the stored tangent (see step())
 
-  // gsInfo<<"x = \n"<<x.transpose()<<"\n";
+  m_stabilityAnalysis.setMethod(m_bifurcationMethod);
+
+  bool ok = false;
   if (m_bifurcationMethod == bifmethod::Determinant)
   {
     if ( auto * s = dynamic_cast<typename gsSparseSolver<T>::SimplicialLDLT*>(m_solver.get()) )
     {
       factorizeMatrix(m_jacMat);
       m_stabilityVec = s->vectorD();
+      ok = m_stabilityAnalysis.classify(m_stabilityVec);
     }
     else
     {
@@ -574,56 +1038,25 @@ void gsALMBase<T>::_computeStability(const gsVector<T> & x, bool jacobian, T shi
     }
   }
   else if (m_bifurcationMethod == bifmethod::Eigenvalue)
-  {
-    #ifdef gsSpectra_ENABLED
-    index_t number = std::min(static_cast<index_t>(std::floor(m_jacMat.cols()/5.)),10);
-    /*
-    // Without shift!
-    // This one can sometimes not converge, because spectra is better at finding large values.
-      gsSpectraSymSolver<gsSparseMatrix<T>> es(m_jacMat,number,5*number);
-      es.init();
-      es.compute(Spectra::SortRule::SmallestAlge,1000,1e-6,Spectra::SortRule::SmallestAlge);
-      GISMO_ASSERT(es.info()==Spectra::CompInfo::Successful,"Spectra did not converge!"); // Reason for not converging can be due to the value of ncv (last input in the class member), which is too low.
-    */
-
-    // With shift!
-    // This one converges easier. However, a shift must be provided!
-    gsSpectraSymShiftSolver<gsSparseMatrix<T>> es(m_jacMat,number,5*number,shift);
-    es.init();
-    es.compute(Spectra::SortRule::LargestAlge,1000,1e-6,Spectra::SortRule::SmallestAlge);
-    if (es.info()!=Spectra::CompInfo::Successful)
-    {
-      gsWarn<<"Spectra did not converge!\n"; // Reason for not converging can be due to the value of ncv (last input in the class member), which is too low.
-      throw 3;
-    }
-
-    // if (es.info()==Spectra::CompInfo::NotComputed)
-    // if (es.info()==Spectra::CompInfo::NotConverging)
-    // if (es.info()==Spectra::CompInfo::NumericalIssue)
-    // gsEigen::SelfAdjointEigenSolver< gsMatrix<T> > es(m_jacMat);
-    m_stabilityVec = es.eigenvalues();
-    #else
-    GISMO_UNUSED(shift);
-    gsEigen::SelfAdjointEigenSolver<gsMatrix<T>> es2(m_jacMat);
-    m_stabilityVec = es2.eigenvalues();
-    #endif
-  }
+    ok = m_stabilityAnalysis.compute(m_jacMat, shift, m_stabilityVec);
   else if (m_bifurcationMethod == bifmethod::Nothing)
   {
-    m_stabilityVec = gsVector<T>::Zero(x.size());
+    m_stabilityVec.setZero(m_numDof);
+    ok = m_stabilityAnalysis.classify(m_stabilityVec);
   }
-  else
-    gsInfo<<"bifurcation method unknown!";
 
-  m_negatives = countNegatives(m_stabilityVec);
-  m_indicator = m_stabilityVec.colwise().minCoeff()[0]; // This is required since D does not necessarily have one column.
-  m_stability = (m_indicator < 0) ? -1 : 1;
+  if (!ok)
+    throw 3;
+
+  m_negatives = m_stabilityAnalysis.negatives();
+  m_indicator = m_stabilityAnalysis.indicator();
+  m_stability = m_stabilityAnalysis.stability();
 }
 
 template <class T>
 index_t gsALMBase<T>::stability() const
 {
-  return (m_indicator < 0) ? -1 : 1;
+  return gsStabilityAnalysis<T>::sign(m_indicator);
 }
 
 template <class T>
@@ -640,7 +1073,7 @@ bool gsALMBase<T>::_extendedSystemSolve(const gsVector<T> & U, const T L, const 
   m_L = L;
   gsInfo<<"Extended iterations --- Starting with U.norm = "<<m_U.norm()<<" and L = "<<m_L<<"\n";
 
-  m_jacMat = this->computeJacobian(m_U,m_deltaU); // Jacobian evaluated on m_U
+  m_jacMat = this->_computeJacobianAt(m_U, m_deltaU, m_L); // Jacobian evaluated on (m_U, m_L)
   this->factorizeMatrix(m_jacMat);
   m_basisResidualKTPhi = (m_jacMat*m_V).norm();
 
@@ -764,10 +1197,45 @@ bool gsALMBase<T>::_bisectionSolve(const gsVector<T> & U, const T L, const T tol
 
   gsVector<T> U_old  = m_U;
   T L_old = L;
-  // Store original arc length
-  real_t dL = m_arcLength;
-  bool adaptiveBool = m_adaptiveLength;
-  m_adaptiveLength = false;
+
+  // Stores the arc length and the controller; the trial steps neither adapt the
+  // length nor call the accepted-step callback. The state is restored on every
+  // exit, also when a helper throws (computeSingularPoint catches it).
+  struct Restore
+  {
+    gsALMBase<T> &            s;
+    const T                   arcLength;
+    const bool                adaptive;
+    const gsStepController<T> controller;
+    bool                      done;
+
+    explicit Restore(gsALMBase<T> & a)
+    : s(a), arcLength(a.m_arcLength), adaptive(a.m_adaptiveLength),
+      controller(a.m_driver->controller()), done(false)
+    {
+      s.m_inBisection = true;
+      s.m_adaptiveLength = false;
+      if (s.m_constraint)
+        s.m_driver->controller().setAdaptive(false, s.m_desiredIterations);
+    }
+
+    void release()
+    {
+      if (done)
+        return;
+      done = true;
+      s.m_inBisection = false;
+      s.m_arcLength = arcLength;
+      s.m_adaptiveLength = adaptive;
+      if (s.m_constraint)
+      {
+        s.m_driver->controller() = controller;
+        s.m_arcLength_prev = s.m_driver->controller().previousLength();
+      }
+    }
+
+    ~Restore() { release(); }
+  } restore(*this);
   bool converged = false;
 
   T referenceError = _bisectionTerminationFunction(m_U, true);
@@ -786,8 +1254,7 @@ bool gsALMBase<T>::_bisectionSolve(const gsVector<T> & U, const T L, const T tol
     if (m_verbose) gsInfo<<"\t bisection iteration "<<k<<"\t arc length = "<<m_arcLength<<"; ";
 
     // Reset start point
-    m_U = U_old;
-    m_L = L_old;
+    this->setSolution(U_old, L_old);
 
     gsInfo<<"From U.norm = "<<m_U.norm()<<" and L = "<<m_L<<"\n";
 
@@ -805,7 +1272,7 @@ bool gsALMBase<T>::_bisectionSolve(const gsVector<T> & U, const T L, const T tol
       fa = fb;
     }
     else
-      m_arcLength = m_arcLength/2.0; // ONLY IF fa==fb??
+      this->reduceLength(0.5); // ONLY IF fa==fb??
 
     // termination criteria
     // relative error
@@ -821,9 +1288,7 @@ bool gsALMBase<T>::_bisectionSolve(const gsVector<T> & U, const T L, const T tol
     }
 
   }
-  // Reset arc length
-  m_arcLength = dL;
-  m_adaptiveLength = adaptiveBool;
+  restore.release();
 
   // Compute eigenvector
   m_V = gsVector<T>::Ones(m_numDof);
@@ -848,6 +1313,12 @@ bool gsALMBase<T>::_bisectionSolve(const gsVector<T> & U, const T L, const T tol
 template <class T>
 void gsALMBase<T>::switchBranch()
 {
+  if (m_constraint && !this->_vectorLike())
+  {
+    gsWarn<<"switchBranch needs a copyable state space that exports a vector of the tangent size.\n";
+    return;
+  }
+
   m_V.normalize();
   real_t lenPhi = m_V.norm();
   real_t xi = lenPhi/m_tau;
@@ -859,6 +1330,15 @@ void gsALMBase<T>::switchBranch()
   m_DeltaUold.setZero();
   // m_DeltaLold = m_DeltaL;
   // m_DeltaUold = m_DeltaU;
+
+  if (m_constraint)
+  {
+    m_prevKnown = false;
+    if (!this->_importMirror())
+      gsWarn<<"switchBranch: the new point could not be imported into the state space.\n";
+    m_driver->resetHistory();
+  }
+  m_stability = m_stabilityPrev = 0;
 }
 
 // ------------------------------------------------------------------------------------------------------------

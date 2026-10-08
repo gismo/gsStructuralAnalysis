@@ -54,6 +54,8 @@ template<class T>
 bool gsCrisfieldConstraint<T>::predict(gsStepContext<T> & ctx, const gsVector<T> & dUt,
                                        const gsStateSpace<T> & space)
 {
+    const bool tangentScaling = m_tangentScalingNext;
+    m_tangentScalingNext = false;
     const index_t n = space.tangentSize();
     if (dUt.size() != n || ctx.F.size() != n)
         return false;
@@ -71,7 +73,13 @@ bool gsCrisfieldConstraint<T>::predict(gsStepContext<T> & ctx, const gsVector<T>
     }
     else
     {
-        if (!m_phiUser)
+        if (!m_phiUser && tangentScaling)
+        {
+            // An initial guess starts the run in the middle of the path: the
+            // secant ratio is replaced by the tangent ratio of the first step.
+            m_phi = math::pow( dUt.dot(dUt) / ctx.F.dot(ctx.F),0.5);
+        }
+        else if (!m_phiUser)
         {
             // phi = |U| / (|lambda| |F|) at the committed state; unguarded, so
             // lambda = 0 gives an infinite or NaN value.

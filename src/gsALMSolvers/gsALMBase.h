@@ -15,19 +15,47 @@
 */
 
 #pragma once
+#include <functional>
+
 #include <gsCore/gsLinearAlgebra.h>
+#include <gsCore/gsMemory.h>
 
 #ifdef gsSpectra_ENABLED
 #include <gsSpectra/gsSpectra.h>
 #endif
 #include <gsIO/gsOptionList.h>
 #include <gsStructuralAnalysis/src/gsStructuralAnalysisTools/gsStructuralAnalysisTypes.h>
+#include <gsStructuralAnalysis/src/gsSolverDriver/gsStabilityAnalysis.h>
+#include <gsStructuralAnalysis/src/gsSolverDriver/gsContinuationDriver.h>
 
 namespace gismo
 {
 
 /**
     @brief Performs the arc length method to solve a nonlinear system of equations.
+
+    One step is one step of a gsContinuationDriver, which factorizes the
+    tangent once per Jacobian and reports failure through a status instead of
+    exceptions. The path constraint that defines the method is installed with
+    \a setConstraint, normally in the constructor of a subclass (the presets
+    gsALMLoadControl, gsALMRiks, gsALMCrisfield and gsALMConsistentCrisfield).
+    Without a constraint, \a step returns gsStatus::OtherError and sets a note.
+
+    The state lives in a gsStateSpace. The class either owns a
+    gsVectorStateSpace and a gsContinuationProblem built from the Jacobian and
+    residual operators of the first two constructors, or refers to a caller's
+    problem and state space (non-owning constructor).
+
+    <b>Sign convention.</b> The operators passed to the legacy constructors
+    use the residual \f$F_{int}-\lambda F_{ext}\f$ and the Newton correction
+    solves \f$K\,\delta U=-R\f$. The driver works with
+    \f$R=\lambda F_{ext}-F_{int}\f$ and solves \f$K\,\delta U=R\f$, so the
+    problem built from the legacy operators negates the residual (exactly) and
+    passes the tangent through. The non-owning constructor expects a problem
+    that is already in the driver convention.
+
+    The class is not copyable: the operators of the owned problem refer to the
+    object itself.
 
     \tparam T coefficient type
 
@@ -46,7 +74,8 @@ public:
 
     virtual ~gsALMBase() {};
 
-    /// Constructor
+    /// Constructor. The class owns the state space and the problem that
+    /// wrap \a Jacobian, \a ALResidual and \a Force.
     gsALMBase(  const Jacobian_t   & Jacobian,
                 const ALResidual_t & ALResidual,
                 const gsVector<T>  & Force )
@@ -59,17 +88,8 @@ public:
             return m_jacobian(x,m);
         };
 
-        // initialize variables
-        m_numIterations = 0;
-        this->defaultOptions();
-        this->setLength(1e-2);
-        m_converged = false;
-
-        // initialize errors
-        m_basisResidualF = 0.0;
-        m_basisResidualU = 0.0;
-
-        m_status = gsStatus::NotStarted;
+        this->_constructOwned(Force);
+        this->_initMembers(false);
     }
 
     /// Constructor using the jacobian that takes the solution and the solution step
@@ -81,15 +101,32 @@ public:
     {
         m_djacobian  = dJacobian;
 
-        // initialize variables
-        m_numIterations = 0;
-        this->defaultOptions();
-        this->setLength(1e-2);
-        m_converged = false;
+        this->_constructOwned(Force);
+        this->_initMembers(false);
+    }
 
-        // initialize errors
-        m_basisResidualF = 0.0;
-        m_basisResidualU = 0.0;
+    /**
+       @brief Constructor on a caller's problem and state space (non-owning).
+
+       No Jacobian or residual operator of the legacy signature exists. A path
+       constraint must be installed (see \a setConstraint) for \a step to
+       run; without one, \a step returns gsStatus::OtherError.
+
+       @param[in] problem the problem, already in the driver convention
+                  \f$R=\lambda F-F_{int}\f$, \f$K=\partial F_{int}/\partial U\f$;
+                  nothing is negated. Must outlive the solver.
+       @param[in] space   the state space; must outlive the solver. The
+                  solution vector \a solutionU() and the extended-system
+                  functions (singular points, branch switching) need a
+                  copyable space whose exported vector has the tangent size.
+    */
+    gsALMBase(  gsContinuationProblem<T> & problem,
+                gsStateSpace<T>          & space )
+    : m_forcing(problem.F)
+    {
+        m_problem = &problem;
+        m_space   = &space;
+        this->_initMembers(true);
     }
 
 // General functions
@@ -100,49 +137,70 @@ public:
     // Returns the number of DoFs
     virtual index_t numDofs() {return m_forcing.size();}
 
-    // Returns the current length
-    virtual T getLength() {return m_arcLength; }
+    /// Returns the current length (the length of the step controller)
+    virtual T getLength();
 
-    /// Perform one arc-length step
+    /**
+       @brief Perform one arc-length step.
+
+       Runs one gsContinuationDriver step: one factorization per assembled
+       Jacobian and no exception on the step path. A failed step leaves the
+       solution and the stability unchanged.
+
+       With the \a BifurcationMethod Determinant or Eigenvalue the stability
+       of the new point is computed once per accepted step, from one assembly
+       and factorization of the tangent at the committed point (the converged
+       point, not the last iterate). The next predictor reuses that
+       factorization when its constraint needs the load tangent (load control,
+       Crisfield), so from the second step on such a step costs no more than
+       without the stability evaluation; the first step, and the first step
+       after anything that discards the committed tangent (\a initialize,
+       \a resetStep, \a switchBranch, \a computeSingularPoint, a change of
+       options), pays one assembly and factorization more. The Riks and the
+       consistent Crisfield predictors need no tangent, so they pay one
+       assembly and factorization more per step. With
+       the Determinant method the LDL^T pivots of that factorization are
+       classified, with the Eigenvalue method the dense eigenvalue problem of
+       that tangent is solved. A committed step cannot be undone, so a
+       failing stability evaluation does not change the returned status
+       (gsStatus::Success); \a note reports it and \a stability keeps its
+       previous value. With the method Nothing no extra work is done.
+
+       If \a setInitialGuess was called with a guess that differs from the
+       current point, the guess is applied before the step by
+       \a applyInitialGuess.
+
+       If a callback was set with \a onStepAccepted, it is called after every
+       accepted step, after the solution has been refreshed.
+
+       @return the status, also available as \a status()
+    */
     virtual gsStatus step();
 
-    /// Initialize the arc-length method, computes the stability of the initial configuration if \a stability is true
-    virtual void initialize(bool stability = true)
-    {
-        m_initialized = true;
-        this -> initMethods();
-        this -> init(stability);
-    }
+    /// Initialize the arc-length method, computes the stability of the initial configuration if \a stability is true.
+    /// The solution is reset to zero (an owned state space) or taken from the
+    /// state space (a caller's state space), and the step history is cleared.
+    /// Without an installed constraint the stability is not computed (a warning is printed).
+    virtual void initialize(bool stability = true);
 
     /// Set arc length to \a length
-    virtual void setLength(T length)
-    {
-      m_options.setReal("Length",length);
-      m_arcLength = m_arcLength_prev = m_arcLength_ori = m_options.getReal("Length");
-    }
+    virtual void setLength(T length);
 
     /// Set arc length to \a length, enables \a adaptive steps
-    virtual void setLength(T length, bool adaptive)
-    {
-      this->setLength(length);
-      m_adaptiveLength = adaptive;
-      m_desiredIterations = 10; // number of desired iterations defaults to 10
-    }
+    virtual void setLength(T length, bool adaptive);
 
     /// Set arc length to \a length, enables \a adaptive steps aiming for \a iterations number of iterations per step
-    virtual void setLength(T length, bool adaptive, index_t iterations)
-    {
-      this->setLength(length);
-      m_adaptiveLength = adaptive;
-      m_desiredIterations = iterations;
-    }
+    virtual void setLength(T length, bool adaptive, index_t iterations);
+
     /// Set arc length to \a length, enables adaptive steps aiming for \a iterations number of iterations per step
-    virtual void setLength(T length, index_t iterations)
-    {
-      this->setLength(length);
-      m_adaptiveLength = true;
-      m_desiredIterations = iterations;
-    }
+    virtual void setLength(T length, index_t iterations);
+
+    /// Sets the function that is called after every accepted step with the
+    /// number of steps accepted before it (0, 1, ...; reset by \a initialize)
+    /// and the load factor of the new point. An empty function clears it.
+    /// It is not called for the trial steps of the bisection inside
+    /// computeSingularPoint.
+    virtual void onStepAccepted(const std::function<void(index_t, T)> & f) { m_onAccepted = f; }
 
     // Output
     /// True if the Arc Length method converged
@@ -161,15 +219,20 @@ public:
     virtual T indicator() const {return m_indicator;}
     virtual void setIndicator(T indicator) {m_indicator = indicator; m_stability = this->stability();}
 
-    /// Return the solution vector and factor
+    /// Return the solution vector and factor.
+    /// \a solutionU is a member buffer, refreshed in place from
+    /// gsStateSpace::exportWorking after every accepted step; it is empty for
+    /// a state space that is not copyable.
     virtual const gsVector<T> & solutionU() const {return  m_U;}
     virtual const gsVector<T> & solutionDU() const {return  m_DeltaU;}
     virtual T  solutionL() const {return  m_L;}
     virtual T  solutionDL() const {return  m_DeltaL;}
     virtual const gsVector<T> & solutionV() const {return  m_V;}
 
-    /// Returns if solution passed a bifurcation point
-    virtual bool isStable() const {return m_stability;}
+    /// Returns true iff the last computed (or set, see \ref setIndicator) stability is +1.
+    /// It is false if the solution is unstable, or if the stability has not been computed
+    /// (after construction, or after \ref initialize with \a stability = false).
+    virtual bool isStable() const {return m_stability > 0;}
 
     // /// Returns the value of the deterimant of the jacobian
     // virtual T determinant() const
@@ -177,24 +240,42 @@ public:
     //     return m_jacobian(m_U).toDense().determinant();
     // }
 
-    /// Resets the step
-    virtual void resetStep() {m_DeltaUold.setZero(); m_DeltaLold = 0;}
+    /// Resets the step. This clears the step history, so the next step uses
+    /// the first-step predictor.
+    virtual void resetStep();
 
     // Set initial guess for solution
     virtual void setInitialGuess(const gsVector<T> & Uguess, const T & Lguess) {m_Uguess = Uguess; m_Lguess = Lguess;}
-    virtual void setPrevious(const gsVector<T> & Uprev, const T & Lprev)
-    {
-        m_Uprev = Uprev;
-        m_Lprev = Lprev;
-        m_DeltaUold = m_U - m_Uprev;
-        m_DeltaLold = m_L - m_Lprev;
-    }
 
-    /// Sets the solution
-    virtual void setSolution(const gsVector<T> & U, const T & L) {m_L = L; m_U = U; }// m_DeltaUold.setZero(); m_DeltaLold = 0;}
+    /// Sets the previous solution. Call it after \a setSolution: the previous step
+    /// is the difference between the present and the previous solution.
+    virtual void setPrevious(const gsVector<T> & Uprev, const T & Lprev);
+
+    /**
+       @brief Sets the solution.
+
+       The solution is imported into the state space, which requires a
+       copyable state space (GISMO_ENSURE) and a vector of the tangent size
+       (without an installed constraint only the mirror is set). The step history becomes the difference between the new and the previous solution, with the previous
+       step length, as long as a previous solution is known (after an
+       accepted step or \a setPrevious); otherwise it is cleared.
+       Note that after accepted steps, a call without a following \a setPrevious
+       sets the history to \f$U-U_{prev}\f$ also for the Crisfield method.
+
+       On an initialized solver the stability is evaluated once at the new
+       point (once per call, not per step), by the same assembly and
+       factorization of the tangent at the committed point as after an
+       accepted step, with every \a BifurcationMethod. It is stored as the
+       previous stability of the next step, so that a bifurcation in the
+       first step after the call is detected, and the factorization is reused
+       by the predictor of that step when its constraint needs the load
+       tangent. Not evaluated for the trial
+       steps of the bisection in \a computeSingularPoint.
+    */
+    virtual void setSolution(const gsVector<T> & U, const T & L);
 
     /// Sets the solution step
-    virtual void setSolutionStep(const gsVector<T> & DU, const T & DL) {m_DeltaUold = DU; m_DeltaLold = DL;}// m_DeltaUold.setZero(); m_DeltaLold = 0;}
+    virtual void setSolutionStep(const gsVector<T> & DU, const T & DL);
 
     /// Access the options
     virtual gsOptionList & options() {return m_options;};
@@ -208,10 +289,23 @@ public:
     /// Apply the options
     virtual void applyOptions() {this->getOptions(); }
 
-    virtual T distance(const gsVector<T>& /*DeltaU*/, const T /*DeltaL*/) const
-    {
-        GISMO_NO_IMPLEMENTATION;
-    }
+    /// Distance of the increment (\a DeltaU, \a DeltaL) in the metric of the
+    /// installed path constraint; not implemented without one. It is defined
+    /// before the first step.
+    virtual T distance(const gsVector<T>& DeltaU, const T DeltaL) const;
+
+    /// Frozen arc-length scaling \f$\varphi_0\f$ of the run, for methods that freeze one
+    /// (gsALMConsistentCrisfield with automatic "Scaling"); 0 otherwise.
+    /// Solvers that continue one path in pieces (e.g. the workers of gsAPALM) exchange it
+    /// so that every piece uses the same arc metric.
+    virtual T frozenScaling() const { return T(0); }
+
+    /// True iff a frozen scaling is set (see \a frozenScaling). Default: false.
+    virtual bool hasFrozenScaling() const { return false; }
+
+    /// Imposes the frozen scaling \a phi0 (> 0, finite) obtained from another solver's
+    /// \a frozenScaling. Methods without a frozen scaling ignore it (default).
+    virtual void setFrozenScaling(T /*phi0*/) { }
 
 // ------------------------------------------------------------------------------------------------------------
 // ---------------------------------------Singular point methods-----------------------------------------------
@@ -230,13 +324,33 @@ public:
      * @param[in]  tolB          The tolerance for the bisection method
      * @param[in]  switchBranch  Switches branch if true
      * @param[in]  jacobian      Evaluate the Jacobian?
+     *
+     * The state space must be copyable and export a vector of the
+     * tangent size; otherwise a warning is printed and gsStatus::OtherError is returned.
+     * The resulting point is imported into the state space and the driver
+     * (load factor and step history, see \a setSolution). The trial steps of the
+     * bisection do not call the \a onStepAccepted callback.
      */
     virtual gsStatus computeSingularPoint(const gsVector<T> & U, const T & L, bool switchBranch=false, bool jacobian=false, bool testPoint=true);
 
-    /// Returns true if the point is a bifurcation
+    /// Returns true if the point is a bifurcation. The state
+    /// space must be copyable and export a vector of the tangent size; otherwise
+    /// a warning is printed and false is returned. Without \a jacobian the stored
+    /// tangent is used: after an accepted step with the \a BifurcationMethod
+    /// Determinant or Eigenvalue (or after \a setSolution) the tangent at the
+    /// committed point; with the method Nothing the last assembled tangent of
+    /// that step; after a failed step the last tangent of the failed attempt.
     virtual bool isBifurcation(bool jacobian = false);
 
-    /// Checks if the stability of the system changed since the previously known solution
+    /// Checks if the stability of the system changed since the previously known solution.
+    /// It is false while either the current or the previous stability is unknown (0).
+    ///
+    /// The previous stability of a step is the one stored at the end of the previous
+    /// accepted step (or evaluated by \a setSolution), at the committed point (from
+    /// the tangent assembled there, never from the last Newton iterate); it is
+    /// never recomputed at the start of a step and does not depend on the verbosity.
+    /// After \a switchBranch it is unknown, so the first step after a branch switch
+    /// reports no change and only seeds the stored value (as AUTO and pde2path do).
     virtual bool stabilityChange() const;
 
     /**
@@ -253,7 +367,11 @@ public:
     /// Computes the stability: -1 if unstable, +1 if stable
     virtual index_t stability() const;
 
-    /// Switches branches
+    /// Switches branches. The new point is imported into the
+    /// state space and the step history is cleared, so the next step uses the
+    /// first-step predictor of the constraint. The stored stability becomes unknown (0),
+    /// so \a stabilityChange is false in the first step after the switch, whose
+    /// accepted value seeds the stored stability. Needs a copyable state space.
     virtual void switchBranch();
 
     /// Reduce the length by multiplication with a factor \a fac
@@ -303,13 +421,12 @@ protected:
 // ---------------------------------------Computations---------------------------------------------------------
 // ------------------------------------------------------------------------------------------------------------
 protected:
-    /// Implementation of step
-    virtual void _step();
-
     /// Set default options
     virtual void defaultOptions();
 
-    /// Apply options
+    /// Apply options; ends by mapping them to the driver (convergence test,
+    /// step controller, corrector, tangent solver), so subclasses that override
+    /// it call this version first
     virtual void getOptions();
 
     /// Initialize the solver
@@ -321,15 +438,27 @@ protected:
     /// Solve the system with right-hand side \a F
     virtual gsVector<T> solveSystem(const gsVector<T> & F);
 
-    /// Compute the residual
+    /// Compute the residual (sign of ALResidual_t). Without legacy operators (solver
+    /// built on a caller's problem) the residual is evaluated through the state
+    /// space at \a U, which costs O(n) extra per call.
     virtual gsVector<T> computeResidual(const gsVector<T> & U, const T & L);
     virtual void computeResidual();
 
     /// Compute the residual error norms
     virtual void computeResidualNorms();
 
-    /// Compute the jacobian matrix
+    /// Compute and factorize the jacobian matrix at the displacement \a U for
+    /// the trial increment \a m_DeltaL, i.e. at the load factor \a m_L + \a m_DeltaL
+    /// (use \a _computeJacobianAt for a given load factor). Without legacy
+    /// operators (solver built on a caller's problem) the tangent is evaluated
+    /// through the state space, which costs O(n) extra per call.
     virtual gsSparseMatrix<T> _computeJacobian(const gsVector<T> & U, const gsVector<T> & dU);
+    /// Compute and factorize the jacobian matrix at the displacement \a U and
+    /// the load factor \a L, with \a dU the latest corrector update. Operators
+    /// built on the legacy signatures do not depend on \a L. Evaluations at a
+    /// committed point (stability, singular points) pass the committed load
+    /// factor \a m_L.
+    gsSparseMatrix<T> _computeJacobianAt(const gsVector<T> & U, const gsVector<T> & dU, T L);
     virtual gsSparseMatrix<T> computeJacobian(const gsVector<T> & U, const gsVector<T> & dU);
     virtual gsSparseMatrix<T> computeJacobian(const gsVector<T> & U);
     virtual gsSparseMatrix<T> computeJacobian();
@@ -342,34 +471,55 @@ protected:
     /// Compute \f$\bar_u\f$
     virtual void computeUbar();
 
-// Purely virtual functions
+// ------------------------------------------------------------------------------------------------------------
+// ---------------------------------------Driver mode----------------------------------------------------------
+// ------------------------------------------------------------------------------------------------------------
 protected:
-    /// Initialize the ALM
-    virtual void initMethods() = 0;
-    /// Initiate the first iteration
-    virtual void initiateStep() = 0;
-    /// Finish the iterations
-    virtual void iterationFinish() = 0;
 
-    /// Provide a specialized predictor when using quasi newton methods
-    virtual void quasiNewtonPredictor() = 0;
-    /// Perform iteration using quasi-newton method
-    virtual void quasiNewtonIteration() = 0;
+    /**
+       @brief Installs the path constraint that defines the method.
 
-    /// Step predictor
-    virtual void predictor() = 0;
-    virtual void predictorGuess() = 0;
-    /// A single iteration
-    virtual void iteration() = 0;
-    /// Normalised residual of the path constraint at the current increment
-    /// (m_DeltaU, m_DeltaL) for the arc length s = m_arcLength; dimensionless,
-    /// non-negative. The step is accepted only if it is below ConstraintTol.
-    virtual T constraintResidual() const = 0;
+       The constraint is handed to the driver, whose setup is marked dirty.
+       Install it before \a initialize. Subclasses call it in their
+       constructors and map their options to the constraint in \a getOptions
+       (after calling the base \a getOptions, which configures the driver).
 
-    /// Initialize the output
-    virtual void initOutput() = 0;
-    /// Provide step-wise output
-    virtual void stepOutput() = 0;
+       @param[in] c the constraint; must not be null (GISMO_ENSURE)
+    */
+    void setConstraint(const typename gsPathConstraint<T>::Ptr & c);
+
+    /// The installed path constraint; null until \a setConstraint is called
+    const typename gsPathConstraint<T>::Ptr & constraint() const { return m_constraint; }
+
+    /// The continuation driver; exists from construction on
+    gsContinuationDriver<T> &       driver()       { return *m_driver; }
+    /// The continuation driver; exists from construction on
+    const gsContinuationDriver<T> & driver() const { return *m_driver; }
+
+    /// The state space of the driver
+    gsStateSpace<T> &       stateSpace()       { return *m_space; }
+    /// The state space of the driver
+    const gsStateSpace<T> & stateSpace() const { return *m_space; }
+
+    /**
+       @brief Applies the initial guess before a step.
+
+       The default sets the step history to
+       \f$(U_{guess}-U,\ \lambda_{guess}-\lambda)\f$ with the previous step
+       length, so that a secant predictor scales it by \f$s/s_{prev}\f$ (the
+       behaviour of the Riks and consistent Crisfield methods). The guess is
+       not cleared by the default, so a guess that is not replaced is applied
+       again at the next step while it differs from the current point.
+       Subclasses refine it, e.g. load control uses the load difference as a
+       one-off step.
+
+       @param[in] Uguess guess of the solution
+       @param[in] Lguess guess of the load factor
+    */
+    virtual void applyInitialGuess(const gsVector<T> & Uguess, T Lguess);
+
+    /// Reset hook called first by \a initialize; subclasses reset their method state (e.g. the frozen scaling)
+    virtual void initMethods() {}
 
 protected:
 
@@ -532,8 +682,9 @@ protected:
 
     // Stability indicator
     gsVector<T> m_stabilityVec;
+    gsStabilityAnalysis<T> m_stabilityAnalysis;
 
-    // Integer if point is unstable (-1) or not (+1)
+    // Stability of the point: -1 unstable, +1 stable, 0 not computed (see isStable)
     index_t m_stabilityPrev; //previous step
     index_t m_stability; //current step
     // Method to check if a point is a bifurcation point
@@ -552,6 +703,75 @@ protected:
 
     // Branch switch parameter
     T m_tau;
+
+protected:
+
+    /// Problem built from the legacy operators (legacy constructors)
+    gsContinuationProblem<T>                  m_ownProblem;
+    /// State space owned by the legacy constructors
+    memory::unique_ptr<gsVectorStateSpace<T> > m_ownSpace;
+    /// The problem the driver works on: \a m_ownProblem or the caller's
+    gsContinuationProblem<T> *                m_problem;
+    /// The state space the driver works on: \a m_ownSpace or the caller's
+    gsStateSpace<T> *                         m_space;
+    /// The driver, built on \a m_problem and \a m_space
+    memory::unique_ptr<gsContinuationDriver<T> > m_driver;
+    /// The installed path constraint; null until \a setConstraint is called
+    typename gsPathConstraint<T>::Ptr         m_constraint;
+    /// True if the driver configuration changed since its last setup()
+    bool                                      m_driverDirty;
+    /// True if \a m_Uprev, \a m_Lprev hold a previous solution
+    bool                                      m_prevKnown;
+    /// Number of accepted steps since \a initialize
+    index_t                                   m_numAccepted;
+    /// Callback of \a onStepAccepted
+    std::function<void(index_t, T)>           m_onAccepted;
+
+private:
+
+    gsALMBase(const gsALMBase &);
+    gsALMBase & operator=(const gsALMBase &);
+
+    /// Builds the owned state space and problem from the legacy operators
+    void _constructOwned(const gsVector<T> & Force);
+    /// Initialises the members, builds the driver and its observer
+    void _initMembers(bool readOptions);
+    /// Maps the options to the driver, called at the end of \a getOptions
+    void _configureDriver();
+    /// One step
+    gsStatus _stepDriver();
+    /// Driver-mode part of \a initialize
+    void _initializeDriver();
+    /// Re-reads the solution mirror \a m_U from the state space
+    void _refreshMirror();
+    /// True if the state space is copyable and exports a vector of the tangent size
+    bool _vectorLike() const;
+    /// Imports \a m_U, \a m_L into the state space and the driver; false if the state space refuses \a m_U
+    bool _importMirror();
+    /// Writes the step history (\a DU, \a DL, previous length) into the driver
+    void _setHistory(const gsVector<T> & DU, T DL);
+    /// Sets the history from the mirrors: present minus previous solution, or cleared if the latter is unknown
+    void _setHistoryFromMirror();
+    /// Keeps the step size of a valid history equal to the previous controller length
+    void _syncHistoryStep();
+    /// Evaluates the residual (legacy sign) or Jacobian at \a U through the state space
+    bool _evaluateAt(const gsVector<T> & U, T L, gsVector<T> * R, gsSparseMatrix<T> * K);
+    /// Prints the verbose output of a driver event
+    void _observe(const gsStepEvent<T> & ev) const;
+    /// Stability of the point just accepted: \a _stabilityAtCommitted, or
+    /// \a computeStability(false) on the last tangent with the method Nothing
+    void _stabilityAfterStep();
+    /// Stability at the committed point after an external \a setSolution:
+    /// \a _stabilityAtCommitted, stored as current and previous stability
+    void _stabilityAtSolution();
+    /// Assembles and factorizes the tangent at the committed point through the
+    /// driver (reused by the next predictor), stores it in \a m_jacMat and sets
+    /// the stability from the LDL^T pivots (Determinant) or from \a m_jacMat
+    /// (otherwise); false if the assembly or the analysis fails
+    bool _stabilityAtCommitted();
+
+    /// True while the bisection of \a computeSingularPoint makes its trial steps
+    bool                                      m_inBisection;
 };
 
 

@@ -114,10 +114,13 @@ gsVector<T> gsStaticNewton<T>::_solveLinear()
 template <class T>
 gsStatus gsStaticNewton<T>::solveNonlinear()
 {
+    // The single try of the nonlinear solve: user operations (assemblers) and the
+    // driver setup may throw; the corrector loop itself never does.
+    // Whatever the failure, the displacements are those of the call.
+    const gsVector<T> U0 = m_U;
     try
     {
-        _solveNonlinear();
-        m_status = gsStatus::Success;
+        m_status = _solveNonlinear();
     }
     catch (int errorCode)
     {
@@ -134,63 +137,136 @@ gsStatus gsStaticNewton<T>::solveNonlinear()
     {
         m_status = gsStatus::OtherError;
     }
+    if (m_status != gsStatus::Success)
+        m_U = U0;
     return m_status;
 }
 
+/*
+   Newton iteration at fixed load as a continuation step with a Fixed constraint:
+   U <- U + dU with K dU = R, R = Fext - Fint(U) (the user residual, evaluated at
+   the load m_L by the residual functor), K = dFint/dU.
 
+   Acceptance: at least one update, |R|/|R0| < tolF and |dU|/|DU| < tolU with DU
+   the running increment of the step (not the predictor, which is zero). With a
+   headstart, the predictor is the given DU and R0 is the residual at U.
+*/
 template <class T>
-gsVector<T> gsStaticNewton<T>::_solveNonlinear()
+gsStatus gsStaticNewton<T>::_solveNonlinear()
 {
     this->getOptions();
     // m_start: true -> m_U given
     // m_headstart: true -> m_DeltaU given
 
-    if (m_DeltaU.norm()==0 && m_DeltaU.rows()==0) ///
+    if (m_DeltaU.norm()==0 && m_DeltaU.rows()==0)
     {
         m_deltaU = m_DeltaU = this->_solveLinear();
         m_U.setZero(); // Needed because linear solve modifies m_U.
         m_headstart = true; // due to this, the relative residual is based on the solution of the linear solve
     }
-    _start();
 
-    gsSparseMatrix<T> jacMat;
+    const index_t n = m_U.size();
+    m_space.reset(new gsVectorStateSpace<T>(m_U));
 
-    if (m_verbose>0) { initOutput(); }
-
-    for (m_numIterations = 0; m_numIterations != m_maxIterations; ++m_numIterations)
+    // The user residual Fext − Fint is passed to the driver unchanged (no negation) because the driver solves K δ = R.
+    m_problem.residual = [this](T, gsVector<T> & R, gsEvalMode) -> bool
     {
-        jacMat = this->_computeJacobian(m_U+m_DeltaU,m_deltaU);
+        return m_residualFun(m_space->working(), R);
+    };
+    m_problem.jacobian = [this](T, gsSparseMatrix<T> & K) -> bool
+    {
+        const gsStepContext<T> & ctx = m_driver->context();
+        // The Jacobian of the first update sees a zero iterative update, later ones the unrelaxed one.
+        gsVector<T> dx;
+        if (ctx.iteration == 0)
+            dx.setZero(m_space->working().size());
+        else
+        {
+            dx = ctx.deltaU;
+            if (ctx.relaxation != T(1)) dx /= ctx.relaxation;
+        }
+        if (!m_dnonlinear(m_space->working(), dx, K))
+            return false;
         if (m_verbose==2)
         {
-            gsInfo<<"Matrix: \n"<<jacMat.toDense()<<"\n";
-            gsInfo<<"Vector: \n"<<m_R<<"\n";
+            gsInfo<<"Matrix: \n"<<K.toDense()<<"\n";
+            gsInfo<<"Vector: \n"<<ctx.R<<"\n";
         }
+        return true;
+    };
+    m_problem.loadDirection = nullptr;
+    m_problem.F = gsVector<T>::Zero(n); // read only by the per-update load tangent solve, trivial for a zero right-hand side
 
-        _factorizeMatrix(jacMat);
-        m_deltaU = _solveSystem(m_R); // this is the UPDATE
-        m_DeltaU += m_relax * m_deltaU;
+    m_driver.reset(new gsContinuationDriver<T>(m_problem, *m_space));
+    if (m_headstart)
+        m_driver->setConstraint(typename gsPathConstraint<T>::Ptr(new gsStaticHeadstartConstraint<T>(m_DeltaU)));
+    else
+        m_driver->setConstraint(typename gsPathConstraint<T>::Ptr(new gsFixedConstraint<T>()));
 
-        m_R = this->_computeResidual(m_U+m_DeltaU);
-        m_residual = m_R.norm();
+    typedef typename gsConvergenceTest<T>::Ptr TestPtr;
+    m_resTest.reset(new gsStaticResidualTest<T>(m_tolF));
+    memory::shared_ptr< gsAllTest<T> > all(new gsAllTest<T>());
+    all->add(TestPtr(new gsMinIterTest<T>(1))).add(m_resTest).add(TestPtr(new gsStaticUpdateTest<T>(m_tolU)));
+    memory::shared_ptr< gsAnyTest<T> > any(new gsAnyTest<T>());
+    any->add(all).add(TestPtr(new gsMaxIterTest<T>(m_maxIterations)));
+    m_driver->setTest(any);
 
-        if (m_verbose>0) { stepOutput(m_numIterations); }
+    m_driver->corrector().setRelaxation(m_relax);
+    m_driver->linearSolver().setSolver(m_options.askString("Solver","SimplicialLDLT"), true);
+    m_driver->setLambda(m_L);
+    m_driver->setup();
 
-        m_residualOld = m_residual;
-
-        if (m_relax * m_deltaU.norm()/m_DeltaU.norm()  < m_tolU && m_residual/m_residualIni < m_tolF)
-        {
-            m_U+=m_DeltaU;
-            break;
-        }
-        else if (m_numIterations+1 == m_maxIterations)
-        {
-            m_U+=m_DeltaU;
-            gsInfo<<"Maximum iterations reached. Solution did not converge\n";
-            throw 1;
-        }
+    if (m_headstart)
+    {
+        // The relative residual of a headstart is based on the residual at U, not at U + DeltaU.
+        gsVector<T> R0;
+        if (!m_residualFun(m_U, R0))
+            return gsStatus::AssemblyError;
+        m_resTest->setBasis(R0.norm());
+        m_headstart = false;
     }
-    return m_U;
-};
+
+    if (m_verbose>0)
+    {
+        initOutput();
+        m_driver->addObserver([this](const gsStepEvent<T> & ev)
+        {
+            if (ev.kind != gsStepEvent<T>::IterationDone)
+                return;
+            const gsStepContext<T> & ctx = ev.ctx;
+            m_residualIni = m_resTest->basis();
+            if (ctx.iteration == 1)
+                m_residualOld = m_resTest->predictedResidual();
+            m_residual = ctx.R.norm();
+            m_DeltaU = ctx.DeltaU;
+            m_deltaU = ctx.deltaU;
+            if (ctx.relaxation != T(1)) m_deltaU /= ctx.relaxation; // stepOutput applies m_relax
+            this->stepOutput(ctx.iteration-1);
+            m_residualOld = m_residual;
+        });
+    }
+
+    const gsStatus st = m_driver->step();
+
+    const gsStepContext<T> & ctx = m_driver->context();
+    m_DeltaU = ctx.DeltaU;
+    m_R = ctx.R;
+    m_residual = m_R.norm();
+
+    const index_t k = m_driver->numIterations();
+    const gsDriverOp op = m_driver->report().failedOp;
+    if (st==gsStatus::Success || st==gsStatus::NotConverged
+        || (st==gsStatus::AssemblyError && op==gsDriverOp::Residual && k>0))
+        m_numIterations = math::max(k-1,index_t(0));
+    else
+        m_numIterations = k;
+
+    if (st==gsStatus::Success)
+        m_U = m_space->committed();
+    else if (st==gsStatus::NotConverged && op==gsDriverOp::None)
+        gsInfo<<"Maximum iterations reached. Solution did not converge\n";
+    return st;
+}
 
 template <class T>
 gsVector<T> gsStaticNewton<T>::_computeResidual(const gsVector<T> & U)
@@ -199,16 +275,6 @@ gsVector<T> gsStaticNewton<T>::_computeResidual(const gsVector<T> & U)
   if (!m_residualFun(U, resVec))
     throw 2;
   return resVec;
-}
-
-template <class T>
-gsSparseMatrix<T> gsStaticNewton<T>::_computeJacobian(const gsVector<T> & U, const gsVector<T> & deltaU)
-{
-  // Compute Jacobian
-  gsSparseMatrix<T> m;
-  if (!m_dnonlinear(U,deltaU,m))
-    throw 2;
-  return m;
 }
 
 template <class T>
@@ -268,51 +334,6 @@ void gsStaticNewton<T>::_init()
     defaultOptions();
 
     m_status = gsStatus::NotStarted;
-}
-
-template <class T>
-void gsStaticNewton<T>::_start()
-{
-    // Define residual measures:
-    // residual    = current residual
-    // residual0   = residual on m_U
-    // residualOld = residual in previous step
-
-    if (!m_headstart) // no headstart
-    {
-        // We can reset the update to ensure we properly restart
-        if (m_dofs==0) gsWarn<<"The number of degrees of freedom is equal to zero. This can lead to bad initialization.\n";
-        m_DeltaU.setZero(m_dofs);
-        // Compute current residual and its norm
-        m_R = this->_computeResidual(m_U);
-        m_residual = m_R.norm();
-        // If the residual is 0 (e.g. with purely displacment loading), we set it to 1 to allow divisions
-        if (m_residual==0) m_residual=1;
-        // All residual norms are equal
-        m_residualIni = m_residualOld = m_residual;
-    }
-    else
-    {
-        // If we have a headstart, we need to compute Residual0 on the solution m_U
-        // Compute current residual and its norm
-        m_R = this->_computeResidual(m_U + m_DeltaU);
-        m_residual = m_R.norm();
-        // If the residual is 0 (e.g. with purely displacment loading), we set it to 1 to allow divisions
-        if (m_residual==0) m_residual=1;
-        // The previous step residual is the same as the residual
-        m_residualOld = m_residual;
-        // Residual0 is the residual without m_DeltaU
-        m_residualIni = this->_computeResidual(m_U).norm();
-        // If the residual is 0 (e.g. with purely displacment loading), we set it to 1 to allow divisions
-        if (m_residualIni==0) m_residualIni=1;
-
-        // Now we can reset the headstart
-        m_headstart = false;
-    }
-
-    // Reset incremental update
-    m_deltaU.setZero(m_dofs);
-
 }
 
 } // namespace gismo
