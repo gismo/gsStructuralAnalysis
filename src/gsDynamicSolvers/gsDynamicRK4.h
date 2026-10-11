@@ -1,6 +1,6 @@
  /** @file gsDynamicRK4.h
 
-    @brief Class to perform time integration of second-order structural dynamics systems using the Explicit Euler method
+    @brief Class to perform time integration of second-order structural dynamics systems using the Runge-Kutta 4 method
 
     This file is part of the G+Smo library.
 
@@ -9,9 +9,6 @@
     file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
     Author(s): H.M. Verhelst (2019-..., TU Delft)
-
-    TODO (June 2023):
-    *    Change inputs to const references!
 */
 
 #pragma once
