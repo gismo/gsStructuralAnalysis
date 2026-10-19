@@ -570,7 +570,7 @@ void gsALMBase<T>::_computeStability(const gsVector<T> & x, bool jacobian, T shi
   else if (m_bifurcationMethod == bifmethod::Eigenvalue)
   {
     #ifdef gsSpectra_ENABLED
-    index_t number = std::min(static_cast<index_t>(std::floor(m_jacMat.cols()/5.)),10);
+    index_t number = std::min<index_t>(static_cast<index_t>(std::floor(m_jacMat.cols()/5.)),10);
     /*
     // Without shift!
     // This one can sometimes not converge, because spectra is better at finding large values.
