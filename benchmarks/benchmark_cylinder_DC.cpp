@@ -587,9 +587,12 @@ int main (int argc, char** argv)
         }
 
         // A failed load step is halved at most maxbisect times in a row; after that a returned
-        // (non-converged) solution is accepted, whereas a thrown solve has no solution to accept.
+        // (non-converged) solution is accepted only if it is finite and has the size of the free
+        // DOFs: a solve that diverged (e.g. through an inverted element) leaves no usable solution.
         const bool halve = !converged && stepBisections < maxbisect;
-        const bool accepted = !halve && !thrown;
+        const bool usable = !thrown && StaticSolver.solution().rows() == assembler->numDofs()
+                            && StaticSolver.solution().allFinite();
+        const bool accepted = !halve && usable;
         if (halve)
         {
             ++bisections;
