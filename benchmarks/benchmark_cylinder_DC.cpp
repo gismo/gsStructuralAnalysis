@@ -3,6 +3,21 @@
 
     @brief Computes the wrinkling behaviour of a cylinder or annulus
 
+    Twisting of an annulus (test 0) or a cylinder (test 1), Verhelst et al., CMAME 441 (2025) 117955,
+    Secs. 6.3 and 6.4. The driven boundary (v = 1) is rotated by pi/2*D about the z axis (D = load factor)
+    and displaced axially by a constant amount; the other boundary (v = 0) has all displacement components fixed (rotations are not constrained). The geometry is
+    discretised with a multi-patch basis with smoothed (C1) interfaces (gsUnstructuredSplines).
+
+    Material: incompressible Neo-Hookean, optionally wrapped by the tension-field theory
+    (--TFT, gsMaterialMatrixTFT) or by the Zhang-Kiendl split (--tftsplit, gsMaterialMatrixTFTSplit);
+    --tftlinear selects the linear flag of the wrapped law for both wrappers.
+    --membrane drops the bending stiffness.
+
+    Output (directory ArcLengthResults/<case>_-r<r>-e<e>[_TFT|_Split][_membrane], or --out):
+    - out.csv: load factor and the three virtual-work moments of the driven boundary
+    - steps.csv: one row per solve attempt, see the column description in the source of main()
+    - ParaView files and line_*.csv with --plot
+
     This file is part of the G+Smo library.
 
     This Source Code Form is subject to the terms of the Mozilla Public
@@ -18,6 +33,7 @@
 #include <gsKLShell/src/gsThinShellAssembler.h>
 #include <gsKLShell/src/getMaterialMatrix.h>
 #include <gsKLShell/src/gsMaterialMatrixTFT.h>
+#include <gsKLShell/src/gsMaterialMatrixTFTSplit.h>
 #include <gsKLShell/src/gsFunctionSum.h>
 #endif
 
@@ -56,7 +72,60 @@ void writeToCSVfile(const std::string& name, const gsMatrix<>& matrix)
   }
 }
 
+/// Creates \a path and its missing parents (gsFileManager::mkdir is not recursive)
+bool makeDirs(const std::string & path)
+{
+    bool ok = true;
+    for (size_t pos = path.find('/',1); pos != std::string::npos; pos = path.find('/',pos+1))
+        ok = gsFileManager::mkdir(path.substr(0,pos)) && ok;
+    return gsFileManager::mkdir(path) && ok;
+}
+
 #ifdef gsKLShell_ENABLED
+
+/// Wrinkling decorator of the base law \a base and the wrinkling-state oracle.
+///
+/// \a model: 0 no decorator, 1 gsMaterialMatrixTFT, 2 gsMaterialMatrixTFTSplit; \a linear is the linear flag
+/// of the decorators. The decorators clone \a base, so the criterion (\a tensionField) must already be set on
+/// \a base. All options are set here, before the caller hands the decorator to a gsMaterialMatrixContainer,
+/// which clones it.
+///
+/// The oracle is a Split decorator around \a base (not owned) with Eta = 0 and S2crit = 1e300: its
+/// TensionField output is the pure criterion state (1 taut, 0 wrinkled, -1 slack) of the base law,
+/// independent of the law the solver integrates.
+template <bool linear>
+void makeWrinkleMaterials(gsMaterialMatrixBase<real_t>::uPtr & wrapped,
+                          gsMaterialMatrixBase<real_t>::uPtr & oracle,
+                          gsMaterialMatrixBase<real_t> & base,
+                          const int model, const real_t eta, const bool exact,
+                          const real_t slackMultiplier, const index_t tensionField)
+{
+    if (model==1)
+    {
+        wrapped = memory::make_unique(new gsMaterialMatrixTFT<3,real_t,linear>(base));
+        wrapped->options().setReal("SlackMultiplier",slackMultiplier);
+    }
+    else if (model==2)
+    {
+        wrapped = memory::make_unique(new gsMaterialMatrixTFTSplit<3,real_t,linear>(base));
+        gsOptionList o = wrapped->options();
+        o.setReal("Eta",eta);
+        o.setSwitch("Exact",exact);
+        o.setReal("SlackMultiplier",slackMultiplier);
+        o.setInt("TensionField",tensionField);
+        wrapped->setOptions(o);
+    }
+
+    oracle = memory::make_unique(new gsMaterialMatrixTFTSplit<3,real_t,linear>(&base));
+    gsOptionList o = oracle->options();
+    o.setReal("Eta",0);
+    o.setSwitch("Exact",false);
+    o.setReal("S2crit",1e300);
+    o.setReal("SlackMultiplier",slackMultiplier);
+    o.setInt("TensionField",tensionField);
+    oracle->setOptions(o);
+}
+
 #ifdef gsUnstructuredSplines_ENABLED
 
 int main (int argc, char** argv)
@@ -66,14 +135,22 @@ int main (int argc, char** argv)
     int numHref     = 5;
     bool plot       = false;
     bool mesh = false;
-    int step = 10;
+    int step = 0;
 
     bool    TFT = false;
+    bool    tftsplit = false;
+    index_t tftlinear = 1;
+    real_t  eta = 0;
+    bool    exact = false;
+    real_t  slackmult = 0;
+    index_t tensionField = 2;
+    index_t maxbisect = 8;
+    std::string outDir;
     bool membrane= false;
     real_t dL = 1;
     // Solvers
     // * Dynamic Relaxation
-    index_t maxitDR = 1e5;
+    index_t maxitDR = 1e4;
     real_t  alpha = 1.0;
     real_t  damping = 0.1;
     bool DR  = false;
@@ -102,13 +179,21 @@ int main (int argc, char** argv)
 
     // Material settings
     cmd.addSwitch("TFT", "Use TFT material matrix", TFT);
+    cmd.addSwitch("tftsplit", "Use the Zhang-Kiendl split tension-field material (gsMaterialMatrixTFTSplit) around the base law", tftsplit);
+    cmd.addInt("", "tftlinear", "Linear flag of the TFT / Split wrapper: (1): wrapped law linear in E (default) | (0): general law", tftlinear);
+    cmd.addReal("", "eta", "Split: fraction of the unmodified stress kept in wrinkled/slack states (default 0)", eta);
+    cmd.addSwitch("exact", "Split: exact (non-truncated) wrinkled stress; requires --tftlinear 0", exact);
+    cmd.addReal("", "slackmult", "TFT and Split: SlackMultiplier of the slack state (default 0)", slackmult);
+    cmd.addInt("", "tensionfield", "Wrinkling criterion: 0 strain, 1 stress, 2 mixed (default 2)", tensionField);
     cmd.addSwitch("membrane", "Use membrane material", membrane);
 
     // Test case
     cmd.addInt("t", "test", "Test case: (0): Annulus | (1): Cylinder", testCase);
 
     // Load/displ stepping settings
-    cmd.addInt("N", "maxsteps", "Maximum number of steps", step);
+    cmd.addInt("N", "maxsteps", "Maximum number of accepted steps (0: walk to D = 1)", step);
+    cmd.addInt("", "maxbisect", "Maximum number of consecutive halvings of the load step after a failed solve", maxbisect);
+    cmd.addInt("", "maxitDR", "Maximum number of Dynamic Relaxation iterations", maxitDR);
     cmd.addReal( "L", "step", "load step size", dL);
     cmd.addReal( "a", "alpha", "alpha",  alpha );
     cmd.addReal( "c", "damping", "damping",  damping );
@@ -119,8 +204,17 @@ int main (int argc, char** argv)
     // Output settings
     cmd.addSwitch("plot", "Plot result in ParaView format", plot);
     cmd.addSwitch("mesh", "Plot mesh?", mesh);
+    cmd.addString("", "out", "Output directory (default: ArcLengthResults/<case>_-r<r>-e<e>[_TFT|_Split][_membrane])", outDir);
 
     try { cmd.getValues(argc,argv); } catch (int rv) { return rv; }
+
+    GISMO_ENSURE(!(TFT && tftsplit),"--TFT and --tftsplit are mutually exclusive");
+    GISMO_ENSURE(tensionField>=0 && tensionField<=2,"--tensionfield must be 0 (strain), 1 (stress) or 2 (mixed)");
+    GISMO_ENSURE(tftlinear==0 || tftlinear==1,"--tftlinear must be 0 or 1");
+    GISMO_ENSURE(!(exact && tftlinear==1),"--exact requires --tftlinear 0 (exact and linearised wrinkled stress coincide for a law linear in E)");
+    GISMO_ENSURE(maxbisect>=0,"--maxbisect must be non-negative");
+    if (!tftsplit && (eta!=0 || exact))
+        gsWarn<<"--eta and --exact only act with --tftsplit and are ignored\n";
 
     std::string output = "solution";
     std::string dirname = "ArcLengthResults";
@@ -139,6 +233,9 @@ int main (int argc, char** argv)
     {
         mp = gsNurbsCreator<>::MultiPatchAnnulus(0.0625,0.25);
         mp.embed(3);
+        // MultiPatchAnnulus leaves the third coefficient column of patches 1-3 uninitialised
+        for (size_t p = 0; p!=mp.nPatches(); ++p)
+            mp.patch(p).coefs().col(2).setZero();
     }
     else if (testCase==1)
         mp = gsNurbsCreator<>::MultiPatchCylinder(0.25,1.0);
@@ -199,10 +296,18 @@ int main (int argc, char** argv)
         GISMO_ERROR("Test case "<<testCase<<" not implemented");
     if (TFT)
         dirname = dirname + "_TFT";
+    if (tftsplit)
+        dirname = dirname + "_Split";
     if (membrane)
       	dirname = dirname + "_membrane";
+    if (!outDir.empty())
+        dirname = outDir;
 
-    gsFileManager::mkdir(dirname);
+    if (!makeDirs(dirname))
+    {
+        gsWarn<<"Could not create the output directory "<<dirname<<"\n";
+        return EXIT_FAILURE;
+    }
 
     output =  "solution";
     wn = output + "data.txt";
@@ -226,6 +331,7 @@ int main (int argc, char** argv)
 
     gsMaterialMatrixBase<real_t>::uPtr materialMatrix;
     gsMaterialMatrixBase<real_t>::uPtr materialMatrixTFT;
+    gsMaterialMatrixBase<real_t>::uPtr oracle;
     gsThinShellAssemblerBase<real_t>* assembler;
 
     gsOptionList options;
@@ -233,10 +339,16 @@ int main (int argc, char** argv)
     options.addSwitch("Compressibility","Compressibility: (false): Imcompressible | (true): Compressible",false);
     options.addInt("Implementation","Implementation: (0): Composites | (1): Analytical | (2): Generalized | (3): Spectral",1);
     materialMatrix = getMaterialMatrix<3,real_t>(mp,t,parameters,rho,options);
+    // The wrinkling decorators clone the base law and read the criterion from the clone
+    materialMatrix->options().setInt("TensionField",tensionField);
+    const int materialModel = TFT ? 1 : (tftsplit ? 2 : 0);
+    if (tftlinear)
+        makeWrinkleMaterials<true>(materialMatrixTFT,oracle,*materialMatrix,materialModel,eta,exact,slackmult,tensionField);
+    else
+        makeWrinkleMaterials<false>(materialMatrixTFT,oracle,*materialMatrix,materialModel,eta,exact,slackmult,tensionField);
     gsMaterialMatrixContainer<real_t> materialMatrixContainer;
-    if (TFT)
+    if (TFT || tftsplit)
     {
-        materialMatrixTFT = memory::make_unique(new gsMaterialMatrixTFT<3,real_t,true>(*materialMatrix));
         for (size_t p = 0; p!=mp.nPatches(); p++)
             materialMatrixContainer.add(*materialMatrixTFT);
         assembler = new gsThinShellAssembler<3, real_t, false>(geom,dbasis,BCs,force,materialMatrixContainer);
@@ -363,6 +475,20 @@ int main (int argc, char** argv)
 
     gsMatrix<> U = gsMatrix<>::Zero(assembler->numDofs(),1);
 
+    // Sample points of the wrinkling-state oracle: the Gauss-Legendre nodes (quA = 1, quB = 1, i.e. p+1 per direction per element) of every patch
+    gsOptionList quOpt;
+    quOpt.addReal("quA","",1.0);
+    quOpt.addInt("quB","",1);
+    std::vector<gsMatrix<> > sampleNodes(dbasis.nBases());
+    index_t numSamples = 0;
+    for (size_t p = 0; p!=dbasis.nBases(); ++p)
+    {
+        sampleNodes[p] = gsQuadrature::getAllNodes(dbasis.basis(p),quOpt);
+        numSamples += sampleNodes[p].cols();
+    }
+    gsMatrix<> Zmid(1,1);
+    Zmid << 0;
+
     std::string writeName = dirname + "/out.csv";
     std::ofstream file;
     file.open(writeName);
@@ -370,7 +496,47 @@ int main (int argc, char** argv)
     file<<std::setprecision(10);
     file<<0<<","<<0<<"\n";
     file.close();
+
+    /*
+        steps.csv: one row per solve attempt. Columns:
+          step        index of the load step (accepted step) the attempt belongs to
+          attempt     running counter over all attempts
+          D           load factor of the attempt
+          theta       prescribed rotation of the driven boundary, pi/2*D [rad]
+          uz          prescribed axial displacement of the driven boundary (independent of D) [m]
+          converged   1 if the static solver reported gsStatus::Success, 0 otherwise (also 0 if it threw)
+          accepted    1 if the attempt is kept (converged, or the bisection cap was reached with a returned
+                      solution), 0 if the load step is halved or the run stops
+          status_dr, status_nr   static_cast<int>(gsStatus) of the solver: 0 Success, 1 NotConverged,
+                      2 AssemblyError, 3 SolverError, 4 NotStarted, 5 OtherError; -1 if the solver did not
+                      run (disabled, or NR after a failed DR). If the solve threw, every enabled solver is
+                      recorded as 3.
+          it_dr, it_nr   iterations of the solver, -1 if it did not run or threw
+          bisections  cumulative number of halvings of the load step in the run, including the one
+                      triggered by this attempt
+          n_points    number of wrinkling-state sample points (Gauss-Legendre nodes, p+1 per direction per element, of all patches)
+          n_taut, n_wrinkled, n_slack   number of sample points in the taut, wrinkled and slack state of the
+                      mid-surface, by the criterion --tensionfield applied to the base law; -1 for a
+                      rejected attempt or if the evaluation failed
+          M1, M2, M3  the Moment1..3 of out.csv
+          Mz          torque about the z axis [N m]: internal virtual work with the rigid-rotation field
+                      v = (-y, x, 0) of the current configuration on the driven side
+          Fz          axial reaction force [N]: internal virtual work with v = (0, 0, 1) on the driven
+                      side; positive if the boundary has to pull to hold the elongation
+          (M1..Fz are nan for a rejected attempt)
+          time_s      wall time of the static solve [s]
+    */
+    std::ofstream stepsFile(dirname + "/steps.csv");
+    GISMO_ENSURE(stepsFile.is_open(),"Could not open "<<dirname<<"/steps.csv");
+    stepsFile<<"step,attempt,D,theta,uz,converged,accepted,status_dr,status_nr,it_dr,it_nr,bisections,n_points,n_taut,n_wrinkled,n_slack,M1,M2,M3,Mz,Fz,time_s\n";
+    stepsFile<<std::setprecision(12);
+
     index_t k=0;
+    index_t attempt=0;
+    index_t bisections=0;
+    index_t stepBisections=0;
+    bool runFailed = false;
+    gsStopwatch stopwatch;
     std::queue<real_t> Dcheckpoints;
     Dcheckpoints.push(0.7);
     Dcheckpoints.push(0.8);
@@ -387,13 +553,63 @@ int main (int argc, char** argv)
         dz.set_t(D);
         assembler->updateBCs(BCs);
         StaticSolver.setDisplacement(U);
-        StaticSolver.solve();
 
-        if ((StaticSolver.status() != gsStatus::Success && dL/dL0 > math::pow(0.5,3)))
+        // The solvers signal a failed residual or Jacobian evaluation by throwing
+        bool thrown = false;
+        stopwatch.restart();
+        try { StaticSolver.solve(); }
+        catch (int rv) { thrown = true; gsWarn<<"Static solver threw "<<rv<<"\n"; }
+        catch (const std::exception & e) { thrown = true; gsWarn<<"Static solver threw: "<<e.what()<<"\n"; }
+        catch (...) { thrown = true; gsWarn<<"Static solver threw an unknown exception\n"; }
+        const real_t solveTime = stopwatch.stop();
+        ++attempt;
+
+        const bool converged = !thrown && StaticSolver.status() == gsStatus::Success;
+        int statusDR = -1, statusNR = -1;
+        index_t itDR = -1, itNR = -1;
+        if (thrown)
         {
-            dL = dL/2;
-            D = D - dL;
-            continue;
+            if (DR) statusDR = static_cast<int>(gsStatus::SolverError);
+            if (NR) statusNR = static_cast<int>(gsStatus::SolverError);
+        }
+        else
+        {
+            if (DR)
+            {
+                statusDR = static_cast<int>(DynamicRelaxationSolver.status());
+                itDR = DynamicRelaxationSolver.iterations();
+            }
+            if (NR && (!DR || DynamicRelaxationSolver.status() == gsStatus::Success))
+            {
+                statusNR = static_cast<int>(NewtonSolver.status());
+                itNR = NewtonSolver.iterations();
+            }
+        }
+
+        // A failed load step is halved at most maxbisect times in a row; after that a returned
+        // (non-converged) solution is accepted, whereas a thrown solve has no solution to accept.
+        const bool halve = !converged && stepBisections < maxbisect;
+        const bool accepted = !halve && !thrown;
+        if (halve)
+        {
+            ++bisections;
+            ++stepBisections;
+        }
+
+        if (!accepted)
+        {
+            stepsFile<<k<<","<<attempt<<","<<D<<","<<EIGEN_PI/2*D<<","<<dz_val<<","
+                     <<0<<","<<0<<","<<statusDR<<","<<statusNR<<","<<itDR<<","<<itNR<<","
+                     <<bisections<<","<<numSamples<<",-1,-1,-1,nan,nan,nan,nan,nan,"<<solveTime<<std::endl;
+            if (halve)
+            {
+                dL = dL/2;
+                D = D - dL;
+                continue;
+            }
+            gsWarn<<"The solve failed after "<<stepBisections<<" halvings of the load step, stopping at D = "<<D<<"\n";
+            runFailed = true;
+            break;
         }
 
         U = StaticSolver.solution();
@@ -468,22 +684,53 @@ int main (int argc, char** argv)
         /////////////////////////////////////////////////////////////////////////////////
         // See: https://comet-fenics.readthedocs.io/en/latest/demo/tips_and_tricks/computing_reactions.html
 
-        // Define vectors representing the distance from the origin to the boundary for the moment around the x and y axes.
-        std::vector<gsFunctionExpr<>> Mz_x_vec(3);
-        std::vector<gsFunctionExpr<>> Mz_y_vec(3);
+        // Virtual displacement fields v on the driven side (zero elsewhere), as component expressions
+        // (x, y, z) of the reference position and the load factor t = D. Per field the components
+        // that are prescribed are given; the others are free and therefore zero.
+        //  0 (Moment1): v = (-y, x, 0), rigid rotation about z in the reference configuration
+        //  1 (Moment2): v = (dx, dy, 0) at t = D, the prescribed in-plane displacement of the driven
+        //               boundary, so Moment2 = sum_i R_i . u_i is the work of the in-plane reactions on
+        //               that displacement. A copied gsFunctionExpr starts with t = 0 (gsFunctionExprPrivate
+        //               copy constructor, src/gsCore/gsFunctionExpr.hpp), hence the explicit set_t.
+        //  2 (Moment3): v = (r sin(theta + pi/2*D), r cos(theta + pi/2*D), 0)
+        //  3 (Mz)     : v = (-r sin(theta + pi/2*D), r cos(theta + pi/2*D), 0) = (-y_cur, x_cur, 0), the rigid
+        //               rotation about z of the CURRENT configuration (the boundary is at angle theta + phi,
+        //               phi = pi/2*D). The torque is sum_i R_i . (e_z x x_cur,i), so this is the field that
+        //               gives it. For a tangential reaction tau (-sin(theta+phi), cos(theta+phi)), field 0
+        //               only gives tau r cos(phi), which vanishes at D = 1.
+        //  4 (Fz)     : v = (0, 0, 1), the axial reaction
+        // Component 0 is stored in Mz_y_vec and component 1 in Mz_x_vec (by the field's role in the
+        // boundary conditions below).
+        std::vector<gsFunctionExpr<>> Mz_x_vec(4);
+        std::vector<gsFunctionExpr<>> Mz_y_vec(4);
         Mz_x_vec[0] = gsFunctionExpr<>("sqrt(x^2+y^2)*cos(atan2(y,x))",3);
-        Mz_x_vec[1] = dx;
+        Mz_x_vec[1] = dy;
+        Mz_x_vec[1].set_t(D);
         Mz_x_vec[2] = gsFunctionExpr<>("sqrt(x^2+y^2)*cos(atan2(y,x)+pi/2*t)",3);
         Mz_x_vec[2].set_t(D);
+        Mz_x_vec[3] = gsFunctionExpr<>("sqrt(x^2+y^2)*cos(atan2(y,x)+pi/2*t)",3);
+        Mz_x_vec[3].set_t(D);
 
         Mz_y_vec[0] = gsFunctionExpr<>("-sqrt(x^2+y^2)*sin(atan2(y,x))",3);
-        Mz_y_vec[1] = dy;
+        Mz_y_vec[1] = dx;
+        Mz_y_vec[1].set_t(D);
         Mz_y_vec[2] = gsFunctionExpr<>("sqrt(x^2+y^2)*sin(atan2(y,x)+pi/2*t)",3);
         Mz_y_vec[2].set_t(D);
+        Mz_y_vec[3] = gsFunctionExpr<>("-sqrt(x^2+y^2)*sin(atan2(y,x)+pi/2*t)",3);
+        Mz_y_vec[3].set_t(D);
+        gsFunctionExpr<> unitZ("1",3);
 
-        std::vector<real_t> Moments(3);
+        // Prescribed function per field and component (nullptr: component not prescribed)
+        gsFunctionExpr<> * vField[5][3] = {
+            {&Mz_y_vec[0], &Mz_x_vec[0], nullptr},
+            {&Mz_y_vec[1], &Mz_x_vec[1], nullptr},
+            {&Mz_y_vec[2], &Mz_x_vec[2], nullptr},
+            {&Mz_y_vec[3], &Mz_x_vec[3], nullptr},
+            {nullptr,      nullptr,      &unitZ}};
 
-        for (index_t k=0; k!=Mz_x_vec.size(); k++)
+        std::vector<real_t> Moments(5);
+
+        for (index_t f=0; f!=5; f++)
         {
             gsExprAssembler<> A(1,1);
             A.setIntegrationElements(dbasis);
@@ -493,18 +740,14 @@ int main (int argc, char** argv)
             // Define dummy boundary conditions.
             // These conditions are used to define the test space on the boundary and compute its values there.
             gsBoundaryConditions<> bc_dummy;
-            bc_dummy.addCondition(0,boundary::north, condition_type::dirichlet, &Mz_y_vec[k], 0 ,false,0);
-            bc_dummy.addCondition(1,boundary::north, condition_type::dirichlet, &Mz_y_vec[k], 0 ,false,0);
-            bc_dummy.addCondition(2,boundary::north, condition_type::dirichlet, &Mz_y_vec[k], 0 ,false,0);
-            bc_dummy.addCondition(3,boundary::north, condition_type::dirichlet, &Mz_y_vec[k], 0 ,false,0);
-
-            bc_dummy.addCondition(0,boundary::north, condition_type::dirichlet, &Mz_x_vec[k], 0 ,false,1);
-            bc_dummy.addCondition(1,boundary::north, condition_type::dirichlet, &Mz_x_vec[k], 0 ,false,1);
-            bc_dummy.addCondition(2,boundary::north, condition_type::dirichlet, &Mz_x_vec[k], 0 ,false,1);
-            bc_dummy.addCondition(3,boundary::north, condition_type::dirichlet, &Mz_x_vec[k], 0 ,false,1);
+            for (index_t c=0; c!=3; c++)
+                if (vField[f][c])
+                    for (size_t p=0; p!=mp.nPatches(); p++)
+                        bc_dummy.addCondition(p,boundary::north, condition_type::dirichlet, vField[f][c], 0 ,false,c);
 
             bc_dummy.setGeoMap(mp);
-            u.setup(bc_dummy,dirichlet::interpolation,-1);
+            // L2 projection: the basis of the smoothed interfaces is not a tensor basis
+            u.setup(bc_dummy,dirichlet::l2Projection,-1);
 
             // Set all coefficients corresponding to the space to zero, except for the boundary conditions.
             gsMultiPatch<> geo;
@@ -547,12 +790,42 @@ int main (int argc, char** argv)
             auto M  = S1.tr();
             auto dEf= -( deriv2(v,sn(deff).normalized().tr() ) + deriv2(deff,var1(v,deff) ) ) * reshape(m2,3,3);
             // Integrate the variational formulation, this gives the moments.
-            Moments[k] = evA.integral((
+            Moments[f] = evA.integral((
                                     N*dEm.tr()
                                     + M*dEf.tr()
                                     )*meas(ori)
                                     );
         }
+
+        // Wrinkling states of the base law at the mid-surface sample points of the accepted state
+        index_t nTaut = -1, nWrinkled = -1, nSlack = -1;
+        try
+        {
+            gsMaterialMatrixEval<real_t,MaterialOutput::TensionField> stateEval(oracle.get(),&def,Zmid);
+            nTaut = nWrinkled = nSlack = 0;
+            for (size_t p = 0; p!=sampleNodes.size(); ++p)
+            {
+                gsMatrix<> state;
+                stateEval.piece(p).eval_into(sampleNodes[p],state);
+                for (index_t i = 0; i!=state.cols(); ++i)
+                {
+                    if (state(0,i) > 0.5)       ++nTaut;
+                    else if (state(0,i) < -0.5) ++nSlack;
+                    else                        ++nWrinkled;
+                }
+            }
+        }
+        catch (const std::exception & e)
+        {
+            gsWarn<<"Wrinkling state evaluation failed: "<<e.what()<<"\n";
+            nTaut = nWrinkled = nSlack = -1;
+        }
+
+        stepsFile<<k<<","<<attempt<<","<<D<<","<<EIGEN_PI/2*D<<","<<dz_val<<","
+                 <<(converged ? 1 : 0)<<","<<1<<","<<statusDR<<","<<statusNR<<","<<itDR<<","<<itNR<<","
+                 <<bisections<<","<<numSamples<<","<<nTaut<<","<<nWrinkled<<","<<nSlack<<","
+                 <<Moments[0]<<","<<Moments[1]<<","<<Moments[2]<<","<<Moments[3]<<","<<Moments[4]<<","
+                 <<solveTime<<std::endl;
 
         file.open(writeName,std::ofstream::out | std::ofstream::app);
         file<< std::setprecision(10)
@@ -569,10 +842,17 @@ int main (int argc, char** argv)
                 break;
         }
 
+        if (step > 0 && k+1 >= step)
+        {
+            gsInfo<<"Stopping after "<<step<<" load steps at D = "<<D<<"\n";
+            break;
+        }
+
         // GO TO THE NEXT STEPs
         dL = std::min(dL0,Dcheckpoints.front()-D);
         D = D + dL;
         k++;
+        stepBisections = 0;
     }
 
     if (plot)
@@ -582,7 +862,7 @@ int main (int argc, char** argv)
     }
 
     delete assembler;
-    return EXIT_SUCCESS;
+    return runFailed ? EXIT_FAILURE : EXIT_SUCCESS;
 }
 
 

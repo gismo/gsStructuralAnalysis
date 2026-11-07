@@ -14,7 +14,11 @@
     (gsMaterialMatrixTFT, \a --TFT), or with the split formulation (gsMaterialMatrixTFTSplit,
     \a --tftsplit; options \a --eta, \a --exact, \a --midsurface, \a --s2crit, \a --slackmult).
 
-    Every attempted load step appends one row to \a <out>/steps.csv (see WrinkleMonitor).
+    Every attempted load step appends one row to \a <out>/steps.csv (see WrinkleMonitor), followed by
+    the pressure, the displacements at the four corners and the two free-edge midpoints of the
+    quarter, and the principal mid-surface stresses at M (columns documented in the
+    steps.csv comment in main). \a --nx N replaces the \a -r refined bilinear square by a uniform N x N tensor B-spline
+    patch of degree 1+\a -e (C^{p-1}).
 
     Solver strategies:
     - \a --DR: dynamic relaxation (\a -T, \a --tolE); \a --NR: Newton (\a --tolNR, \a --maxitNR,
@@ -379,6 +383,7 @@ int main (int argc, char** argv)
     // Input options
     int numElevate    = 0;
     int numRefine     = 1;
+    int nx            = 0;
     bool plot         = false;
     bool write        = false;
     bool stress       = false;
@@ -427,6 +432,7 @@ int main (int argc, char** argv)
     gsCmdLine cmd("Example for an inflating pillow.");
 
     cmd.addInt("r","hRefine", "Number of dyadic h-refinement (bisection) steps to perform before solving", numRefine);
+    cmd.addInt("","nx", "Uniform N x N quarter mesh of degree 1+e (replaces -r); 0: BSplineSquare refined by -r (default 0)", nx);
     cmd.addInt("e","degreeElevation", "Number of degree elevation steps to perform on the Geometry's basis before solving", numElevate);
 
     cmd.addInt( "N", "maxit", "maxit",  loadSteps );
@@ -459,7 +465,7 @@ int main (int argc, char** argv)
     cmd.addReal( "", "thickness", "Thickness [m]; negative: value of the test case (default -1)",  thicknessOpt );
     cmd.addSwitch( "warmstart", "Start every load step from the last converged displacement (default: from zero)",  warmstart );
     cmd.addSwitch( "drfirst", "With --DR --NR --warmstart: DR on the first load step only, Newton alone afterwards",  drfirst );
-    cmd.addString( "", "out", "Output directory (default: ./Pillow_r<r>_e<e>-M<M>-c<C>[_TFT|_TFTSplit])",  outDir );
+    cmd.addString( "", "out", "Output directory (default: ./Pillow_<r<r>|nx<N>>_e<e>-M<M>-c<C>[_TFT|_TFTSplit])",  outDir );
     cmd.addInt( "", "monitor", "Point diagnostics in steps.csv: 0: none; 1: per step; 2: also per Newton iteration (default 2)",  monitorLevel );
 
     cmd.addSwitch("plot", "Plot result in ParaView format", plot);
@@ -478,6 +484,21 @@ int main (int argc, char** argv)
       GISMO_ERROR("--TFT and --tftsplit select different wrinkling models; use only one of them.");
     if (!tftsplit && (eta!=0 || exact || midsurface || s2crit!=0))
       gsWarn<<"--eta, --exact, --midsurface and --s2crit only act together with --tftsplit and are ignored.\n";
+    if (nx<0)
+      GISMO_ERROR("--nx must be non-negative.");
+    if (nx>0)
+    {
+      // -r defaults to 1, so only an explicitly given non-zero -r is worth a warning
+      bool rGiven = false;
+      for (int i = 1; i < argc; ++i)
+      {
+        const std::string arg(argv[i]);
+        if (arg=="-r" || arg.compare(0,9,"--hRefine")==0 || (arg.size()>2 && arg.compare(0,2,"-r")==0 && std::isdigit(static_cast<unsigned char>(arg[2]))))
+          rGiven = true;
+      }
+      if (rGiven && numRefine!=0)
+        gsWarn<<"--nx given: -r is ignored.\n";
+    }
     if (drfirst && !(DR && NR && warmstart))
       GISMO_ERROR("--drfirst needs --DR, --NR and --warmstart.");
 
@@ -518,16 +539,36 @@ int main (int argc, char** argv)
       thickness = thicknessOpt;
 
     gsMultiPatch<> mp,mp_def;
-    mp.addPatch(gsNurbsCreator<>::BSplineSquare(box));
-    mp.embed(3);
+    if (nx > 0)
+    {
+      // Uniform nx x nx tensor B-spline of degree 1+numElevate and regularity C^{p-1}. Greville control
+      // points reproduce the affine map of the box exactly.
+      const index_t degree = 1 + numElevate;
+      gsKnotVector<> kx(0,1,nx-1,degree+1), ky(0,1,nx-1,degree+1);
+      gsTensorBSplineBasis<2,real_t> tb(kx,ky);
+      const gsMatrix<> anchors = tb.anchors();
+      gsMatrix<> coefs(tb.size(),2);
+      for (index_t i = 0; i != tb.size(); ++i)
+      {
+        coefs(i,0) = box(0,0) + anchors(0,i)*(box(0,1)-box(0,0));
+        coefs(i,1) = box(1,0) + anchors(1,i)*(box(1,1)-box(1,0));
+      }
+      mp.addPatch(gsTensorBSpline<2,real_t>(tb,coefs));
+      mp.embed(3);
+    }
+    else
+    {
+      mp.addPatch(gsNurbsCreator<>::BSplineSquare(box));
+      mp.embed(3);
 
-    // p-refine
-    for(index_t i = 0; i< numElevate; ++i)
-      mp.patch(0).degreeElevate();    // Elevate the degree
+      // p-refine
+      for(index_t i = 0; i< numElevate; ++i)
+        mp.patch(0).degreeElevate();    // Elevate the degree
 
-    // h-refine
-    for(index_t i = 0; i< numRefine; ++i)
-      mp.patch(0).uniformRefine();
+      // h-refine
+      for(index_t i = 0; i< numRefine; ++i)
+        mp.patch(0).uniformRefine();
+    }
 
     gsInfo<<"mu = "<<E_modulus / (2 * (1 + PoissonRatio))<<"\n";
 
@@ -569,7 +610,7 @@ int main (int argc, char** argv)
     // real_t pressure =0;
 
     std::string dirname = ".";
-    dirname = dirname + "/Pillow_r" + std::to_string(numRefine) + "_e" + std::to_string(numElevate) + "-M" + std::to_string(material) + "-c" + std::to_string(Compressibility);
+    dirname = dirname + "/Pillow_" + (nx>0 ? "nx" + std::to_string(nx) : "r" + std::to_string(numRefine)) + "_e" + std::to_string(numElevate) + "-M" + std::to_string(material) + "-c" + std::to_string(Compressibility);
     if (TFT)
       dirname = dirname + "_TFT";
     if (tftsplit)
@@ -749,6 +790,15 @@ int main (int argc, char** argv)
     gsParaviewCollection<> GHcollection(dirname + "/" + "wrinkle_gamma_hat");
     gsParaviewCollection<> solcollection(dirname + "/" + "solution");
 
+    // Parametric points of the displacement columns of steps.csv, in column order (see the steps.csv comment below)
+    gsMatrix<> qoiPoints(2,6);
+    qoiPoints.col(0)<<0,0;
+    qoiPoints.col(1)<<1,0;
+    qoiPoints.col(2)<<0,1;
+    qoiPoints.col(3)<<1,1;
+    qoiPoints.col(4)<<0.5,0;
+    qoiPoints.col(5)<<1,0.5;
+
     gsStructuralAnalysisOutput<real_t> writer(dirname + "/" + wn,writePoints);
     std::vector<std::string> pointheaders = {"x","y","z"};
     std::vector<std::string> otherheaders = {"load"};
@@ -792,9 +842,18 @@ int main (int argc, char** argv)
     //   pressure: applied pressure (Pa)
     //   uz_M:     z-displacement at the centre M of the full square, parametric point (0,1) (m)
     //   ux_A:     x-displacement at the free corner A, parametric point (1,0) (m)
+    //   ux_c00,uy_c00,uz_c00: displacement at parametric point (0,0), where the west symmetry line meets the south free edge (m)
+    //   ux_c10,uy_c10,uz_c10: displacement at parametric point (1,0), the free corner A (m)
+    //   ux_c01,uy_c01,uz_c01: displacement at parametric point (0,1), the centre M (m)
+    //   ux_c11,uy_c11,uz_c11: displacement at parametric point (1,1), where the north symmetry line meets the east free edge (m)
+    //   ux_es,uy_es,uz_es:    displacement at parametric point (0.5,0), the midpoint of the south free edge (m)
+    //   ux_ee,uy_ee,uz_ee:    displacement at parametric point (1,0.5), the midpoint of the east free edge (m)
+    //   S1_M,S2_M: principal 2nd Piola-Kirchhoff stresses at the mid-surface at M, parametric point (0,1), S1 >= S2 (Pa)
     // The QoI columns are NaN for non-converged attempts.
     std::ofstream stepsFile(dirname + "/steps.csv");
-    stepsFile<<std::setprecision(12)<<WrinkleMonitor::header()<<",pressure,uz_M,ux_A"<<std::endl;
+    stepsFile<<std::setprecision(12)<<WrinkleMonitor::header()<<",pressure,uz_M,ux_A"
+              <<",ux_c00,uy_c00,uz_c00,ux_c10,uy_c10,uz_c10,ux_c01,uy_c01,uz_c01,ux_c11,uy_c11,uz_c11"
+              <<",ux_es,uy_es,uz_es,ux_ee,uy_ee,uz_ee,S1_M,S2_M"<<std::endl;
     index_t attempt = 0, failures = 0, singular = 0;
     gsStopwatch stopwatch;
 
@@ -898,7 +957,10 @@ int main (int argc, char** argv)
       if (!info.converged)
       {
         monitor.writeColumns(stepsFile,info,pointStats);
-        stepsFile<<","<<pressure*load_fac<<","<<std::numeric_limits<real_t>::quiet_NaN()<<","<<std::numeric_limits<real_t>::quiet_NaN()<<std::endl;
+        stepsFile<<","<<pressure*load_fac<<","<<std::numeric_limits<real_t>::quiet_NaN()<<","<<std::numeric_limits<real_t>::quiet_NaN();
+        for (index_t k = 0; k != 20; ++k)
+          stepsFile<<","<<std::numeric_limits<real_t>::quiet_NaN();
+        stepsFile<<std::endl;
 
         gsDebug<<"Number of failures: "<<bisected<<"\n";
         if (bisected > 20) // failed already 20 times
@@ -938,7 +1000,17 @@ int main (int argc, char** argv)
       {
         const gsMatrix<> qoi = deformation.patch(0).eval(writePoints);
         monitor.writeColumns(stepsFile,info,pointStats);
-        stepsFile<<","<<pressure*load_fac<<","<<qoi(2,2)<<","<<qoi(0,0)<<std::endl;
+        stepsFile<<","<<pressure*load_fac<<","<<qoi(2,2)<<","<<qoi(0,0);
+        const gsMatrix<> qoiDisp = deformation.patch(0).eval(qoiPoints);
+        for (index_t k = 0; k != qoiPoints.cols(); ++k)
+          stepsFile<<","<<qoiDisp(0,k)<<","<<qoiDisp(1,k)<<","<<qoiDisp(2,k);
+
+        // Principal stresses at M: one point per call, the order of the pair depends on the material
+        const gsMatrix<> Z0 = gsMatrix<>::Zero(1,1);
+        gsMatrix<> ptM(2,1);
+        ptM<<0,1;
+        const gsMatrix<> SM = evalMaterial<MaterialOutput::PStress>(runMaterial,mp_def,ptM,Z0);
+        stepsFile<<","<<std::max(SM(0,0),SM(1,0))<<","<<std::min(SM(0,0),SM(1,0))<<std::endl;
       }
 
       // ! [Export visualization in ParaView]

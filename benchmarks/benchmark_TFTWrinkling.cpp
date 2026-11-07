@@ -22,7 +22,9 @@
 
     Wrinkling model (\a --model): \a none, \a tft (gsMaterialMatrixTFT) or \a split
     (gsMaterialMatrixTFTSplit; options \a --eta, \a --exact, \a --midsurface, \a --s2crit,
-    \a --slackmult).
+    \a --slackmult). \a --tensionfield selects the wrinkling criterion (0: strain-based, 1:
+    stress-based, 2: mixed, the default; Zhang & Kiendl (2026), Eq. 35) of the base law (used by
+    TFT), of the Split decorator and of the wrinkle-state monitor.
 
     Every attempted load step appends one row to \a <out>/steps.csv (see WrinkleMonitor and the
     column list next to the header of the case). A step that does not converge is halved, at most
@@ -36,6 +38,41 @@
     the singular values of the tangent matrix. The diagnostics only observe the iteration. Without
     the flag no diagnostic file is written.
 
+    Shell mode (\a --shell, test cases 1 and 2, needs \a --model none and \a -p >= 2): the same
+    problems are solved as Kirchhoff-Love shells with bending (gsThinShellAssembler<3,real_t,true>),
+    with the material, the parameters (for the Mooney-Rivlin sheet the ratio c1/c2), the displacement
+    control and the load schedule of the membrane runs; both cases are embedded in space (d = 3).
+    - Boundary conditions. The membrane conditions are kept and the out-of-plane component (2) is
+      added. Test 1: the symmetry edges x = 0 and y = 0 are clamped in component 2 (zero slope of
+      u_z across the symmetry plane), the grip has u_z = 0 and a clamped component 2 (zero rotation),
+      the free edge is free. Test 2: the top edge is clamped in component 2, i.e. it stays in its
+      plane with normal e_z. The driven bottom edge is only pinned (all components prescribed):
+      clamping u_z ties dU_z/d(eta) = 0, but a rigid rotation of the grip about the y-axis needs
+      dU/d(eta) = (R-I) dX/d(eta), which has nonzero x and z components, so a componentwise clamp
+      would impose a twisted grip in the rotation phase.
+    - Imperfection (\a --seedamp a, \a --seed): every free global z-dof of the control net, excluding
+      the Dirichlet ones and those tied to them, gets the offset a*t*U(-1,1) of the reference
+      geometry, with U drawn from std::mt19937(\a --seed) in the order of the global dof numbers.
+      Control points tied by a clamp share the offset. The draws are reproducible for a given
+      standard library (std::uniform_real_distribution is implementation-defined). With
+      \a --seedamp 0 the geometry is not touched.
+    - Solver. Newton as in the membrane case, or with \a --DR a dynamic-relaxation solve followed by
+      Newton in every load step (gsStaticDR, gsStaticComposite; \a --alpha coefficient of the
+      lumped mass rho*t*area, which makes it unit dependent: about 1e13 for the SI sheet of test 1 and about 1e2 for the mm/MPa trapezoid of
+      test 2,
+      \a --damping 0 = kinetic damping with a velocity reset every 100 iterations, \a --maxitDR
+      iteration cap). \a --tolDR is relative to the residual norm of the step's starting state
+      (previous converged state under the new boundary data): the DR residual tolerance is
+      tolDR*|R0| and the tolerance on the relative DR update is tolDR.
+    - Torque of test 2 (N mm): the virtual work of the full internal force f_int, bending included,
+      on the rotation velocity of the driven edge, T = sum_i f_int,i dU_i/d(theta). f_int comes from
+      one vector assembly of a second assembler without boundary conditions, so that the force at
+      the prescribed dofs is available.
+    - Column uz_absmax (all shell runs, at the Gauss points): test 1 [m], max |z| of the deformed
+      mid-surface (all prescribed edges lie in z = 0). Test 2 [mm], max |(x-r).n_r| with the
+      ruled surface r(xi,eta) = (1-eta) x(xi,0) + eta x(xi,1) between the two deformed edges and
+      its unit normal n_r; in phase 1 r is the plane z = 0.
+
     This file is part of the G+Smo library.
 
     This Source Code Form is subject to the terms of the Mozilla Public
@@ -47,6 +84,9 @@
 
 #include <gismo.h>
 
+#include <random>
+#include <set>
+
 #ifdef gsKLShell_ENABLED
 #include <gsKLShell/src/gsThinShellAssembler.h>
 #include <gsKLShell/src/getMaterialMatrix.h>
@@ -56,7 +96,9 @@
 #include <gsKLShell/src/gsMaterialMatrixIntegrate.h>
 #endif
 
+#include <gsStructuralAnalysis/src/gsStaticSolvers/gsStaticDR.h>
 #include <gsStructuralAnalysis/src/gsStaticSolvers/gsStaticNewton.h>
+#include <gsStructuralAnalysis/src/gsStaticSolvers/gsStaticComposite.h>
 
 #include <gsStructuralAnalysis/src/gsStructuralAnalysisTools/gsStructuralAnalysisUtils.h>
 
@@ -669,9 +711,10 @@ private:
 };
 
 /// Builds the wrinkling-state oracle around \a base (not owned): a Split decorator with Eta = 0, no exact
-/// solve and S2crit = 1e300, so that the TensionField output is the criterion state
+/// solve and S2crit = 1e300, so that the TensionField output is the criterion state; the oracle
+/// evaluates the wrinkling criterion \a tensionField
 template <short_t d, bool linear>
-gsMaterialMatrixBase<real_t>::uPtr makeOracle(MaterialBase * base, real_t slackMultiplier)
+gsMaterialMatrixBase<real_t>::uPtr makeOracle(MaterialBase * base, real_t slackMultiplier, index_t tensionField)
 {
     gsMaterialMatrixBase<real_t>::uPtr oracle =
         memory::make_unique(new gsMaterialMatrixTFTSplit<d,real_t,linear>(base));
@@ -680,12 +723,13 @@ gsMaterialMatrixBase<real_t>::uPtr makeOracle(MaterialBase * base, real_t slackM
     o.setSwitch("Exact",false);
     o.setReal("S2crit",1e300);
     o.setReal("SlackMultiplier",slackMultiplier);
+    o.setInt("TensionField",tensionField);
     oracle->setOptions(o);
     return oracle;
 }
 
-/// Sets the options of a Split material
-void setSplitOptions(MaterialBase * split, real_t eta, bool exact, bool midsurface, real_t s2crit, real_t slackMultiplier)
+/// Sets the options of a Split material, including its own wrinkling criterion \a tensionField
+void setSplitOptions(MaterialBase * split, real_t eta, bool exact, bool midsurface, real_t s2crit, real_t slackMultiplier, index_t tensionField)
 {
     gsOptionList o = split->options();
     o.setReal("Eta",eta);
@@ -693,6 +737,7 @@ void setSplitOptions(MaterialBase * split, real_t eta, bool exact, bool midsurfa
     o.setSwitch("Midsurface",midsurface);
     o.setReal("S2crit",s2crit);
     o.setReal("SlackMultiplier",slackMultiplier);
+    o.setInt("TensionField",tensionField);
     split->setOptions(o);
 }
 
@@ -706,15 +751,19 @@ struct RunMaterials
     std::function<void(index_t *)> readCounters; ///< theta fallbacks, TFT failures, exact fallbacks, exact reclassified
 };
 
-/// Creates the base material (\a options select the law), its wrinkling decorator and the oracle
+/// Creates the base material (\a options select the law), its wrinkling decorator and the oracle;
+/// \a tensionField is the wrinkling criterion (0 strain-based, 1 stress-based, 2 mixed) of all three
 template <short_t d, bool linear>
 void buildMaterials(RunMaterials & m, const gsMultiPatch<> & mp, const gsFunctionSet<> & t, const gsFunctionSet<> & rho,
                     std::vector<gsFunctionSet<>*> & parameters, const gsOptionList & options, int model,
-                    real_t eta, bool exact, bool midsurface, real_t s2crit, real_t slackMultiplier)
+                    real_t eta, bool exact, bool midsurface, real_t s2crit, real_t slackMultiplier, index_t tensionField)
 {
     m.base = getMaterialMatrix<d,real_t>(mp,t,parameters,rho,options);
+    // The TFT decorator clones the base law and takes its criterion from the clone, so the
+    // option has to be set before anything wraps the base.
+    m.base->options().setInt("TensionField",tensionField);
     m.model = model;
-    m.oracle = makeOracle<d,linear>(m.base.get(),slackMultiplier);
+    m.oracle = makeOracle<d,linear>(m.base.get(),slackMultiplier,tensionField);
     m.resetCounters = [](){};
     m.readCounters = [](index_t * c){ c[0] = c[1] = c[2] = c[3] = -1; };
     if (model==0)
@@ -730,7 +779,7 @@ void buildMaterials(RunMaterials & m, const gsMultiPatch<> & mp, const gsFunctio
     else
     {
         m.wrapped = memory::make_unique(new gsMaterialMatrixTFTSplit<d,real_t,linear>(*m.base));
-        setSplitOptions(m.wrapped.get(),eta,exact,midsurface,s2crit,slackMultiplier);
+        setSplitOptions(m.wrapped.get(),eta,exact,midsurface,s2crit,slackMultiplier,tensionField);
         m.run = m.wrapped.get();
         gsMaterialMatrixTFTSplit<d,real_t,linear> * split = static_cast<gsMaterialMatrixTFTSplit<d,real_t,linear> *>(m.run);
         m.resetCounters = [split](){ split->resetCounters(); };
@@ -822,6 +871,69 @@ real_t virtualWorkTorque(const gsMultiBasis<> & dbasis, const gsMultiPatch<> & m
     return ev.integral( (N*dEm.tr())*meas(ori) );
 }
 
+/**
+ * @brief Torque on the driven edge of the trapezoid shell: the virtual work of the full internal force
+ *        (membrane and bending) on the rotation velocity du/dtheta = (-X sin(theta), 0, X cos(theta)),
+ *        T = sum_i f_int,i . du_i/dtheta, over the control points i of the south edge (N mm).
+ *
+ * \a freeAssembler must have no boundary conditions, so that its residual r = f_ext - f_int (f_ext = 0)
+ * contains the force at the prescribed dofs. The driven edge is pinned, so no control point of
+ * the second row is tied to it and the edge control points carry the whole reaction. X is the
+ * reference x-coordinate of a control point of \a mp, \a D = theta/pi.
+ * Cost: one vector assembly plus O(#edge control points).
+ */
+real_t residualTorque(gsThinShellAssemblerBase<real_t> & freeAssembler, const gsMultiBasis<> & dbasis,
+                      const gsMultiPatch<> & mp, const gsMultiPatch<> & def, real_t D)
+{
+    freeAssembler.assembleVector(def);
+    const gsVector<> r = freeAssembler.rhs();
+    const gsDofMapper fmap = freeAssembler.getMapper();
+    const gsMatrix<index_t> bnd = dbasis.basis(0).boundary(boundary::south);
+    const real_t th = EIGEN_PI*D;
+    real_t T = 0;
+    for (index_t k = 0; k!=bnd.rows(); ++k)
+    {
+        const index_t i = bnd(k,0);
+        const real_t X = mp.patch(0).coefs()(i,0);
+        T -= r[fmap.index(i,0,0)]*(-X*std::sin(th)) + r[fmap.index(i,0,2)]*(X*std::cos(th));
+    }
+    return T;
+}
+
+/// Maximum of |z| of the geometry \a g over the parametric points \a nodes: the deviation of the deformed
+/// mid-surface from the plane z = 0. Cost: O(#nodes) evaluations.
+real_t maxAbsZ(const gsGeometry<> & g, const gsMatrix<> & nodes)
+{
+    const gsMatrix<> x = g.eval(nodes);
+    return x.row(2).cwiseAbs().maxCoeff();
+}
+
+/// Maximum over the parametric points \a nodes (xi,eta) of |(x-r).n_r|, the distance of the surface \a g
+/// from the ruled surface r(xi,eta) = (1-eta) b(xi) + eta h(xi) spanned by its edges b = x(.,0) and
+/// h = x(.,1); n_r is the unit normal of r, d_xi r x (h-b). Points where this normal vanishes are skipped.
+/// Cost: O(#nodes) evaluations.
+real_t maxDistanceToRuled(const gsGeometry<> & g, const gsMatrix<> & nodes)
+{
+    real_t result = 0;
+    gsMatrix<> pt(2,1), pb(2,1), ph(2,1);
+    for (index_t k = 0; k!=nodes.cols(); ++k)
+    {
+        const real_t xi = nodes(0,k), et = nodes(1,k);
+        pt<<xi,et; pb<<xi,0; ph<<xi,1;
+        const gsMatrix<> x = g.eval(pt), b = g.eval(pb), h = g.eval(ph);
+        const gsMatrix<> Jb = g.jacobian(pb), Jh = g.jacobian(ph);
+        const gsVector3d<> r  = (1-et)*b.col(0) + et*h.col(0);
+        const gsVector3d<> dr = (1-et)*Jb.col(0) + et*Jh.col(0);
+        gsVector3d<> n = dr.cross(gsVector3d<>(h.col(0)-b.col(0)));
+        const real_t nn = n.norm();
+        if (nn==0)
+            continue;
+        n /= nn;
+        result = std::max(result,std::abs(n.dot(gsVector3d<>(x.col(0)-r))));
+    }
+    return result;
+}
+
 /// Writes the sampled midline stresses as CSV (x, S1, S2)
 void writeMidline(const std::string & fileName, const std::vector<real_t> & x, const std::vector<real_t> & S1, const std::vector<real_t> & S2)
 {
@@ -843,12 +955,13 @@ struct Phase
 /// Writes the material output \a out of \a mat on \a def (evaluated at z = 0) as a ParaView file.
 /// Planar assemblers cannot construct the wrinkle fields through constructStress (which needs the surface
 /// normal), so the fields of planar cases are evaluated from the material directly.
+/// \a npts is the total number of ParaView sample points per patch.
 template <MaterialOutput out>
-void writeMaterialField(MaterialBase * mat, const gsMultiPatch<> & def, const std::string & fileName)
+void writeMaterialField(MaterialBase * mat, const gsMultiPatch<> & def, const std::string & fileName, index_t npts)
 {
     gsMaterialMatrixEval<real_t,out> ev(mat,&def,gsMatrix<>::Zero(1,1));
     gsField<> field(def,ev,true);
-    gsWriteParaview(field,fileName,5000);
+    gsWriteParaview(field,fileName,npts);
 }
 
 /// A ParaView collection of one field of the assembler
@@ -869,6 +982,7 @@ int main (int argc, char** argv)
     index_t testCase   = 0;
     std::string modelName("split");
     real_t eta         = 0;
+    index_t tensionField = 2;
     bool exact         = false;
     real_t slackmult   = 1e-6;
     bool midsurface    = false;
@@ -890,6 +1004,16 @@ int main (int argc, char** argv)
     bool newtonDiag    = false;
     real_t diagFrom    = 0;
     bool plot          = false;
+    index_t npts       = 5000;
+    index_t nptsSol    = 1000;
+    bool shell         = false;
+    real_t seedAmp     = 0.01;
+    index_t seed       = 0;
+    bool DR            = false;
+    real_t alphaDR     = 1.0;
+    real_t dampingDR   = 0.0;
+    real_t tolDR       = 1e-3;
+    index_t maxitDR    = 100000;
     std::string outDir;
     index_t verbose    = 0;
 
@@ -898,6 +1022,7 @@ int main (int argc, char** argv)
     cmd.addInt("t","testCase","Test case: 0: shear rectangle (SvK, d=2); 1: stretched Mooney-Rivlin sheet (d=2); 2: twisted trapezoid (Neo-Hookean, d=3)",testCase);
     cmd.addString("","model","Wrinkling model: none, tft or split (default split)",modelName);
     cmd.addReal("","eta","Split: stress fraction retained in the wrinkled/slack state (default 0)",eta);
+    cmd.addInt("","tensionfield","Wrinkling criterion of TFT, Split and the wrinkle-state monitor (also with --model none): 0 strain-based, 1 stress-based, 2 mixed (default 2)",tensionField);
     cmd.addSwitch("exact","Split: exact wrinkled-state solve for nonlinear materials",exact);
     cmd.addReal("","slackmult","Multiplier of the stiffness in the slack state, TFT and Split (default 1e-6)",slackmult);
     cmd.addSwitch("midsurface","Split: evaluate the material at the mid-surface only",midsurface);
@@ -919,7 +1044,17 @@ int main (int argc, char** argv)
     cmd.addSwitch("newtondiag","Write per-Newton-iterate diagnostics (newton_iter.csv, newton_flips.csv, converged_tangent.csv); needs --monitor 2",newtonDiag);
     cmd.addReal("","diagfrom","With --newtondiag: attempts of the last phase with load >= this value also get the tangent spectrum analysed (default 0)",diagFrom);
     cmd.addSwitch("plot","Write ParaView files and the midline stresses",plot);
-    cmd.addString("","out","Output directory (default: ./TFTWrinkling_t<case>_<model>)",outDir);
+    cmd.addInt("","npts","ParaView sample points per patch of the material fields (default 5000)",npts);
+    cmd.addInt("","nptssol","ParaView sample points per patch of the displacement field (default 1000)",nptsSol);
+    cmd.addSwitch("shell","Test cases 1 and 2: Kirchhoff-Love shell with bending instead of a membrane (needs --model none and -p >= 2)",shell);
+    cmd.addReal("","seedamp","Shell: amplitude of the random out-of-plane imperfection in units of the thickness (default 0.01; 0: none)",seedAmp);
+    cmd.addInt("","seed","Shell: seed of the random number generator of the imperfection (default 0)",seed);
+    cmd.addSwitch("DR","Shell: dynamic relaxation followed by Newton in every load step",DR);
+    cmd.addReal("","alpha","DR: coefficient of the lumped mass rho*t*area (rho = 1 is passed to the material), so the stable value depends on the unit system: about 1e13 for the SI sheet (test 1), about 1e2 for the mm/MPa trapezoid (test 2) (default 1)",alphaDR);
+    cmd.addReal("","damping","DR: damping coefficient; 0: kinetic damping with a velocity reset every 100 iterations (default 0)",dampingDR);
+    cmd.addReal("","tolDR","DR: tolerance relative to the residual norm of the starting state of the load step (default 1e-3)",tolDR);
+    cmd.addInt("","maxitDR","DR: maximum number of iterations (default 100000)",maxitDR);
+    cmd.addString("","out","Output directory (default: ./TFTWrinkling_t<case>_<model>, ./TFTWrinkling_t<case>_shell with --shell)",outDir);
     cmd.addInt("v","verbose","0: no; 1: Newton iteration output",verbose);
 
     try { cmd.getValues(argc,argv); } catch (int rv) { return rv; }
@@ -936,10 +1071,28 @@ int main (int argc, char** argv)
         gsWarn<<"--eta, --exact, --midsurface and --s2crit only act together with --model split and are ignored.\n";
     if (model==2 && exact && testCase==0)
         gsInfo<<"The shear case uses a linear (SvK) material, for which --exact has no effect.\n";
+    if (tensionField<0 || tensionField>2)
+        GISMO_ERROR("--tensionfield must be 0, 1 or 2, got "<<tensionField);
     if (degree<1)
         GISMO_ERROR("The degree must be at least 1.");
     if (newtonDiag && monitorLevel<2)
         GISMO_ERROR("--newtondiag needs --monitor 2: the state flips come from the monitor's iterate states.");
+    if (shell && testCase==0)
+        GISMO_ERROR("--shell is available for the test cases 1 and 2 only.");
+    if (shell && model!=0)
+        GISMO_ERROR("--shell requires --model none.");
+    if (shell && degree<2)
+        GISMO_ERROR("KL shells need C1: -p >= 2.");
+    if (DR && !shell)
+        GISMO_ERROR("--DR requires --shell.");
+    if (DR && newtonDiag)
+        GISMO_ERROR("--DR cannot be combined with --newtondiag: the diagnostics would observe every residual call of the DR iteration.");
+    if (seedAmp<0)
+        GISMO_ERROR("--seedamp must not be negative.");
+    if (shell && DR && alphaDR==1.0)
+        gsWarn<<"--DR with the default --alpha 1: the lumped mass is rho*t*area (rho = 1), so dt = 1 is far outside the stability limit in SI or mm/MPa units; expect DR to diverge unless --alpha is scaled (about 1e13 for test 1, 1e2 for test 2).\n";
+    if (!shell && (seedAmp!=0.01 || seed!=0 || alphaDR!=1.0 || dampingDR!=0.0 || tolDR!=1e-3 || maxitDR!=100000))
+        gsWarn<<"--seedamp, --seed, --alpha, --damping, --tolDR and --maxitDR only act together with --shell and are ignored.\n";
     if (nx<0) nx = (testCase==0 ? 40 : testCase==1 ? 8 : 16);
     if (ny<0) ny = (testCase==0 ? 10 : testCase==1 ? 4 : 16);
     if (steps<0) steps = (testCase==2 ? 60 : 30);
@@ -947,7 +1100,7 @@ int main (int argc, char** argv)
     if (nx<1 || ny<1 || steps<1 || presteps<1 || maxBisect<0)
         GISMO_ERROR("The numbers of elements and steps must be positive.");
     if (outDir.empty())
-        outDir = "./TFTWrinkling_t" + std::to_string(testCase) + "_" + modelName;
+        outDir = "./TFTWrinkling_t" + std::to_string(testCase) + "_" + (shell ? std::string("shell") : modelName);
     if (!makeDirs(outDir))
     {
         gsWarn<<"Could not create the output directory "<<outDir<<"\n";
@@ -957,8 +1110,9 @@ int main (int argc, char** argv)
     gsStopwatch totalTime, stageTime;
     stageTime.restart();
 
-    // Geometry and material parameters. Test case 0 and 1 are plane (d = 2), test case 2 is a membrane in space.
-    const short_t d = (testCase==2) ? 3 : 2;
+    // Geometry and material parameters. Test case 0 and 1 are plane (d = 2) membranes, test case 2 and the
+    // shells live in space (d = 3).
+    const short_t d = (testCase==2 || shell) ? 3 : 2;
     real_t E_modulus = 0, PoissonRatio = 0, thickness = 0, ratio = 0;
     index_t materialId = 0;
     if (testCase==0)
@@ -1036,6 +1190,13 @@ int main (int argc, char** argv)
         BCs.addCondition(boundary::south, condition_type::dirichlet, 0, 0, false, 1);
         BCs.addCondition(boundary::east, condition_type::dirichlet, 0, 0, false, 1);
         BCs.addCondition(boundary::east, condition_type::dirichlet, &uxFun, 0, false, 0);
+        if (shell)
+        {
+            BCs.addCondition(boundary::west , condition_type::clamped  , 0, 0, false, 2); // symmetry plane x = 0: dw/dx = 0
+            BCs.addCondition(boundary::south, condition_type::clamped  , 0, 0, false, 2); // symmetry plane y = 0: dw/dy = 0
+            BCs.addCondition(boundary::east , condition_type::dirichlet, 0, 0, false, 2); // grip: u_z = 0
+            BCs.addCondition(boundary::east , condition_type::clamped  , 0, 0, false, 2); // grip: zero rotation
+        }
     }
     else
     {
@@ -1048,9 +1209,41 @@ int main (int argc, char** argv)
         BCs2.addCondition(boundary::south, condition_type::dirichlet, &p2x, 0, false, 0);
         BCs2.addCondition(boundary::south, condition_type::dirichlet, &p2y, 0, false, 1);
         BCs2.addCondition(boundary::south, condition_type::dirichlet, &p2z, 0, false, 2);
+        if (shell)
+        {
+            // The top edge keeps z = 0 and the normal e_z: a clamp of component 2 is the exact zero-rotation
+            // condition. The driven edge is only pinned, see the file documentation. BCs and BCs2 must have
+            // the same structure, so that the dof numbering is the same in both phases.
+            BCs.addCondition(boundary::north, condition_type::clamped, 0, 0, false, 2);
+            BCs2.addCondition(boundary::north, condition_type::clamped, 0, 0, false, 2);
+        }
         BCs2.setGeoMap(mp);
     }
     BCs.setGeoMap(mp);
+
+    // Imperfection: one uniform draw per free global z-dof (control points tied by a clamp share a dof, hence
+    // the offset); the control net is final before the materials and the assembler copy or point to it.
+    gsDofMapper seedMap;
+    if (shell && seedAmp!=0)
+    {
+        seedMap = createMapper(dbasis,BCs,3,0,true,true);
+        std::mt19937 gen(static_cast<unsigned>(seed));
+        std::uniform_real_distribution<real_t> U(-1.0,1.0);
+        std::vector<real_t> w(seedMap.freeSize());
+        for (size_t i = 0; i!=w.size(); ++i)
+            w[i] = U(gen);
+        index_t nSeeded = 0;
+        std::set<index_t> zDofs;
+        for (index_t k = 0; k!=mp.patch(0).coefs().rows(); ++k)
+            if (seedMap.is_free(k,0,2))
+            {
+                mp.patch(0).coefs()(k,2) += seedAmp*thickness*w[seedMap.index(k,0,2)];
+                zDofs.insert(seedMap.index(k,0,2));
+                ++nSeeded;
+            }
+        mp_def = mp;
+        gsInfo<<"Imperfection: amplitude "<<seedAmp<<" t, seed "<<seed<<", "<<nSeeded<<" control points seeded ("<<zDofs.size()<<" free z-dofs)\n";
+    }
 
     // Materials
     gsConstantFunction<> t(thickness,d);
@@ -1072,22 +1265,35 @@ int main (int argc, char** argv)
 
     RunMaterials materials;
     if      (testCase==0)
-        buildMaterials<2,true >(materials,mp,t,rho,parameters,options,model,eta,exact,midsurface,s2crit,slackmult);
+        buildMaterials<2,true >(materials,mp,t,rho,parameters,options,model,eta,exact,midsurface,s2crit,slackmult,tensionField);
+    else if (testCase==1 && shell)
+        buildMaterials<3,false>(materials,mp,t,rho,parameters,options,model,eta,exact,midsurface,s2crit,slackmult,tensionField);
     else if (testCase==1)
-        buildMaterials<2,false>(materials,mp,t,rho,parameters,options,model,eta,exact,midsurface,s2crit,slackmult);
+        buildMaterials<2,false>(materials,mp,t,rho,parameters,options,model,eta,exact,midsurface,s2crit,slackmult,tensionField);
     else
-        buildMaterials<3,false>(materials,mp,t,rho,parameters,options,model,eta,exact,midsurface,s2crit,slackmult);
+        buildMaterials<3,false>(materials,mp,t,rho,parameters,options,model,eta,exact,midsurface,s2crit,slackmult,tensionField);
 
     gsVector<> forceVec = gsVector<>::Zero(d);
     gsConstantFunction<> force(forceVec,d);
 
     // The assembler integrates the material objects as they are (it does not clone them)
     std::unique_ptr<gsThinShellAssemblerBase<real_t> > assembler;
-    if (d==2)
+    if (shell)
+        assembler.reset(new gsThinShellAssembler<3,real_t,true>(mp,dbasis,BCs,force,materials.run));
+    else if (d==2)
         assembler.reset(new gsThinShellAssembler<2,real_t,false>(mp,dbasis,BCs,force,materials.run));
     else
         assembler.reset(new gsThinShellAssembler<3,real_t,false>(mp,dbasis,BCs,force,materials.run));
     GISMO_ENSURE(assembler->material(0) == materials.run,"The assembler does not use the expected material object");
+    if (shell && seedAmp!=0)
+        GISMO_ENSURE(seedMap.freeSize()==assembler->numDofs(),"The dof mapper of the imperfection does not match the one of the assembler");
+
+    // Assembler without boundary conditions: its residual contains the forces at the prescribed dofs (torque)
+    gsBoundaryConditions<> noBCs;
+    noBCs.setGeoMap(mp);
+    std::unique_ptr<gsThinShellAssemblerBase<real_t> > freeAssembler;
+    if (shell && testCase==2)
+        freeAssembler.reset(new gsThinShellAssembler<3,real_t,true>(mp,dbasis,noBCs,force,materials.run));
 
     // Sample points of the diagnostics: the Gauss points of the assembler
     gsOptionList quOpt;
@@ -1103,6 +1309,13 @@ int main (int argc, char** argv)
     assembler->assemble();
     gsSparseMatrix<> K = assembler->matrix();
     gsVector<> F = assembler->rhs();
+    // Lumped mass vector of DR; gsStaticDR keeps a reference to it. The number of dofs is the same in all phases.
+    gsVector<> Mlumped;
+    if (DR)
+    {
+        assembler->assembleMass(true);
+        Mlumped = assembler->rhs();
+    }
 
     gsStructuralAnalysisOps<real_t>::Jacobian_t Jacobian = [&assembler,&mp_def,&monitor,&diag](gsVector<real_t> const &x, gsSparseMatrix<real_t> & m)
     {
@@ -1131,6 +1344,27 @@ int main (int argc, char** argv)
     NWTOptions.setString("Solver",linSolver);
     NWTOptions.setInt("verbose",verbose);
     NWT.setOptions(NWTOptions);
+
+    // DR followed by Newton (Pillow's settings: alpha 1, kinetic damping with a velocity reset every 100 iterations)
+    std::unique_ptr<gsStaticDR<real_t> > DRM;
+    std::unique_ptr<gsStaticComposite<real_t> > DRsolver;
+    if (DR)
+    {
+        DRM.reset(new gsStaticDR<real_t>(Mlumped,F,Residual));
+        gsOptionList DROptions = DRM->options();
+        DROptions.setReal("damping",dampingDR);
+        DROptions.setReal("alpha",alphaDR);
+        DROptions.setInt("maxIt",maxitDR);
+        DROptions.setReal("tolE",1e-5);
+        DROptions.setInt("ResetIt",100);
+        DROptions.setInt("verbose",verbose);
+        DRM->setOptions(DROptions);
+        std::vector<gsStaticBase<real_t> *> solvers;
+        solvers.push_back(DRM.get());
+        solvers.push_back(&NWT);
+        DRsolver.reset(new gsStaticComposite<real_t>(solvers));
+        DRsolver->options().setInt("verbose",verbose);
+    }
 
     // The materials of the assembler, for the virtual work integral
     const gsMaterialMatrixContainer<real_t> materialContainer = assembler->materials();
@@ -1210,11 +1444,15 @@ int main (int argc, char** argv)
     //     wwidth               width of the wrinkled zone along the vertical centre line (m): twice the length
     //                          of the centre line of the quarter on which the run material is wrinkled, sampled
     //                          at 201 points; -1 without wrinkling model
+    //     uz_absmax            (--shell only) max |z| of the deformed mid-surface over the Gauss points (m)
     //   test case 2 (mm, N, MPa):
     //     theta_pi             rotation of the bottom edge divided by pi (-)
     //     uy_bot               vertical displacement of the bottom edge (mm)
     //     Torque               torque on the rotated bottom edge (N mm); NaN in phase 1
     //     Fy_bot               vertical reaction force on the bottom edge (N)
+    //     uz_absmax            (--shell only) max |(x-r).n_r| over the Gauss points (mm), the distance of the deformed
+    //                          mid-surface from the ruled surface r between its two deformed edges; in phase 1
+    //                          r is the plane z = 0. With --shell, Torque (phase 2) includes the bending contribution.
     // Response columns are NaN for attempts that did not converge.
     std::vector<std::string> qoiNames;
     if      (testCase==0)
@@ -1223,6 +1461,8 @@ int main (int argc, char** argv)
         qoiNames = {"eps","Rx_quarter","Rx_full","wwidth"};
     else
         qoiNames = {"theta_pi","uy_bot","Torque","Fy_bot"};
+    if (shell)
+        qoiNames.push_back("uz_absmax");
 
     const real_t nan = std::numeric_limits<real_t>::quiet_NaN();
     const gsMatrix<> Z0 = gsMatrix<>::Zero(1,1);
@@ -1244,7 +1484,12 @@ int main (int argc, char** argv)
     if (plot)
     {
         std::vector<PlotField> fieldList;
-        if (model==0)
+        if (shell)
+        {
+            fieldList.push_back(PlotField{"principal_stress_membrane",stress_type::principal_stress_membrane,MaterialOutput::PStress,nullptr,false});
+            fieldList.push_back(PlotField{"principal_stress_flexural",stress_type::principal_stress_flexural,MaterialOutput::PStress,nullptr,false});
+        }
+        else if (model==0)
             fieldList.push_back(PlotField{"principal_stress_membrane",stress_type::principal_stress_membrane,MaterialOutput::PStress,nullptr,false});
         else
         {
@@ -1304,14 +1549,49 @@ int main (int argc, char** argv)
                 U0 = assembler->constructSolutionVector(dispPred);
             }
 
-            NWT.initialize();
-            NWT.setDisplacement(U0);
+            // DR tolerance relative to the residual norm of the starting state of the step
+            if (DR)
+            {
+                gsVector<> R0;
+                Residual(U0,R0);
+                const real_t tiny = 1e-14*(1.0+F.norm());
+                const real_t tolAbs = tolDR*std::max(R0.norm(),tiny);
+                DRM->options().setReal("tol",tolAbs);
+                DRM->options().setReal("tolF",tolAbs);
+                DRM->options().setReal("tolU",tolDR);
+                DRsolver->initialize();
+                DRsolver->setDisplacement(U0);
+            }
+            else
+            {
+                NWT.initialize();
+                NWT.setDisplacement(U0);
+            }
             monitor.beginSolve();
             if (diag)
                 diag->beginAttempt(attempt,step,ph+1,D,diag->inWindow(ph,phases.size(),D));
             materials.resetCounters();
             stopwatch.restart();
-            NWT.solve();
+            // gsStaticDR::solve does not catch its error codes (1: not converged, 2: assembly error, 3: solver error),
+            // so a failed DR solve surfaces as an int and is recorded as a failed attempt
+            bool drThrew = false;
+            int drStatus = -1;
+            if (DR)
+            {
+                try
+                {
+                    DRsolver->solve();
+                }
+                catch (int errorCode)
+                {
+                    drThrew = true;
+                    drStatus = static_cast<int>(errorCode==1 ? gsStatus::NotConverged :
+                                                errorCode==2 ? gsStatus::AssemblyError :
+                                                errorCode==3 ? gsStatus::SolverError : gsStatus::OtherError);
+                }
+            }
+            else
+                NWT.solve();
             const real_t solveTime = stopwatch.stop();
             if (diag)
                 diag->endAttempt();
@@ -1321,18 +1601,32 @@ int main (int argc, char** argv)
             info.step = step;
             info.attempt = attempt++;
             info.load = D;
-            info.converged = NWT.converged();
-            info.statusNR = static_cast<int>(NWT.status());
-            info.statusDR = -1;
-            info.itNR = NWT.iterations();
-            info.itDR = -1;
-            info.usesNR = true;
+            if (DR)
+            {
+                // Newton runs only if DR succeeded
+                const bool ranNR = !drThrew && DRM->converged();
+                info.converged = !drThrew && DRsolver->converged();
+                info.statusDR = drThrew ? drStatus : static_cast<int>(DRM->status());
+                info.statusNR = ranNR ? static_cast<int>(NWT.status()) : -1;
+                info.itDR = DRM->iterations();
+                info.itNR = ranNR ? NWT.iterations() : 0;
+                info.usesNR = ranNR;
+            }
+            else
+            {
+                info.converged = NWT.converged();
+                info.statusNR = static_cast<int>(NWT.status());
+                info.statusDR = -1;
+                info.itNR = NWT.iterations();
+                info.itDR = -1;
+                info.usesNR = true;
+            }
             info.time = solveTime;
             // The counters have to be read before any further evaluation of the run material
             materials.readCounters(info.splitCounters);
             if (!info.converged)
                 failures++;
-            if (info.statusNR==static_cast<int>(gsStatus::SolverError))
+            if (info.statusNR==static_cast<int>(gsStatus::SolverError) || info.statusDR==static_cast<int>(gsStatus::SolverError))
                 singular++;
             info.bisections = bisected;
             info.failures = failures;
@@ -1340,7 +1634,7 @@ int main (int argc, char** argv)
 
             if (info.converged)
             {
-                solVector = NWT.solution();
+                solVector = DR ? DRsolver->solution() : NWT.solution();
                 mp_def = assembler->constructSolution(solVector);
             }
             const PointStats pointStats = monitor.evaluate(mp_def,materials.run,materials.model);
@@ -1383,6 +1677,8 @@ int main (int argc, char** argv)
                     qoi[1] = -bf(0,0);
                     qoi[2] = 2*qoi[1];
                     qoi[3] = -1;
+                    if (shell)
+                        qoi[4] = maxAbsZ(mp_def.patch(0),sampleNodes);
                     if (model!=0)
                     {
                         const index_t nLine = 201;
@@ -1401,9 +1697,12 @@ int main (int argc, char** argv)
                 {
                     qoi[2] = nan;
                     if (ph==1)
-                        qoi[2] = virtualWorkTorque(dbasis,mp,mp_def,materialContainer,vx,vz);
+                        qoi[2] = shell ? residualTorque(*freeAssembler,dbasis,mp,mp_def,D)
+                                       : virtualWorkTorque(dbasis,mp,mp_def,materialContainer,vx,vz);
                     const gsMatrix<> bf = assembler->boundaryForce(mp_def,patchSide(0,boundary::south));
                     qoi[3] = -bf(1,0);
+                    if (shell)
+                        qoi[4] = maxDistanceToRuled(mp_def.patch(0),sampleNodes);
                 }
             }
 
@@ -1441,7 +1740,7 @@ int main (int argc, char** argv)
                 deformation.patch(0).coefs() -= mp.patch(0).coefs();
                 gsField<> solField(mp_def,deformation);
                 std::string fileName = outDir + "/" + "solution" + util::to_string(step);
-                gsWriteParaview<>(solField,fileName,1000,true);
+                gsWriteParaview<>(solField,fileName,nptsSol,true);
                 solcollection.addPart(gsFileManager::getFilename(fileName) + "0.vts",step);
 
                 for (size_t i = 0; i!=plotFields.size(); ++i)
@@ -1456,12 +1755,12 @@ int main (int argc, char** argv)
                         {
                             switch (pf.output)
                             {
-                                case MaterialOutput::PStress:           writeMaterialField<MaterialOutput::PStress>(materials.run,mp_def,fileName); break;
-                                case MaterialOutput::TensionField:      writeMaterialField<MaterialOutput::TensionField>(materials.run,mp_def,fileName); break;
-                                case MaterialOutput::Theta:             writeMaterialField<MaterialOutput::Theta>(materials.run,mp_def,fileName); break;
-                                case MaterialOutput::WrinkleDir:        writeMaterialField<MaterialOutput::WrinkleDir>(materials.run,mp_def,fileName); break;
-                                case MaterialOutput::WrinkleIntensity:  writeMaterialField<MaterialOutput::WrinkleIntensity>(materials.run,mp_def,fileName); break;
-                                default:                                writeMaterialField<MaterialOutput::GammaHat>(materials.run,mp_def,fileName); break;
+                                case MaterialOutput::PStress:           writeMaterialField<MaterialOutput::PStress>(materials.run,mp_def,fileName,npts); break;
+                                case MaterialOutput::TensionField:      writeMaterialField<MaterialOutput::TensionField>(materials.run,mp_def,fileName,npts); break;
+                                case MaterialOutput::Theta:             writeMaterialField<MaterialOutput::Theta>(materials.run,mp_def,fileName,npts); break;
+                                case MaterialOutput::WrinkleDir:        writeMaterialField<MaterialOutput::WrinkleDir>(materials.run,mp_def,fileName,npts); break;
+                                case MaterialOutput::WrinkleIntensity:  writeMaterialField<MaterialOutput::WrinkleIntensity>(materials.run,mp_def,fileName,npts); break;
+                                default:                                writeMaterialField<MaterialOutput::GammaHat>(materials.run,mp_def,fileName,npts); break;
                             }
                         }
                         else
@@ -1469,7 +1768,7 @@ int main (int argc, char** argv)
                             gsPiecewiseFunction<> pieces;
                             assembler->constructStress(mp_def,pieces,pf.type);
                             gsField<> field(mp_def,pieces,true);
-                            gsWriteParaview(field,fileName,5000);
+                            gsWriteParaview(field,fileName,npts);
                         }
                         pf.collection->addPart(gsFileManager::getFilename(fileName) + "0.vts",step);
                     }
