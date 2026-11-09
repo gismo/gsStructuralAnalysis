@@ -41,7 +41,7 @@
 
     Options: \a --model, \a --eta (Split), \a --tensionfield (wrinkling criterion: 0 strain-based,
     1 stress-based, 2 mixed, the default), \a --slackmult, \a --nu, \a --presteps, \a -N (steps of
-    phase 2), \a --mmax (final r, < 1), \a --tolNR, \a --maxitNR, \a --solver, \a --maxbisect,
+    phase 2), \a --mmax (final r, < 1), \a --tolNR, \a --maxitNR, \a --solver, \a --linesearch, \a --maxbisect,
     \a --out, \a -v.
 
     Output in \a <out> (default ./SteinHedgepeth_<model>):
@@ -296,6 +296,7 @@ int main (int argc, char** argv)
     real_t tolNR       = 1e-6;
     index_t maxitNR    = 50;
     std::string linSolver("LU");
+    bool lineSearch = false;
     index_t maxBisect  = 8;
     std::string outDir;
     index_t verbose    = 0;
@@ -312,6 +313,7 @@ int main (int argc, char** argv)
     cmd.addReal("","mmax","Final moment ratio r = 2M/(PH), below 1 (default 0.825)",mmax);
     cmd.addReal("","tolNR","Relative tolerance of the Newton solver, residual and update (default 1e-6)",tolNR);
     cmd.addInt("","maxitNR","Maximum number of Newton iterations (default 50)",maxitNR);
+    cmd.addSwitch("linesearch", "Newton: backtracking line search on the residual norm (gsStaticNewton option LineSearch)", lineSearch);
     cmd.addString("","solver","Linear solver of the Newton iterations: LU, CGDiagonal, SimplicialLDLT, ... (default LU)",linSolver);
     cmd.addInt("","maxbisect","Maximum number of successive halvings of a load step before the run stops (default 8)",maxBisect);
     cmd.addString("","out","Output directory (default: ./SteinHedgepeth_<model>)",outDir);
@@ -473,6 +475,7 @@ int main (int argc, char** argv)
     NWTOptions.setInt("maxIt",maxitNR);
     NWTOptions.setReal("tol",tolNR);
     NWTOptions.setString("Solver",linSolver);
+    NWTOptions.setSwitch("LineSearch",lineSearch);
     NWTOptions.setInt("verbose",verbose);
     NWT.setOptions(NWTOptions);
 
@@ -520,12 +523,17 @@ int main (int argc, char** argv)
     gsVector<> solVector = gsVector<>::Zero(assembler->numDofs());
     index_t step = 0, attempt = 0, bisected = 0;
     bool failed = false;
+    // Last converged value of the load parameter D of the phase in which the run stands, and that phase
+    real_t lastConverged = phases.front().from;
+    size_t stopPhase = 0;
     gsStopwatch stopwatch;
     real_t solveTimeTotal = 0;
 
     for (size_t ph = 0; ph!=phases.size() && !failed; ++ph)
     {
         const Phase & P = phases[ph];
+        lastConverged = P.from;
+        stopPhase = ph;
         const real_t dL0 = (P.to-P.from)/P.nSteps;
         const real_t tolD = 1e-12*std::max<real_t>(1.0,std::abs(P.to));
         size_t cpIdx = 0;
@@ -599,6 +607,7 @@ int main (int argc, char** argv)
             }
 
             Dold = D;
+            lastConverged = D;
             halvings = 0;
             step++;
             if (hitsCheckpoint)
@@ -613,7 +622,10 @@ int main (int argc, char** argv)
 
     gsInfo<<"Total time: "<<totalTime.stop()<<" s (Newton solves: "<<solveTimeTotal<<" s); accepted steps: "
           <<step<<"; attempts: "<<attempt<<"; halvings: "<<bisected<<"\n";
-    return failed ? 1 : 0;
+    const bool reached = !failed;
+    if (!reached)
+        gsInfo<<"FINAL LOAD NOT REACHED: last converged "<<lastConverged<<" of "<<phases[stopPhase].to<<"\n";
+    return reached ? EXIT_SUCCESS : EXIT_FAILURE;
 }
 #else//gsKLShell_ENABLED
 int main(int argc, char *argv[])

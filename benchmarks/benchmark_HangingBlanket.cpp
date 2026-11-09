@@ -174,6 +174,7 @@ int main (int argc, char** argv)
     index_t maxitNR = 100;
     index_t maxitDR = 100000;
     std::string linSolver("LU");
+    bool lineSearch = false;
     bool DRall = false;
     std::string outDir;
     bool plot = false;
@@ -201,6 +202,7 @@ int main (int argc, char** argv)
     cmd.addReal("","tolNR","Newton tolerance (default 1e-4)",tolNR);
     cmd.addInt("","maxitNR","Maximum number of Newton iterations (default 100)",maxitNR);
     cmd.addInt("","maxitDR","Maximum number of DR iterations; a DR solve that exceeds it counts as failed and the load step is halved (default 100000)",maxitDR);
+    cmd.addSwitch("linesearch", "Newton: backtracking line search on the residual norm (gsStaticNewton option LineSearch)", lineSearch);
     cmd.addString("","solver","Linear solver of the Newton iterations: LU, CGDiagonal, SimplicialLDLT, ... (default LU)",linSolver);
     cmd.addSwitch("DRall","DR followed by Newton on every load step (default: DR on the first step only)",DRall);
     cmd.addString("","out","Output directory (default ./HangingBlanket_<model>)",outDir);
@@ -420,6 +422,7 @@ int main (int argc, char** argv)
     NWTOptions.setInt("maxIt",maxitNR);
     NWTOptions.setReal("tol",tolNR);
     NWTOptions.setString("Solver",linSolver);
+    NWTOptions.setSwitch("LineSearch",lineSearch);
     NWTOptions.setInt("verbose",verbose);
     NWT.setOptions(NWTOptions);
 
@@ -610,7 +613,10 @@ int main (int argc, char** argv)
     gsInfo<<"Reached load factor "<<load<<" in "<<step-1<<" converged steps and "<<attempt<<" attempts; solve time "
           <<totalSolveTime<<" s, total time "<<total.stop()<<" s\nResults in "<<dirname<<"\n";
 
-    return failed ? 1 : 0;
+    const bool reached = !failed && load >= 1 - 1e-12;
+    if (!reached)
+        gsInfo<<"FINAL LOAD NOT REACHED: last converged "<<load<<" of 1\n";
+    return reached ? EXIT_SUCCESS : EXIT_FAILURE;
 }
 #else//gsKLShell_ENABLED
 int main(int argc, char *argv[])

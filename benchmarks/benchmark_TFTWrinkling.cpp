@@ -999,6 +999,7 @@ int main (int argc, char** argv)
     real_t tolNR       = 1e-8;
     index_t maxitNR    = 50;
     std::string linSolver("LU");
+    bool lineSearch = false;
     index_t maxBisect  = 8;
     index_t monitorLevel = 2;
     bool newtonDiag    = false;
@@ -1038,6 +1039,7 @@ int main (int argc, char** argv)
     cmd.addReal("","ratio","Test case 1: Mooney-Rivlin ratio c1/c2 (default 2.548)",ratioValue);
     cmd.addReal("","tolNR","Relative tolerance of the Newton solver, residual and update (default 1e-8)",tolNR);
     cmd.addInt("","maxitNR","Maximum number of Newton iterations (default 50)",maxitNR);
+    cmd.addSwitch("linesearch", "Newton: backtracking line search on the residual norm (gsStaticNewton option LineSearch)", lineSearch);
     cmd.addString("","solver","Linear solver of the Newton iterations: LU, CGDiagonal, SimplicialLDLT, ... (default LU)",linSolver);
     cmd.addInt("","maxbisect","Maximum number of successive halvings of a load step before the run stops (default 8)",maxBisect);
     cmd.addInt("","monitor","Point diagnostics in steps.csv: 0: none; 1: per step; 2: also per Newton iteration (default 2)",monitorLevel);
@@ -1342,6 +1344,7 @@ int main (int argc, char** argv)
     NWTOptions.setInt("maxIt",maxitNR);
     NWTOptions.setReal("tol",tolNR);
     NWTOptions.setString("Solver",linSolver);
+    NWTOptions.setSwitch("LineSearch",lineSearch);
     NWTOptions.setInt("verbose",verbose);
     NWT.setOptions(NWTOptions);
 
@@ -1515,11 +1518,16 @@ int main (int argc, char** argv)
     gsVector<> solVector = gsVector<>::Zero(assembler->numDofs());
     index_t step = 0, attempt = 0, failures = 0, singular = 0, bisected = 0;
     bool failed = false;
+    // Last converged value of the load parameter D of the phase in which the run stands, and that phase
+    real_t lastConverged = phases.front().from;
+    size_t stopPhase = 0;
     gsStopwatch stopwatch;
 
     for (size_t ph = 0; ph!=phases.size() && !failed; ++ph)
     {
         const Phase & P = phases[ph];
+        lastConverged = P.from;
+        stopPhase = ph;
         const real_t dL0 = (P.to-P.from)/P.nSteps;
         const real_t tolD = 1e-12*std::max<real_t>(1.0,std::abs(P.to));
         size_t cpIdx = 0;
@@ -1784,6 +1792,7 @@ int main (int argc, char** argv)
                 writeMidline(outDir + "/midline_" + util::to_string(step) + ".csv",midX,midS1,midS2);
 
             Dold = D;
+            lastConverged = D;
             halvings = 0;
             step++;
             if (hitsCheckpoint)
@@ -1802,7 +1811,10 @@ int main (int argc, char** argv)
             plotFields[i].collection->save();
 
     gsInfo<<"Total time: "<<totalTime.stop()<<" s; accepted steps: "<<step<<"; attempts: "<<attempt<<"; halvings: "<<bisected<<"\n";
-    return failed ? 1 : 0;
+    const bool reached = !failed;
+    if (!reached)
+        gsInfo<<"FINAL LOAD NOT REACHED: last converged "<<lastConverged<<" of "<<phases[stopPhase].to<<"\n";
+    return reached ? EXIT_SUCCESS : EXIT_FAILURE;
 }
 #else//gsKLShell_ENABLED
 int main(int argc, char *argv[])

@@ -159,6 +159,8 @@ int main (int argc, char** argv)
     bool OP  = false;
     // * Newton Raphson
     index_t maxitNR = 50;
+    bool lineSearch = false;
+    std::string linSolver("CGDiagonal");
     bool NR  = false;
 
 
@@ -200,6 +202,8 @@ int main (int argc, char** argv)
     cmd.addSwitch("DR", "Use Dynamic Relaxation", DR);
     cmd.addSwitch("OP", "Use Optimizer", OP);
     cmd.addSwitch("NR", "Use Newton Raphson", NR);
+    cmd.addSwitch("linesearch", "Newton: backtracking line search on the residual norm (gsStaticNewton option LineSearch)", lineSearch);
+    cmd.addString("", "solver", "Linear solver of the Newton iterations: LU, CGDiagonal, SimplicialLDLT, ... (default CGDiagonal)", linSolver);
 
     // Output settings
     cmd.addSwitch("plot", "Plot result in ParaView format", plot);
@@ -446,6 +450,8 @@ int main (int argc, char** argv)
     NewtonOptions.setInt("maxIt",maxitNR);
     NewtonOptions.setReal("tolU",1e-6);
     NewtonOptions.setReal("tolF",1e-8);
+    NewtonOptions.setString("Solver",linSolver);
+    NewtonOptions.setSwitch("LineSearch",lineSearch);
     NewtonSolver.setOptions(NewtonOptions);
 
     std::vector<gsStaticBase<real_t> *> solvers;
@@ -536,6 +542,7 @@ int main (int argc, char** argv)
     index_t bisections=0;
     index_t stepBisections=0;
     bool runFailed = false;
+    real_t lastAccepted = 0; // last displacement whose solution was accepted
     gsStopwatch stopwatch;
     std::queue<real_t> Dcheckpoints;
     Dcheckpoints.push(0.7);
@@ -616,6 +623,7 @@ int main (int argc, char** argv)
         }
 
         U = StaticSolver.solution();
+        lastAccepted = D;
 
         // 1. Get all the coefficients (including the ones from the eliminated BCs.)
         // gsMatrix<real_t> solFull = assembler->fullSolutionVector(controlDC.solutionU());
@@ -865,7 +873,12 @@ int main (int argc, char** argv)
     }
 
     delete assembler;
-    return runFailed ? EXIT_FAILURE : EXIT_SUCCESS;
+
+    // The checkpoint queue is empty exactly when the final displacement was accepted
+    const bool reached = !runFailed && Dcheckpoints.empty();
+    if (!reached)
+        gsInfo<<"FINAL LOAD NOT REACHED: last converged "<<lastAccepted<<" of 1\n";
+    return reached ? EXIT_SUCCESS : EXIT_FAILURE;
 }
 
 

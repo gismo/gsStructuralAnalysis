@@ -22,7 +22,7 @@
 
     Solver strategies:
     - \a --DR: dynamic relaxation (\a -T, \a --tolE); \a --NR: Newton (\a --tolNR, \a --maxitNR,
-      \a --solver). Both together run DR as predictor of Newton.
+      \a --solver, \a --linesearch). Both together run DR as predictor of Newton.
     - \a --warmstart: each load step starts from the last converged displacement instead of zero.
     - \a --drfirst: with \a --DR \a --NR \a --warmstart, the DR predictor is used on the first
       load step only (the flat, stress-free state has no out-of-plane stiffness, so Newton
@@ -416,6 +416,7 @@ int main (int argc, char** argv)
     real_t slackmult = 1e-6;
     index_t maxitNR = 100;
     std::string linSolver("LU");
+    bool lineSearch = false;
     real_t tolE = 1e-5;
     real_t diag = 1.2;
     real_t thicknessOpt = -1;
@@ -452,6 +453,7 @@ int main (int argc, char** argv)
     cmd.addReal( "", "tolE", "Tolerance on the relative kinetic energy of the DR solver (default 1e-5)",  tolE );
     cmd.addReal( "", "tolNR", "Relative tolerance of the Newton solver, residual and update (default 1e-4)",  tol );
     cmd.addInt( "", "maxitNR", "Maximum number of Newton iterations (default 100)",  maxitNR );
+    cmd.addSwitch( "linesearch", "Newton: backtracking line search on the residual norm (gsStaticNewton option LineSearch)", lineSearch );
     cmd.addString( "", "solver", "Linear solver of the Newton iterations: LU, CGDiagonal, SimplicialLDLT, ... (default LU)",  linSolver );
 
     cmd.addSwitch( "tftsplit", "Use the split tension-field formulation (gsMaterialMatrixTFTSplit)",  tftsplit );
@@ -821,6 +823,7 @@ int main (int argc, char** argv)
     NWTOptions.setInt("maxIt",maxitNR);
     NWTOptions.setReal("tol",tol);
     NWTOptions.setString("Solver",linSolver);
+    NWTOptions.setSwitch("LineSearch",lineSearch);
     NWTOptions.setInt("verbose",verbose);
     NWT.setOptions(NWTOptions);
 
@@ -855,6 +858,7 @@ int main (int argc, char** argv)
               <<",ux_c00,uy_c00,uz_c00,ux_c10,uy_c10,uz_c10,ux_c01,uy_c01,uz_c01,ux_c11,uy_c11,uz_c11"
               <<",ux_es,uy_es,uz_es,ux_ee,uy_ee,uz_ee,S1_M,S2_M"<<std::endl;
     index_t attempt = 0, failures = 0, singular = 0;
+    real_t lastConverged = 0; // load factor of the last converged step
     gsStopwatch stopwatch;
 
     while (load_fac <= 1)
@@ -952,7 +956,10 @@ int main (int argc, char** argv)
       }
       const PointStats pointStats = monitor.evaluate(mp_def,runMaterial,model);
       if (info.converged)
+      {
         monitor.accept();
+        lastConverged = load_fac;
+      }
 
       if (!info.converged)
       {
@@ -1168,7 +1175,10 @@ int main (int argc, char** argv)
 
     delete assembler;
 
-    return EXIT_SUCCESS;
+    const bool reached = lastConverged >= 1 - 1e-12;
+    if (!reached)
+      gsInfo<<"FINAL LOAD NOT REACHED: last converged "<<lastConverged<<" of 1\n";
+    return reached ? EXIT_SUCCESS : EXIT_FAILURE;
 }
 #else//gsKLShell_ENABLED
 int main(int argc, char *argv[])
