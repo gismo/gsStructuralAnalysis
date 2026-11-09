@@ -11,7 +11,7 @@
     edges (pressure 0), load factor 1 applies the pressure (edge load 0).
 
     The membrane can be run without a wrinkling model, with the tension-field model
-    (gsMaterialMatrixTFT, \a --TFT), or with the split formulation (gsMaterialMatrixTFTSplit,
+    (gsMaterialMatrixTFT, \a --TFT; options \a --eta and \a --etatangent), or with the split formulation (gsMaterialMatrixTFTSplit,
     \a --tftsplit; options \a --eta, \a --exact, \a --midsurface, \a --s2crit, \a --slackmult).
 
     Every attempted load step appends one row to \a <out>/steps.csv (see WrinkleMonitor), followed by
@@ -229,7 +229,8 @@ public:
             const gsMatrix<> S = evalMaterial<MaterialOutput::Generic>(run,def,m_nodes,m_Z);
 
             // Tension along the wrinkles: n4.S = m1^2 S11 + m2^2 S22 + 2 m1 m2 S12, m = (-sin(theta),cos(theta)).
-            // With Eta > 0 this is the blended stress that the assembler integrates.
+            // With Eta > 0 this is the blended stress that the assembler integrates (for TFT with --etatangent the
+            // integrated stress is the unblended tension-field stress).
             st.n4SNonpos = 0;
             for (index_t i = 0; i!=theta.cols(); ++i)
             {
@@ -410,6 +411,7 @@ int main (int argc, char** argv)
 
     bool tftsplit = false;
     real_t eta = 0;
+    bool etaTangent = false;
     bool exact = false;
     bool midsurface = false;
     real_t s2crit = 0;
@@ -457,7 +459,8 @@ int main (int argc, char** argv)
     cmd.addString( "", "solver", "Linear solver of the Newton iterations: LU, CGDiagonal, SimplicialLDLT, ... (default LU)",  linSolver );
 
     cmd.addSwitch( "tftsplit", "Use the split tension-field formulation (gsMaterialMatrixTFTSplit)",  tftsplit );
-    cmd.addReal( "", "eta", "Split: stress fraction retained in the wrinkled/slack state (default 0; needs --tftsplit)",  eta );
+    cmd.addReal( "", "eta", "TFT and Split: stress fraction retained in the wrinkled/slack state (default 0; needs --TFT or --tftsplit)",  eta );
+    cmd.addSwitch( "etatangent", "TFT: apply --eta to the tangent only (stress stays the pure tension field)",  etaTangent );
     cmd.addSwitch( "exact", "Split: exact wrinkled-state solve for nonlinear materials (needs --tftsplit)",  exact );
     cmd.addSwitch( "midsurface", "Split: evaluate the material at the mid-surface only (needs --tftsplit)",  midsurface );
     cmd.addReal( "", "s2crit", "Split: minor principal stress below which a point is displayed as wrinkled (default 0; needs --tftsplit)",  s2crit );
@@ -484,8 +487,12 @@ int main (int argc, char** argv)
     GISMO_ASSERT(NR || DR,"At least a Newton Raphson or a Dynamic Relaxation solver needs to be enabled. Run with option NR or DR.");
     if (TFT && tftsplit)
       GISMO_ERROR("--TFT and --tftsplit select different wrinkling models; use only one of them.");
-    if (!tftsplit && (eta!=0 || exact || midsurface || s2crit!=0))
-      gsWarn<<"--eta, --exact, --midsurface and --s2crit only act together with --tftsplit and are ignored.\n";
+    if (!TFT && !tftsplit && eta!=0)
+      gsWarn<<"--eta is ignored without a wrinkling model.\n";
+    if (!TFT && etaTangent)
+      gsWarn<<"--etatangent only acts together with --TFT and is ignored.\n";
+    if (!tftsplit && (exact || midsurface || s2crit!=0))
+      gsWarn<<"--exact, --midsurface and --s2crit only act together with --tftsplit and are ignored.\n";
     if (nx<0)
       GISMO_ERROR("--nx must be non-negative.");
     if (nx>0)
@@ -680,7 +687,11 @@ int main (int argc, char** argv)
     // gsMaterialMatrixTFT<3,real_t,false> * materialMatrixTFT = new gsMaterialMatrixTFT<3,real_t,false>(static_cast<gsMaterialMatrixBaseDim<3,real_t> * >(materialMatrix));
 
     if (TFT)
+    {
       materialMatrixTFT->options().setReal("SlackMultiplier",slackmult);
+      materialMatrixTFT->options().setReal("Eta",eta);
+      materialMatrixTFT->options().setSwitch("EtaTangentOnly",etaTangent);
+    }
     if (tftsplit)
       setSplitOptions(materialMatrixTFTSplit.get(),eta,exact,midsurface,s2crit,slackmult);
 

@@ -10,7 +10,8 @@
 
     Material: incompressible Neo-Hookean, optionally wrapped by the tension-field theory
     (--TFT, gsMaterialMatrixTFT) or by the Zhang-Kiendl split (--tftsplit, gsMaterialMatrixTFTSplit);
-    --tftlinear selects the linear flag of the wrapped law for both wrappers.
+    --tftlinear selects the linear flag of the wrapped law for both wrappers. --eta acts on --TFT as well as on
+    --tftsplit; --etatangent (--TFT only) applies it to the tangent only.
     --membrane drops the bending stiffness.
 
     Output (directory ArcLengthResults/<case>_-r<r>-e<e>[_TFT|_Split][_membrane], or --out):
@@ -97,13 +98,15 @@ template <bool linear>
 void makeWrinkleMaterials(gsMaterialMatrixBase<real_t>::uPtr & wrapped,
                           gsMaterialMatrixBase<real_t>::uPtr & oracle,
                           gsMaterialMatrixBase<real_t> & base,
-                          const int model, const real_t eta, const bool exact,
+                          const int model, const real_t eta, const bool etaTangent, const bool exact,
                           const real_t slackMultiplier, const index_t tensionField)
 {
     if (model==1)
     {
         wrapped = memory::make_unique(new gsMaterialMatrixTFT<3,real_t,linear>(base));
         wrapped->options().setReal("SlackMultiplier",slackMultiplier);
+        wrapped->options().setReal("Eta",eta);
+        wrapped->options().setSwitch("EtaTangentOnly",etaTangent);
     }
     else if (model==2)
     {
@@ -141,6 +144,7 @@ int main (int argc, char** argv)
     bool    tftsplit = false;
     index_t tftlinear = 1;
     real_t  eta = 0;
+    bool    etaTangent = false;
     bool    exact = false;
     real_t  slackmult = 0;
     index_t tensionField = 2;
@@ -183,7 +187,8 @@ int main (int argc, char** argv)
     cmd.addSwitch("TFT", "Use TFT material matrix", TFT);
     cmd.addSwitch("tftsplit", "Use the Zhang-Kiendl split tension-field material (gsMaterialMatrixTFTSplit) around the base law", tftsplit);
     cmd.addInt("", "tftlinear", "Linear flag of the TFT / Split wrapper: (1): wrapped law linear in E (default) | (0): general law", tftlinear);
-    cmd.addReal("", "eta", "Split: fraction of the unmodified stress kept in wrinkled/slack states (default 0)", eta);
+    cmd.addReal("", "eta", "TFT and Split: fraction of the unmodified stress kept in wrinkled/slack states (default 0)", eta);
+    cmd.addSwitch("etatangent", "TFT: apply --eta to the tangent only (stress stays the pure tension field)", etaTangent);
     cmd.addSwitch("exact", "Split: exact (non-truncated) wrinkled stress; requires --tftlinear 0", exact);
     cmd.addReal("", "slackmult", "TFT and Split: SlackMultiplier of the slack state (default 0)", slackmult);
     cmd.addInt("", "tensionfield", "Wrinkling criterion: 0 strain, 1 stress, 2 mixed (default 2)", tensionField);
@@ -217,8 +222,12 @@ int main (int argc, char** argv)
     GISMO_ENSURE(tftlinear==0 || tftlinear==1,"--tftlinear must be 0 or 1");
     GISMO_ENSURE(!(exact && tftlinear==1),"--exact requires --tftlinear 0 (exact and linearised wrinkled stress coincide for a law linear in E)");
     GISMO_ENSURE(maxbisect>=0,"--maxbisect must be non-negative");
-    if (!tftsplit && (eta!=0 || exact))
-        gsWarn<<"--eta and --exact only act with --tftsplit and are ignored\n";
+    if (!TFT && !tftsplit && eta!=0)
+        gsWarn<<"--eta is ignored without a wrinkling model\n";
+    if (!TFT && etaTangent)
+        gsWarn<<"--etatangent only acts with --TFT and is ignored\n";
+    if (!tftsplit && exact)
+        gsWarn<<"--exact only acts with --tftsplit and is ignored\n";
 
     std::string output = "solution";
     std::string dirname = "ArcLengthResults";
@@ -347,9 +356,9 @@ int main (int argc, char** argv)
     materialMatrix->options().setInt("TensionField",tensionField);
     const int materialModel = TFT ? 1 : (tftsplit ? 2 : 0);
     if (tftlinear)
-        makeWrinkleMaterials<true>(materialMatrixTFT,oracle,*materialMatrix,materialModel,eta,exact,slackmult,tensionField);
+        makeWrinkleMaterials<true>(materialMatrixTFT,oracle,*materialMatrix,materialModel,eta,etaTangent,exact,slackmult,tensionField);
     else
-        makeWrinkleMaterials<false>(materialMatrixTFT,oracle,*materialMatrix,materialModel,eta,exact,slackmult,tensionField);
+        makeWrinkleMaterials<false>(materialMatrixTFT,oracle,*materialMatrix,materialModel,eta,etaTangent,exact,slackmult,tensionField);
     gsMaterialMatrixContainer<real_t> materialMatrixContainer;
     if (TFT || tftsplit)
     {

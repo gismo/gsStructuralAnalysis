@@ -20,7 +20,8 @@
          steps), phase 2 rotates it about the vertical central axis up to \a --theta (times pi,
          \a -N steps). The torque on the rotated edge is reported.
 
-    Wrinkling model (\a --model): \a none, \a tft (gsMaterialMatrixTFT) or \a split
+    Wrinkling model (\a --model): \a none, \a tft (gsMaterialMatrixTFT; options \a --eta and \a --etatangent:
+    residual stiffness in the stress and the tangent, or in the tangent only) or \a split
     (gsMaterialMatrixTFTSplit; options \a --eta, \a --exact, \a --midsurface, \a --s2crit,
     \a --slackmult). \a --tensionfield selects the wrinkling criterion (0: strain-based, 1:
     stress-based, 2: mixed, the default; Zhang & Kiendl (2026), Eq. 35) of the base law (used by
@@ -282,7 +283,8 @@ public:
             const gsMatrix<> S = evalMaterial<MaterialOutput::Generic>(run,def,m_nodes,m_Z);
 
             // Tension along the wrinkles: n4.S = m1^2 S11 + m2^2 S22 + 2 m1 m2 S12, m = (-sin(theta),cos(theta)).
-            // With Eta > 0 this is the blended stress that the assembler integrates.
+            // With Eta > 0 this is the blended stress that the assembler integrates (for TFT with --etatangent the
+            // integrated stress is the unblended tension-field stress).
             st.n4SNonpos = 0;
             for (index_t i = 0; i!=theta.cols(); ++i)
             {
@@ -360,7 +362,8 @@ public:
     ///                    (= gamma G^{ab} n_a n_b, dimensionless) of the run material over wrinkled points;
     ///                    NaN without wrinkling model or wrinkled points
     /// - n4S_nonpos:      number of wrinkled points where the stress along the wrinkles, n4.S, of the run
-    ///                    material is <= 0 (with Eta > 0: of the blended stress that the assembler integrates);
+    ///                    material is <= 0 (with Eta > 0: of the blended stress that the assembler integrates,
+    ///                    except TFT with --etatangent, whose integrated stress is the unblended one);
     ///                    -1 without wrinkling model
     /// - tft_theta_mismatch, tft_theta_zero, tft_state_mismatch: TFT runs only (else -1). Points where the
     ///                    wrinkle angle of TFT differs from the closed-form angle modulo pi (tolerance 1e-8
@@ -756,7 +759,7 @@ struct RunMaterials
 template <short_t d, bool linear>
 void buildMaterials(RunMaterials & m, const gsMultiPatch<> & mp, const gsFunctionSet<> & t, const gsFunctionSet<> & rho,
                     std::vector<gsFunctionSet<>*> & parameters, const gsOptionList & options, int model,
-                    real_t eta, bool exact, bool midsurface, real_t s2crit, real_t slackMultiplier, index_t tensionField)
+                    real_t eta, bool etaTangent, bool exact, bool midsurface, real_t s2crit, real_t slackMultiplier, index_t tensionField)
 {
     m.base = getMaterialMatrix<d,real_t>(mp,t,parameters,rho,options);
     // The TFT decorator clones the base law and takes its criterion from the clone, so the
@@ -774,6 +777,8 @@ void buildMaterials(RunMaterials & m, const gsMultiPatch<> & mp, const gsFunctio
     {
         m.wrapped = memory::make_unique(new gsMaterialMatrixTFT<d,real_t,linear>(*m.base));
         m.wrapped->options().setReal("SlackMultiplier",slackMultiplier);
+        m.wrapped->options().setReal("Eta",eta);
+        m.wrapped->options().setSwitch("EtaTangentOnly",etaTangent);
         m.run = m.wrapped.get();
     }
     else
@@ -982,6 +987,7 @@ int main (int argc, char** argv)
     index_t testCase   = 0;
     std::string modelName("split");
     real_t eta         = 0;
+    bool etaTangent    = false;
     index_t tensionField = 2;
     bool exact         = false;
     real_t slackmult   = 1e-6;
@@ -1022,7 +1028,8 @@ int main (int argc, char** argv)
 
     cmd.addInt("t","testCase","Test case: 0: shear rectangle (SvK, d=2); 1: stretched Mooney-Rivlin sheet (d=2); 2: twisted trapezoid (Neo-Hookean, d=3)",testCase);
     cmd.addString("","model","Wrinkling model: none, tft or split (default split)",modelName);
-    cmd.addReal("","eta","Split: stress fraction retained in the wrinkled/slack state (default 0)",eta);
+    cmd.addReal("","eta","TFT and Split: stress fraction retained in the wrinkled/slack state (default 0)",eta);
+    cmd.addSwitch("etatangent","TFT: apply --eta to the tangent only (stress stays the pure tension field)",etaTangent);
     cmd.addInt("","tensionfield","Wrinkling criterion of TFT, Split and the wrinkle-state monitor (also with --model none): 0 strain-based, 1 stress-based, 2 mixed (default 2)",tensionField);
     cmd.addSwitch("exact","Split: exact wrinkled-state solve for nonlinear materials",exact);
     cmd.addReal("","slackmult","Multiplier of the stiffness in the slack state, TFT and Split (default 1e-6)",slackmult);
@@ -1069,8 +1076,12 @@ int main (int argc, char** argv)
     else if (modelName=="split") model = 2;
     else
         GISMO_ERROR("Unknown model \""<<modelName<<"\"; use none, tft or split.");
-    if (model!=2 && (eta!=0 || exact || midsurface || s2crit!=0))
-        gsWarn<<"--eta, --exact, --midsurface and --s2crit only act together with --model split and are ignored.\n";
+    if (model==0 && eta!=0)
+        gsWarn<<"--eta is ignored without a wrinkling model.\n";
+    if (model!=1 && etaTangent)
+        gsWarn<<"--etatangent only acts together with --model tft and is ignored.\n";
+    if (model!=2 && (exact || midsurface || s2crit!=0))
+        gsWarn<<"--exact, --midsurface and --s2crit only act together with --model split and are ignored.\n";
     if (model==2 && exact && testCase==0)
         gsInfo<<"The shear case uses a linear (SvK) material, for which --exact has no effect.\n";
     if (tensionField<0 || tensionField>2)
@@ -1267,13 +1278,13 @@ int main (int argc, char** argv)
 
     RunMaterials materials;
     if      (testCase==0)
-        buildMaterials<2,true >(materials,mp,t,rho,parameters,options,model,eta,exact,midsurface,s2crit,slackmult,tensionField);
+        buildMaterials<2,true >(materials,mp,t,rho,parameters,options,model,eta,etaTangent,exact,midsurface,s2crit,slackmult,tensionField);
     else if (testCase==1 && shell)
-        buildMaterials<3,false>(materials,mp,t,rho,parameters,options,model,eta,exact,midsurface,s2crit,slackmult,tensionField);
+        buildMaterials<3,false>(materials,mp,t,rho,parameters,options,model,eta,etaTangent,exact,midsurface,s2crit,slackmult,tensionField);
     else if (testCase==1)
-        buildMaterials<2,false>(materials,mp,t,rho,parameters,options,model,eta,exact,midsurface,s2crit,slackmult,tensionField);
+        buildMaterials<2,false>(materials,mp,t,rho,parameters,options,model,eta,etaTangent,exact,midsurface,s2crit,slackmult,tensionField);
     else
-        buildMaterials<3,false>(materials,mp,t,rho,parameters,options,model,eta,exact,midsurface,s2crit,slackmult,tensionField);
+        buildMaterials<3,false>(materials,mp,t,rho,parameters,options,model,eta,etaTangent,exact,midsurface,s2crit,slackmult,tensionField);
 
     gsVector<> forceVec = gsVector<>::Zero(d);
     gsConstantFunction<> force(forceVec,d);

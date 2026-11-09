@@ -39,7 +39,7 @@
     that does not converge is halved, at most \a --maxbisect times in a row; the run then stops
     and the exit code is 1.
 
-    Options: \a --model, \a --eta (Split), \a --tensionfield (wrinkling criterion: 0 strain-based,
+    Options: \a --model, \a --eta (TFT and Split), \a --etatangent (TFT: \a --eta in the tangent only), \a --tensionfield (wrinkling criterion: 0 strain-based,
     1 stress-based, 2 mixed, the default), \a --slackmult, \a --nu, \a --presteps, \a -N (steps of
     phase 2), \a --mmax (final r, < 1), \a --tolNR, \a --maxitNR, \a --solver, \a --linesearch, \a --maxbisect,
     \a --out, \a -v.
@@ -284,6 +284,7 @@ int main (int argc, char** argv)
     // Input options
     std::string modelName("split");
     real_t eta         = 0;
+    bool etaTangent    = false;
     index_t tensionField = 2;
     real_t slackmult   = 1e-6;
     real_t PoissonRatio = 0.3;
@@ -304,7 +305,8 @@ int main (int argc, char** argv)
     gsCmdLine cmd("In-plane pure bending of a prestressed membrane (Stein & Hedgepeth), Zhang & Kiendl (2025) Sec. 5.1.");
 
     cmd.addString("","model","Wrinkling model: none, tft or split (default split)",modelName);
-    cmd.addReal("","eta","Split: stress fraction retained in the wrinkled/slack state (default 0)",eta);
+    cmd.addReal("","eta","TFT and Split: stress fraction retained in the wrinkled/slack state (default 0)",eta);
+    cmd.addSwitch("etatangent","TFT: apply --eta to the tangent only (stress stays the pure tension field)",etaTangent);
     cmd.addInt("","tensionfield","Wrinkling criterion: 0 strain-based, 1 stress-based, 2 mixed (default 2)",tensionField);
     cmd.addReal("","slackmult","Multiplier of the stiffness in the slack state, TFT and Split (default 1e-6)",slackmult);
     cmd.addReal("","nu","Poisson ratio (default 0.3; 0 matches the analytic solution exactly)",PoissonRatio);
@@ -327,8 +329,10 @@ int main (int argc, char** argv)
     else if (modelName=="split") model = 2;
     else
         GISMO_ERROR("Unknown model \""<<modelName<<"\"; use none, tft or split.");
-    if (model!=2 && eta!=0)
-        gsWarn<<"--eta only acts together with --model split and is ignored.\n";
+    if (model==0 && eta!=0)
+        gsWarn<<"--eta is ignored without a wrinkling model.\n";
+    if (model!=1 && etaTangent)
+        gsWarn<<"--etatangent only acts together with --model tft and is ignored.\n";
     if (tensionField<0 || tensionField>2)
         GISMO_ERROR("--tensionfield must be 0, 1 or 2, got "<<tensionField);
     if (presteps<1 || steps<1 || maxBisect<0)
@@ -418,6 +422,8 @@ int main (int argc, char** argv)
     {
         wrapped = memory::make_unique(new gsMaterialMatrixTFT<2,real_t,true>(*base));
         wrapped->options().setReal("SlackMultiplier",slackmult);
+        wrapped->options().setReal("Eta",eta);
+        wrapped->options().setSwitch("EtaTangentOnly",etaTangent);
         wrapped->options().setInt("TensionField",tensionField);
         run = wrapped.get();
     }

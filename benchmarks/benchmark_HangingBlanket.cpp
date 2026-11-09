@@ -11,7 +11,8 @@
       Parametric (xi,eta) maps to (x,y) = L(xi,eta).
     - Material: linear Saint Venant-Kirchhoff, E, nu, thickness t, surface density rho (mass per reference
       area); the wrinkling model \a --model is none, tft (gsMaterialMatrixTFT, criterion
-      \a --tensionfield: 0 strain, 1 stress, 2 mixed) or split (gsMaterialMatrixTFTSplit, \a --eta).
+      \a --tensionfield: 0 strain, 1 stress, 2 mixed; options \a --eta, \a --etatangent) or split
+      (gsMaterialMatrixTFTSplit, \a --eta).
     - Load: self-weight, a dead load of -rho g lambda e_z per unit reference area [N/m^2], with the load
       factor lambda ramped from 0 to 1 in \a -N equal steps. The thickness does not enter the force.
     - Supports: all four corners have u_z = 0. In-plane, each corner component is rigid or carries a
@@ -154,6 +155,7 @@ int main (int argc, char** argv)
     // Input options
     std::string modelName("none");
     real_t eta = 0;
+    bool etaTangent = false;
     index_t tensionfield = 2;
     real_t slackmult = 1e-6;
     real_t E_modulus = 30000;
@@ -182,7 +184,8 @@ int main (int argc, char** argv)
 
     gsCmdLine cmd("Hanging blanket: square membrane under self-weight on corner springs (Zhang & Kiendl 2025, Sec. 5.5).");
     cmd.addString("","model","Wrinkling model: none, tft or split (default none)",modelName);
-    cmd.addReal("","eta","Split: stress fraction retained in the wrinkled/slack state (default 0; needs --model split)",eta);
+    cmd.addReal("","eta","TFT and Split: stress fraction retained in the wrinkled/slack state (default 0; needs --model tft or split)",eta);
+    cmd.addSwitch("etatangent","TFT: apply --eta to the tangent only (stress stays the pure tension field)",etaTangent);
     cmd.addInt("","tensionfield","Wrinkling criterion: 0 strain, 1 stress, 2 mixed (default 2)",tensionfield);
     cmd.addReal("","slackmult","Multiplier of the stiffness in the slack state, TFT and Split (default 1e-6)",slackmult);
     cmd.addReal("E","young","Young's modulus [Pa] (default 30000)",E_modulus);
@@ -216,8 +219,10 @@ int main (int argc, char** argv)
     else if (modelName=="tft")   model = 1;
     else if (modelName=="split") model = 2;
     else GISMO_ERROR("Unknown --model "<<modelName<<"; use none, tft or split");
-    if (eta!=0 && model!=2)
-        gsWarn<<"--eta is ignored without --model split\n";
+    if (eta!=0 && model==0)
+        gsWarn<<"--eta is ignored without a wrinkling model\n";
+    if (etaTangent && model!=1)
+        gsWarn<<"--etatangent only acts together with --model tft and is ignored\n";
     GISMO_ENSURE(nx>=1 && degree>=1 && loadSteps>=1,"--nx, -p and -N must be positive");
     GISMO_ENSURE(maxitDR>=2,"--maxitDR must be at least 2");
 
@@ -274,6 +279,8 @@ int main (int argc, char** argv)
     {
         wrapped = memory::make_unique(new gsMaterialMatrixTFT<3,real_t,true>(base.get()));
         wrapped->options().setReal("SlackMultiplier",slackmult);
+        wrapped->options().setReal("Eta",eta);
+        wrapped->options().setSwitch("EtaTangentOnly",etaTangent);
     }
     else if (model==2)
     {
