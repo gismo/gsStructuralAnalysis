@@ -216,6 +216,7 @@ int main (int argc, char** argv)
     cmd.addString("", "out", "Output directory (default: ArcLengthResults/<case>_-r<r>-e<e>[_TFT|_Split][_membrane])", outDir);
 
     try { cmd.getValues(argc,argv); } catch (int rv) { return rv; }
+    if (!(eta >= 0 && eta <= 1)) { gsWarn << "--eta must be in [0,1], got " << eta << "\n"; return EXIT_FAILURE; }
 
     GISMO_ENSURE(!(TFT && tftsplit),"--TFT and --tftsplit are mutually exclusive");
     GISMO_ENSURE(tensionField>=0 && tensionField<=2,"--tensionfield must be 0 (strain), 1 (stress) or 2 (mixed)");

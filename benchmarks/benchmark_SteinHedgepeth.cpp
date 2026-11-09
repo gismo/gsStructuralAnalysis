@@ -322,6 +322,7 @@ int main (int argc, char** argv)
     cmd.addInt("v","verbose","0: no; 1: Newton iteration output",verbose);
 
     try { cmd.getValues(argc,argv); } catch (int rv) { return rv; }
+    if (!(eta >= 0 && eta <= 1)) { gsWarn << "--eta must be in [0,1], got " << eta << "\n"; return EXIT_FAILURE; }
 
     int model = 0;
     if      (modelName=="none")  model = 0;

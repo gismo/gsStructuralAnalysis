@@ -213,6 +213,7 @@ int main (int argc, char** argv)
     cmd.addInt("v","verbose","Solver verbosity (default 0)",verbose);
 
     try { cmd.getValues(argc,argv); } catch (int rv) { return rv; }
+    if (!(eta >= 0 && eta <= 1)) { gsWarn << "--eta must be in [0,1], got " << eta << "\n"; return EXIT_FAILURE; }
 
     int model = -1;
     if      (modelName=="none")  model = 0;
