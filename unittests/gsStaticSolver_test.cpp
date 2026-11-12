@@ -416,4 +416,97 @@ SUITE(gsStaticSolver_test)                 // The suite should have the same nam
     }
 #endif
 
+    /// Newton solver exposing the iteration count of its (CGDiagonal) linear solver
+    class NewtonCGProbe : public gsStaticNewton<real_t>
+    {
+    public:
+        NewtonCGProbe(const gsSparseMatrix<real_t> & K, const gsVector<real_t> & F) : gsStaticNewton<real_t>(K,F) {}
+
+        index_t linearIterations() const
+        {
+            const auto * s = dynamic_cast<const gsSparseSolver<real_t>::CGDiagonal*>(this->m_solver.get());
+            GISMO_ENSURE(s!=nullptr, "linear solver is not CGDiagonal");
+            return s->iterations();
+        }
+    };
+
+    /// SPD 5-point Laplacian on an m x m grid with non-constant diagonal 4 + i/n
+    gsSparseMatrix<real_t> laplacianSPD(const index_t m)
+    {
+        const index_t n = m*m;
+        std::vector<gsEigen::Triplet<real_t,index_t> > t;
+        for (index_t j=0; j!=m; ++j)
+            for (index_t i=0; i!=m; ++i)
+            {
+                const index_t k = j*m+i;
+                t.push_back(gsEigen::Triplet<real_t,index_t>(k,k,4.0+real_t(k)/n));
+                if (i>0)   t.push_back(gsEigen::Triplet<real_t,index_t>(k,k-1,-1.0));
+                if (i<m-1) t.push_back(gsEigen::Triplet<real_t,index_t>(k,k+1,-1.0));
+                if (j>0)   t.push_back(gsEigen::Triplet<real_t,index_t>(k,k-m,-1.0));
+                if (j<m-1) t.push_back(gsEigen::Triplet<real_t,index_t>(k,k+m,-1.0));
+            }
+        gsSparseMatrix<real_t> K(n,n);
+        K.setFromTriplets(t.begin(),t.end());
+        K.makeCompressed();
+        return K;
+    }
+
+    gsVector<real_t> forceSPD(const index_t n)
+    {
+        gsVector<real_t> F(n);
+        for (index_t i=0; i!=n; ++i)
+            F(i) = 1.0 + std::sin(real_t(i));
+        return F;
+    }
+
+    TEST(StaticSolver_SolverTol_CG)
+    {
+        const gsSparseMatrix<real_t> K = laplacianSPD(30);
+        const gsVector<real_t> F = forceSPD(K.rows());
+
+        NewtonCGProbe A(K,F), B(K,F);
+        A.options().setString("Solver","CGDiagonal");
+        B.options().setString("Solver","CGDiagonal");
+        B.options().setReal("SolverTol",1e-10);
+        A.solve();
+        B.solve();
+
+        gsInfo<<"CG iterations: default = "<<A.linearIterations()<<", SolverTol 1e-10 = "<<B.linearIterations()<<"\n";
+        const gsVector<real_t> x = B.solution();
+        CHECK(B.status()==gsStatus::Success);
+        CHECK((K*x - F).norm()/F.norm() <= 1e-9);
+        CHECK(B.linearIterations() < A.linearIterations());
+    }
+
+    TEST(StaticSolver_SolverDefaults_bitIdentical)
+    {
+        const gsSparseMatrix<real_t> K = laplacianSPD(30);
+        const gsVector<real_t> F = forceSPD(K.rows());
+
+        NewtonCGProbe probe(K,F);
+        probe.options().setString("Solver","CGDiagonal");
+        probe.solve();
+        const gsMatrix<real_t> x = probe.solution();
+
+        gsSparseSolver<real_t>::CGDiagonal s;
+        s.compute(K);
+        const gsMatrix<real_t> xp = s.solve(F);
+
+        CHECK_EQUAL(0, (x - xp).cwiseAbs().maxCoeff());
+        CHECK_EQUAL(s.iterations(), probe.linearIterations());
+    }
+
+    TEST(StaticSolver_SolverMaxIt_CG)
+    {
+        const gsSparseMatrix<real_t> K = laplacianSPD(30);
+        const gsVector<real_t> F = forceSPD(K.rows());
+
+        NewtonCGProbe probe(K,F);
+        probe.options().setString("Solver","CGDiagonal");
+        probe.options().setInt("SolverMaxIt",3);
+        probe.solve();
+
+        CHECK_EQUAL(3, probe.linearIterations());
+    }
+
 }
