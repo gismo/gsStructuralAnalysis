@@ -89,8 +89,8 @@ bool makeDirs(const std::string & path)
 /// \a model: 0 no decorator, 1 gsMaterialMatrixTFT, 2 gsMaterialMatrixTFTSplit; \a linear is the linear flag
 /// of the decorators. The decorators clone \a base, so the criterion (\a tensionField) must already be set on
 /// \a base. All options are set here, before the caller hands the decorator to a gsMaterialMatrixContainer,
-/// which clones it. \a exactTol, \a exactStagTol and \a exactMaxIt are the ExactTol, ExactStagTol and
-/// ExactMaxIt options of the Split decorator (ignored for the other models).
+/// which clones it. \a exactTol, \a exactStagTol, \a exactMaxIt and \a exactLocalSolve are the ExactTol,
+/// ExactStagTol, ExactMaxIt and ExactLocalSolve options of the Split decorator (ignored for the other models).
 ///
 /// The oracle is a Split decorator around \a base (not owned) with Eta = 0 and S2crit = 1e300: its
 /// TensionField output is the pure criterion state (1 taut, 0 wrinkled, -1 slack) of the base law,
@@ -101,7 +101,8 @@ void makeWrinkleMaterials(gsMaterialMatrixBase<real_t>::uPtr & wrapped,
                           gsMaterialMatrixBase<real_t> & base,
                           const int model, const real_t eta, const bool etaTangent, const bool exact,
                           const real_t slackMultiplier, const index_t tensionField,
-                          const real_t exactTol, const real_t exactStagTol, const index_t exactMaxIt)
+                          const real_t exactTol, const real_t exactStagTol, const index_t exactMaxIt,
+                          const index_t exactLocalSolve)
 {
     if (model==1)
     {
@@ -119,6 +120,7 @@ void makeWrinkleMaterials(gsMaterialMatrixBase<real_t>::uPtr & wrapped,
         o.setReal("ExactTol",exactTol);
         o.setReal("ExactStagTol",exactStagTol);
         o.setInt("ExactMaxIt",exactMaxIt);
+        o.setInt("ExactLocalSolve",exactLocalSolve);
         o.setReal("SlackMultiplier",slackMultiplier);
         o.setInt("TensionField",tensionField);
         wrapped->setOptions(o);
@@ -154,6 +156,7 @@ int main (int argc, char** argv)
     real_t  exactTol = 1e-12;
     real_t  exactStagTol = 1e-9;
     index_t exactMaxIt = 50;
+    index_t exactLocal = 1;
     real_t  slackmult = 0;
     index_t tensionField = 2;
     index_t maxbisect = 8;
@@ -203,6 +206,7 @@ int main (int argc, char** argv)
     cmd.addReal("", "exacttol", "Split: ExactTol, convergence tolerance of the exact wrinkled-stress solve (default 1e-12)", exactTol);
     cmd.addReal("", "exactstagtol", "Split: ExactStagTol, stagnation tolerance of the exact solve; must be >= exacttol (default 1e-9)", exactStagTol);
     cmd.addInt("", "exactmaxit", "Split: ExactMaxIt, maximum iterations of the exact solve (default 50)", exactMaxIt);
+    cmd.addInt("", "exactlocal", "Split: ExactLocalSolve, local solver of the exact solve: (0): scalar pass + 2x2 Newton | (1): scalar pass + rank-one minimisation where the 2x2 pass ran (default) | (2): minimisation only", exactLocal);
     cmd.addReal("", "slackmult", "TFT and Split: SlackMultiplier of the slack state (default 0)", slackmult);
     cmd.addInt("", "tensionfield", "Wrinkling criterion: 0 strain, 1 stress, 2 mixed (default 2)", tensionField);
     cmd.addSwitch("membrane", "Use membrane material", membrane);
@@ -239,6 +243,7 @@ int main (int argc, char** argv)
         gsWarn << "Need exactstagtol >= exacttol > 0 and exactmaxit >= 1, got " << exactStagTol << ", " << exactTol << ", " << exactMaxIt << "\n";
         return EXIT_FAILURE;
     }
+    if (exactLocal<0 || exactLocal>2) { gsWarn << "--exactlocal must be 0, 1 or 2, got " << exactLocal << "\n"; return EXIT_FAILURE; }
 
     GISMO_ENSURE(!(TFT && tftsplit),"--TFT and --tftsplit are mutually exclusive");
     GISMO_ENSURE(tensionField>=0 && tensionField<=2,"--tensionfield must be 0 (strain), 1 (stress) or 2 (mixed)");
@@ -251,6 +256,8 @@ int main (int argc, char** argv)
         gsWarn<<"--etatangent only acts with --TFT and is ignored\n";
     if (!tftsplit && exact)
         gsWarn<<"--exact only acts with --tftsplit and is ignored\n";
+    if (!(tftsplit && exact) && exactLocal!=1)
+        gsWarn<<"--exactlocal only acts with --tftsplit --exact and is ignored\n";
 
     std::string output = "solution";
     std::string dirname = "ArcLengthResults";
@@ -379,9 +386,9 @@ int main (int argc, char** argv)
     materialMatrix->options().setInt("TensionField",tensionField);
     const int materialModel = TFT ? 1 : (tftsplit ? 2 : 0);
     if (tftlinear)
-        makeWrinkleMaterials<true>(materialMatrixTFT,oracle,*materialMatrix,materialModel,eta,etaTangent,exact,slackmult,tensionField,exactTol,exactStagTol,exactMaxIt);
+        makeWrinkleMaterials<true>(materialMatrixTFT,oracle,*materialMatrix,materialModel,eta,etaTangent,exact,slackmult,tensionField,exactTol,exactStagTol,exactMaxIt,exactLocal);
     else
-        makeWrinkleMaterials<false>(materialMatrixTFT,oracle,*materialMatrix,materialModel,eta,etaTangent,exact,slackmult,tensionField,exactTol,exactStagTol,exactMaxIt);
+        makeWrinkleMaterials<false>(materialMatrixTFT,oracle,*materialMatrix,materialModel,eta,etaTangent,exact,slackmult,tensionField,exactTol,exactStagTol,exactMaxIt,exactLocal);
     gsMaterialMatrixContainer<real_t> materialMatrixContainer;
     if (TFT || tftsplit)
     {
@@ -493,7 +500,8 @@ int main (int argc, char** argv)
     if (tftsplit)
         gsInfo<<" | Split exact options: ExactTol "<<materialMatrixTFT->options().getReal("ExactTol")
               <<" ExactStagTol "<<materialMatrixTFT->options().getReal("ExactStagTol")
-              <<" ExactMaxIt "<<materialMatrixTFT->options().getInt("ExactMaxIt");
+              <<" ExactMaxIt "<<materialMatrixTFT->options().getInt("ExactMaxIt")
+              <<" ExactLocalSolve "<<materialMatrixTFT->options().getInt("ExactLocalSolve");
     gsInfo<<"\n";
 
     // The assembler integrates clones of the Split material (one per patch), not materialMatrixTFT:
@@ -521,10 +529,10 @@ int main (int argc, char** argv)
         for (auto s : splitNL)  s->resetCounters();
     };
     // Order: thetaFallbacks, tftFailures, exactNonconverged, exactSaddle, exactWrongBranch, exactStagnated,
-    // exactReclassifiedTaut, exactReclassifiedSlack, exactSkipped, exactUsed2x2; -1 without the Split material
+    // exactReclassifiedTaut, exactReclassifiedSlack, exactSkipped, exactUsed2x2, exactMinimised; -1 without the Split material
     auto readSplitCounters = [&splitLin,&splitNL](index_t * c)
     {
-        for (index_t i = 0; i!=10; ++i) c[i] = (splitLin.empty() && splitNL.empty()) ? -1 : 0;
+        for (index_t i = 0; i!=11; ++i) c[i] = (splitLin.empty() && splitNL.empty()) ? -1 : 0;
         auto add = [&c](const auto * s)
         {
             c[0] += s->numThetaFallbacks();         c[1] += s->numTFTFailures();
@@ -532,6 +540,7 @@ int main (int argc, char** argv)
             c[4] += s->numExactWrongBranch();       c[5] += s->numExactStagnated();
             c[6] += s->numExactReclassifiedTaut();  c[7] += s->numExactReclassifiedSlack();
             c[8] += s->numExactSkipped();           c[9] += s->numExactUsed2x2();
+            c[10] += s->numExactMinimised();
         };
         for (auto s : splitLin) add(s);
         for (auto s : splitNL)  add(s);
@@ -608,14 +617,18 @@ int main (int argc, char** argv)
                       mid-surface, by the criterion --tensionfield applied to the base law; -1 for a
                       rejected attempt or if the evaluation failed
           n_theta_fallbacks, n_tft_failures, n_exact_nonconverged, n_exact_saddle, n_exact_wrongbranch,
-          n_exact_stagnated, n_exact_taut, n_exact_slack, n_exact_skipped, n_exact_used2x2
+          n_exact_stagnated, n_exact_taut, n_exact_slack, n_exact_skipped, n_exact_used2x2, n_exact_minimised
                       the counters of gsMaterialMatrixTFTSplit (numThetaFallbacks, numTFTFailures,
                       numExactNonconverged, numExactSaddle, numExactWrongBranch, numExactStagnated,
-                      numExactReclassifiedTaut, numExactReclassifiedSlack, numExactSkipped, numExactUsed2x2),
+                      numExactReclassifiedTaut, numExactReclassifiedSlack, numExactSkipped, numExactUsed2x2,
+                      numExactMinimised),
                       summed over the material clones of the patches, over this attempt's whole static solve
                       (every residual and Jacobian assembly). They count material evaluations, not points.
                       nonconverged + saddle + wrongbranch = numExactFallbacks() and taut + slack =
-                      numExactReclassified(); stagnated and used2x2 are independent of the outcome counters.
+                      numExactReclassified(); stagnated, used2x2 and minimised are independent of the outcome counters.
+                      n_exact_minimised counts exact solves in which the rank-one minimisation pass ran
+                      (ExactLocalSolve 1 or 2); it is 0 under --exactlocal 0 and for points evaluated
+                      without a W provider.
                       -1 for a rejected attempt or a run without --tftsplit
           M1, M2, M3  the Moment1..3 of out.csv
           Mz          torque about the z axis [N m]: internal virtual work with the rigid-rotation field
@@ -627,7 +640,7 @@ int main (int argc, char** argv)
     */
     std::ofstream stepsFile(dirname + "/steps.csv");
     GISMO_ENSURE(stepsFile.is_open(),"Could not open "<<dirname<<"/steps.csv");
-    stepsFile<<"step,attempt,D,theta,uz,converged,accepted,status_dr,status_nr,it_dr,it_nr,bisections,n_points,n_taut,n_wrinkled,n_slack,n_theta_fallbacks,n_tft_failures,n_exact_nonconverged,n_exact_saddle,n_exact_wrongbranch,n_exact_stagnated,n_exact_taut,n_exact_slack,n_exact_skipped,n_exact_used2x2,M1,M2,M3,Mz,Fz,time_s\n";
+    stepsFile<<"step,attempt,D,theta,uz,converged,accepted,status_dr,status_nr,it_dr,it_nr,bisections,n_points,n_taut,n_wrinkled,n_slack,n_theta_fallbacks,n_tft_failures,n_exact_nonconverged,n_exact_saddle,n_exact_wrongbranch,n_exact_stagnated,n_exact_taut,n_exact_slack,n_exact_skipped,n_exact_used2x2,n_exact_minimised,M1,M2,M3,Mz,Fz,time_s\n";
     stepsFile<<std::setprecision(12);
 
     index_t k=0;
@@ -664,7 +677,7 @@ int main (int argc, char** argv)
         catch (...) { thrown = true; gsWarn<<"Static solver threw an unknown exception\n"; }
         const real_t solveTime = stopwatch.stop();
         // Read before post-processing: the Moments below evaluate the same material clones.
-        index_t splitCnt[10];
+        index_t splitCnt[11];
         readSplitCounters(splitCnt);
         ++attempt;
 
@@ -707,7 +720,7 @@ int main (int argc, char** argv)
         {
             stepsFile<<k<<","<<attempt<<","<<D<<","<<EIGEN_PI/2*D<<","<<dz_val<<","
                      <<0<<","<<0<<","<<statusDR<<","<<statusNR<<","<<itDR<<","<<itNR<<","
-                     <<bisections<<","<<numSamples<<",-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,nan,nan,nan,nan,nan,"<<solveTime<<std::endl;
+                     <<bisections<<","<<numSamples<<",-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,nan,nan,nan,nan,nan,"<<solveTime<<std::endl;
             if (halve)
             {
                 dL = dL/2;
@@ -934,6 +947,7 @@ int main (int argc, char** argv)
                  <<bisections<<","<<numSamples<<","<<nTaut<<","<<nWrinkled<<","<<nSlack<<","
                  <<splitCnt[0]<<","<<splitCnt[1]<<","<<splitCnt[2]<<","<<splitCnt[3]<<","<<splitCnt[4]<<","
                  <<splitCnt[5]<<","<<splitCnt[6]<<","<<splitCnt[7]<<","<<splitCnt[8]<<","<<splitCnt[9]<<","
+                 <<splitCnt[10]<<","
                  <<Moments[0]<<","<<Moments[1]<<","<<Moments[2]<<","<<Moments[3]<<","<<Moments[4]<<","
                  <<solveTime<<std::endl;
 
