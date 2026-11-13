@@ -206,7 +206,7 @@ int main (int argc, char** argv)
     cmd.addReal("", "exacttol", "Split: ExactTol, convergence tolerance of the exact wrinkled-stress solve (default 1e-12)", exactTol);
     cmd.addReal("", "exactstagtol", "Split: ExactStagTol, stagnation tolerance of the exact solve; must be >= exacttol (default 1e-9)", exactStagTol);
     cmd.addInt("", "exactmaxit", "Split: ExactMaxIt, maximum iterations of the exact solve (default 50)", exactMaxIt);
-    cmd.addInt("", "exactlocal", "Split: ExactLocalSolve, local solver of the exact solve: (0): scalar pass + 2x2 Newton | (1): scalar pass + rank-one minimisation where the 2x2 pass ran (default) | (2): minimisation only", exactLocal);
+    cmd.addInt("", "exactlocal", "Split: ExactLocalSolve, local solver of the exact solve: (0): scalar pass + 2x2 Newton | (1): scalar pass + rank-one minimisation where the 2x2 pass would have run (hand-off), and at points with no admissible wrinkle direction or a rejected closed form (default) | (2): minimisation only", exactLocal);
     cmd.addReal("", "slackmult", "TFT and Split: SlackMultiplier of the slack state (default 0)", slackmult);
     cmd.addInt("", "tensionfield", "Wrinkling criterion: 0 strain, 1 stress, 2 mixed (default 2)", tensionField);
     cmd.addSwitch("membrane", "Use membrane material", membrane);
@@ -236,6 +236,7 @@ int main (int argc, char** argv)
 
     try { cmd.getValues(argc,argv); } catch (int rv) { return rv; }
     if (!(eta >= 0 && eta <= 1)) { gsWarn << "--eta must be in [0,1], got " << eta << "\n"; return EXIT_FAILURE; }
+    if (!(slackmult >= 0)) { gsWarn << "--slackmult must be non-negative, got " << slackmult << "\n"; return EXIT_FAILURE; }
     if (!(linTol >= 0)) { gsWarn << "--lintol must be non-negative, got " << linTol << "\n"; return EXIT_FAILURE; }
     if (linMaxIt < 0) { gsWarn << "--linmaxit must be non-negative, got " << linMaxIt << "\n"; return EXIT_FAILURE; }
     if (!(exactStagTol >= exactTol && exactTol > 0 && exactMaxIt >= 1))

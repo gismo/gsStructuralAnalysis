@@ -485,6 +485,7 @@ int main (int argc, char** argv)
 
     try { cmd.getValues(argc,argv); } catch (int rv) { return rv; }
     if (!(eta >= 0 && eta <= 1)) { gsWarn << "--eta must be in [0,1], got " << eta << "\n"; return EXIT_FAILURE; }
+    if (!(slackmult >= 0)) { gsWarn << "--slackmult must be non-negative, got " << slackmult << "\n"; return EXIT_FAILURE; }
     GISMO_ASSERT(NR || DR,"At least a Newton Raphson or a Dynamic Relaxation solver needs to be enabled. Run with option NR or DR.");
     if (TFT && tftsplit)
       GISMO_ERROR("--TFT and --tftsplit select different wrinkling models; use only one of them.");

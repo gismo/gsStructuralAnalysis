@@ -1068,6 +1068,7 @@ int main (int argc, char** argv)
 
     try { cmd.getValues(argc,argv); } catch (int rv) { return rv; }
     if (!(eta >= 0 && eta <= 1)) { gsWarn << "--eta must be in [0,1], got " << eta << "\n"; return EXIT_FAILURE; }
+    if (!(slackmult >= 0)) { gsWarn << "--slackmult must be non-negative, got " << slackmult << "\n"; return EXIT_FAILURE; }
 
     if (testCase<0 || testCase>2)
         GISMO_ERROR("Test case "<<testCase<<" not implemented");
