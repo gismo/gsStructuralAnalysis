@@ -22,6 +22,10 @@ void gsStaticNewton<T>::defaultOptions()
     Base::defaultOptions();
     m_options.setString("Solver","CGDiagonal"); // The CG solver is robust for membrane models, where zero-blocks in the matrix might occur.
     m_options.addReal("Relaxation","Relaxation parameter",1);
+    m_options.addSwitch("LineSearch","Backtracking (Armijo) line search on the residual norm",false);
+    m_options.addReal("LineSearchC","Line search: sufficient decrease constant c, 0 < c < 1",1e-4);
+    m_options.addReal("LineSearchRho","Line search: step reduction factor rho, 0 < rho < 1",0.5);
+    m_options.addInt("LineSearchMaxRed","Line search: maximum number of step reductions",8);
 };
 
 template <class T>
@@ -36,6 +40,17 @@ void gsStaticNewton<T>::getOptions()
     // }
 
     m_relax = m_options.getReal("Relaxation");
+
+    m_lineSearch = m_options.getSwitch("LineSearch");
+    m_lsC        = m_options.getReal("LineSearchC");
+    m_lsRho      = m_options.getReal("LineSearchRho");
+    m_lsMaxRed   = m_options.getInt("LineSearchMaxRed");
+    if (m_lineSearch)
+    {
+        GISMO_ENSURE(m_lsC>0 && m_lsC<1,"LineSearchC must be in (0,1), got "<<m_lsC);
+        GISMO_ENSURE(m_lsRho>0 && m_lsRho<1,"LineSearchRho must be in (0,1), got "<<m_lsRho);
+        GISMO_ENSURE(m_lsMaxRed>=0,"LineSearchMaxRed must be non-negative, got "<<m_lsMaxRed);
+    }
 };
 
 template <class T>
@@ -51,6 +66,8 @@ void gsStaticNewton<T>::initOutput()
     gsInfo<<std::setw(17)<<std::left<<"|dU|/|U+DU|";
     gsInfo<<std::setw(17)<<std::left<<"log(Ri/R0):";
     gsInfo<<std::setw(17)<<std::left<<"log(Ri+1/R0)";
+    if (m_lineSearch)
+        gsInfo<<std::setw(17)<<std::left<<"alpha";
     gsInfo<<"\n";
 }
 
@@ -67,6 +84,8 @@ void gsStaticNewton<T>::stepOutput(index_t k)
     gsInfo<<std::setw(17)<<std::left<<m_relax * m_deltaU.norm()/(m_U+m_DeltaU).norm();
     gsInfo<<std::setw(17)<<std::left<<math::log10(m_residualOld/m_residualIni);
     gsInfo<<std::setw(17)<<std::left<<math::log10(m_residual/m_residualIni);
+    if (m_lineSearch)
+        gsInfo<<std::setw(17)<<std::left<<m_alpha;
     gsInfo<<"\n";
 
 }
@@ -168,9 +187,59 @@ gsVector<T> gsStaticNewton<T>::_solveNonlinear()
 
         _factorizeMatrix(jacMat);
         m_deltaU = _solveSystem(m_R); // this is the UPDATE
-        m_DeltaU += m_relax * m_deltaU;
+        if (!m_lineSearch)
+        {
+            m_DeltaU += m_relax * m_deltaU;
 
-        m_R = this->_computeResidual(m_U+m_DeltaU);
+            m_R = this->_computeResidual(m_U+m_DeltaU);
+        }
+        else
+        {
+            // Backtracking on the residual norm: accept the first alpha = rho^j,
+            // j = 0..maxRed, with finite trial residual and
+            //   ||R(u + alpha du)|| <= (1 - c alpha) ||R(u)||   (Armijo)
+            // At most maxRed extra residual assemblies per iteration.
+            const T R0n = m_R.norm();
+            // At convergence level the decrease test is dominated by round-off.
+            const bool converged = (R0n==0) || (R0n/m_residualIni < m_tolF);
+            gsVector<T> Rt;
+            bool accepted = false;
+            T alpha = 1;
+            for (index_t j = 0; j <= m_lsMaxRed; ++j, alpha *= m_lsRho)
+            {
+                bool failed = false;
+                try { Rt = this->_computeResidual(m_U + m_DeltaU + alpha * m_relax * m_deltaU); }
+                catch (...) { failed = true; }
+
+                if (failed)
+                {
+                    if (m_verbose==2) gsInfo<<"\t\tline search: alpha = "<<alpha<<" residual evaluation threw\n";
+                }
+                else if (!Rt.allFinite())
+                {
+                    if (m_verbose==2) gsInfo<<"\t\tline search: alpha = "<<alpha<<" non-finite residual\n";
+                }
+                else if (converged || Rt.norm() <= (1 - m_lsC*alpha)*R0n)
+                {
+                    accepted = true;
+                    break;
+                }
+                else if (m_verbose==2)
+                    gsInfo<<"\t\tline search: alpha = "<<alpha<<" |R_trial| = "<<Rt.norm()<<" > "<<(1 - m_lsC*alpha)*R0n<<"\n";
+            }
+
+            if (!accepted)
+            {
+                m_U += m_DeltaU;
+                gsInfo<<"Line search failed: no step length in [rho^maxRed, 1] gives sufficient decrease. Solution did not converge\n";
+                throw 1;
+            }
+
+            m_alpha = alpha;
+            m_deltaU *= alpha;
+            m_DeltaU += m_relax * m_deltaU;
+            m_R = give(Rt);
+        }
         m_residual = m_R.norm();
 
         if (m_verbose>0) { stepOutput(m_numIterations); }
@@ -264,6 +333,7 @@ void gsStaticNewton<T>::_init()
         gsWarn<<"The number of degrees of freedom is equal to zero. This can lead to bad initialization.\n";
 
     m_residual = m_residualIni = m_residualOld = 0;
+    m_alpha = 1;
 
     defaultOptions();
 

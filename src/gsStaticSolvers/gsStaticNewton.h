@@ -21,6 +21,32 @@ namespace gismo
 /**
     @brief Static solver using a newton method
 
+    Each iteration solves \f$ J\,\delta u = R \f$ with the tangent \f$J\f$ and the
+    residual \f$R = f_{ext} - f_{int}\f$, and updates \f$ \Delta u \leftarrow \Delta u + \omega\,\delta u \f$
+    with the relaxation \f$\omega\f$ (option "Relaxation").
+
+    <b>Line search</b> (option "LineSearch", off by default): the step is scaled by the
+    first \f$\alpha \in \{1,\rho,\rho^2,\dots,\rho^{m}\}\f$ for which the trial residual is
+    finite and satisfies the Armijo-type sufficient decrease condition
+    \f[ \|R(u+\alpha\,\omega\,\delta u)\| \le (1 - c\,\alpha)\,\|R(u)\| . \f]
+    The options are "LineSearchC" (\f$c\f$, default 1e-4), "LineSearchRho" (\f$\rho\f$, default 0.5)
+    and "LineSearchMaxRed" (\f$m\f$, default 8). If no step length is accepted, the solve ends
+    with gsStatus::NotConverged and the last accepted iterate. A residual evaluation that throws
+    or returns non-finite values (e.g. an inverted element) rejects the trial.
+
+    \f$\delta u\f$ is a descent direction of \f$\|R\|^2\f$ only for a consistent tangent and an
+    exact linear solve; with the default inexact solver "CGDiagonal" every trial may fail.
+
+    Cost: each rejected trial costs one residual assembly, i.e. at most "LineSearchMaxRed" extra
+    residual assemblies per iteration compared to the solve without line search; there is no extra
+    Jacobian assembly or factorization, and acceptance of
+    \f$\alpha=1\f$ costs the same single residual assembly as without line search.
+
+    References: C.T. Kelley, <em>Iterative Methods for Linear and Nonlinear Equations</em>, SIAM 1995, Ch. 8;
+    J.E. Dennis, R.B. Schnabel, <em>Numerical Methods for Unconstrained Optimization and Nonlinear
+    Equations</em>, SIAM 1996, Sec. 6.3; J. Nocedal, S.J. Wright, <em>Numerical Optimization</em>,
+    2nd ed., Ch. 3 and Sec. 11.2.
+
     \tparam T coefficient type
 
     \ingroup gsStructuralAnalysis
@@ -254,6 +280,17 @@ protected:
     using Base::m_tolU;
 
     mutable T m_relax;
+
+    /// Backtracking line search switch (option "LineSearch")
+    bool    m_lineSearch;
+    /// Sufficient decrease constant c (option "LineSearchC")
+    T       m_lsC;
+    /// Step reduction factor rho (option "LineSearchRho")
+    T       m_lsRho;
+    /// Maximum number of step reductions (option "LineSearchMaxRed")
+    index_t m_lsMaxRed;
+    /// Step length accepted in the last iteration (1 without line search)
+    T       m_alpha;
 
     using Base::m_maxIterations;
     using Base::m_numIterations;

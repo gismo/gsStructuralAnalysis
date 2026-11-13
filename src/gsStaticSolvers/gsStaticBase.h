@@ -72,6 +72,8 @@ public:
         m_options.addInt("verbose","Verbose output",0);
         m_options.addInt ("BifurcationMethod","Bifurcation Identification based on: 0: Determinant;  1: Eigenvalue",stabmethod::Eigenvalue);
         m_options.addString("Solver","Sparse linear solver", "SimplicialLDLT");
+        m_options.addReal("SolverTol","Relative residual tolerance |Ax-b|/|b| of the iterative linear solver (CG*, BiCGSTAB*); 0: solver default (machine epsilon); ignored by direct solvers",0);
+        m_options.addInt("SolverMaxIt","Maximum iterations of the iterative linear solver (CG*, BiCGSTAB*); 0: solver default (2 x size); ignored by direct solvers",0);
     }
 
     /// Apply the options
@@ -83,7 +85,37 @@ public:
         m_verbose = m_options.getInt("verbose");
         m_stabilityMethod     = m_options.getInt ("BifurcationMethod");
         m_solver = gsSparseSolver<T>::get( m_options.askString("Solver","SimplicialLDLT") );
+
+        const T solverTol = m_options.askReal("SolverTol",0);
+        const index_t solverMaxIt = m_options.askInt("SolverMaxIt",0);
+        GISMO_ENSURE(solverTol >= 0, "SolverTol must be non-negative, got "<<solverTol);
+        GISMO_ENSURE(solverMaxIt >= 0, "SolverMaxIt must be non-negative, got "<<solverMaxIt);
+        // Eigen treats 0 as a real value (setMaxIterations(0): no iterations), so only positive values are applied
+        if (solverTol > 0 || solverMaxIt > 0)
+        {
+            _setIterative<typename gsSparseSolver<T>::CGDiagonal>(solverTol,solverMaxIt) ||
+            _setIterative<typename gsSparseSolver<T>::CGIdentity>(solverTol,solverMaxIt) ||
+            _setIterative<typename gsSparseSolver<T>::BiCGSTABDiagonal>(solverTol,solverMaxIt) ||
+            _setIterative<typename gsSparseSolver<T>::BiCGSTABIdentity>(solverTol,solverMaxIt) ||
+            _setIterative<typename gsSparseSolver<T>::BiCGSTABILUT>(solverTol,solverMaxIt);
+        }
     }
+
+protected:
+    /// Sets tolerance and iteration cap (each only if positive) when #m_solver is of type \a S; returns whether it is
+    template<class S>
+    bool _setIterative(const T tol, const index_t maxIt)
+    {
+        if (S * s = dynamic_cast<S*>(m_solver.get()))
+        {
+            if (tol   > 0) s->setTolerance(tol);
+            if (maxIt > 0) s->setMaxIterations(maxIt);
+            return true;
+        }
+        return false;
+    }
+
+public:
 
     /// Set the options from \a options
     virtual void setOptions(gsOptionList & options) {m_options.update(options,gsOptionList::addIfUnknown); }
